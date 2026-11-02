@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+"""settings.json dagi bitta qiymatni o'zgartiradi. Ochiq shell uni darhol qo'llaydi.
+
+  niri-desk-set windows.gaps 8
+  niri-desk-set panel.position '"bottom"'
+  niri-desk-set --reset windows.gaps
+"""
+import json
+import os
+import sys
+from pathlib import Path
+
+path = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "niri-desk/settings.json"
+args = sys.argv[1:]
+reset = args[:1] == ["--reset"]
+if reset:
+    args = args[1:]
+if len(args) != (1 if reset else 2):
+    print(__doc__.strip(), file=sys.stderr)
+    sys.exit(2)
+data = json.loads(path.read_text() or "{}") if path.exists() else {}
+keys = args[0].split(".")
+node = data
+for key in keys[:-1]:
+    node = node.setdefault(key, {})
+if reset:
+    node.pop(keys[-1], None)
+else:
+    try:
+        node[keys[-1]] = json.loads(args[1])
+    except ValueError:
+        node[keys[-1]] = args[1]
+tmp = path.with_name(path.name + ".tmp")
+tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+os.replace(tmp, path)

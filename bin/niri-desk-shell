@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Shell nazoratchisi: qs o'lsa qayta ishga tushiradi. Tez-tez yiqilsa to'xtab, xabar beradi.
+set -u
+
+exec 9>"${XDG_RUNTIME_DIR:-/tmp}/niri-desk-shell.lock"
+flock -n 9 || exit 0
+
+fails=0
+while niri msg version >/dev/null 2>&1; do
+    started=$SECONDS
+    # Panel GPU'da qoladi: dasturiy render faqat VM'dagi oynalar uchun.
+    env -u LIBGL_ALWAYS_SOFTWARE qs -c niri-desk 9>&-
+    if ((SECONDS - started < 10)); then
+        fails=$((fails + 1))
+    else
+        fails=0
+    fi
+    if ((fails >= 5)); then
+        notify-send -u critical "niri-desk" "$("$HOME/.local/bin/niri-desk-tr" "The panel keeps crashing: qs -c niri-desk log")" 9>&-
+        exit 1
+    fi
+    sleep 1
+done

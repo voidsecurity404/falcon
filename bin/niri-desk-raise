@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Dastur ochiq bo'lsa unga o'tadi, bo'lmasa ochadi.
+#   niri-desk-raise APP_ID_REGEX BUYRUQ [ARGUMENTLAR...]
+set -euo pipefail
+
+pattern="$1"
+shift
+
+if ! jq -n --arg re "$pattern" '"" | test($re)' >/dev/null 2>&1; then
+    echo "Invalid pattern: $pattern" >&2
+    exit 2
+fi
+windows="$(niri msg --json windows)"
+if ! id="$(jq -er --arg re "$pattern" '[.[] | select((.app_id // "") | test($re; "i"))] | sort_by(.focus_timestamp.secs // 0, .focus_timestamp.nanos // 0) | last | .id // ""' <<<"$windows")"; then
+    echo "Invalid pattern: $pattern" >&2
+    exit 2
+fi
+if [[ -n "$id" ]]; then
+    exec niri msg action focus-window --id "$id"
+fi
+exec "$@"

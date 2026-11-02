@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Fokus rejimi: panel yashiriladi, oynalar orasidagi oraliq va burchaklar yo'qoladi.
+# niri generated/zen.kdl o'zgarishini o'zi sezadi, shell ham shu faylga qaraydi.
+set -euo pipefail
+
+file="${XDG_CONFIG_HOME:-$HOME/.config}/niri/generated/zen.kdl"
+
+if [[ -s "$file" ]]; then
+    : >"$file"
+else
+    cat >"$file" <<'KDL'
+layout {
+    gaps 0
+    focus-ring {
+        width 1
+    }
+    shadow {
+        off
+    }
+}
+window-rule {
+    geometry-corner-radius 0
+}
+KDL
+fi
+
+# niri o'zgarishni o'qib olgach, ko'rinish yangi oraliqqa moslansin (chap chetda tirqish qolmasin).
+sleep 0.2
+niri msg action set-column-width "+0%" >/dev/null 2>&1 || true

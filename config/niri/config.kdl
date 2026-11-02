@@ -1,0 +1,16 @@
+// niri-desk: asosiy fayl. Har bir mavzu alohida turadi.
+// Tartib muhim: keyingi include avvalgisini ustidan yozadi.
+include "cfg/layout.kdl"
+include "cfg/rules.kdl"
+include "cfg/startup.kdl"
+include "cfg/binds.kdl"
+
+// Bu fayllar avtomatik yoziladi, qo'lda o'zgartirmang:
+// settings.kdl va binds.kdl — Sozlamalar oynasidan, colors.kdl — fon rasmidan, zen.kdl — fokus rejimidan.
+include "generated/settings.kdl"
+include "generated/binds.kdl"
+include "generated/colors.kdl"
+include "generated/zen.kdl"
+
+// O'z qo'shimchalaringiz shu faylga yoziladi, yangilanishda tegilmaydi.
+include "cfg/user.kdl"

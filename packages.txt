@@ -1,0 +1,66 @@
+# Kompozitor va shell
+niri
+xwayland-satellite
+quickshell
+qt6-wayland
+qt6-declarative
+jq
+python
+fd
+translate-shell
+tmux
+power-profiles-daemon
+bluetui
+btop
+satty
+# Fon va ranglar
+awww
+matugen
+# Terminal
+kitty
+# Bloklash va bo'sh turish
+hyprlock
+hypridle
+# Parol oynasi, ekran ulashish va fayl tanlash (niri hujjatidagi tavsiya)
+hyprpolkitagent
+xdg-desktop-portal-gnome
+xdg-desktop-portal-gtk
+gnome-keyring
+nautilus
+# Clipboard, skrinshot, yozish, OCR
+wl-clipboard
+cliphist
+grim
+slurp
+wf-recorder
+tesseract
+tesseract-data-eng
+tesseract-data-rus
+tesseract-data-uzb
+xdg-user-dirs
+# Ovoz, yorqinlik, batareya, tarmoq, tungi rejim
+pipewire
+pipewire-audio
+pipewire-pulse
+pipewire-alsa
+wireplumber
+playerctl
+brightnessctl
+upower
+networkmanager
+bluez
+wlsunset
+curl
+xdg-utils
+gvfs
+mesa
+noto-fonts
+noto-fonts-emoji
+adwaita-cursors
+adwaita-icon-theme
+firefox
+git
+sudo
+iproute2
+libnotify
+dconf

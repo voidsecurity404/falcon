@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Pentest nishoni holati JSON ko'rinishida. Faqat TCP ulanishni tekshiradi, boshqa hech narsa yubormaydi.
+#   niri-desk-lab NISHON VPN_INTERFEYS PORT...
+target="$1"
+vpn_if="$2"
+shift 2
+
+open=()
+for port in "$@"; do
+    [[ "$port" =~ ^[0-9]+$ ]] || continue
+    if timeout 0.6 bash -c 'exec 3<>"/dev/tcp/$0/$1"' "$target" "$port" 2>/dev/null; then
+        open+=("$port")
+    fi
+done
+
+vpn=""
+if [[ -d "/sys/class/net/$vpn_if" ]]; then
+    vpn="$(ip -4 -o addr show dev "$vpn_if" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n 1)"
+fi
+
+list="$(IFS=,; echo "${open[*]:-}")"
+printf '{"open":[%s],"vpn":"%s"}\n' "$list" "$vpn"

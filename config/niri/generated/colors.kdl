@@ -1,0 +1,20 @@
+// matugen birinchi ishga tushguncha ishlatiladigan ranglar.
+layout {
+    focus-ring {
+        active-color "#8fc7ee"
+        inactive-color "#3a4652"
+        urgent-color "#ffb4ab"
+    }
+    shadow {
+        color "#00000070"
+    }
+}
+recent-windows {
+    highlight {
+        active-color "#8fc7ee"
+        urgent-color "#ffb4ab"
+    }
+}
+overview {
+    backdrop-color "#0b1a29"
+}

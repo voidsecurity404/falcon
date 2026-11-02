@@ -1,0 +1,159 @@
+import QtQuick
+import Quickshell.Networking
+import Quickshell.Services.SystemTray
+import Quickshell.Widgets
+import qs.components
+import qs.services
+
+Rectangle {
+    id: root
+
+    implicitWidth: row.implicitWidth + 12
+    height: 34
+    radius: 11
+    color: Theme.panel
+
+    Row {
+        id: row
+
+        anchors.centerIn: parent
+        spacing: 0
+
+        // Tray: dasturlar ikonkasi. Chap tugma ochadi, o'ng tugma menyu chiqaradi.
+        Repeater {
+            model: Settings.get("panel.tray", true) ? SystemTray.items : []
+
+            delegate: Item {
+                id: trayItem
+
+                required property var modelData
+
+                width: 28
+                height: 34
+
+                IconImage {
+                    anchors.centerIn: parent
+                    implicitSize: 16
+                    source: trayItem.modelData.icon
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: mouse => {
+                        const item = trayItem.modelData;
+                        if (mouse.button === Qt.MiddleButton) {
+                            item.secondaryActivate();
+                        } else if (mouse.button === Qt.LeftButton && !item.onlyMenu) {
+                            item.activate();
+                        } else if (item.hasMenu) {
+                            Ui.trayItem = item;
+                            Ui.popup = "tray";
+                        }
+                    }
+                }
+            }
+        }
+
+        // Klaviatura tili
+        Rectangle {
+            visible: Settings.get("panel.lang", true)
+            width: langLabel.implicitWidth + 18
+            height: 34
+            radius: 9
+            color: langArea.containsMouse ? Qt.alpha(Theme.text, 0.08) : "transparent"
+
+            Label {
+                id: langLabel
+
+                anchors.centerIn: parent
+                text: Niri.layoutLabel
+                size: 14
+            }
+
+            MouseArea {
+                id: langArea
+
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: Niri.nextLayout()
+            }
+        }
+
+        // Holat: bosilganda boshqaruv paneli ochiladi
+        Rectangle {
+            width: stateRow.implicitWidth + 18
+            height: 34
+            radius: 9
+            color: stateArea.containsMouse || Ui.popup === "control" ? Qt.alpha(Theme.text, 0.08) : "transparent"
+
+            Row {
+                id: stateRow
+
+                anchors.centerIn: parent
+                spacing: 6
+
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "wifi"
+                    visible: Networking.wifiEnabled && Settings.get("panel.wifi", true)
+                }
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: Audio.muted ? "mute" : "volume"
+                    visible: Audio.available && Settings.get("panel.volume", true)
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: Audio.available && Settings.get("panel.volume", true)
+                    text: Audio.percent
+                    size: 14
+                }
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: Sys.charging ? "charging" : "battery"
+                    visible: Sys.hasBattery && Settings.get("panel.battery", true)
+                    color: Sys.batteryPercent <= 15 && !Sys.charging ? Theme.error : Theme.text
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: Sys.hasBattery && Settings.get("panel.battery", true)
+                    text: Sys.batteryPercent
+                    size: 14
+                }
+                // O'qilmagan xabarlar va kofe rejimi belgisi
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: Toasts.unread > 0
+                    width: 7
+                    height: 7
+                    radius: 3.5
+                    color: Theme.accent
+                }
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "coffee"
+                    color: Theme.accent
+                    visible: Caffeine.enabled
+                }
+                // Hech narsa ko'rinmaydigan qurilmada ham tugma bosiladigan bo'lsin.
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "sun"
+                    visible: !(Networking.wifiEnabled && Settings.get("panel.wifi", true)) && !(Audio.available && Settings.get("panel.volume", true)) && !(Sys.hasBattery && Settings.get("panel.battery", true)) && Toasts.unread === 0 && !Caffeine.enabled
+                }
+            }
+
+            MouseArea {
+                id: stateArea
+
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: Ui.togglePopup("control")
+            }
+        }
+    }
+}

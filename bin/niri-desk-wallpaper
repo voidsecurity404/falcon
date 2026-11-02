@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Fon rasmini o'rnatadi va ranglarni shu rasmdan oladi.
+#   niri-desk-wallpaper RASM       tanlangan rasmni qo'yish
+#   niri-desk-wallpaper --restore  oxirgi rasmni qaytarish (sessiya boshida)
+#   niri-desk-wallpaper --colors RASM  faqat ranglarni yozish, rasm qo'ymasdan
+set -euo pipefail
+
+state="${XDG_STATE_HOME:-$HOME/.local/state}/niri-desk"
+link="$state/wallpaper"
+dir="$HOME/Pictures/Wallpapers"
+mkdir -p "$state"
+
+colors() {
+    "$HOME/.local/bin/niri-desk-apply" --colors "$1"
+}
+
+wait_daemon() {
+    for _ in $(seq 1 50); do
+        awww query >/dev/null 2>&1 && return 0
+        sleep 0.1
+    done
+    echo "awww-daemon did not respond" >&2
+    return 1
+}
+
+show() {
+    wait_daemon
+    awww img "$1" --transition-type grow --transition-pos 0.5,1.0 --transition-duration 1 --transition-fps 60
+}
+
+first_image() {
+    find "$dir" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) | sort | head -n 1
+}
+
+case "${1:-}" in
+    --restore)
+        image="$(readlink -f "$link" 2>/dev/null || true)"
+        [[ -f "$image" ]] || image="$(first_image)"
+        [[ -n "$image" ]] || exit 0
+        ln -sfn "$image" "$link"
+        show "$image"
+        [[ -f "$state/colors.json" ]] || colors "$image"
+        ;;
+    --colors)
+        image="$(readlink -f "$2")"
+        ln -sfn "$image" "$link"
+        colors "$image"
+        ;;
+    "" | -h | --help)
+        sed -n '2,5p' "$0" | cut -c3-
+        ;;
+    *)
+        image="$(readlink -f "$1")"
+        [[ -f "$image" ]] || { echo "Image not found: $1" >&2; exit 1; }
+        # Rasm ochilmasa joriy fon va ranglar o'zgarishsiz qoladi.
+        show "$image"
+        colors "$image"
+        ln -sfn "$image" "$link"
+        qs -c niri-desk ipc call desk toast "$("$HOME/.local/bin/niri-desk-tr" "Colors updated")" "$(basename "${image%.*}")" >/dev/null 2>&1 || true
+        ;;
+esac

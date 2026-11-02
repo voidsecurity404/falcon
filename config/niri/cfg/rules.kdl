@@ -1,0 +1,132 @@
+// Barcha oynalar: yumaloq burchak. Focus ring oyna orqasidan ko'rinmasin.
+window-rule {
+    clip-to-geometry true
+    draw-border-with-background false
+}
+
+// Terminal shaffof, orqasida xiralashgan fon rasmi ko'rinadi.
+window-rule {
+    match app-id="^kitty$"
+    match app-id="^niri-desk-scratch$"
+    match app-id="^niri-desk-tool$"
+    background-effect {
+        blur true
+    }
+}
+
+// Parol va xavfsizlik oynalari ekran yozuviga tushmasin.
+window-rule {
+    match app-id=r#"^org\.keepassxc\.KeePassXC$"#
+    match app-id=r#"^org\.gnome\.World\.Secrets$"#
+    match app-id=r#"^Bitwarden$"#
+    block-out-from "screen-capture"
+}
+
+// Burp Suite oynasi keng ochilsin.
+window-rule {
+    match app-id=r#"^burp"#
+    default-column-width { proportion 0.66667; }
+}
+
+// Kichik yordamchi oynalar va dialoglar lentani buzmasin, suzib ochilsin.
+window-rule {
+    match app-id=r#"^org\.gnome\.Calculator$"#
+    match app-id=r#"^(qalculate-gtk|pavucontrol|org\.pulseaudio\.pavucontrol|blueman-manager|nm-connection-editor|nwg-look|zenity|xdg-desktop-portal-(gtk|gnome)|hyprpolkitagent|org\.kde\.polkit-kde-authentication-agent-1|org\.quickshell)$"#
+    match title="^Picture-in-Picture$"
+    match title=r#"(?i)^(open|save|select|choose)\b.*\b(file|files|folder|directory|as|image|document)\b"#
+    match title=r#"(?i)^(открыть|сохранить|выбор|выберите)\b.*(файл|папк|как|изображен|документ)"#
+    open-floating true
+}
+
+// Steam xabarlari fokusni tortib olmasin.
+window-rule {
+    match app-id="^steam$" title=r#"^notificationtoasts_\d+_desktop$"#
+    open-floating true
+    open-focused false
+    default-floating-position x=12 y=12 relative-to="bottom-right"
+}
+
+// Tarjima natijasi suzib ochiladi.
+window-rule {
+    match title="^niri-desk translate$"
+    open-floating true
+    default-column-width { fixed 640; }
+    default-window-height { fixed 420; }
+}
+
+// Rasm ko'rish oynalari to'liq ekranda ochilsin.
+window-rule {
+    match app-id=r#"org\.telegram\.desktop$"# title="^Media viewer$"
+    open-fullscreen true
+    open-focused true
+}
+
+// Suzuvchi oyna yaqqolroq ajralib tursin.
+window-rule {
+    match is-floating=true
+    shadow {
+        softness 44
+        spread 2
+    }
+}
+
+// Diqqat so'rayotgan oyna qizil ramka bilan belgilanadi.
+window-rule {
+    match is-urgent=true
+    focus-ring {
+        active-color "#f38ba8"
+        inactive-color "#f38ba8"
+    }
+}
+
+// Sozlamalar oynasi
+window-rule {
+    match title="^niri-desk settings$"
+    open-floating true
+    default-column-width { fixed 860; }
+    default-window-height { fixed 640; }
+}
+
+// Scratchpad terminal tepada suzib turadi.
+window-rule {
+    match app-id="^niri-desk-scratch$"
+    open-floating true
+    default-column-width { proportion 0.6; }
+    default-window-height { proportion 0.55; }
+    default-floating-position x=0 y=52 relative-to="top"
+}
+
+// btop va nmtui kabi dasturlarga kamida 80 ustun kerak: keng ochiladi.
+window-rule {
+    match app-id="^niri-desk-tool$"
+    default-column-width { proportion 0.8; }
+}
+
+// Bitta oyna ulashilayotganda u qizil ramka bilan belgilanadi.
+window-rule {
+    match is-window-cast-target=true
+    focus-ring {
+        active-color "#f38ba8"
+        inactive-color "#7d0d2d"
+    }
+}
+
+// Picture-in-Picture burchakda ochiladi.
+window-rule {
+    match title="^Picture-in-Picture$"
+    default-floating-position x=24 y=24 relative-to="bottom-right"
+}
+
+// Fon rasmi overview ichida ham joyida tursin.
+layer-rule {
+    match namespace="^awww-daemon"
+    place-within-backdrop true
+}
+
+// Fon tanlash oynasi orqasi xiralashsin.
+layer-rule {
+    match namespace="^niri-desk-picker$"
+    background-effect {
+        blur true
+    }
+}

@@ -1,0 +1,13 @@
+// Tor oynaga ham sig'adigan ixcham salomlashuv.
+{
+  "logo": { "type": "none" },
+  "display": { "separator": "  ", "key": { "width": 8 }, "color": { "keys": "blue" } },
+  "modules": [
+    { "type": "os", "key": "os", "format": "{name}" },
+    { "type": "kernel", "key": "kernel", "format": "{release}" },
+    { "type": "wm", "key": "wm", "format": "{pretty-name}" },
+    { "type": "uptime", "key": "uptime" },
+    { "type": "memory", "key": "memory", "format": "{used} / {total}" },
+    { "type": "disk", "key": "disk", "folders": "/", "format": "{size-used} / {size-total}" }
+  ]
+}

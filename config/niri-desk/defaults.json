@@ -1,0 +1,157 @@
+{
+  "appearance": {
+    "mode": "dark",
+    "scheme": "scheme-tonal-spot",
+    "accent": "",
+    "font": "Geist",
+    "monoFont": "Geist Mono",
+    "fontScale": 1.0,
+    "panelOpacity": 1.0,
+    "terminalOpacity": 0.78,
+    "terminalFontSize": 11,
+    "cursorTheme": "Adwaita",
+    "cursorSize": 24,
+    "language": "auto"
+  },
+  "windows": {
+    "gaps": 14,
+    "radius": 13,
+    "focusRing": 2,
+    "shadow": true,
+    "blur": true,
+    "inactiveOpacity": 1.0,
+    "centerFocused": "never",
+    "centerSingle": true,
+    "defaultWidth": 0.5,
+    "tabbedByDefault": false,
+    "focusFollowsMouse": false,
+    "warpMouse": false,
+    "autoBackForth": false,
+    "animations": true,
+    "animationSpeed": 1.0,
+    "rules": []
+  },
+  "panel": {
+    "position": "top",
+    "ribbon": true,
+    "hideEmpty": false,
+    "lang": true,
+    "wifi": true,
+    "volume": true,
+    "battery": true,
+    "tray": true,
+    "clockSeconds": false,
+    "clockDate": false,
+    "labDot": true,
+    "quietClock": true
+  },
+  "keyboard": {
+    "layouts": "us,ru",
+    "options": "grp:alt_shift_toggle,compose:caps",
+    "repeatDelay": 300,
+    "repeatRate": 35,
+    "perWindow": true,
+    "numlock": true
+  },
+  "pointer": {
+    "tap": true,
+    "naturalScroll": true,
+    "disableWhileTyping": true,
+    "touchpadSpeed": 0.0,
+    "scrollFactor": 0.8,
+    "mouseFlat": true,
+    "mouseSpeed": 0.0
+  },
+  "idle": {
+    "lock": 300,
+    "screenOff": 360,
+    "suspend": 1800
+  },
+  "notifications": {
+    "seconds": 3.6,
+    "history": 30
+  },
+  "nightlight": {
+    "temperature": 4000,
+    "auto": false,
+    "from": "20:00",
+    "to": "07:00"
+  },
+  "weather": {
+    "enabled": true,
+    "lat": 41.31,
+    "lon": 69.28
+  },
+  "lab": {
+    "target": "127.0.0.1",
+    "ports": [
+      {
+        "port": 8080,
+        "name": "site"
+      },
+      {
+        "port": 5432,
+        "name": "postgres"
+      }
+    ],
+    "vpnInterface": "tun0",
+    "evidence": false,
+    "dir": "~/Pentest",
+    "lport": 4444
+  },
+  "vpn": {
+    "up": "",
+    "down": ""
+  },
+  "wallpaperDir": "~/Pictures/Wallpapers",
+  "binds": {
+    "terminal": "Mod+Return",
+    "launcher": "Mod+Space",
+    "clipboard": "Mod+V",
+    "dashboard": "Mod+D",
+    "control": "Mod+C",
+    "wallpapers": "Mod+W",
+    "settings": "Mod+Comma",
+    "zen": "Mod+F",
+    "lock": "Mod+X",
+    "overview": "Mod+O",
+    "scratch": "Mod+Grave",
+    "sticky": "Mod+S",
+    "browser": "Mod+B",
+    "files": "Mod+E",
+    "burp": "Mod+Shift+B",
+    "notes": "Mod+N",
+    "close": "Mod+Q",
+    "widthCycle": "Mod+R",
+    "maximize": "Mod+M",
+    "fullscreen": "Mod+Shift+F",
+    "screenshot": "Mod+Shift+S",
+    "record": "Mod+Shift+R",
+    "ocr": "Mod+P",
+    "translate": "Mod+Alt+P"
+  },
+  "ai": {
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "maxTokens": 16000,
+    "fallbacks": true,
+    "system": "",
+    "backend": "auto"
+  },
+  "pomodoro": {
+    "work": 25,
+    "rest": 5
+  },
+  "session": {
+    "restore": true
+  },
+  "translate": {
+    "to": ""
+  },
+  "monitors": {},
+  "schedule": {
+    "mode": false,
+    "lightFrom": "07:00",
+    "darkFrom": "19:00"
+  }
+}
