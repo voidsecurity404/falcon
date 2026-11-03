@@ -83,8 +83,8 @@ binds {
 
     // Skrinshot, yozish, matn olish
     Print { screenshot; }
-    Ctrl+Print { screenshot-screen; }
-    Alt+Print { screenshot-window; }
+    Ctrl+Print repeat=false { spawn "~/.local/bin/niri-desk-shot" "screen"; }
+    Alt+Print repeat=false { spawn "~/.local/bin/niri-desk-shot" "window"; }
 
     // Ovoz va yorqinlik: holat tepadagi orolda chiqadi
     XF86AudioRaiseVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.05+ -l 1.0"; }

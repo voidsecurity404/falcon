@@ -200,7 +200,7 @@ do_it cp -a "$root/config/hypr/." "$HOME/.config/hypr/"
 do_it cp -a "$root/bin/." "$HOME/.local/bin/"
 
 # Foydalanuvchi sozlamalari va fon rasmlari ustidan yozilmaydi.
-do_it mkdir -p "$HOME/.config/niri-desk" "$HOME/Pictures/Wallpapers" "$HOME/Pictures/Screenshots" "$HOME/.local/share/fonts/niri-desk"
+do_it mkdir -p "$HOME/.config/niri-desk" "$HOME/Pictures/Wallpapers" "$HOME/.local/share/fonts/niri-desk"
 do_it cp "$root/config/niri-desk/tmux.conf" "$root/config/niri-desk/defaults.json" "$root/config/niri-desk/shell.bash" "$root/config/niri-desk/i18n-ru.json" "$HOME/.config/niri-desk/"
 for f in profiles.json snippets.json; do
     [[ -e "$HOME/.config/niri-desk/$f" ]] || do_it cp "$root/config/niri-desk/$f" "$HOME/.config/niri-desk/$f"

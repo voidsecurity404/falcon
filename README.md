@@ -121,7 +121,8 @@ Most things change from the `Mod+,` window and apply immediately: appearance, wi
 | All settings | `~/.config/niri-desk/settings.json` |
 | Your own binds | `~/.config/niri/cfg/user.kdl` |
 | Extra animation settings | `~/.config/niri/cfg/layout.kdl` |
-| Wallpapers | `~/Pictures/Wallpapers` |
+| Wallpapers | `~/Pictures/Wallpapers`, change it in Settings → Wallpaper folder |
+| Screenshots | `Screenshots` inside your pictures folder (`xdg-user-dir PICTURES`) |
 
 Set `vpn.up` and `vpn.down` in `settings.json` to enable the shield button in the control center, for example `nmcli con up htb` and `nmcli con down htb`.
 

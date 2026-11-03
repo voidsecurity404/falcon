@@ -2166,7 +2166,7 @@ def _():
 # ---------------------------------------------------------------------------------------
 feature("screenshot", "Skrinshot va tahrirlash")
 
-SHOTS = HOME / "Pictures/Screenshots"
+SHOTS = Path(sh("xdg-user-dir PICTURES").stdout.strip() or HOME / "Pictures") / "Screenshots"
 
 
 def nshots():

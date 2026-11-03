@@ -13,6 +13,12 @@ Rectangle {
     radius: 11
     color: Theme.panel
 
+    // Belgi radio yoqilganini emas, haqiqiy ulanishni ko'rsatadi. Sim ustun turadi.
+    readonly property var netDevices: Networking.devices.values
+    readonly property bool wiredUp: netDevices.some(d => d.type === DeviceType.Wired && d.connected)
+    readonly property bool wifiUp: netDevices.some(d => d.type === DeviceType.Wifi && d.connected)
+    readonly property bool showNetwork: Settings.get("panel.wifi", true)
+
     Row {
         id: row
 
@@ -97,8 +103,9 @@ Rectangle {
 
                 Icon {
                     anchors.verticalCenter: parent.verticalCenter
-                    name: "wifi"
-                    visible: Networking.wifiEnabled && Settings.get("panel.wifi", true)
+                    name: root.wiredUp ? "ethernet" : (root.wifiUp || Networking.wifiEnabled ? "wifi" : "wifiOff")
+                    opacity: root.wiredUp || root.wifiUp ? 1 : 0.4
+                    visible: root.showNetwork
                 }
                 Icon {
                     anchors.verticalCenter: parent.verticalCenter
@@ -142,7 +149,7 @@ Rectangle {
                 Icon {
                     anchors.verticalCenter: parent.verticalCenter
                     name: "sun"
-                    visible: !(Networking.wifiEnabled && Settings.get("panel.wifi", true)) && !(Audio.available && Settings.get("panel.volume", true)) && !(Sys.hasBattery && Settings.get("panel.battery", true)) && Toasts.unread === 0 && !Caffeine.enabled
+                    visible: !root.showNetwork && !(Audio.available && Settings.get("panel.volume", true)) && !(Sys.hasBattery && Settings.get("panel.battery", true)) && Toasts.unread === 0 && !Caffeine.enabled
                 }
             }
 

@@ -10,6 +10,8 @@ Singleton {
 
     property bool available: false
     property int percent: 100
+    // Slider bilan bir xil chegara: qadam ham ekranni qoraytirmasin.
+    property int minimumRaw: 1
     property bool announceNext: false
 
     function refresh() {
@@ -18,7 +20,7 @@ Singleton {
 
     function step(amount) {
         announceNext = true;
-        setter.command = ["brightnessctl", "--class=backlight", "set", amount];
+        setter.command = ["brightnessctl", "--class=backlight", "--min-value=" + minimumRaw, "set", amount];
         setter.running = true;
     }
 
@@ -36,8 +38,10 @@ Singleton {
             onStreamFinished: {
                 const parts = text.trim().split(",");
                 root.available = parts.length >= 5;
-                if (root.available)
+                if (root.available) {
                     root.percent = parseInt(parts[3]);
+                    root.minimumRaw = Math.max(1, Math.ceil(parseInt(parts[4]) * 0.05));
+                }
                 if (root.announceNext) {
                     root.announceNext = false;
                     Toasts.level("brightness", Tr.t("Brightness") + " " + root.percent + "%", root.percent / 100, "sun");

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Screenshot without a selection: niri-desk-shot screen|window
+# niri names files by the second, so a second shot within one second would replace the first.
+set -euo pipefail
+
+kind="${1:-screen}"
+[[ "$kind" == screen || "$kind" == window ]] || { echo "Usage: niri-desk-shot screen|window" >&2; exit 2; }
+
+settings="${XDG_CONFIG_HOME:-$HOME/.config}/niri/generated/settings.kdl"
+format="$(sed -n 's/^screenshot-path "\(.*\)"$/\1/p' "$settings" 2>/dev/null | head -n 1)"
+if [[ -z "$format" ]]; then
+    exec niri msg action "screenshot-$kind"
+fi
+
+# niri writes the file a moment later, so checking whether it exists would be too early.
+path="$(date +"${format%.png}-%3N.png")"
+mkdir -p "$(dirname "$path")"
+exec niri msg action "screenshot-$kind" --path "$path"

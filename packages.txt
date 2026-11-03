@@ -62,5 +62,7 @@ firefox
 git
 sudo
 iproute2
+# Lab: quick scan va nmap snippetlari
+nmap
 libnotify
 dconf

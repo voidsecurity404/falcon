@@ -66,8 +66,6 @@ animations {
 
 prefer-no-csd
 
-screenshot-path "~/Pictures/Screenshots/%Y-%m-%d_%H-%M-%S.png"
-
 // Alt+Tab: oxirgi ishlatilgan oynalar, jonli ko'rinish bilan.
 recent-windows {
     debounce-ms 500

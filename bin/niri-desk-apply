@@ -131,8 +131,8 @@ def settings_kdl(s):
 
     out += monitors_kdl(s)
     shots = evidence_dir(s)
-    if shots:
-        out += [f'screenshot-path {q(str(shots) + "/shots/%Y-%m-%d_%H-%M-%S.png")}', ""]
+    shots = shots / "shots" if shots else pictures_dir() / "Screenshots"
+    out += [f'screenshot-path {q(str(shots) + "/%Y-%m-%d_%H-%M-%S.png")}', ""]
 
     if is_vm():
         out += ["environment {", '    LIBGL_ALWAYS_SOFTWARE "1"', "}", ""]
@@ -142,6 +142,15 @@ def settings_kdl(s):
     for rule in w["rules"]:
         out += app_rule(rule)
     return "\n".join(out) + "\n"
+
+
+def pictures_dir():
+    # Masalan rus tizimida ~/Изображения. xdg-user-dir sozlanmagan papka uchun $HOME qaytaradi.
+    try:
+        path = subprocess.run(["xdg-user-dir", "PICTURES"], capture_output=True, text=True).stdout.strip()
+    except OSError:
+        path = ""
+    return Path(path) if path and Path(path) != HOME else HOME / "Pictures"
 
 
 def monitors_kdl(s):
