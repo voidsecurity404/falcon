@@ -17,6 +17,11 @@ Singleton {
     property string lastError: ""
     property bool ready: false
 
+    // Oynadan kelgan o'zgarishdan oldingi holat: qo'llanmasa shunga qaytiladi.
+    // Aks holda rad etilgan qiymat faylda qolib, keyingi sozlamalarni ham to'xtatadi.
+    property var rollback: null
+    property bool restored: false
+
     readonly property real weatherLat: get("weather.lat", 41.31)
     readonly property real weatherLon: get("weather.lon", 69.28)
     readonly property string labTarget: get("lab.target", "")
@@ -49,7 +54,8 @@ Singleton {
         return node === undefined || node === null ? fallback : node;
     }
 
-    function set(path, value) {
+    // keep: o'zi qayta urinadigan chaqiruvchi uchun (jadval), aks holda qaytarish aylanib qoladi.
+    function set(path, value, keep) {
         const copy = JSON.parse(JSON.stringify(user));
         const keys = path.split(".");
         let node = copy;
@@ -59,7 +65,7 @@ Singleton {
             node = node[key];
         }
         node[keys[keys.length - 1]] = value;
-        write(copy);
+        write(copy, keep);
     }
 
     function resetAll() {
@@ -72,11 +78,24 @@ Singleton {
         write(copy);
     }
 
-    function write(next) {
+    function write(next, keep) {
+        if (!keep && rollback === null)
+            rollback = user;
+        save(next);
+    }
+
+    function save(next) {
         user = next;
         data = merge(defaults, next);
         userFile.setText(JSON.stringify(next, null, 2) + "\n");
         debounce.restart();
+    }
+
+    // Generated fayllar ham eski holatga mos bo'lishi uchun yana qo'llanadi.
+    function restore(previous) {
+        rollback = null;
+        restored = true;
+        save(previous);
     }
 
     FileView {
@@ -127,20 +146,34 @@ Singleton {
         onTriggered: {
             if (apply.running)
                 restart();
-            else
+            else {
+                apply.undo = root.rollback;
+                apply.quiet = root.restored && root.rollback === null;
+                root.rollback = null;
+                root.restored = false;
                 apply.running = true;
+            }
         }
     }
 
     Process {
         id: apply
 
+        property var undo: null
+        property bool quiet: false
+
         command: [root.home + "/.local/bin/niri-desk-apply"]
         stderr: StdioCollector {
             onStreamFinished: {
+                // Qaytarilgan holatni qo'llash: asl xato allaqachon aytilgan.
+                if (apply.quiet)
+                    return;
                 root.lastError = text.trim();
-                if (root.lastError !== "")
+                if (root.lastError !== "") {
                     Toasts.show(Tr.t("Setting not applied"), root.lastError, "alert");
+                    if (apply.undo !== null)
+                        root.restore(apply.undo);
+                }
             }
         }
     }

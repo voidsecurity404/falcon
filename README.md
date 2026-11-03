@@ -19,7 +19,7 @@ sudo reboot
 
 The installer adds packages, GPU drivers (Intel and AMD), Claude Code when your repositories have it, and turns on NetworkManager, Bluetooth and audio. It sets up the greetd login screen, unless another display manager is already enabled or you pass `--no-login-manager`. If the login screen does not start, press `Ctrl+Alt+F2`, log in and fix it from there. NVIDIA drivers are not installed for you: on CachyOS run `sudo chwd -a`.
 
-Existing configs are saved to `~/.local/state/niri-desk/backup-*`. `./install.sh --uninstall` restores them, turns greetd off and leaves packages installed.
+Existing configs are saved to `~/.local/state/niri-desk/backup-*`. `./install.sh --uninstall` restores them, turns greetd off and leaves packages installed. Your own binds from `user.kdl` are kept in `~/.local/state/niri-desk/user.kdl` and come back on the next install.
 
 For the AI chat, sign in once with `claude auth login`.
 
@@ -114,7 +114,7 @@ The default model is `claude-opus-5-5`, and you can choose another in Settings. 
 
 ## Configuration
 
-Most things change from the `Mod+,` window and apply immediately: appearance, windows, per-app rules, panel, keyboard, shortcuts, monitors, AI and system. If a value does not pass `niri validate`, the previous setting stays. From the command line: `niri-desk-set windows.gaps 8`.
+Most things change from the `Mod+,` window and apply immediately: appearance, windows, per-app rules, panel, keyboard, shortcuts, monitors, AI and system. If a value from that window is rejected, it is reverted and the reason is shown. If you edit `settings.json` by hand, the file is left as is, and no setting applies until you fix the value named in the error. From the command line: `niri-desk-set windows.gaps 8`.
 
 | What | Where |
 | --- | --- |

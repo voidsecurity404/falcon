@@ -13,6 +13,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 state="$HOME/.local/state/niri-desk"
 manifest="$state/backup-manifest"
+saved_kdl="$state/user.kdl"
 stamp="$(date +%Y%m%d-%H%M%S)"
 backup="$state/backup-$stamp"
 
@@ -76,6 +77,13 @@ targets=(
 if ((uninstall)); then
     [[ -f "$manifest" ]] || { echo "Backup not found: $manifest" >&2; exit 1; }
     from="$(head -n 1 "$manifest")"
+    # Shaxsiy klavishlar birinchi zaxirada yo'q: o'chirishdan oldin alohida saqlanadi.
+    current_kdl="$HOME/.config/niri/cfg/user.kdl"
+    if [[ -f "$current_kdl" ]] && ! cmp -s "$current_kdl" "$root/config/niri/cfg/user.kdl"; then
+        do_it mkdir -p "$state"
+        do_it cp "$current_kdl" "$saved_kdl"
+        say "Your own binds were kept in $saved_kdl, the next install brings them back."
+    fi
     for t in "${targets[@]}"; do
         do_it rm -rf "${HOME:?}/$t"
     done
@@ -171,12 +179,17 @@ fi
 say "Copying configs"
 # Qayta o'rnatishda foydalanuvchining o'z sozlamalari saqlanadi.
 user_kdl=""
-[[ -f "$HOME/.config/niri/cfg/user.kdl" ]] && user_kdl="$(cat "$HOME/.config/niri/cfg/user.kdl")"
+if [[ -f "$HOME/.config/niri/cfg/user.kdl" ]]; then
+    user_kdl="$(cat "$HOME/.config/niri/cfg/user.kdl")"
+elif [[ -f "$saved_kdl" ]]; then
+    user_kdl="$(cat "$saved_kdl")"
+fi
 do_it rm -rf "$HOME/.config/niri" "$HOME/.config/quickshell/niri-desk" "$HOME/.config/matugen"
 do_it mkdir -p "$HOME/.config/quickshell" "$HOME/.config/kitty" "$HOME/.config/hypr" "$HOME/.config/gtk-3.0" "$HOME/.config/gtk-4.0" "$HOME/.local/bin"
 do_it cp -a "$root/config/niri" "$HOME/.config/niri"
 if ((dry == 0)) && [[ -n "$user_kdl" ]]; then
     printf '%s\n' "$user_kdl" >"$HOME/.config/niri/cfg/user.kdl"
+    rm -f "$saved_kdl"
 fi
 do_it cp -a "$root/config/quickshell/niri-desk" "$HOME/.config/quickshell/niri-desk"
 do_it cp -a "$root/config/matugen" "$HOME/.config/matugen"

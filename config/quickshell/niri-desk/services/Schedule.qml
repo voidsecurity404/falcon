@@ -25,7 +25,7 @@ Singleton {
             return;
         const mode = wantedMode(new Date());
         if (Settings.get("appearance.mode", "dark") !== mode)
-            Settings.set("appearance.mode", mode);
+            Settings.set("appearance.mode", mode, true);
     }
 
     Timer {
