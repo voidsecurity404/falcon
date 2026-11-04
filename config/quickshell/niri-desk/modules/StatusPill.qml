@@ -73,29 +73,18 @@ Rectangle {
             }
         }
 
-        // Claude limiti: halqa 5 soatlik limit ishlatilgani sari to'ladi.
+        // Claude limiti: faqat ikonka, limitlar bosilganda ochiladi.
         Rectangle {
-            width: claudeRow.implicitWidth + 16
+            width: 34
             height: 34
             radius: 9
             color: claudeArea.containsMouse || Ui.popup === "claude" ? Qt.alpha(Theme.text, 0.08) : "transparent"
 
-            Row {
-                id: claudeRow
-
+            Icon {
                 anchors.centerIn: parent
-                spacing: 6
-
-                MiniRing {
-                    anchors.verticalCenter: parent.verticalCenter
-                    value: ClaudeUsage.fiveHour
-                    opacity: ClaudeUsage.hasData ? 1 : 0.45
-                }
-                Label {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: ClaudeUsage.hasData ? Math.round(ClaudeUsage.fiveHour) + "%" : "—"
-                    size: 13
-                }
+                name: "claude"
+                size: 18
+                opacity: ClaudeUsage.hasData ? 1 : 0.45
             }
             MouseArea {
                 id: claudeArea

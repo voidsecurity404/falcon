@@ -10,6 +10,18 @@ from pathlib import Path
 STATE = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "niri-desk"
 
 
+def merged(saved, new):
+    """Sessions repeat their last known limits, so an older value must not replace a newer one."""
+    if not isinstance(saved, dict):
+        return new
+    saved_resets, new_resets = saved.get("resets", 0), new.get("resets", 0)
+    if new_resets < saved_resets:
+        return saved
+    if new_resets == saved_resets:
+        return {"used": max(saved.get("used", 0), new["used"]), "resets": new_resets}
+    return new
+
+
 def main():
     try:
         limits = json.load(sys.stdin).get("rate_limits")
@@ -17,18 +29,28 @@ def main():
         return
     if not isinstance(limits, dict):
         return
-    out = {"updated": int(time.time())}
+    target = STATE / "claude-usage.json"
+    try:
+        saved = json.loads(target.read_text())
+        if not isinstance(saved, dict):
+            saved = {}
+    except (OSError, ValueError):
+        saved = {}
+    windows = {}
     for name in ("five_hour", "seven_day"):
         window = limits.get(name)
         if isinstance(window, dict) and "used_percentage" in window:
-            out[name] = {"used": window["used_percentage"], "resets": window.get("resets_at", 0)}
-    if len(out) == 1:
+            new = {"used": window["used_percentage"], "resets": window.get("resets_at", 0)}
+            windows[name] = merged(saved.get(name), new)
+        elif isinstance(saved.get(name), dict):
+            windows[name] = saved[name]
+    if not windows or all(saved.get(name) == value for name, value in windows.items()):
         return
     STATE.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=STATE, prefix=".claude-usage")
     with os.fdopen(fd, "w") as file:
-        json.dump(out, file)
-    os.replace(tmp, STATE / "claude-usage.json")
+        json.dump({"updated": int(time.time()), **windows}, file)
+    os.replace(tmp, target)
 
 
 if __name__ == "__main__":

@@ -99,10 +99,10 @@ Clock, analog clock, calendar, weather, system load, music, Claude limits and no
 
 ## Claude limits
 
-The ring next to the keyboard layout fills up as you use the 5-hour limit. Click it for the 5-hour and weekly usage and the time left until each resets. The numbers come from Claude Code's status line, so they update while Claude Code is running. Add this to `~/.claude/settings.json` once:
+The Claude icon sits next to the keyboard layout. Click it for the 5-hour and weekly usage and the time left until each resets. The numbers come from Claude Code's status line: it checks them every 5 seconds while running, and new values arrive after its replies. Add this to `~/.claude/settings.json` once:
 
 ```json
-"statusLine": { "type": "command", "command": "~/.local/bin/niri-desk-claude-status" }
+"statusLine": { "type": "command", "command": "~/.local/bin/niri-desk-claude-status", "refreshInterval": 5 }
 ```
 
 ## Lists you edit as files

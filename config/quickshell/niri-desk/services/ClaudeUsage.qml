@@ -66,7 +66,7 @@ Singleton {
     }
 
     Timer {
-        interval: 30000
+        interval: 5000
         running: true
         repeat: true
         onTriggered: root.now = Date.now() / 1000
