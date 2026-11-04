@@ -148,6 +148,9 @@ ShellRoot {
         function widgets(): void {
             Widgets.editMode = !Widgets.editMode;
         }
+        function widgetsRestack(): void {
+            Widgets.restack();
+        }
         function claude(): void {
             Ui.togglePopup("claude");
         }

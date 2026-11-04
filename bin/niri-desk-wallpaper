@@ -58,6 +58,12 @@ stop_live() {
 # Ovozsiz, aylanib, ekranni to'ldirib o'ynaydi; ko'rinmaganda to'xtaydi.
 play() {
     setsid -f mpvpaper -p -o "no-audio loop panscan=1.0 hwdec=auto" '*' "$1" >/dev/null 2>&1
+    # Video keyin ochilgani uchun vidjetlarni yopadi: ularni yana ustiga chiqaramiz.
+    for _ in $(seq 1 50); do
+        niri msg -j layers 2>/dev/null | grep -q '"mpvpaper"' && break
+        sleep 0.1
+    done
+    qs -c niri-desk ipc call desk widgetsRestack >/dev/null 2>&1 || true
 }
 
 toast() {

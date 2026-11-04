@@ -124,6 +124,7 @@ Singleton {
     // Delegates follow this list, so moving a widget does not rebuild it.
     property var ids: []
     property bool loaded: false
+    property bool restacking: false
     property bool editMode: false
     property bool noteHovered: false
     property bool noteFocused: false
@@ -272,6 +273,18 @@ Singleton {
             }
         }
     }
+    // Keyin ochilgan jonli fon vidjetlarni yopib qo'yadi: ko'rinadigan qatlamni qayta ochib, ustiga chiqaramiz.
+    function restack() {
+        restacking = true;
+        restackTimer.restart();
+    }
+    Timer {
+        id: restackTimer
+
+        interval: 120
+        onTriggered: root.restacking = false
+    }
+
     property string lastActive: ""
 
     FileView {

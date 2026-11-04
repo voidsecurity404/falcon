@@ -26,7 +26,7 @@ PanelWindow {
     }
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
-    visible: wanted
+    visible: wanted && !Widgets.restacking
     mask: Region {}
     WlrLayershell.layer: WlrLayer.Background
     WlrLayershell.namespace: "niri-desk-widgets-face"

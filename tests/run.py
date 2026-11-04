@@ -1411,6 +1411,14 @@ def _():
     key("esc")
 
 
+@case("Vidjet qatlami qayta ochilgach joyida qoladi")
+def _():
+    sh(["qs", "-c", "niri-desk", "ipc", "call", "desk", "widgetsRestack"])
+    time.sleep(0.5)
+    layers = json.loads(sh(["niri", "msg", "-j", "layers"]).stdout)
+    ok(any(l["namespace"] == "niri-desk-widgets-face" for l in layers))
+
+
 @case("Papka bo'sh bo'lsa xabar chiqadi")
 def _():
     Path("/tmp/nd-empty").mkdir(exist_ok=True)
