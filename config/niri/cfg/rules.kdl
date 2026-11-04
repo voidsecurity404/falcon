@@ -128,3 +128,11 @@ layer-rule {
     match namespace="^niri-desk-widgets-face$"
     place-within-backdrop true
 }
+
+// Ilovalar menyusi shisha: orqasidagi oyna ko'rinadi, faqat fon rasmi emas.
+layer-rule {
+    match namespace="^niri-desk-menu$"
+    background-effect {
+        xray false
+    }
+}
