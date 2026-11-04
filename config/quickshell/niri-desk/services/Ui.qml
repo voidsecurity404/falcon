@@ -11,7 +11,7 @@ Singleton {
     readonly property string home: Quickshell.env("HOME")
     readonly property string binDir: home + "/.local/bin/"
 
-    // "", launcher, clipboard, wallpapers, dashboard, control, claude
+    // "", menu, launcher, clipboard, wallpapers, dashboard, control, claude
     property string popup: ""
     property bool zen: false
     property bool settingsOpen: false
@@ -24,9 +24,13 @@ Singleton {
     property int launcherSelected: 0
     // The picker stays on screen after the popup changes, until its closing animation ends.
     property bool pickerAlive: false
+    // The app menu does the same.
+    property bool menuAlive: false
     onPopupChanged: {
         if (popup === "wallpapers")
             pickerAlive = true;
+        if (popup === "menu")
+            menuAlive = true;
     }
     property int pickerSelected: 0
     property int pickerFiles: 0

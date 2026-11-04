@@ -34,6 +34,7 @@ ShellRoot {
     }
 
     Launcher {}
+    AppMenu {}
     WallpaperPicker {}
     SettingsWindow {}
 
@@ -41,6 +42,9 @@ ShellRoot {
     IpcHandler {
         target: "desk"
 
+        function menu(): void {
+            Ui.togglePopup("menu");
+        }
         function launcher(): void {
             Ui.togglePopup("launcher");
         }

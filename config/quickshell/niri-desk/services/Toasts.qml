@@ -16,6 +16,12 @@ Singleton {
     // Oxirgi xabarlar: {title, sub, app, time}
     property var history: []
     property int unread: 0
+    // The history is on the Today tab of the dashboard.
+    readonly property bool historySeen: Ui.popup === "dashboard" && Ui.dashTab === 0
+    onHistorySeenChanged: {
+        if (historySeen)
+            unread = 0;
+    }
 
     function start() {
     }
@@ -103,7 +109,8 @@ Singleton {
                 time: Qt.formatTime(new Date(), "hh:mm")
             }
         ].concat(history).slice(0, Settings.get("notifications.history", 30));
-        unread += 1;
+        if (!historySeen)
+            unread += 1;
     }
 
     function clearHistory() {
@@ -167,14 +174,6 @@ Singleton {
         }
         function onConfigFailed() {
             root.show(Tr.t("Error in the niri config"), Tr.t("The previous settings stay active"), "alert");
-        }
-    }
-
-    Connections {
-        target: Ui
-        function onPopupChanged() {
-            if (Ui.popup === "control")
-                root.unread = 0;
         }
     }
 }

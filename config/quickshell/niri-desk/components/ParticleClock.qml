@@ -11,6 +11,7 @@ Item {
     property real pointerX: -999
     property real pointerY: -999
     property real centerY: height / 2
+    property int fontSize: 240
 
     readonly property string wanted: Ui.pad(clock.hours) + ":" + Ui.pad(clock.minutes)
     readonly property int pool: 3400
@@ -184,12 +185,12 @@ Item {
             const ctx = getContext("2d");
             ctx.clearRect(0, 0, width, height);
             ctx.fillStyle = "#ffffff";
-            ctx.font = "800 240px \"Unbounded\"";
+            ctx.font = "800 " + root.fontSize + "px \"Unbounded\"";
             // The variable font has overlapping outlines. fillText would cut holes where they cross.
             ctx.fillRule = Qt.WindingFill;
             ctx.beginPath();
-            // text() ignores the alignment settings. The digits are 180 px tall at this size.
-            ctx.text(root.wanted, (width - ctx.measureText(root.wanted).width) / 2, root.centerY + 90);
+            // text() ignores the alignment settings. The digits are 0.75 of the font size tall.
+            ctx.text(root.wanted, (width - ctx.measureText(root.wanted).width) / 2, root.centerY + root.fontSize * 0.375);
             ctx.fill();
             const pixels = ctx.getImageData(0, 0, width, height).data;
             ctx.clearRect(0, 0, width, height);
@@ -228,7 +229,7 @@ Item {
                 color: Theme.accent
             }
             GradientStop {
-                position: Math.min(1, (root.centerY + 90) / Math.max(1, root.height))
+                position: Math.min(1, (root.centerY + root.fontSize * 0.375) / Math.max(1, root.height))
                 color: Qt.hsla((Math.max(0, Theme.accent.hslHue) + 0.18) % 1, Theme.accent.hslSaturation, Theme.accent.hslLightness, 1)
             }
         }

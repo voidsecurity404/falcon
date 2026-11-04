@@ -190,32 +190,6 @@ LazyLoader {
             }
         ]
 
-        // Ruscha klaviaturada yozilgan bo'lsa, lotin ko'rinishi ham tekshiriladi.
-        function score(name, q, extra) {
-            return Math.max(scoreOne(name, q, extra), scoreOne(name, Tools.swapLayout(q), extra));
-        }
-
-        // Boshidan yoki so'z boshidan mos kelsa yuqoriroq. Harflar orasidagi izlash faqat nomda ishlaydi.
-        function scoreOne(name, q, extra) {
-            if (q === "")
-                return 1;
-            const hay = name.toLowerCase();
-            const direct = hay.indexOf(q);
-            if (direct === 0)
-                return 1000;
-            if (direct > 0)
-                return (hay[direct - 1] === " " ? 800 : 500) - direct;
-            if (extra && extra.toLowerCase().indexOf(q) >= 0)
-                return 300;
-            let at = -1;
-            for (const ch of q) {
-                at = hay.indexOf(ch, at + 1);
-                if (at < 0)
-                    return 0;
-            }
-            return 100 - at;
-        }
-
         readonly property var results: {
             const raw = query.trim();
             const q = raw.toLowerCase();
@@ -305,7 +279,7 @@ LazyLoader {
             const rows = (items, nameOf, extraOf) => items.map((item, order) => ({
                             item: item,
                             order: order,
-                            rank: score(nameOf(item), q, extraOf ? extraOf(item) : "")
+                            rank: Tools.score(nameOf(item), q, extraOf ? extraOf(item) : "")
                         })).filter(r => r.rank > 0).sort((a, b) => b.rank - a.rank || a.order - b.order);
             const allApps = DesktopEntries.applications.values.filter(a => !a.noDisplay);
             const appExtra = a => a.genericName + " " + a.keywords.join(" ");
@@ -357,7 +331,7 @@ LazyLoader {
             if (!clipboardOnly) {
                 const available = q === "" ? actions.filter(a => a.always) : ranked(actions, a => a.name, a => a.keywords);
                 // Nomi aynan mos kelgan amal kalit so'z orqali topilgan dasturdan yuqori turadi.
-                const named = q !== "" && available.some(a => score(a.name, q, "") >= 800) && !allApps.some(a => score(a.name, q, "") >= 800);
+                const named = q !== "" && available.some(a => Tools.score(a.name, q, "") >= 800) && !allApps.some(a => Tools.score(a.name, q, "") >= 800);
                 const actionRows = available.slice(0, 4).map(action => ({
                             section: Tr.t("Actions"),
                             name: action.name,

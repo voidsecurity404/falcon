@@ -7,6 +7,9 @@ import qs.services
 Item {
     id: root
 
+    readonly property int sideWidth: 300
+    readonly property int leftWidth: width - sideWidth - 24
+
     readonly property var figures: [
         {
             label: Tr.t("Processor"),
@@ -42,8 +45,12 @@ Item {
     }
 
     ParticleClock {
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: root.leftWidth
         centerY: 160
+        fontSize: 200
         pointerX: pointer.containsMouse ? pointer.mouseX : -999
         pointerY: pointer.containsMouse ? pointer.mouseY : -999
     }
@@ -51,15 +58,17 @@ Item {
     MouseArea {
         id: pointer
 
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: root.leftWidth
         hoverEnabled: true
         acceptedButtons: Qt.NoButton
     }
 
     Label {
-        anchors.horizontalCenter: parent.horizontalCenter
         y: 322
-        width: parent.width
+        width: root.leftWidth
         horizontalAlignment: Text.AlignHCenter
         size: 17
         color: Qt.alpha(Theme.text, 0.8)
@@ -72,9 +81,8 @@ Item {
     // Kompyuter ko'rsatkichlari: bosilganda btop ochiladi.
     Item {
         anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.leftMargin: 42
-        anchors.rightMargin: 42
+        anchors.leftMargin: 12
+        width: root.leftWidth - 24
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 8
         height: 62
@@ -117,10 +125,136 @@ Item {
         }
     }
 
-    // Sozlamalar: ustiga kelganda g'ildirak aylanadi.
+    // Notifications: the newest is on top and the list scrolls.
     Rectangle {
         anchors.right: parent.right
         anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: root.sideWidth
+        radius: 22
+        color: Qt.alpha(Theme.text, 0.05)
+
+        Label {
+            x: 18
+            height: 54
+            verticalAlignment: Text.AlignVCenter
+            text: Tr.t("Notifications")
+            size: 15
+            font.weight: Font.Medium
+        }
+        Label {
+            anchors.right: parent.right
+            anchors.rightMargin: 62
+            height: 54
+            verticalAlignment: Text.AlignVCenter
+            visible: Toasts.history.length > 0
+            text: Tr.t("Clear")
+            color: clearArea.containsMouse ? Theme.text : Theme.muted
+            size: 13
+
+            MouseArea {
+                id: clearArea
+
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: Toasts.clearHistory()
+            }
+        }
+
+        Column {
+            anchors.centerIn: parent
+            spacing: 10
+            visible: Toasts.history.length === 0
+
+            Icon {
+                anchors.horizontalCenter: parent.horizontalCenter
+                name: "bell"
+                size: 30
+                color: Qt.alpha(Theme.text, 0.3)
+            }
+            Label {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: Tr.t("No notifications yet")
+                color: Qt.alpha(Theme.text, 0.45)
+                size: 13
+            }
+        }
+
+        ListView {
+            anchors.fill: parent
+            anchors.topMargin: 54
+            anchors.leftMargin: 10
+            anchors.rightMargin: 10
+            anchors.bottomMargin: 10
+            clip: true
+            spacing: 6
+            boundsBehavior: Flickable.StopAtBounds
+            model: Toasts.history
+
+            delegate: Rectangle {
+                id: note
+
+                required property var modelData
+
+                width: ListView.view.width
+                height: noteText.implicitHeight + 20
+                radius: 14
+                color: Qt.alpha(Theme.text, 0.06)
+
+                Column {
+                    id: noteText
+
+                    x: 12
+                    y: 10
+                    width: parent.width - 24
+                    spacing: 3
+
+                    Item {
+                        width: parent.width
+                        height: noteTitle.implicitHeight
+
+                        Label {
+                            id: noteTitle
+
+                            anchors.left: parent.left
+                            anchors.right: noteTime.left
+                            anchors.rightMargin: 8
+                            text: note.modelData.title
+                            size: 13
+                            font.weight: Font.Medium
+                            elide: Text.ElideRight
+                        }
+                        Label {
+                            id: noteTime
+
+                            anchors.right: parent.right
+                            text: note.modelData.time
+                            color: Theme.muted
+                            size: 12
+                        }
+                    }
+                    Label {
+                        width: parent.width
+                        visible: note.modelData.sub !== ""
+                        text: note.modelData.sub
+                        color: Theme.muted
+                        size: 12
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 3
+                        elide: Text.ElideRight
+                    }
+                }
+            }
+        }
+    }
+
+    // Sozlamalar: ustiga kelganda g'ildirak aylanadi.
+    Rectangle {
+        anchors.right: parent.right
+        anchors.rightMargin: 12
+        anchors.top: parent.top
+        anchors.topMargin: 8
         width: 38
         height: 38
         radius: gearArea.containsMouse ? 13 : 19

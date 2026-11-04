@@ -943,6 +943,52 @@ def _():
     wait(lambda: "autilus" in focused()["app_id"])
 
 
+feature("menu", "Dastur menyusi")
+
+
+def open_menu(q=""):
+    ipc("menu")
+    wait(lambda: st()["popup"] == "menu", 3, "menyu ochilmadi")
+    time.sleep(0.5)
+    if q:
+        typ(q)
+    time.sleep(0.3)
+
+
+@case("IPC ochadi, Esc yopadi")
+def _():
+    open_menu()
+    key("esc")
+    wait(lambda: st()["popup"] == "")
+
+
+@case("Nomi bilan dastur topiladi")
+def _():
+    open_menu("kit")
+    ok(st()["rows"][0] == "kitty", st()["rows"])
+    key("esc")
+
+
+@case("> buyruqlarni ko'rsatadi, >wallpaper rasmlar qatorini ochadi")
+def _():
+    open_menu(">")
+    ok(len(st()["rows"]) >= 10, st()["rows"])
+    typ("wallpaper")
+    wait(lambda: st()["rows"] == [], 3)
+    key("esc")
+
+
+@case("Chiqish tugmasi birinchi bosishda bajarilmaydi")
+def _():
+    # 640 kenglikdagi menyu markazda, tugmalar o'ng pastda, chiqish uchinchisi.
+    open_menu()
+    click(835, 765)
+    time.sleep(0.4)
+    ok(st()["popup"] == "menu")
+    ok(sh("pgrep -u $(id -u) -x niri").returncode == 0)
+    key("esc")
+
+
 feature("launcher", "Qidiruv oynasi")
 
 
@@ -1534,11 +1580,6 @@ def open_control():
     time.sleep(0.5)
 
 
-def sess_y():
-    # Sessiya tugmalari panelning eng pastida: xabar yo'q paytdagi joyi.
-    return 52 + st()["controlHeight"] - 16 - 19
-
-
 def toggle_xy(i):
     # 400 kenglikdagi panel, ichi 368. 0 va 1: tarmoq tugmalari, 2-4: tez tugmalar.
     left = 1280 - 14 - 400 + 16
@@ -1592,14 +1633,6 @@ def _():
     time.sleep(0.8)
     ok(st()["toast"] == "", st()["toast"])
     ok("Jim xabar" in st()["history"])
-
-
-@case("Chiqish tugmasi birinchi bosishda bajarilmaydi")
-def _():
-    open_control()
-    click(1065, sess_y())
-    toast("Confirm", 3)
-    ok(sh("pgrep -u $(id -u) -x niri").returncode == 0)
 
 
 @case("Wi-Fi tugmasi tarmoqlar ro'yxatini ochadi, Esc orqaga qaytaradi")
@@ -1769,11 +1802,11 @@ def _():
     wait(lambda: "Tarixiy" in st()["history"])
 
 
-@case("O'qilmaganlar soni panel ochilganda nolga tushadi")
+@case("O'qilmaganlar soni Bugun bo'limi ochilganda nolga tushadi")
 def _():
     notify("Oqilmagan")
     wait(lambda: st()["unread"] == 1)
-    ipc("control")
+    ipc("dashboardTab", "0")
     wait(lambda: st()["unread"] == 0)
 
 

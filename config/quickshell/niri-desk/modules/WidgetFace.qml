@@ -52,7 +52,7 @@ PanelWindow {
         id: idle
 
         timeout: 300
-        respectInhibitors: false
+        respectInhibitors: true
     }
 
     BackgroundEffect.blurRegion: Region {

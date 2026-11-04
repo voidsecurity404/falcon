@@ -77,3 +77,29 @@ function swapLayout(text) {
     }
     return out;
 }
+
+// Ruscha klaviaturada yozilgan bo'lsa, lotin ko'rinishi ham tekshiriladi.
+function score(name, q, extra) {
+    return Math.max(scoreOne(name, q, extra), scoreOne(name, swapLayout(q), extra));
+}
+
+// Boshidan yoki so'z boshidan mos kelsa yuqoriroq. Harflar orasidagi izlash faqat nomda ishlaydi.
+function scoreOne(name, q, extra) {
+    if (q === "")
+        return 1;
+    const hay = name.toLowerCase();
+    const direct = hay.indexOf(q);
+    if (direct === 0)
+        return 1000;
+    if (direct > 0)
+        return (hay[direct - 1] === " " ? 800 : 500) - direct;
+    if (extra && extra.toLowerCase().indexOf(q) >= 0)
+        return 300;
+    let at = -1;
+    for (const ch of q) {
+        at = hay.indexOf(ch, at + 1);
+        if (at < 0)
+            return 0;
+    }
+    return 100 - at;
+}
