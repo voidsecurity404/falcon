@@ -10,12 +10,13 @@ Column {
     signal releaseFocus
 
     readonly property var sinks: Pipewire.nodes.values.filter(n => n.isSink && !n.isStream && n.audio)
+    readonly property var sources: Pipewire.nodes.values.filter(n => !n.isSink && !n.isStream && n.audio)
 
     width: parent.width
     spacing: 10
 
     PwObjectTracker {
-        objects: root.sinks
+        objects: root.sinks.concat(root.sources)
     }
 
     PageHeader {
@@ -39,6 +40,32 @@ Column {
                 title: modelData.description || modelData.name
                 current: Pipewire.defaultAudioSink === modelData
                 onClicked: Pipewire.preferredDefaultAudioSink = modelData
+            }
+        }
+    }
+
+    Label {
+        visible: root.sources.length > 0
+        x: 4
+        text: Tr.t("Microphone")
+        color: Theme.muted
+        size: 13
+    }
+
+    Column {
+        width: parent.width
+        spacing: 2
+
+        Repeater {
+            model: root.sources
+
+            delegate: ChoiceRow {
+                required property var modelData
+
+                icon: "mic"
+                title: modelData.description || modelData.name
+                current: Pipewire.defaultAudioSource === modelData
+                onClicked: Pipewire.preferredDefaultAudioSource = modelData
             }
         }
     }

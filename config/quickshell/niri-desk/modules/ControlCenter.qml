@@ -224,6 +224,16 @@ Rectangle {
                 }
                 ThickSlider {
                     width: parent.width
+                    visible: Audio.micAvailable
+                    icon: Audio.micMuted ? "micOff" : "mic"
+                    iconButton: true
+                    value: Audio.micVolume
+                    text: Audio.micPercent + "%"
+                    onMoved: value => Audio.setMicVolume(value)
+                    onIconClicked: Audio.toggleMicMute()
+                }
+                ThickSlider {
+                    width: parent.width
                     visible: Brightness.available
                     icon: "sun"
                     value: Brightness.percent / 100

@@ -8,6 +8,8 @@ Rectangle {
     property real value: 0
     property string icon: "volume"
     property string text: ""
+    // The icon works as its own button, such as mute.
+    property bool iconButton: false
 
     signal moved(real value)
     signal iconClicked
@@ -56,6 +58,14 @@ Rectangle {
             if (pressed)
                 root.fromMouse(mouse.x);
         }
+    }
+
+    MouseArea {
+        visible: root.iconButton
+        width: root.height
+        height: root.height
+        cursorShape: Qt.PointingHandCursor
+        onClicked: root.iconClicked()
     }
 
     Icon {

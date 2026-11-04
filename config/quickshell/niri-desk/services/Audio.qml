@@ -13,6 +13,12 @@ Singleton {
     readonly property bool muted: available ? sink.audio.muted : false
     readonly property int percent: Math.round(volume * 100)
 
+    readonly property var source: Pipewire.defaultAudioSource
+    readonly property bool micAvailable: !!source && !!source.audio
+    readonly property real micVolume: micAvailable ? source.audio.volume : 0
+    readonly property bool micMuted: micAvailable ? source.audio.muted : false
+    readonly property int micPercent: Math.round(micVolume * 100)
+
     property bool settled: false
 
     function setVolume(value) {
@@ -23,6 +29,16 @@ Singleton {
     function toggleMute() {
         if (available)
             sink.audio.muted = !sink.audio.muted;
+    }
+
+    function setMicVolume(value) {
+        if (micAvailable)
+            source.audio.volume = Math.max(0, Math.min(1, value));
+    }
+
+    function toggleMicMute() {
+        if (micAvailable)
+            source.audio.muted = !source.audio.muted;
     }
 
     function announce() {
@@ -43,6 +59,6 @@ Singleton {
     }
 
     PwObjectTracker {
-        objects: root.sink ? [root.sink] : []
+        objects: [root.sink, root.source].filter(n => !!n)
     }
 }
