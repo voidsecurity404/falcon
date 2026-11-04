@@ -21,8 +21,6 @@ The installer adds packages, GPU drivers (Intel and AMD), Claude Code when your 
 
 Existing configs are saved to `~/.local/state/niri-desk/backup-*`. `./install.sh --uninstall` restores them, turns greetd off and leaves packages installed. Your own binds from `user.kdl` are kept in `~/.local/state/niri-desk/user.kdl` and come back on the next install.
 
-For the AI chat, sign in once with `claude auth login`.
-
 ## Language
 
 Settings → Appearance → Language: Automatic, English or Русский. Automatic follows the system locale. Translations live in `~/.config/niri-desk/i18n-ru.json`.
@@ -69,15 +67,6 @@ Click the clock. Three tabs, switched with `1`–`3` or `Tab`.
 | --- | --- |
 | Today | The time made of living dots that flee from the pointer and tremble with the CPU load, the date and weather, CPU, memory, temperature, disk and battery, settings button |
 | Music | Blurred, slowly moving cover in the background, colors taken from the cover, a spinning record, seekable progress bar, and a visualizer that follows the real sound. The sound is only measured on this computer |
-| AI | Chat with Claude in glass bubbles over a slowly moving aurora |
-
-## AI chat
-
-With a Claude subscription, the chat runs through Claude Code: install it and sign in with `claude auth login`, no API key needed. Usage counts toward your subscription limits, shared with your other Claude Code work. The chat runs with no tools, so it cannot read files or run commands.
-
-To use an API key instead, choose it in Settings → AI → Connection and enter the key. It is written to `~/.config/niri-desk/secrets/anthropic-key`, readable only by you and excluded from backups, and the official `anthropic` SDK from `~/.local/share/niri-desk/venv` is used. API usage is billed separately. With Automatic, Claude Code is used when the `claude` command is found.
-
-The default model is `claude-opus-5-5`, and you can choose another in Settings. Messages are sent to Anthropic. The chat is stored in `~/.local/state/niri-desk/ai-history.json`.
 
 ## Desktop widgets
 
@@ -144,4 +133,4 @@ No code was copied from these projects, the ideas were rewritten.
 
 `tests/run.py` runs the scenarios on CachyOS in VirtualBox, results are in `tests/REPORT.md`. It closes windows and changes settings, so run it only on a test machine. It needs `ydotool`, `foot`, `ffmpeg` and `network-manager-applet`.
 
-Not tested yet: the AI chat with a real API key (the Claude Code path was checked with a real subscription), automatic window restore at login, a second monitor, brightness, battery warnings, Wi-Fi, Bluetooth, touchpad, performance on a real GPU, screen sharing, logging in from the login screen, and the final step of the log out, reboot and shutdown buttons.
+Not tested yet: automatic window restore at login, a second monitor, brightness, battery warnings, Wi-Fi, Bluetooth, touchpad, performance on a real GPU, screen sharing, logging in from the login screen, and the final step of the log out, reboot and shutdown buttons.

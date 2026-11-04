@@ -6,7 +6,7 @@ import qs.services
 Item {
     id: root
 
-    // 0 Today, 1 Music, 2 AI. Each page has its own scene over the glass.
+    // 0 Today, 1 Music. Each page has its own scene over the glass.
     property int page: 0
     property string art: ""
     property bool playing: false
@@ -86,18 +86,6 @@ Item {
                 ctx.fillRect(-width, -height * 2, width * 2, height * 4);
                 ctx.restore();
             }
-
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: 480
-                }
-            }
-        }
-
-        Aurora {
-            anchors.fill: parent
-            visible: opacity > 0
-            opacity: root.page === 2 ? 1 : 0
 
             Behavior on opacity {
                 NumberAnimation {

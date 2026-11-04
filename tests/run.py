@@ -2907,8 +2907,6 @@ def _():
 # Yangi funksiyalar
 LBIN = HOME / ".local/bin"
 PROFILES = HOME / ".config/niri-desk/profiles.json"
-AI_URL = "http://127.0.0.1:8765"
-FAKE = None
 
 
 def run(*argv, stdin=None, timeout=30):
@@ -2921,39 +2919,14 @@ def dash(tab):
     time.sleep(0.5)
 
 
-def ai_ready():
-    global FAKE
-    if FAKE is None or FAKE.poll() is not None:
-        FAKE = subprocess.Popen([sys.executable, str(Path(__file__).with_name("fake_ai.py"))], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-        time.sleep(0.8)
-    sh(["rm", "-f", "/tmp/fake-ai.log", str(STATE / "ai-history.json")])
-    settings(ai__baseUrl=AI_URL, ai__backend="api")
-    sh(f"echo sk-test | {LBIN}/niri-desk-ai set-key")
-
-
-def fake_log():
-    try:
-        return [json.loads(l) for l in open("/tmp/fake-ai.log")]
-    except OSError:
-        return []
-
-
-def ai_say(text, done=True):
-    dash(2)
-    typ(text)
-    key("enter")
-    if done:
-        wait(lambda: not st()["aiBusy"] and any(m.startswith(("assistant:", "error:")) for m in st()["aiMessages"][-1:]), 15, "javob kelmadi")
-
-
 def write_json(path, data):
     path.write_text(json.dumps(data))
     time.sleep(0.6)
 
 
-feature("dash", "Dashboard: 3 ta vkladka")
+feature("dash", "Dashboard: 2 ta vkladka")
 
-for _i, _name in enumerate(["Today", "Music", "AI"]):
+for _i, _name in enumerate(["Today", "Music"]):
     @case(f"{_i + 1}-vkladka ({_name}) ochiladi")
     def _(i=_i):
         dash(i)
@@ -2970,10 +2943,10 @@ def _():
 @case("Vkladka nomini bosish uni tanlaydi")
 def _():
     dash(0)
-    click(770, 27)
-    wait(lambda: st()["dashTab"] == 2, 2, "almashmadi")
-    click(640, 27)
+    click(699, 27)
     wait(lambda: st()["dashTab"] == 1, 2, "almashmadi")
+    click(581, 27)
+    wait(lambda: st()["dashTab"] == 0, 2, "almashmadi")
 
 
 @case("Raqam tugmalari vkladkani almashtiradi")
@@ -2981,22 +2954,22 @@ def _():
     dash(0)
     key("2")
     wait(lambda: st()["dashTab"] == 1, 2, "2 ishlamadi")
-    key("3")
-    wait(lambda: st()["dashTab"] == 2, 2, "3 ishlamadi")
+    key("1")
+    wait(lambda: st()["dashTab"] == 0, 2, "1 ishlamadi")
 
 
 @case("Tab keyingisiga o'tadi va aylanadi")
 def _():
-    dash(1)
+    dash(0)
     key("tab")
-    wait(lambda: st()["dashTab"] == 2, 2, f"AI ga o'tmadi: {layers()} {focused()}")
+    wait(lambda: st()["dashTab"] == 1, 2, f"Musiqaga o'tmadi: {layers()} {focused()}")
     key("tab")
-    wait(lambda: st()["dashTab"] == 0, 2, "AI ichida Tab ushlanib qoldi")
+    wait(lambda: st()["dashTab"] == 0, 2, "aylanmadi")
 
 
 @case("Esc har vkladkada yopadi")
 def _():
-    for i in range(3):
+    for i in range(2):
         dash(i)
         key("esc")
         wait(lambda: st()["popup"] == "", 2, f"{i}-vkladka yopilmadi")
@@ -3010,226 +2983,6 @@ def _():
     ipc("dashboard")
     wait(lambda: st()["popup"] == "dashboard", 2)
     ok(st()["dashTab"] == 1)
-
-
-feature("ai", "AI chat")
-
-
-@case("Xabar yuboriladi va javob oqib keladi")
-def _():
-    ai_ready()
-    ai_say("salom")
-    ok(st()["aiMessages"][-1] == "assistant:Salom, bu javob: salom", st()["aiMessages"])
-
-
-@case("Darhol yozilgan xabar tarix yuklanishida yo'qolmaydi")
-def _():
-    ai_ready()
-    ai_say("tez")
-    ok(st()["aiMessages"][-2] == "user:tez", st()["aiMessages"])
-
-
-@case("Ikkinchi savolda tarix ham yuboriladi, thinking bloki buzilmaydi")
-def _():
-    ai_ready()
-    ai_say("birinchi")
-    ai_say("ikkinchi")
-    sent = fake_log()[-1]["body"]["messages"]
-    ok(len(sent) == 3 and sent[1]["content"][0]["type"] == "thinking" and sent[1]["content"][0]["signature"] == "sig123", sent)
-
-
-@case("Standart model va sozlamalar to'g'ri yuboriladi")
-def _():
-    ai_ready()
-    ai_say("model")
-    r = fake_log()[-1]
-    ok(r["body"]["model"] == "claude-opus-5-5" and r["body"]["stream"] and r["body"]["fallbacks"] == "default" and r["beta"] == "server-side-fallback-2026-07-01", r)
-
-
-@case("Sozlamadagi model ishlatiladi")
-def _():
-    ai_ready()
-    settings(ai__model="claude-haiku-5-5")
-    ai_say("x")
-    ok(fake_log()[-1]["body"]["model"] == "claude-haiku-5-5")
-
-
-@case("Noto'g'ri kalit tushunarli xato beradi, tarix iflos bo'lmaydi")
-def _():
-    ai_ready()
-    ai_say("401")
-    ok(st()["aiMessages"][-1].startswith("error:The API key"), st()["aiMessages"])
-    ok(json.loads(run("niri-desk-ai", "history").stdout) == [])
-
-
-@case("Rad etilgan javob tarixga yozilmaydi")
-def _():
-    ai_ready()
-    ai_say("refuse")
-    ok(st()["aiMessages"][-1].startswith("error:The model"))
-    ok(json.loads(run("niri-desk-ai", "history").stdout) == [])
-
-
-@case("To'xtatish javobni kesadi va busy qoldirmaydi")
-def _():
-    ai_ready()
-    ai_say("sekin", done=False)
-    wait(lambda: st()["aiBusy"], 3, "boshlanmadi")
-    click(1086, 525)
-    wait(lambda: not st()["aiBusy"], 4, "to'xtamadi")
-
-
-@case("Javob kutilganda ikkinchi xabar yuborilmaydi")
-def _():
-    ai_ready()
-    ai_say("sekin", done=False)
-    wait(lambda: st()["aiBusy"], 3)
-    typ("yana")
-    key("enter")
-    time.sleep(0.5)
-    ok(sum(m.startswith("user:") for m in st()["aiMessages"]) == 1, st()["aiMessages"])
-
-
-@case("Kalit fayli faqat egasiga ochiq va settings.json ga tushmaydi")
-def _():
-    ai_ready()
-    path = HOME / ".config/niri-desk/secrets/anthropic-key"
-    ok(oct(path.stat().st_mode)[-3:] == "600")
-    ok("sk-test" not in SET.read_text())
-
-
-@case("Tozalash suhbatni va faylni o'chiradi")
-def _():
-    ai_ready()
-    ai_say("salom")
-    click(1086, 525)
-    wait(lambda: st()["aiMessages"] == [], 3, "tozalanmadi")
-    time.sleep(0.4)
-    ok(json.loads(run("niri-desk-ai", "history").stdout) == [])
-
-
-feature("aicc", "AI chat: Claude Code obunasi")
-
-FAKE_CLAUDE = Path(__file__).with_name("fake_claude.py")
-CLOG = Path("/tmp/fake-claude.log")
-AISESSION = STATE / "ai-session"
-
-
-def cc_ready():
-    FAKE_CLAUDE.chmod(0o755)
-    CLOG.unlink(missing_ok=True)
-    sh(["rm", "-f", str(STATE / "ai-history.json"), str(AISESSION)])
-    settings(ai__backend="claude-code", ai__claudePath=str(FAKE_CLAUDE))
-
-
-def cc_log():
-    return [json.loads(l) for l in CLOG.read_text().splitlines()]
-
-
-@case("Javob oqib keladi va tarixga yoziladi")
-def _():
-    cc_ready()
-    ai_say("salom")
-    ok(st()["aiMessages"][-1] == "assistant:Salom, bu javob: salom", st()["aiMessages"])
-    ok(json.loads(run("niri-desk-ai", "history").stdout)[-1]["text"] == "Salom, bu javob: salom")
-
-
-@case("Asboblar, MCP va sozlama fayllari o'chiq")
-def _():
-    cc_ready()
-    ai_say("salom")
-    a = cc_log()[-1]["args"]
-    ok(a[a.index("--tools") + 1] == "" and "--strict-mcp-config" in a and a[a.index("--setting-sources") + 1] == "" and "--disable-slash-commands" in a, a)
-
-
-@case("Ikkinchi xabar o'sha suhbatni davom ettiradi")
-def _():
-    cc_ready()
-    ai_say("birinchi")
-    ok("--resume" not in cc_log()[-1]["args"])
-    ai_say("ikkinchi")
-    a = cc_log()[-1]["args"]
-    ok(a[a.index("--resume") + 1] == "session-1", a)
-
-
-@case("API kaliti obuna so'roviga o'tkazilmaydi")
-def _():
-    cc_ready()
-    r = sh(f"echo salom | ANTHROPIC_API_KEY=sk-x ANTHROPIC_AUTH_TOKEN=t {LBIN}/niri-desk-ai send")
-    ok('"done"' in r.stdout, r.stdout)
-    ok(cc_log()[-1]["api_key"] is None and cc_log()[-1]["token"] is None, cc_log()[-1])
-
-
-@case("Kirilmagan bo'lsa tushunarli xato")
-def _():
-    cc_ready()
-    ai_say("login")
-    ok("claude auth login" in st()["aiMessages"][-1], st()["aiMessages"])
-
-
-@case("Obuna limiti aytiladi, tarix iflos bo'lmaydi")
-def _():
-    cc_ready()
-    ai_say("limit")
-    ok(st()["aiMessages"][-1].startswith("error:Subscription limit"), st()["aiMessages"])
-    ok(json.loads(run("niri-desk-ai", "history").stdout) == [])
-
-
-@case("Rad etilgan javob tarixga yozilmaydi")
-def _():
-    cc_ready()
-    ai_say("refuse")
-    ok(st()["aiMessages"][-1].startswith("error:The model"))
-    ok(json.loads(run("niri-desk-ai", "history").stdout) == [])
-
-
-@case("Yo'qolgan suhbat o'rniga yangisi boshlanadi")
-def _():
-    cc_ready()
-    AISESSION.write_text("lost-session")
-    ai_say("salom")
-    ok(st()["aiMessages"][-1].startswith("assistant:"), st()["aiMessages"])
-    ok(AISESSION.read_text() == "session-1")
-
-
-@case("To'xtatish claude jarayonini ham o'ldiradi")
-def _():
-    cc_ready()
-    ai_say("sekin", done=False)
-    wait(lambda: st()["aiBusy"], 3)
-    wait(CLOG.exists, 4)
-    pid = cc_log()[-1]["pid"]
-    click(1086, 525)
-    wait(lambda: not st()["aiBusy"], 4, "to'xtamadi")
-    wait(lambda: not Path(f"/proc/{pid}").exists(), 4, "jarayon qoldi")
-
-
-@case("Tozalash suhbat identifikatorini ham o'chiradi")
-def _():
-    cc_ready()
-    ai_say("salom")
-    ok(AISESSION.exists())
-    click(1086, 525)
-    wait(lambda: st()["aiMessages"] == [], 3)
-    wait(lambda: not AISESSION.exists(), 3, "qoldi")
-
-
-@case("claude topilmasa tushunarli xato")
-def _():
-    cc_ready()
-    settings(ai__claudePath="/yoq/claude")
-    ai_say("salom")
-    ok(st()["aiMessages"][-1].startswith("error:Claude Code not found"), st()["aiMessages"])
-
-
-@case("Auto rejim claude bo'lsa obunani tanlaydi")
-def _():
-    cc_ready()
-    settings(ai__backend="auto")
-    ok(json.loads(run("niri-desk-ai", "status").stdout)["backend"] == "claude-code")
-    settings(ai__claudePath="/yoq/claude")
-    time.sleep(0.2)
-    ok(json.loads(run("niri-desk-ai", "status").stdout)["backend"] == "api")
 
 
 feature("profile", "Ish profillari")
@@ -4324,26 +4077,10 @@ def _():
 @case("Tablarni juda tez almashtiradi: oxirgisi to'g'ri qoladi")
 def _():
     dash(0)
-    # AI bo'limida raqamlar yozuv bo'ladi, shuning uchun tez almashtirish qolgan ikkitasida.
     for k in ("2", "1", "2", "1", "2", "1", "2"):
         key(k)
     wait(lambda: st()["dashTab"] == 1, 3)
     time.sleep(0.7)
-    ok(st()["popup"] == "dashboard")
-
-
-@case("AI tabida yozadi, boshqa tabga o'tib qaytadi: matn yo'qolmaydi, klaviatura ishlaydi")
-def _():
-    dash(2)
-    time.sleep(0.6)
-    typ("salom")
-    click(640, 27)
-    wait(lambda: st()["dashTab"] == 1, 2)
-    time.sleep(0.6)
-    click(770, 27)
-    wait(lambda: st()["dashTab"] == 2, 2)
-    time.sleep(0.7)
-    key("backspace")
     ok(st()["popup"] == "dashboard")
 
 
@@ -4804,7 +4541,7 @@ def _():
 
 @case("Bo'limni tez almashtiradi: vizualizator jarayoni qolib ketmaydi")
 def _():
-    for t in (1, 0, 1, 2, 1, 0):
+    for t in (1, 0, 1, 0, 1, 0):
         ipc("dashboardTab", str(t))
         time.sleep(0.2)
     ipc("close")

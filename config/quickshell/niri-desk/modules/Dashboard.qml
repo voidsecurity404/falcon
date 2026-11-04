@@ -3,41 +3,27 @@ import Quickshell
 import qs.components
 import qs.services
 
-// Soatni bosganda ochiladigan panel: uchta sahifa yonma-yon turadi va suriladi.
+// Soatni bosganda ochiladigan panel: ikkita sahifa yonma-yon turadi va suriladi.
 FocusScope {
     id: root
 
-    readonly property var tabs: [Tr.t("Today"), Tr.t("Music"), Tr.t("AI")]
+    readonly property var tabs: [Tr.t("Today"), Tr.t("Music")]
     readonly property int tabWidth: 118
     readonly property int pageGap: 24
-    // AI sahifasi ko'ringanda yozish maydoni fokusni oladi: boshqa sahifalar orasida surilganda u ochilmasligi kerak.
-    property bool leavingAi: false
-    property int lastTab: Ui.dashTab
 
     function select(index) {
         Ui.dashTab = index;
-    }
-
-    // Yashiringan vkladkada fokus qolib ketmasin.
-    Connections {
-        target: Ui
-        function onDashTabChanged() {
-            root.leavingAi = root.lastTab === 2;
-            root.lastTab = Ui.dashTab;
-            if (Ui.dashTab !== 2)
-                root.forceActiveFocus();
-        }
     }
 
     focus: true
     Keys.onEscapePressed: Ui.popup = ""
     Keys.onPressed: event => {
         const digit = event.key - Qt.Key_1;
-        if (digit >= 0 && digit <= 2) {
+        if (digit >= 0 && digit <= 1) {
             select(digit);
             event.accepted = true;
         } else if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
-            select((Ui.dashTab + (event.key === Qt.Key_Tab ? 1 : 2)) % 3);
+            select(1 - Ui.dashTab);
             event.accepted = true;
         }
     }
@@ -53,10 +39,7 @@ FocusScope {
 
         interval: 60
         running: true
-        onTriggered: {
-            if (Ui.dashTab !== 2)
-                root.forceActiveFocus();
-        }
+        onTriggered: root.forceActiveFocus()
     }
 
     // Ovozga qarab chayqaladigan pol: panelning butun eni bo'ylab, o'rtadan chetlarga.
@@ -230,12 +213,6 @@ FocusScope {
                 width: pager.width
                 height: pager.height
                 visible: Ui.dashTab === 1 || slide.running
-            }
-            DashAi {
-                x: 2 * (pager.width + root.pageGap)
-                width: pager.width
-                height: pager.height
-                visible: Ui.dashTab === 2 || (slide.running && root.leavingAi)
             }
         }
     }

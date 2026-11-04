@@ -43,10 +43,6 @@ Singleton {
 
     signal launcherInject(string text)
 
-    function nextDashTab(step) {
-        dashTab = (dashTab + step + 3) % 3;
-    }
-
     function togglePopup(name) {
         popup = popup === name ? "" : name;
     }
