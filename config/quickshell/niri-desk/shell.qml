@@ -92,7 +92,6 @@ ShellRoot {
                 lang: Tr.language,
                 sample: Tr.t("Settings"),
                 dashTab: Ui.dashTab,
-                profiles: Library.profiles.length,
                 rows: Ui.launcherRows,
                 selected: Ui.launcherSelected,
                 pickerSelected: Ui.pickerSelected,
@@ -171,7 +170,6 @@ ShellRoot {
 
     Component.onCompleted: {
         Toasts.start();
-        Library.profiles;
         Schedule.check();
         Sticky.ids;
     }

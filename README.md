@@ -80,14 +80,10 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 "statusLine": { "type": "command", "command": "~/.local/bin/niri-desk-claude-status", "refreshInterval": 5 }
 ```
 
-## Lists you edit as files
-
-`~/.config/niri-desk/profiles.json`: work profiles. `workspace` numbers set the order: niri keeps no empty workspaces, so if a number is skipped, windows are placed consecutively.
-
 ## Helper commands
 
 - `niri-desk-session save|restore`: restore windows. Saved every minute, restored at login. Arguments are never replayed, so a terminal opens empty.
-- `niri-desk-backup export [file]`, `import file`: save settings and profiles to one file.
+- `niri-desk-backup export [file]`, `import file`: save settings to one file.
 - `niri-desk-translate`: the text is sent to an online translation service (`translate-shell`).
 
 ## Configuration
@@ -109,7 +105,7 @@ config/niri/        niri config, split by topic
 config/quickshell/  panel, island, dashboard, search, wallpaper picker
 config/matugen/     templates that take colors from the wallpaper
 config/hypr/        hyprlock and hypridle
-config/niri-desk/   defaults, Russian catalog, profiles
+config/niri-desk/   defaults, Russian catalog, emoji list
 bin/                wallpaper, focus, recording, OCR and other scripts
 wallpapers/         sample wallpapers
 fonts/              Geist, Geist Mono and Unbounded (SIL OFL 1.1)
@@ -131,6 +127,6 @@ No code was copied from these projects, the ideas were rewritten.
 
 ## Status
 
-`tests/run.py` runs the scenarios on CachyOS in VirtualBox, results are in `tests/REPORT.md`. It closes windows and changes settings, so run it only on a test machine. It needs `ydotool`, `foot`, `ffmpeg` and `network-manager-applet`.
+`tests/run.py` runs the scenarios on CachyOS in VirtualBox. It closes windows and changes settings, so run it only on a test machine. It needs `ydotool`, `foot`, `ffmpeg` and `network-manager-applet`.
 
 Not tested yet: automatic window restore at login, a second monitor, brightness, battery warnings, Wi-Fi, Bluetooth, touchpad, performance on a real GPU, screen sharing, logging in from the login screen, and the final step of the log out, reboot and shutdown buttons.

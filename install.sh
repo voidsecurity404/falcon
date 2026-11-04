@@ -62,7 +62,6 @@ targets=(
     .local/bin/niri-desk-tr
     .local/bin/niri_desk_tr.py
     .config/hypr/niri-desk-lang.conf
-    .local/bin/niri-desk-profile
     .local/bin/niri-desk-session
     .local/bin/niri-desk-translate
     .local/bin/niri-desk-backup
@@ -207,7 +206,6 @@ do_it cp -a "$root/bin/." "$HOME/.local/bin/"
 # Foydalanuvchi sozlamalari va fon rasmlari ustidan yozilmaydi.
 do_it mkdir -p "$HOME/.config/niri-desk" "$HOME/Pictures/Wallpapers" "$HOME/Pictures/Wallpapers/Live" "$HOME/.local/share/fonts/niri-desk"
 do_it cp "$root/config/niri-desk/tmux.conf" "$root/config/niri-desk/defaults.json" "$root/config/niri-desk/i18n-ru.json" "$root/config/niri-desk/emoji.json" "$HOME/.config/niri-desk/"
-[[ -e "$HOME/.config/niri-desk/profiles.json" ]] || do_it cp "$root/config/niri-desk/profiles.json" "$HOME/.config/niri-desk/profiles.json"
 [[ -e "$HOME/.config/niri-desk/settings.json" ]] || do_it cp "$root/config/niri-desk/settings.json" "$HOME/.config/niri-desk/settings.json"
 do_it cp -n "$root"/wallpapers/* "$HOME/Pictures/Wallpapers/"
 do_it cp -a "$root"/fonts/. "$HOME/.local/share/fonts/niri-desk/"

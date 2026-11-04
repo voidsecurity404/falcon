@@ -15,7 +15,7 @@ SET = HOME / ".config/niri-desk/settings.json"
 GEN = HOME / ".config/niri/generated"
 STATE = HOME / ".local/state/niri-desk"
 FAILDIR = Path("/tmp/nd-fail")
-LIB = {p: p.read_text() for p in (HOME / ".config/niri-desk/profiles.json",) if p.exists()}
+LIB = {}
 PW = os.environ.get("NIRI_DESK_TEST_PW", "")
 FEATURES, CUR = [], None
 KEYC = {**{c: k for c, k in zip("qwertyuiop", range(16, 26))}, **{c: k for c, k in zip("asdfghjkl", range(30, 39))}, **{c: k for c, k in zip("zxcvbnm", range(44, 51))},
@@ -2906,7 +2906,6 @@ def _():
 # ---------------------------------------------------------------------------------------
 # Yangi funksiyalar
 LBIN = HOME / ".local/bin"
-PROFILES = HOME / ".config/niri-desk/profiles.json"
 
 
 def run(*argv, stdin=None, timeout=30):
@@ -2983,67 +2982,6 @@ def _():
     ipc("dashboard")
     wait(lambda: st()["popup"] == "dashboard", 2)
     ok(st()["dashTab"] == 1)
-
-
-feature("profile", "Ish profillari")
-
-FOOTA = {"workspace": 1, "cmd": "foot --app-id prof-a sleep 900", "match": "^prof-a$"}
-FOOTB = {"workspace": 2, "cmd": "foot --app-id prof-b sleep 900", "match": "^prof-b$"}
-
-
-def wsof(app):
-    ids = {w["id"]: w["idx"] for w in wsl()}
-    return next((ids[w["workspace_id"]] for w in windows() if w["app_id"] == app), None)
-
-
-@case("Dasturlar o'z workspace'ida ochiladi")
-def _():
-    write_json(PROFILES, [{"name": "T", "windows": [FOOTA, FOOTB]}])
-    ok(run("niri-desk-profile", "T").returncode == 0)
-    ok(wsof("prof-a") == 1 and wsof("prof-b") == 2, windows())
-
-
-@case("Oxirida birinchi workspace'ga qaytadi")
-def _():
-    write_json(PROFILES, [{"name": "T", "windows": [FOOTA, FOOTB]}])
-    run("niri-desk-profile", "T")
-    ok(active_ws() == 1, active_ws())
-
-
-@case("Ochiq dastur qayta ochilmaydi")
-def _():
-    write_json(PROFILES, [{"name": "T", "windows": [FOOTA]}])
-    run("niri-desk-profile", "T")
-    run("niri-desk-profile", "T")
-    ok(sum(w["app_id"] == "prof-a" for w in windows()) == 1)
-
-
-@case("O'rnatilmagan dastur xato chiqarmaydi va xabarda aytiladi")
-def _():
-    write_json(PROFILES, [{"name": "T", "windows": [{"workspace": 2, "cmd": "yoq-dastur"}, FOOTB]}])
-    ok(run("niri-desk-profile", "T").returncode == 0)
-    ok(wsof("prof-b") is not None)
-    wait(lambda: "yoq-dastur" in st()["toastSub"], 4, "aytilmadi")
-
-
-@case("Noma'lum profil xato qaytaradi")
-def _():
-    ok(run("niri-desk-profile", "yoq").returncode == 1)
-
-
-@case("Noto'g'ri fayl dasturni yiqitmaydi")
-def _():
-    PROFILES.write_text("{buzuq")
-    time.sleep(0.6)
-    ok(run("niri-desk-profile", "T").returncode == 1)
-
-
-@case("Fayl o'zgarsa ro'yxat qayta o'qiladi")
-def _():
-    write_json(PROFILES, [{"name": "A"}])
-    wait(lambda: st()["profiles"] == 1, 3)
-    write_json(PROFILES, [{"name": "A"}, {"name": "B"}, {"name": "C"}])
-    wait(lambda: st()["profiles"] == 3, 3, "yangilanmadi")
 
 
 feature("restore", "Sessiyani tiklash")
@@ -3524,10 +3462,10 @@ def _():
     p.unlink()
 
 
-@case("Sozlama va profillar bor")
+@case("Sozlama bor")
 def _():
     export()
-    ok("niri-desk/settings.json" in members() and "niri-desk/profiles.json" in members())
+    ok("niri-desk/settings.json" in members())
 
 
 @case("Import sozlamani qaytaradi")
@@ -4629,13 +4567,6 @@ def _():
 def _():
     settings(appearance__language="ru")
     wait(lambda: st()["lang"] == "ru" and st()["sample"] == "Настройки", 3, "almashmadi")
-
-
-@case("Skript xabari tilga ergashadi")
-def _():
-    settings(appearance__language="ru")
-    ok(run("niri-desk-profile", "yoq").returncode == 1)
-    wait(lambda: st()["toast"] == "Профиль не найден", 3, "tarjima bo'lmadi")
 
 
 @case("Klavish sarlavhalari tilga ergashadi")

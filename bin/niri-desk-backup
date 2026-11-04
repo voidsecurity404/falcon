@@ -14,7 +14,7 @@ from pathlib import Path
 
 HOME = Path.home()
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
-ITEMS = ["niri-desk/settings.json", "niri-desk/profiles.json", "niri-desk/widgets.json", "niri-desk/note.txt", "niri/cfg/user.kdl"]
+ITEMS = ["niri-desk/settings.json", "niri-desk/widgets.json", "niri-desk/note.txt", "niri/cfg/user.kdl"]
 
 
 def export(target):
