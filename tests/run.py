@@ -4338,13 +4338,6 @@ def _():
     wait(windows, 6, "dastur ochilmadi")
 
 
-@case("Mod+Space ham xuddi shu menyuni ochadi")
-def _():
-    key("mod", "space")
-    wait(rofi_open, 3)
-    ok("drun" in sh("ps -o args= -C rofi").stdout)
-
-
 feature("rofi-search", "Mod+A: Поиск bo'limi")
 
 
