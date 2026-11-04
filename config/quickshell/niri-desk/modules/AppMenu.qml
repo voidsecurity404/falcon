@@ -9,541 +9,731 @@ import "../services/tools.js" as Tools
 
 // App menu: rises from the bottom center of the screen. Typing searches apps, and ">" lists
 // commands, ">wallpaper" among them. The session buttons sit beside the search field.
-LazyLoader {
-    active: Ui.menuAlive
+// The window stays built between openings, so it opens at once with its icons ready.
+PanelWindow {
+    id: root
 
-    PanelWindow {
-        id: root
+    readonly property bool closing: Ui.popup !== "menu"
+    // A panel at the bottom takes the edge, so the menu floats above it.
+    readonly property int edgeGap: Settings.bottom ? 56 : 0
+    // The card reaches this far below the edge, so its overshoot never lifts it off the screen.
+    readonly property int overdraw: Settings.bottom ? 0 : 28
+    readonly property int rowHeight: 54
+    readonly property int maxRows: 7
+    readonly property int padding: 12
+    readonly property size wallCard: Qt.size(180, 210)
+    readonly property var emphasized: [0.2, 0, 0, 1, 1, 1]
 
-        readonly property bool closing: Ui.popup !== "menu"
-        // A panel at the bottom takes the edge, so the menu floats above it.
-        readonly property int edgeGap: Settings.bottom ? 56 : 0
-        readonly property int rowHeight: 54
-        readonly property int maxRows: 7
-        readonly property int padding: 12
-        readonly property size wallCard: Qt.size(180, 210)
+    property string query: ""
+    property int selected: 0
+    property int wallSelected: 0
+    property real reveal: 0
+    // Drives the rows and buttons that follow the card on opening, 0 to 1.
+    property real stagger: 0
+    property var lastPointer: null
+    // Dangerous actions need a second press, this holds the first one.
+    property string armed: ""
+    property string hoveredSession: ""
 
-        property string query: ""
-        property int selected: 0
-        property int wallSelected: 0
-        property real reveal: 0
-        property var lastPointer: null
-        // Dangerous actions need a second press, this holds the first one.
-        property string armed: ""
-        property string hoveredSession: ""
+    readonly property bool commandMode: query[0] === ">" || query[0] === "Ю"
+    readonly property string commandText: commandMode ? query.slice(1).replace(/^\s+/, "") : ""
+    readonly property string commandWord: commandText.split(/\s+/)[0]
+    readonly property string commandRest: commandText.slice(commandWord.length).trim()
+    readonly property bool wallpaperMode: commandMode && wordIs(["wallpaper", "обои"])
+    readonly property bool schemeMode: commandMode && wordIs(["scheme", "стиль"]) && commandText.length > commandWord.length
+    readonly property bool calcMode: commandMode && wordIs(["calc", "счёт", "счет"]) && commandText.length > commandWord.length
+    readonly property string mode: wallpaperMode ? "wallpaper" : calcMode ? "calc" : schemeMode ? "scheme" : commandMode ? "commands" : "apps"
 
-        readonly property bool commandMode: query[0] === ">" || query[0] === "Ю"
-        readonly property string commandText: commandMode ? query.slice(1).replace(/^\s+/, "") : ""
-        readonly property string commandWord: commandText.split(/\s+/)[0]
-        readonly property string commandRest: commandText.slice(commandWord.length).trim()
-        readonly property bool wallpaperMode: commandMode && wordIs(["wallpaper", "обои"])
-        readonly property bool schemeMode: commandMode && wordIs(["scheme", "стиль"]) && commandText.length > commandWord.length
-        readonly property bool calcMode: commandMode && wordIs(["calc", "счёт", "счет"]) && commandText.length > commandWord.length
+    // What is on screen follows the text. A change of mode first fades the old content away.
+    property string shownMode: "apps"
+    property var shownRows: []
+    property var shownIds: []
+    property var rowsById: ({})
+    property real viewFade: 1
+    readonly property bool shownWide: shownMode === "wallpaper"
 
-        readonly property var session: [
-            {
-                id: "lock",
-                icon: "lock",
-                name: Tr.t("Lock screen"),
-                keywords: "lock блокировка",
-                confirm: false,
-                run: () => Quickshell.execDetached(["loginctl", "lock-session"])
-            },
-            {
-                id: "sleep",
-                icon: "moon",
-                name: Tr.t("Sleep"),
-                keywords: "sleep suspend сон",
-                confirm: false,
-                run: () => Quickshell.execDetached(["systemctl", "suspend"])
-            },
-            {
-                id: "logout",
-                icon: "logout",
-                name: Tr.t("Log out"),
-                keywords: "logout quit выход",
-                confirm: true,
-                run: () => Quickshell.execDetached(["niri", "msg", "action", "quit", "--skip-confirmation"])
-            },
-            {
-                id: "reboot",
-                icon: "reboot",
-                name: Tr.t("Reboot"),
-                keywords: "reboot restart перезагрузка",
-                confirm: true,
-                run: () => Quickshell.execDetached(["systemctl", "reboot"])
-            },
-            {
-                id: "power",
-                icon: "power",
-                name: Tr.t("Shut down"),
-                keywords: "shutdown poweroff выключение",
-                confirm: true,
-                run: () => Quickshell.execDetached(["systemctl", "poweroff"])
-            }
-        ]
+    readonly property var session: [
+        {
+            id: "lock",
+            icon: "lock",
+            name: Tr.t("Lock screen"),
+            keywords: "lock блокировка",
+            confirm: false,
+            run: () => Quickshell.execDetached(["loginctl", "lock-session"])
+        },
+        {
+            id: "sleep",
+            icon: "moon",
+            name: Tr.t("Sleep"),
+            keywords: "sleep suspend сон",
+            confirm: false,
+            run: () => Quickshell.execDetached(["systemctl", "suspend"])
+        },
+        {
+            id: "logout",
+            icon: "logout",
+            name: Tr.t("Log out"),
+            keywords: "logout quit выход",
+            confirm: true,
+            run: () => Quickshell.execDetached(["niri", "msg", "action", "quit", "--skip-confirmation"])
+        },
+        {
+            id: "reboot",
+            icon: "reboot",
+            name: Tr.t("Reboot"),
+            keywords: "reboot restart перезагрузка",
+            confirm: true,
+            run: () => Quickshell.execDetached(["systemctl", "reboot"])
+        },
+        {
+            id: "power",
+            icon: "power",
+            name: Tr.t("Shut down"),
+            keywords: "shutdown poweroff выключение",
+            confirm: true,
+            run: () => Quickshell.execDetached(["systemctl", "poweroff"])
+        }
+    ]
 
-        readonly property var commands: [
+    readonly property var commands: [
+        {
+            id: "wallpaper",
+            icon: "wallpaper",
+            name: Tr.t("Change wallpaper"),
+            detail: Tr.t("Choose from your pictures"),
+            keywords: "wallpaper обои",
+            complete: "wallpaper "
+        },
+        {
+            id: "random",
+            icon: "sparkle",
+            name: Tr.t("Random wallpaper"),
+            detail: Tr.t("Pick one for me"),
+            keywords: "random случайные обои",
+            run: () => root.randomWallpaper()
+        },
+        {
+            id: "scheme",
+            icon: "palette",
+            name: Tr.t("Color style"),
+            detail: Tr.t("How colors come from the wallpaper"),
+            keywords: "scheme стиль цвет",
+            complete: "scheme "
+        },
+        {
+            id: "light",
+            icon: "sun",
+            name: Tr.t("Light"),
+            detail: Tr.t("Mode"),
+            keywords: "light светлый",
+            run: () => Settings.set("appearance.mode", "light")
+        },
+        {
+            id: "dark",
+            icon: "moon",
+            name: Tr.t("Dark"),
+            detail: Tr.t("Mode"),
+            keywords: "dark тёмный темный",
+            run: () => Settings.set("appearance.mode", "dark")
+        },
+        {
+            id: "calc",
+            icon: "chip",
+            name: Tr.t("Calculator"),
+            detail: Tr.t("Enter: copy"),
+            keywords: "calc счёт счет",
+            complete: "calc "
+        },
+        {
+            id: "settings",
+            icon: "settings",
+            name: Tr.t("Settings"),
+            detail: "Mod+,",
+            keywords: "settings настройки",
+            run: () => Ui.settingsOpen = true
+        }
+    ].concat(session.map(s => Object.assign({
+            detail: Tr.t("System")
+        }, s)))
+
+    readonly property var schemes: [["scheme-tonal-spot", "Tonal"], ["scheme-vibrant", "Vibrant"], ["scheme-expressive", "Expressive"], ["scheme-fidelity", "Faithful"], ["scheme-content", "Content"], ["scheme-neutral", "Neutral"], ["scheme-monochrome", "Monochrome"], ["scheme-rainbow", "Rainbow"], ["scheme-fruit-salad", "Fruit salad"]]
+
+    readonly property var wallFiles: {
+        const key = commandRest.toLowerCase();
+        const all = Wallpapers.liveFiles.concat(Wallpapers.imageFiles);
+        return key === "" ? all : all.filter(path => Tools.score(Wallpapers.nameOf(path), key, "") > 0);
+    }
+
+    // One row object per app, built once: searching only chooses among them.
+    readonly property var appEntries: DesktopEntries.applications.values.filter(a => !a.noDisplay).sort((a, b) => a.name.localeCompare(b.name)).map(entry => ({
+                id: "app:" + entry.id,
+                image: Quickshell.iconPath(entry.icon, true),
+                icon: "windows",
+                name: entry.name,
+                detail: entry.comment || entry.genericName || "",
+                extra: entry.genericName + " " + entry.keywords.join(" "),
+                run: () => entry.execute()
+            }))
+
+    readonly property var results: {
+        if (wallpaperMode)
+            return [];
+        if (calcMode)
+            return calcRows();
+        if (schemeMode)
+            return schemeRows();
+        if (commandMode)
+            return ranked(commands, c => c.name, c => c.keywords, commandText.toLowerCase());
+        return ranked(appEntries, a => a.name, a => a.extra, query.trim().toLowerCase());
+    }
+
+    function wordIs(names) {
+        const word = commandWord.toLowerCase();
+        return names.indexOf(word) >= 0 || names.indexOf(Tools.swapLayout(word)) >= 0;
+    }
+
+    // Keeps the original order on ties. An exact match hides guesses from scattered letters.
+    function ranked(items, nameOf, extraOf, q) {
+        const rows = items.map((item, order) => ({
+                    item: item,
+                    order: order,
+                    rank: Tools.score(nameOf(item), q, extraOf(item))
+                })).filter(r => r.rank > 0).sort((a, b) => b.rank - a.rank || a.order - b.order);
+        const exact = rows.some(r => r.rank >= 300);
+        return rows.filter(r => !exact || r.rank >= 300).map(r => r.item);
+    }
+
+    function schemeRows() {
+        const key = commandRest.toLowerCase();
+        const current = Settings.get("appearance.scheme", "");
+        const rows = schemes.map(s => ({
+                    id: s[0],
+                    icon: s[0] === current ? "check" : "palette",
+                    name: Tr.t(s[1]),
+                    detail: "",
+                    run: () => Settings.set("appearance.scheme", s[0])
+                }));
+        return ranked(rows, r => r.name, r => r.id, key);
+    }
+
+    function calcRows() {
+        let value = "";
+        try {
+            value = commandRest === "" ? "" : Tools.calc(commandRest);
+        } catch (e) {
+            value = "";
+        }
+        return [
             {
-                id: "wallpaper",
-                icon: "wallpaper",
-                name: Tr.t("Change wallpaper"),
-                detail: Tr.t("Choose from your pictures"),
-                keywords: "wallpaper обои",
-                complete: "wallpaper "
-            },
-            {
-                id: "random",
-                icon: "sparkle",
-                name: Tr.t("Random wallpaper"),
-                detail: Tr.t("Pick one for me"),
-                keywords: "random случайные обои",
-                run: () => root.randomWallpaper()
-            },
-            {
-                id: "scheme",
-                icon: "palette",
-                name: Tr.t("Color style"),
-                detail: Tr.t("How colors come from the wallpaper"),
-                keywords: "scheme стиль цвет",
-                complete: "scheme "
-            },
-            {
-                id: "light",
-                icon: "sun",
-                name: Tr.t("Light"),
-                detail: Tr.t("Mode"),
-                keywords: "light светлый",
-                run: () => Settings.set("appearance.mode", "light")
-            },
-            {
-                id: "dark",
-                icon: "moon",
-                name: Tr.t("Dark"),
-                detail: Tr.t("Mode"),
-                keywords: "dark тёмный темный",
-                run: () => Settings.set("appearance.mode", "dark")
-            },
-            {
-                id: "calc",
+                id: "result",
                 icon: "chip",
-                name: Tr.t("Calculator"),
+                name: value || Tr.t("incomplete expression"),
                 detail: Tr.t("Enter: copy"),
-                keywords: "calc счёт счет",
-                complete: "calc "
-            },
-            {
-                id: "settings",
-                icon: "settings",
-                name: Tr.t("Settings"),
-                detail: "Mod+,",
-                keywords: "settings настройки",
-                run: () => Ui.settingsOpen = true
-            }
-        ].concat(session.map(s => Object.assign({
-                detail: Tr.t("System")
-            }, s)))
-
-        readonly property var schemes: [["scheme-tonal-spot", "Tonal"], ["scheme-vibrant", "Vibrant"], ["scheme-expressive", "Expressive"], ["scheme-fidelity", "Faithful"], ["scheme-content", "Content"], ["scheme-neutral", "Neutral"], ["scheme-monochrome", "Monochrome"], ["scheme-rainbow", "Rainbow"], ["scheme-fruit-salad", "Fruit salad"]]
-
-        readonly property var wallFiles: {
-            const key = commandRest.toLowerCase();
-            const all = Wallpapers.liveFiles.concat(Wallpapers.imageFiles);
-            return key === "" ? all : all.filter(path => Tools.score(Wallpapers.nameOf(path), key, "") > 0);
-        }
-
-        readonly property var results: {
-            if (wallpaperMode)
-                return [];
-            if (calcMode)
-                return calcRows();
-            if (schemeMode)
-                return schemeRows();
-            if (commandMode)
-                return ranked(commands, c => c.name, c => c.keywords, commandText.toLowerCase());
-            return appRows(query.trim().toLowerCase());
-        }
-
-        function wordIs(names) {
-            const word = commandWord.toLowerCase();
-            return names.indexOf(word) >= 0 || names.indexOf(Tools.swapLayout(word)) >= 0;
-        }
-
-        // Keeps the original order on ties. An exact match hides guesses from scattered letters.
-        function ranked(items, nameOf, extraOf, q) {
-            const rows = items.map((item, order) => ({
-                        item: item,
-                        order: order,
-                        rank: Tools.score(nameOf(item), q, extraOf(item))
-                    })).filter(r => r.rank > 0).sort((a, b) => b.rank - a.rank || a.order - b.order);
-            const exact = rows.some(r => r.rank >= 300);
-            return rows.filter(r => !exact || r.rank >= 300).map(r => r.item);
-        }
-
-        function appRows(q) {
-            const apps = DesktopEntries.applications.values.filter(a => !a.noDisplay).sort((a, b) => a.name.localeCompare(b.name));
-            return ranked(apps, a => a.name, a => a.genericName + " " + a.keywords.join(" "), q).map(entry => ({
-                        id: entry.id,
-                        image: Quickshell.iconPath(entry.icon, true),
-                        icon: "windows",
-                        name: entry.name,
-                        detail: entry.comment || entry.genericName || "",
-                        run: () => entry.execute()
-                    }));
-        }
-
-        function schemeRows() {
-            const key = commandRest.toLowerCase();
-            const current = Settings.get("appearance.scheme", "");
-            const rows = schemes.map(s => ({
-                        id: s[0],
-                        icon: s[0] === current ? "check" : "palette",
-                        name: Tr.t(s[1]),
-                        detail: "",
-                        run: () => Settings.set("appearance.scheme", s[0])
-                    }));
-            return ranked(rows, r => r.name, r => r.id, key);
-        }
-
-        function calcRows() {
-            let value = "";
-            try {
-                value = commandRest === "" ? "" : Tools.calc(commandRest);
-            } catch (e) {
-                value = "";
-            }
-            return [
-                {
-                    id: "result",
-                    icon: "chip",
-                    name: value || Tr.t("incomplete expression"),
-                    detail: Tr.t("Enter: copy"),
-                    run: () => {
-                        if (!value)
-                            return;
-                        Quickshell.clipboardText = value;
-                        Toasts.show(Tr.t("Copied"), value, "check");
-                    }
+                run: () => {
+                    if (!value)
+                        return;
+                    Quickshell.clipboardText = value;
+                    Toasts.show(Tr.t("Copied"), value, "check");
                 }
-            ];
-        }
-
-        function randomWallpaper() {
-            const all = Wallpapers.imageFiles.filter(path => path !== Wallpapers.currentImage);
-            if (all.length > 0)
-                setWallpaper(all[Math.floor(Math.random() * all.length)]);
-        }
-
-        function setWallpaper(path) {
-            Wallpapers.chosen(path, Wallpapers.liveFiles.indexOf(path) >= 0);
-            Ui.popup = "";
-            Ui.run("niri-desk-wallpaper", path);
-        }
-
-        function runSession(item) {
-            if (item.confirm && armed !== item.id) {
-                armed = item.id;
-                disarm.restart();
-                return;
             }
-            armed = "";
-            Ui.popup = "";
-            item.run();
-        }
+        ];
+    }
 
-        function execute(index) {
-            if (wallpaperMode) {
-                if (wallFiles[wallSelected])
-                    setWallpaper(wallFiles[wallSelected]);
-                return;
-            }
-            const item = results[index];
-            if (!item)
-                return;
-            if (item.complete) {
-                input.text = ">" + item.complete;
-                return;
-            }
-            // A click or Enter in the list counts the same as a session button.
-            if (item.confirm !== undefined) {
-                runSession(item);
-                return;
-            }
-            Ui.popup = "";
-            item.run();
-        }
+    function randomWallpaper() {
+        const all = Wallpapers.imageFiles.filter(path => path !== Wallpapers.currentImage);
+        if (all.length > 0)
+            setWallpaper(all[Math.floor(Math.random() * all.length)]);
+    }
 
-        function startWallpapers() {
-            const live = wallFiles.indexOf(Wallpapers.currentLive);
-            wallSelected = Math.max(0, live >= 0 ? live : wallFiles.indexOf(Wallpapers.currentImage));
-            wallView.positionViewAtIndex(wallSelected, ListView.Center);
-        }
+    function setWallpaper(path) {
+        Wallpapers.chosen(path, Wallpapers.liveFiles.indexOf(path) >= 0);
+        Ui.popup = "";
+        Ui.run("niri-desk-wallpaper", path);
+    }
 
-        // A row left under the pointer stays unselected until the pointer really moves.
-        function pointerMoved(index, point) {
-            if (lastPointer && Math.abs(lastPointer.x - point.x) + Math.abs(lastPointer.y - point.y) > 3)
-                selected = index;
-            lastPointer = point;
+    function runSession(item) {
+        if (item.confirm && armed !== item.id) {
+            armed = item.id;
+            disarm.restart();
+            return;
         }
+        armed = "";
+        Ui.popup = "";
+        item.run();
+    }
 
-        onClosingChanged: {
-            if (closing) {
-                fadeIn.stop();
-                fadeOut.start();
-            } else {
-                fadeOut.stop();
-                input.text = "";
-                input.forceActiveFocus();
-                fadeIn.start();
-            }
+    function execute(index) {
+        if (wallpaperMode) {
+            if (wallFiles[wallSelected])
+                setWallpaper(wallFiles[wallSelected]);
+            return;
         }
-        onResultsChanged: {
-            selected = 0;
-            Ui.launcherSelected = 0;
-            Ui.launcherRows = results.map(r => r.name);
+        const item = results[index];
+        if (!item)
+            return;
+        if (item.complete) {
+            input.text = ">" + item.complete;
+            return;
         }
-        onSelectedChanged: Ui.launcherSelected = selected
-        onWallpaperModeChanged: {
-            if (wallpaperMode) {
-                Wallpapers.refresh();
-                startWallpapers();
-            }
+        // A click or Enter in the list counts the same as a session button.
+        if (item.confirm !== undefined) {
+            runSession(item);
+            return;
         }
-        onCommandRestChanged: {
-            if (wallpaperMode)
-                wallSelected = 0;
-        }
-        Component.onCompleted: {
-            Ui.launcherRows = results.map(r => r.name);
+        Ui.popup = "";
+        item.run();
+    }
+
+    function startWallpapers() {
+        const live = wallFiles.indexOf(Wallpapers.currentLive);
+        wallSelected = Math.max(0, live >= 0 ? live : wallFiles.indexOf(Wallpapers.currentImage));
+        wallView.positionViewAtIndex(wallSelected, ListView.Center);
+    }
+
+    // A row left under the pointer stays unselected until the pointer really moves.
+    function pointerMoved(index, point) {
+        if (lastPointer && Math.abs(lastPointer.x - point.x) + Math.abs(lastPointer.y - point.y) > 3)
+            selected = index;
+        lastPointer = point;
+    }
+
+    // How far along an item with this delay is. Bindings on it follow `stagger`.
+    function progress(delay) {
+        const t = Math.max(0, Math.min(1, (stagger * 1.6 - delay) / 0.6));
+        return 1 - Math.pow(1 - t, 3);
+    }
+
+    function syncRows() {
+        const map = Object.assign({}, rowsById);
+        for (const row of results)
+            map[row.id] = row;
+        rowsById = map;
+        shownRows = results;
+        shownIds = results.map(r => r.id);
+        shownMode = mode;
+        Ui.launcherRows = results.map(r => r.name);
+    }
+
+    function clearForNextTime() {
+        modeSwap.stop();
+        input.text = "";
+        armed = "";
+        hoveredSession = "";
+        selected = 0;
+        viewFade = 1;
+        syncRows();
+        list.positionViewAtBeginning();
+    }
+
+    onClosingChanged: {
+        if (closing) {
+            fadeIn.stop();
+            staggerIn.stop();
+            fadeOut.start();
+        } else {
+            fadeOut.stop();
+            input.forceActiveFocus();
             fadeIn.start();
+            stagger = 0;
+            staggerIn.start();
         }
+    }
+    onQueryChanged: {
+        selected = 0;
+        armed = "";
+    }
+    onModeChanged: modeSwap.restart()
+    onResultsChanged: {
+        if (mode === shownMode && !modeSwap.running)
+            syncRows();
+    }
+    onSelectedChanged: Ui.launcherSelected = selected
+    onWallFilesChanged: wallSelected = Math.min(wallSelected, Math.max(0, wallFiles.length - 1))
+    Component.onCompleted: syncRows()
 
-        anchors {
-            top: true
-            left: true
-            right: true
-            bottom: true
-        }
-        screen: Quickshell.screens.find(s => s.name === Niri.focusedOutput) || Quickshell.screens[0]
-        exclusionMode: ExclusionMode.Ignore
-        color: "transparent"
-        WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.namespace: "niri-desk-menu"
-        WlrLayershell.keyboardFocus: closing ? WlrKeyboardFocus.None : WlrKeyboardFocus.Exclusive
+    visible: Ui.menuAlive
+    anchors {
+        top: true
+        left: true
+        right: true
+        bottom: true
+    }
+    screen: Quickshell.screens.find(s => s.name === Niri.focusedOutput) || Quickshell.screens[0]
+    exclusionMode: ExclusionMode.Ignore
+    color: "transparent"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.namespace: "niri-desk-menu"
+    WlrLayershell.keyboardFocus: closing ? WlrKeyboardFocus.None : WlrKeyboardFocus.Exclusive
 
-        mask: Region {
-            item: root.closing ? null : catcher
-        }
-        BackgroundEffect.blurRegion: Region {
-            item: card
-            topLeftRadius: card.topLeftRadius
-            topRightRadius: card.topRightRadius
-            bottomLeftRadius: card.bottomLeftRadius
-            bottomRightRadius: card.bottomRightRadius
-        }
+    mask: Region {
+        item: root.closing ? null : catcher
+    }
+    BackgroundEffect.blurRegion: Region {
+        item: card
+        topLeftRadius: card.topLeftRadius
+        topRightRadius: card.topRightRadius
+        bottomLeftRadius: card.bottomLeftRadius
+        bottomRightRadius: card.bottomRightRadius
+    }
 
-        Connections {
-            target: Ui
-            function onLauncherInject(text) {
-                input.text = text;
+    Connections {
+        target: Ui
+        function onLauncherInject(text) {
+            input.text = text;
+        }
+    }
+
+    SequentialAnimation {
+        id: fadeIn
+
+        // The surface reaches the screen a moment after it is mapped.
+        PauseAnimation {
+            duration: 30
+        }
+        NumberAnimation {
+            target: root
+            property: "reveal"
+            to: 1
+            duration: 480
+            easing.type: Easing.OutBack
+            easing.overshoot: 0.8
+        }
+    }
+    NumberAnimation {
+        id: staggerIn
+
+        target: root
+        property: "stagger"
+        to: 1
+        duration: 560
+    }
+    SequentialAnimation {
+        id: fadeOut
+
+        NumberAnimation {
+            target: root
+            property: "reveal"
+            to: 0
+            duration: 230
+            easing.type: Easing.BezierSpline
+            easing.bezierCurve: [0.3, 0, 0.8, 0.15, 1, 1]
+        }
+        ScriptAction {
+            script: {
+                root.stagger = 0;
+                root.clearForNextTime();
+                Ui.menuAlive = false;
+            }
+        }
+    }
+    SequentialAnimation {
+        id: modeSwap
+
+        NumberAnimation {
+            target: root
+            property: "viewFade"
+            to: 0
+            duration: 90
+            easing.type: Easing.InQuad
+        }
+        ScriptAction {
+            script: {
+                root.syncRows();
+                if (root.wallpaperMode) {
+                    Wallpapers.refresh();
+                    const live = root.wallFiles.indexOf(Wallpapers.currentLive);
+                    root.wallSelected = Math.max(0, live >= 0 ? live : root.wallFiles.indexOf(Wallpapers.currentImage));
+                    wallView.positionViewAtIndex(root.wallSelected, ListView.Center);
+                }
+            }
+        }
+        NumberAnimation {
+            target: root
+            property: "viewFade"
+            to: 1
+            duration: 200
+            easing.type: Easing.OutCubic
+        }
+    }
+    Timer {
+        id: disarm
+
+        interval: 4000
+        onTriggered: root.armed = ""
+    }
+
+    MouseArea {
+        id: catcher
+
+        anchors.fill: parent
+        onClicked: Ui.popup = ""
+    }
+
+    // Inner curves that join the menu to the screen edge. They stay on the edge when the card
+    // overshoots, and appear as soon as the card has risen far enough to meet them.
+    Repeater {
+        model: Settings.bottom ? [] : [0, 1]
+
+        delegate: Shape {
+            id: curve
+
+            required property int modelData
+
+            x: modelData === 0 ? card.x - 18 : card.x + card.width
+            y: root.height - 18
+            width: 18
+            height: 18
+            opacity: Math.max(0, Math.min(1, (root.height - card.y - root.overdraw) / 40))
+            preferredRendererType: Shape.CurveRenderer
+
+            ShapePath {
+                strokeWidth: 0
+                strokeColor: "transparent"
+                fillColor: Theme.glassTop
+
+                PathSvg {
+                    path: curve.modelData === 0 ? "M0 18 L18 18 L18 0 A18 18 0 0 1 0 18 Z" : "M18 18 L0 18 L0 0 A18 18 0 0 0 18 18 Z"
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        id: card
+
+        readonly property int radiusSize: 26
+        readonly property int bodyHeight: viewport.height + 10 + 46 + root.padding * 2
+
+        x: Math.round((parent.width - width) / 2)
+        y: parent.height - root.edgeGap - bodyHeight + (1 - root.reveal) * (bodyHeight + root.edgeGap + 4)
+        width: root.shownWide ? Math.min(980, parent.width - 40) : 640
+        height: bodyHeight + root.overdraw
+        topLeftRadius: radiusSize
+        topRightRadius: radiusSize
+        bottomLeftRadius: Settings.bottom ? radiusSize : 0
+        bottomRightRadius: Settings.bottom ? radiusSize : 0
+        border.width: 1
+        border.color: Theme.panelEdge
+        gradient: Gradient {
+            GradientStop {
+                position: 0
+                color: Theme.panel
+            }
+            GradientStop {
+                position: 1
+                color: Theme.glassTop
             }
         }
 
-        SequentialAnimation {
-            id: fadeIn
+        Behavior on width {
+            enabled: root.reveal > 0.5
 
-            // The surface reaches the screen a moment after it is created.
-            PauseAnimation {
-                duration: 40
-            }
             NumberAnimation {
-                target: root
-                property: "reveal"
-                to: 1
-                duration: 360
+                duration: 420
                 easing.type: Easing.BezierSpline
-                easing.bezierCurve: [0.2, 0, 0, 1, 1, 1]
+                easing.bezierCurve: root.emphasized
             }
         }
-        SequentialAnimation {
-            id: fadeOut
 
-            NumberAnimation {
-                target: root
-                property: "reveal"
-                to: 0
-                duration: 240
-                easing.type: Easing.InCubic
-            }
-            ScriptAction {
-                script: Ui.menuAlive = false
-            }
-        }
-        Timer {
-            id: disarm
-
-            interval: 4000
-            onTriggered: root.armed = ""
-        }
-
+        // Keeps clicks on the menu from closing it.
         MouseArea {
-            id: catcher
-
             anchors.fill: parent
-            onClicked: Ui.popup = ""
         }
 
-        Rectangle {
-            id: card
+        // Rows above the search field. Only this height animates, so the field never moves.
+        Item {
+            id: viewport
 
-            readonly property int radiusSize: 26
-            readonly property bool wide: root.wallpaperMode
+            x: root.padding
+            y: root.padding
+            width: parent.width - root.padding * 2
+            height: root.shownWide ? root.wallCard.height + 30 : root.rowHeight * Math.min(root.maxRows, Math.max(1, root.shownRows.length))
+            clip: true
+            opacity: root.viewFade
+            scale: 0.97 + 0.03 * root.viewFade
 
-            x: Math.round((parent.width - width) / 2)
-            y: parent.height - root.edgeGap - height + (1 - root.reveal) * (height + root.edgeGap)
-            width: wide ? Math.min(980, parent.width - 40) : 640
-            height: column.implicitHeight + root.padding * 2
-            topLeftRadius: radiusSize
-            topRightRadius: radiusSize
-            bottomLeftRadius: Settings.bottom ? radiusSize : 0
-            bottomRightRadius: Settings.bottom ? radiusSize : 0
-            border.width: 1
-            border.color: Theme.panelEdge
-            gradient: Gradient {
-                GradientStop {
-                    position: 0
-                    color: Theme.panel
-                }
-                GradientStop {
-                    position: 1
-                    color: Theme.glassTop
-                }
-            }
+            Behavior on height {
+                enabled: root.reveal > 0.5
 
-            Behavior on width {
                 NumberAnimation {
                     duration: 340
                     easing.type: Easing.BezierSpline
-                    easing.bezierCurve: [0.2, 0, 0, 1, 1, 1]
-                }
-            }
-            Behavior on height {
-                enabled: root.reveal === 1
-
-                NumberAnimation {
-                    duration: 300
-                    easing.type: Easing.BezierSpline
-                    easing.bezierCurve: [0.2, 0, 0, 1, 1, 1]
+                    easing.bezierCurve: root.emphasized
                 }
             }
 
-            // Inner curves that join the menu to the screen edge.
-            Repeater {
-                model: Settings.bottom ? [] : [0, 1]
+            // Apps and commands
+            ListView {
+                id: list
 
-                delegate: Shape {
-                    id: curve
+                anchors.fill: parent
+                visible: !root.shownWide
+                cacheBuffer: 600
+                currentIndex: root.selected
+                boundsBehavior: Flickable.StopAtBounds
+                highlightFollowsCurrentItem: false
+                highlightRangeMode: ListView.ApplyRange
+                preferredHighlightBegin: 0
+                preferredHighlightEnd: height
+                highlightMoveDuration: 200
+                highlightMoveVelocity: -1
+                model: ScriptModel {
+                    values: root.shownIds
+                }
 
-                    required property int modelData
+                highlight: Rectangle {
+                    y: root.selected * root.rowHeight
+                    width: list.width
+                    height: root.rowHeight
+                    radius: 15
+                    visible: list.count > 0
+                    color: list.currentItem && list.currentItem.isArmed ? Theme.error : Qt.alpha(Theme.text, 0.1)
 
-                    x: modelData === 0 ? -18 : card.width
-                    y: card.height - 18
-                    width: 18
-                    height: 18
-                    preferredRendererType: Shape.CurveRenderer
-
-                    ShapePath {
-                        strokeWidth: 0
-                        strokeColor: "transparent"
-                        fillColor: Theme.glassTop
-
-                        PathSvg {
-                            path: curve.modelData === 0 ? "M0 18 L18 18 L18 0 A18 18 0 0 1 0 18 Z" : "M18 18 L0 18 L0 0 A18 18 0 0 0 18 18 Z"
+                    Behavior on y {
+                        NumberAnimation {
+                            duration: 200
+                            easing.type: Easing.BezierSpline
+                            easing.bezierCurve: root.emphasized
+                        }
+                    }
+                    Behavior on color {
+                        ColorAnimation {
+                            duration: 160
                         }
                     }
                 }
-            }
 
-            // Keeps clicks on the menu from closing it.
-            MouseArea {
-                anchors.fill: parent
-            }
-
-            Column {
-                id: column
-
-                x: root.padding
-                y: root.padding
-                width: parent.width - root.padding * 2
-                spacing: 10
-
-                // Apps and commands
-                ListView {
-                    id: list
-
-                    width: parent.width
-                    height: root.wallpaperMode ? 0 : root.rowHeight * Math.min(root.maxRows, Math.max(1, count))
-                    visible: !root.wallpaperMode
-                    clip: true
-                    model: root.results
-                    currentIndex: root.selected
-                    boundsBehavior: Flickable.StopAtBounds
-                    highlightMoveDuration: 140
-                    highlightMoveVelocity: -1
-                    highlightResizeDuration: 0
-                    highlight: Rectangle {
-                        radius: 14
-                        color: root.results[root.selected] && root.armed === root.results[root.selected].id ? Theme.error : Qt.alpha(Theme.text, 0.1)
+                // Leaving rows are gone before new ones come, so text never overlaps.
+                add: Transition {
+                    SequentialAnimation {
+                        PropertyAction {
+                            property: "opacity"
+                            value: 0
+                        }
+                        PauseAnimation {
+                            duration: 70
+                        }
+                        NumberAnimation {
+                            property: "opacity"
+                            to: 1
+                            duration: 180
+                            easing.type: Easing.OutCubic
+                        }
                     }
-
-                    Label {
-                        anchors.centerIn: parent
-                        visible: list.count === 0
-                        text: Tr.t("Nothing found")
-                        color: Theme.muted
+                }
+                remove: Transition {
+                    NumberAnimation {
+                        property: "opacity"
+                        to: 0
+                        duration: 70
                     }
+                }
+                displaced: Transition {
+                    NumberAnimation {
+                        property: "y"
+                        duration: 260
+                        easing.type: Easing.BezierSpline
+                        easing.bezierCurve: root.emphasized
+                    }
+                    NumberAnimation {
+                        properties: "opacity,scale"
+                        to: 1
+                        duration: 160
+                    }
+                }
+                move: Transition {
+                    NumberAnimation {
+                        property: "y"
+                        duration: 260
+                        easing.type: Easing.BezierSpline
+                        easing.bezierCurve: root.emphasized
+                    }
+                    NumberAnimation {
+                        properties: "opacity,scale"
+                        to: 1
+                        duration: 160
+                    }
+                }
 
-                    delegate: Item {
-                        id: row
+                delegate: Item {
+                    id: row
 
-                        required property var modelData
-                        required property int index
+                    required property string modelData
+                    required property int index
 
-                        readonly property bool isArmed: root.armed !== "" && root.armed === modelData.id
-                        readonly property color nameColor: isArmed ? Theme.pill : Theme.text
-                        readonly property bool hasImage: !!modelData.image && picture.status === Image.Ready
+                    readonly property var entry: root.rowsById[modelData] || null
+                    readonly property bool isSelected: index === root.selected
+                    readonly property bool isArmed: root.armed !== "" && root.armed === modelData
+                    readonly property color nameColor: isArmed ? Theme.pill : Theme.text
+                    readonly property bool hasImage: !!entry && !!entry.image && picture.status === Image.Ready
+                    // Rows unfold upward from the search field.
+                    readonly property real rise: root.progress(Math.max(0, Math.min(root.maxRows, root.shownRows.length) - 1 - index) * 0.07)
 
-                        width: ListView.view.width
-                        height: root.rowHeight
+                    width: ListView.view.width
+                    height: root.rowHeight
 
-                        Image {
-                            id: picture
+                    Item {
+                        anchors.fill: parent
+                        opacity: row.rise
+                        transform: Translate {
+                            y: (1 - row.rise) * 18
+                        }
+                        scale: rowArea.pressed ? 0.98 : 1
 
+                        Behavior on scale {
+                            NumberAnimation {
+                                duration: 110
+                            }
+                        }
+
+                        Item {
                             x: 12
                             anchors.verticalCenter: parent.verticalCenter
                             width: 32
                             height: 32
-                            source: row.modelData.image || ""
-                            sourceSize: Qt.size(64, 64)
-                            asynchronous: true
-                            visible: row.hasImage
-                        }
-                        Icon {
-                            x: 17
-                            anchors.verticalCenter: parent.verticalCenter
-                            visible: !row.hasImage
-                            name: row.modelData.icon
-                            size: 22
-                            color: row.nameColor
+                            scale: row.isSelected ? 1.1 : 1
+
+                            Behavior on scale {
+                                NumberAnimation {
+                                    duration: 260
+                                    easing.type: Easing.OutBack
+                                    easing.overshoot: 2
+                                }
+                            }
+
+                            Image {
+                                id: picture
+
+                                anchors.fill: parent
+                                source: row.entry && row.entry.image ? row.entry.image : ""
+                                sourceSize: Qt.size(64, 64)
+                                asynchronous: true
+                                visible: row.hasImage
+                            }
+                            Icon {
+                                anchors.centerIn: parent
+                                visible: !row.hasImage
+                                name: row.entry ? row.entry.icon : "windows"
+                                size: 22
+                                color: row.nameColor
+                            }
                         }
                         Column {
-                            x: 58
+                            x: row.isSelected ? 62 : 58
                             anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width - 70
+                            width: parent.parent.width - 74
+
+                            Behavior on x {
+                                NumberAnimation {
+                                    duration: 220
+                                    easing.type: Easing.BezierSpline
+                                    easing.bezierCurve: root.emphasized
+                                }
+                            }
 
                             Label {
                                 width: parent.width
-                                text: row.modelData.name
+                                text: row.entry ? row.entry.name : ""
                                 size: 14
                                 color: row.nameColor
                                 elide: Text.ElideRight
@@ -551,278 +741,460 @@ LazyLoader {
                             Label {
                                 width: parent.width
                                 visible: text !== ""
-                                text: row.isArmed ? Tr.t("Press once more to proceed") : row.modelData.detail
+                                text: row.isArmed ? Tr.t("Press once more to proceed") : row.entry ? row.entry.detail : ""
                                 size: 12
                                 color: row.isArmed ? Theme.pill : Theme.muted
                                 elide: Text.ElideRight
                             }
                         }
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onPositionChanged: mouse => root.pointerMoved(row.index, mapToItem(null, mouse.x, mouse.y))
-                            onClicked: root.execute(row.index)
-                        }
+                    }
+                    MouseArea {
+                        id: rowArea
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onPositionChanged: mouse => root.pointerMoved(row.index, mapToItem(null, mouse.x, mouse.y))
+                        onClicked: root.execute(row.index)
+                    }
+                }
+            }
+
+            Label {
+                anchors.centerIn: parent
+                opacity: !root.shownWide && list.count === 0 ? 1 : 0
+                text: Tr.t("Nothing found")
+                color: Theme.muted
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 180
+                    }
+                }
+            }
+
+            // Wallpapers, plain and live
+            ListView {
+                id: wallView
+
+                anchors.fill: parent
+                visible: root.shownWide
+                orientation: ListView.Horizontal
+                spacing: 8
+                cacheBuffer: 400
+                currentIndex: root.wallSelected
+                highlightMoveDuration: 300
+                highlightMoveVelocity: -1
+                highlightRangeMode: ListView.ApplyRange
+                preferredHighlightBegin: (width - root.wallCard.width) / 2
+                preferredHighlightEnd: (width + root.wallCard.width) / 2
+                model: ScriptModel {
+                    values: root.wallFiles
+                }
+
+                add: Transition {
+                    NumberAnimation {
+                        property: "opacity"
+                        from: 0
+                        to: 1
+                        duration: 200
+                    }
+                }
+                remove: Transition {
+                    NumberAnimation {
+                        property: "opacity"
+                        to: 0
+                        duration: 120
+                    }
+                }
+                displaced: Transition {
+                    NumberAnimation {
+                        property: "x"
+                        duration: 280
+                        easing.type: Easing.BezierSpline
+                        easing.bezierCurve: root.emphasized
+                    }
+                    NumberAnimation {
+                        property: "opacity"
+                        to: 1
+                        duration: 160
                     }
                 }
 
-                // Wallpapers, plain and live
-                ListView {
-                    id: wallView
+                Label {
+                    anchors.centerIn: parent
+                    visible: wallView.count === 0
+                    text: Tr.t("Nothing found")
+                    color: Theme.muted
+                }
 
-                    width: parent.width
-                    height: root.wallpaperMode ? root.wallCard.height + 30 : 0
-                    visible: root.wallpaperMode
+                delegate: Item {
+                    id: wall
+
+                    required property string modelData
+                    required property int index
+
+                    readonly property bool isSelected: index === root.wallSelected
+
+                    width: root.wallCard.width
+                    height: wallView.height
+
+                    ClippingRectangle {
+                        width: root.wallCard.width
+                        height: root.wallCard.height
+                        radius: wall.isSelected ? 20 : 16
+                        color: Qt.alpha(Theme.text, 0.06)
+                        border.width: wall.isSelected ? 2 : 0
+                        border.color: Theme.accent
+                        scale: wall.isSelected ? 1 : 0.9
+                        opacity: wall.isSelected ? 1 : 0.55
+
+                        Behavior on scale {
+                            NumberAnimation {
+                                duration: 340
+                                easing.type: Easing.OutBack
+                                easing.overshoot: 1.6
+                            }
+                        }
+                        Behavior on opacity {
+                            NumberAnimation {
+                                duration: 220
+                            }
+                        }
+                        Behavior on radius {
+                            NumberAnimation {
+                                duration: 220
+                            }
+                        }
+
+                        Image {
+                            anchors.fill: parent
+                            // Same size and fill as the service, so the picture is found in memory.
+                            sourceSize: Wallpapers.thumbSize
+                            fillMode: Image.PreserveAspectCrop
+                            source: Wallpapers.thumbOf(wall.modelData)
+                            asynchronous: true
+                        }
+                        Rectangle {
+                            x: 8
+                            y: 8
+                            width: 24
+                            height: 24
+                            radius: 12
+                            color: Theme.pill
+                            visible: Wallpapers.liveFiles.indexOf(wall.modelData) >= 0
+
+                            Icon {
+                                anchors.centerIn: parent
+                                name: "play"
+                                size: 12
+                            }
+                        }
+                    }
+                    Label {
+                        y: root.wallCard.height + 8
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        text: Wallpapers.nameOf(wall.modelData)
+                        opacity: wall.isSelected ? 1 : 0
+                        size: 12
+                        color: Theme.muted
+                        elide: Text.ElideMiddle
+
+                        Behavior on opacity {
+                            NumberAnimation {
+                                duration: 200
+                            }
+                        }
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.setWallpaper(wall.modelData)
+                        onWheel: wheel => {
+                            const step = wheel.angleDelta.y > 0 ? -1 : 1;
+                            root.wallSelected = Math.max(0, Math.min(wallView.count - 1, root.wallSelected + step));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Search and session buttons
+        Item {
+            id: bottomRow
+
+            x: root.padding
+            y: viewport.y + viewport.height + 10
+            width: parent.width - root.padding * 2
+            height: 46
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: sessionRow.left
+                anchors.rightMargin: 10
+                height: parent.height
+                radius: 23
+                color: Qt.alpha(Theme.text, input.text === "" ? 0.08 : 0.11)
+                opacity: root.progress(0)
+
+                Behavior on color {
+                    ColorAnimation {
+                        duration: 180
+                    }
+                }
+
+                // The glass turns from a search into a command prompt.
+                Icon {
+                    x: 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "search"
+                    size: 17
+                    color: Theme.muted
+                    opacity: root.commandMode ? 0 : 1
+                    rotation: root.commandMode ? 90 : 0
+                    scale: root.commandMode ? 0.6 : 1
+
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: 160
+                        }
+                    }
+                    Behavior on rotation {
+                        NumberAnimation {
+                            duration: 260
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                    Behavior on scale {
+                        NumberAnimation {
+                            duration: 260
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                }
+                Icon {
+                    x: 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "forward"
+                    size: 17
+                    color: Theme.accent
+                    opacity: root.commandMode ? 1 : 0
+                    rotation: root.commandMode ? 0 : -90
+                    scale: root.commandMode ? 1 : 0.6
+
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: 160
+                        }
+                    }
+                    Behavior on rotation {
+                        NumberAnimation {
+                            duration: 260
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                    Behavior on scale {
+                        NumberAnimation {
+                            duration: 260
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                }
+                TextInput {
+                    id: input
+
+                    anchors.left: parent.left
+                    anchors.leftMargin: 44
+                    anchors.right: parent.right
+                    anchors.rightMargin: 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    focus: true
                     clip: true
-                    orientation: ListView.Horizontal
-                    spacing: 8
-                    model: root.wallFiles
-                    currentIndex: root.wallSelected
-                    highlightMoveDuration: 240
-                    highlightMoveVelocity: -1
-                    highlightRangeMode: ListView.ApplyRange
-                    preferredHighlightBegin: (width - root.wallCard.width) / 2
-                    preferredHighlightEnd: (width + root.wallCard.width) / 2
-                    onCountChanged: {
-                        if (root.wallSelected >= count)
-                            root.wallSelected = Math.max(0, count - 1);
+                    color: Theme.text
+                    selectionColor: Theme.accent
+                    selectedTextColor: Theme.accentText
+                    font.family: Theme.sans
+                    font.pixelSize: Math.round(15 * Theme.fontScale)
+                    onTextChanged: root.query = text
+                    Keys.onEscapePressed: Ui.popup = ""
+                    Keys.onReturnPressed: root.execute(root.selected)
+                    Keys.onEnterPressed: root.execute(root.selected)
+                    Keys.onDownPressed: root.selected = Math.min(root.results.length - 1, root.selected + 1)
+                    Keys.onUpPressed: root.selected = Math.max(0, root.selected - 1)
+                    Keys.onTabPressed: {
+                        if (root.results.length > 0)
+                            root.selected = (root.selected + 1) % root.results.length;
+                    }
+                    Keys.onLeftPressed: event => {
+                        if (root.wallpaperMode)
+                            root.wallSelected = Math.max(0, root.wallSelected - 1);
+                        else
+                            event.accepted = false;
+                    }
+                    Keys.onRightPressed: event => {
+                        if (root.wallpaperMode)
+                            root.wallSelected = Math.min(wallView.count - 1, root.wallSelected + 1);
+                        else
+                            event.accepted = false;
                     }
 
                     Label {
-                        anchors.centerIn: parent
-                        visible: wallView.count === 0
-                        text: Tr.t("Nothing found")
-                        color: Theme.muted
-                    }
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width
+                        x: input.text === "" ? 0 : 10
+                        opacity: input.text === "" ? 1 : 0
+                        text: Tr.t("Search apps, or type > for commands")
+                        color: Qt.alpha(Theme.text, 0.45)
+                        size: 15
+                        elide: Text.ElideRight
 
-                    delegate: Item {
-                        id: wall
-
-                        required property string modelData
-                        required property int index
-
-                        readonly property bool isSelected: index === root.wallSelected
-
-                        width: root.wallCard.width
-                        height: wallView.height
-
-                        ClippingRectangle {
-                            width: root.wallCard.width
-                            height: root.wallCard.height
-                            radius: 16
-                            color: Qt.alpha(Theme.text, 0.06)
-                            border.width: wall.isSelected ? 2 : 0
-                            border.color: Theme.accent
-                            scale: wall.isSelected ? 1 : 0.92
-                            opacity: wall.isSelected ? 1 : 0.6
-
-                            Behavior on scale {
-                                NumberAnimation {
-                                    duration: 200
-                                    easing.type: Easing.OutCubic
-                                }
-                            }
-                            Behavior on opacity {
-                                NumberAnimation {
-                                    duration: 200
-                                }
-                            }
-
-                            Image {
-                                anchors.fill: parent
-                                // Same size and fill as the service, so the picture is found in memory.
-                                sourceSize: Wallpapers.thumbSize
-                                fillMode: Image.PreserveAspectCrop
-                                source: Wallpapers.thumbOf(wall.modelData)
-                                asynchronous: true
-                            }
-                            Rectangle {
-                                x: 8
-                                y: 8
-                                width: 24
-                                height: 24
-                                radius: 12
-                                color: Theme.pill
-                                visible: Wallpapers.liveFiles.indexOf(wall.modelData) >= 0
-
-                                Icon {
-                                    anchors.centerIn: parent
-                                    name: "play"
-                                    size: 12
-                                }
+                        Behavior on x {
+                            NumberAnimation {
+                                duration: 180
+                                easing.type: Easing.OutCubic
                             }
                         }
-                        Label {
-                            y: root.wallCard.height + 8
-                            width: parent.width
-                            horizontalAlignment: Text.AlignHCenter
-                            text: Wallpapers.nameOf(wall.modelData)
-                            visible: wall.isSelected
-                            size: 12
-                            color: Theme.muted
-                            elide: Text.ElideMiddle
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.setWallpaper(wall.modelData)
-                            onWheel: wheel => {
-                                const step = wheel.angleDelta.y > 0 ? -1 : 1;
-                                root.wallSelected = Math.max(0, Math.min(wallView.count - 1, root.wallSelected + step));
+                        Behavior on opacity {
+                            NumberAnimation {
+                                duration: 70
                             }
                         }
                     }
                 }
+            }
 
-                // Search and session buttons
-                Item {
-                    width: parent.width
-                    height: 46
+            Row {
+                id: sessionRow
 
-                    Rectangle {
-                        anchors.left: parent.left
-                        anchors.right: sessionRow.left
-                        anchors.rightMargin: 10
-                        height: parent.height
-                        radius: 23
-                        color: Qt.alpha(Theme.text, 0.08)
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 4
 
-                        Icon {
-                            x: 16
-                            anchors.verticalCenter: parent.verticalCenter
-                            name: root.commandMode ? "forward" : "search"
-                            size: 17
-                            color: root.commandMode ? Theme.accent : Theme.muted
-                        }
-                        TextInput {
-                            id: input
+                Repeater {
+                    model: root.session
 
-                            anchors.left: parent.left
-                            anchors.leftMargin: 44
-                            anchors.right: parent.right
-                            anchors.rightMargin: 16
-                            anchors.verticalCenter: parent.verticalCenter
-                            focus: true
-                            clip: true
-                            color: Theme.text
-                            selectionColor: Theme.accent
-                            selectedTextColor: Theme.accentText
-                            font.family: Theme.sans
-                            font.pixelSize: Math.round(15 * Theme.fontScale)
-                            onTextChanged: {
-                                root.query = text;
-                                root.armed = "";
+                    delegate: Item {
+                        id: sessionSlot
+
+                        required property var modelData
+                        required property int index
+
+                        readonly property real pop: root.progress(0.1 + index * 0.07)
+
+                        width: 42
+                        height: 42
+                        opacity: pop
+                        scale: 0.6 + 0.4 * pop
+
+                        Rectangle {
+                            id: sessionButton
+
+                            readonly property bool isArmed: root.armed === sessionSlot.modelData.id
+
+                            anchors.fill: parent
+                            radius: isArmed || sessionArea.containsMouse ? 14 : 21
+                            color: isArmed ? Theme.error : Qt.alpha(Theme.text, sessionArea.containsMouse ? 0.15 : 0.06)
+                            scale: sessionArea.pressed ? 0.88 : sessionArea.containsMouse ? 1.06 : 1
+
+                            Behavior on radius {
+                                NumberAnimation {
+                                    duration: 300
+                                    easing.type: Easing.OutBack
+                                    easing.overshoot: 1.4
+                                }
                             }
-                            Keys.onEscapePressed: Ui.popup = ""
-                            Keys.onReturnPressed: root.execute(root.selected)
-                            Keys.onEnterPressed: root.execute(root.selected)
-                            Keys.onDownPressed: root.selected = Math.min(root.results.length - 1, root.selected + 1)
-                            Keys.onUpPressed: root.selected = Math.max(0, root.selected - 1)
-                            Keys.onTabPressed: {
-                                if (root.results.length > 0)
-                                    root.selected = (root.selected + 1) % root.results.length;
+                            Behavior on color {
+                                ColorAnimation {
+                                    duration: 160
+                                }
                             }
-                            Keys.onLeftPressed: event => {
-                                if (root.wallpaperMode)
-                                    root.wallSelected = Math.max(0, root.wallSelected - 1);
-                                else
-                                    event.accepted = false;
-                            }
-                            Keys.onRightPressed: event => {
-                                if (root.wallpaperMode)
-                                    root.wallSelected = Math.min(wallView.count - 1, root.wallSelected + 1);
-                                else
-                                    event.accepted = false;
+                            Behavior on scale {
+                                NumberAnimation {
+                                    duration: 240
+                                    easing.type: Easing.OutBack
+                                    easing.overshoot: 2.2
+                                }
                             }
 
-                            Label {
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: parent.width
-                                visible: input.text === ""
-                                text: Tr.t("Search apps, or type > for commands")
-                                color: Qt.alpha(Theme.text, 0.45)
-                                size: 15
-                                elide: Text.ElideRight
+                            Icon {
+                                anchors.centerIn: parent
+                                name: sessionSlot.modelData.icon
+                                size: 18
+                                color: sessionButton.isArmed ? Theme.pill : Theme.text
+                            }
+                            MouseArea {
+                                id: sessionArea
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onContainsMouseChanged: {
+                                    if (containsMouse)
+                                        root.hoveredSession = sessionSlot.modelData.id;
+                                    else if (root.hoveredSession === sessionSlot.modelData.id)
+                                        root.hoveredSession = "";
+                                }
+                                onClicked: root.runSession(sessionSlot.modelData)
                             }
                         }
                     }
+                }
+            }
 
-                    Row {
-                        id: sessionRow
+            // The buttons have no text: their name shows above them.
+            Rectangle {
+                id: tipBox
 
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 4
+                readonly property string current: root.armed || root.hoveredSession
+                readonly property bool showing: current !== ""
+                // Stays while it fades out, so the text does not vanish first.
+                property var item: null
 
-                        Repeater {
-                            model: root.session
+                onCurrentChanged: {
+                    if (current !== "")
+                        item = root.session.find(s => s.id === current) || null;
+                }
 
-                            delegate: Rectangle {
-                                id: sessionButton
+                anchors.right: parent.right
+                y: showing ? -34 : -28
+                width: tip.implicitWidth + 20
+                height: 28
+                radius: 10
+                color: root.armed !== "" ? Theme.error : Theme.pill
+                opacity: showing ? 1 : 0
+                visible: opacity > 0
 
-                                required property var modelData
-
-                                readonly property bool isArmed: root.armed === modelData.id
-
-                                width: 42
-                                height: 42
-                                radius: isArmed || sessionArea.containsMouse ? 14 : 21
-                                color: isArmed ? Theme.error : Qt.alpha(Theme.text, sessionArea.containsMouse ? 0.14 : 0.06)
-
-                                Behavior on radius {
-                                    NumberAnimation {
-                                        duration: 180
-                                    }
-                                }
-
-                                Icon {
-                                    anchors.centerIn: parent
-                                    name: sessionButton.modelData.icon
-                                    size: 18
-                                    color: sessionButton.isArmed ? Theme.pill : Theme.text
-                                }
-                                MouseArea {
-                                    id: sessionArea
-
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onContainsMouseChanged: {
-                                        if (containsMouse)
-                                            root.hoveredSession = sessionButton.modelData.id;
-                                        else if (root.hoveredSession === sessionButton.modelData.id)
-                                            root.hoveredSession = "";
-                                    }
-                                    onClicked: root.runSession(sessionButton.modelData)
-                                }
-                            }
-                        }
+                Behavior on y {
+                    NumberAnimation {
+                        duration: 200
+                        easing.type: Easing.OutCubic
                     }
-
-                    // The buttons have no text: their name shows above them.
-                    Rectangle {
-                        readonly property var item: root.session.find(s => s.id === (root.armed || root.hoveredSession)) || null
-
-                        anchors.right: parent.right
-                        anchors.bottom: parent.top
-                        anchors.bottomMargin: 6
-                        width: tip.implicitWidth + 20
-                        height: 28
-                        radius: 10
-                        color: root.armed !== "" ? Theme.error : Theme.pill
-                        visible: !!item
-                        z: 5
-
-                        Label {
-                            id: tip
-
-                            anchors.centerIn: parent
-                            text: parent.item ? (root.armed !== "" ? parent.item.name + ": " + Tr.t("Press once more to proceed") : parent.item.name) : ""
-                            color: root.armed !== "" ? Theme.pill : Theme.text
-                            size: 12
-                        }
+                }
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 150
                     }
+                }
+                Behavior on width {
+                    NumberAnimation {
+                        duration: 200
+                        easing.type: Easing.OutCubic
+                    }
+                }
+                Behavior on color {
+                    ColorAnimation {
+                        duration: 160
+                    }
+                }
+
+                Label {
+                    id: tip
+
+                    anchors.centerIn: parent
+                    text: tipBox.item ? (root.armed !== "" ? tipBox.item.name + ": " + Tr.t("Press once more to proceed") : tipBox.item.name) : ""
+                    color: root.armed !== "" ? Theme.pill : Theme.text
+                    size: 12
                 }
             }
         }
