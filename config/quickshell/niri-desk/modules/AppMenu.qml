@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Widgets
 import qs.components
@@ -30,7 +31,17 @@ PanelWindow {
     property real reveal: 0
     // Drives the rows and buttons that follow the card on opening, 0 to 1.
     property real stagger: 0
-    property var lastPointer: null
+    // The pointer counts once it has really moved: a row left under it stays unselected at first.
+    property var pointerStart: null
+    property bool pointerLive: false
+    property real wheelRest: 0
+    // The wallpaper as it was when the row of pictures opened, and the one being tried instead.
+    property string wallStartImage: ""
+    property string wallStartLive: ""
+    property string wallTried: ""
+    // Runs of the wallpaper script go one at a time, the last wish wins.
+    property string wallWanted: ""
+    property string wallDone: ""
     // Dangerous actions need a second press, this holds the first one.
     property string armed: ""
     property string hoveredSession: ""
@@ -158,9 +169,10 @@ PanelWindow {
 
     readonly property var schemes: [["scheme-tonal-spot", "Tonal"], ["scheme-vibrant", "Vibrant"], ["scheme-expressive", "Expressive"], ["scheme-fidelity", "Faithful"], ["scheme-content", "Content"], ["scheme-neutral", "Neutral"], ["scheme-monochrome", "Monochrome"], ["scheme-rainbow", "Rainbow"], ["scheme-fruit-salad", "Fruit salad"]]
 
+    // Pictures only: live wallpapers are chosen in the picker, Mod+W.
     readonly property var wallFiles: {
         const key = commandRest.toLowerCase();
-        const all = Wallpapers.liveFiles.concat(Wallpapers.imageFiles);
+        const all = Wallpapers.imageFiles;
         return key === "" ? all : all.filter(path => Tools.score(Wallpapers.nameOf(path), key, "") > 0);
     }
 
@@ -245,10 +257,51 @@ PanelWindow {
             setWallpaper(all[Math.floor(Math.random() * all.length)]);
     }
 
+    function runWallpaper(path) {
+        wallWanted = path;
+        if (!wallProcess.running)
+            startWallpaper();
+    }
+
+    function startWallpaper() {
+        wallDone = wallWanted;
+        wallProcess.command = [Ui.binDir + "niri-desk-wallpaper", wallDone];
+        wallProcess.running = true;
+    }
+
+    // Enter or a click: this picture stays.
     function setWallpaper(path) {
-        Wallpapers.chosen(path, Wallpapers.liveFiles.indexOf(path) >= 0);
+        tryTimer.stop();
+        if (path !== wallTried) {
+            Wallpapers.chosen(path, false);
+            runWallpaper(path);
+        }
+        wallTried = "";
         Ui.popup = "";
-        Ui.run("niri-desk-wallpaper", path);
+    }
+
+    // Moving with the arrows or the wheel puts the picture on the screen.
+    function stepWall(by) {
+        wallSelected = Math.max(0, Math.min(wallFiles.length - 1, wallSelected + by));
+        tryTimer.restart();
+    }
+
+    // Esc, a click outside or leaving >wallpaper gives back what was there.
+    function undoWallTry() {
+        tryTimer.stop();
+        if (wallTried === "")
+            return;
+        wallTried = "";
+        Wallpapers.chosen(wallStartLive || wallStartImage, wallStartLive !== "");
+        runWallpaper(wallStartLive || wallStartImage);
+    }
+
+    function startWallpapers() {
+        Wallpapers.refresh();
+        wallStartImage = Wallpapers.currentImage;
+        wallStartLive = Wallpapers.currentLive;
+        wallSelected = Math.max(0, wallFiles.indexOf(Wallpapers.currentImage));
+        wallView.positionViewAtIndex(wallSelected, ListView.Center);
     }
 
     function runSession(item) {
@@ -284,17 +337,22 @@ PanelWindow {
         item.run();
     }
 
-    function startWallpapers() {
-        const live = wallFiles.indexOf(Wallpapers.currentLive);
-        wallSelected = Math.max(0, live >= 0 ? live : wallFiles.indexOf(Wallpapers.currentImage));
-        wallView.positionViewAtIndex(wallSelected, ListView.Center);
+    function pointerMoved(point) {
+        if (pointerLive)
+            return true;
+        if (!pointerStart)
+            pointerStart = point;
+        else if (Math.abs(pointerStart.x - point.x) + Math.abs(pointerStart.y - point.y) > 3)
+            pointerLive = true;
+        return pointerLive;
     }
 
-    // A row left under the pointer stays unselected until the pointer really moves.
-    function pointerMoved(index, point) {
-        if (lastPointer && Math.abs(lastPointer.x - point.x) + Math.abs(lastPointer.y - point.y) > 3)
-            selected = index;
-        lastPointer = point;
+    // Gives whole steps from a mouse wheel notch or from many small touchpad deltas.
+    function wheelSteps(delta) {
+        wheelRest += delta;
+        const steps = Math.trunc(wheelRest / 120);
+        wheelRest -= steps * 120;
+        return -steps;
     }
 
     // How far along an item with this delay is. Bindings on it follow `stagger`.
@@ -319,6 +377,8 @@ PanelWindow {
         input.text = "";
         armed = "";
         hoveredSession = "";
+        pointerStart = null;
+        pointerLive = false;
         selected = 0;
         viewFade = 1;
         syncRows();
@@ -327,6 +387,7 @@ PanelWindow {
 
     onClosingChanged: {
         if (closing) {
+            undoWallTry();
             fadeIn.stop();
             staggerIn.stop();
             fadeOut.start();
@@ -343,6 +404,10 @@ PanelWindow {
         armed = "";
     }
     onModeChanged: modeSwap.restart()
+    onWallpaperModeChanged: {
+        if (!wallpaperMode)
+            undoWallTry();
+    }
     onResultsChanged: {
         if (mode === shownMode && !modeSwap.running)
             syncRows();
@@ -366,7 +431,7 @@ PanelWindow {
     WlrLayershell.keyboardFocus: closing ? WlrKeyboardFocus.None : WlrKeyboardFocus.Exclusive
 
     mask: Region {
-        item: root.closing ? null : catcher
+        item: catcher
     }
     BackgroundEffect.blurRegion: Region {
         item: card
@@ -439,12 +504,8 @@ PanelWindow {
         ScriptAction {
             script: {
                 root.syncRows();
-                if (root.wallpaperMode) {
-                    Wallpapers.refresh();
-                    const live = root.wallFiles.indexOf(Wallpapers.currentLive);
-                    root.wallSelected = Math.max(0, live >= 0 ? live : root.wallFiles.indexOf(Wallpapers.currentImage));
-                    wallView.positionViewAtIndex(root.wallSelected, ListView.Center);
-                }
+                if (root.wallpaperMode)
+                    root.startWallpapers();
             }
         }
         NumberAnimation {
@@ -453,6 +514,31 @@ PanelWindow {
             to: 1
             duration: 200
             easing.type: Easing.OutCubic
+        }
+    }
+    Timer {
+        id: tryTimer
+
+        // Passing over pictures quickly only shows the one you stop at.
+        interval: 300
+        onTriggered: {
+            const path = root.wallFiles[root.wallSelected];
+            if (!path || path === Wallpapers.currentImage)
+                return;
+            root.wallTried = path;
+            Wallpapers.chosen(path, false);
+            root.runWallpaper(path);
+        }
+    }
+    Process {
+        id: wallProcess
+
+        environment: ({
+                NIRI_DESK_WALLPAPER_QUIET: "1"
+            })
+        onExited: {
+            if (root.wallWanted !== root.wallDone)
+                root.startWallpaper();
         }
     }
     Timer {
@@ -465,7 +551,9 @@ PanelWindow {
     MouseArea {
         id: catcher
 
-        anchors.fill: parent
+        // Empty while closing, so clicks already reach what is behind.
+        width: root.closing ? 0 : parent.width
+        height: root.closing ? 0 : parent.height
         onClicked: Ui.popup = ""
     }
 
@@ -570,7 +658,8 @@ PanelWindow {
                 visible: !root.shownWide
                 cacheBuffer: 600
                 currentIndex: root.selected
-                boundsBehavior: Flickable.StopAtBounds
+                // The wheel moves the selection and the list follows, so nothing fights over it.
+                interactive: false
                 highlightFollowsCurrentItem: false
                 highlightRangeMode: ListView.ApplyRange
                 preferredHighlightBegin: 0
@@ -579,6 +668,15 @@ PanelWindow {
                 highlightMoveVelocity: -1
                 model: ScriptModel {
                     values: root.shownIds
+                }
+
+                WheelHandler {
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                    onWheel: event => {
+                        const steps = root.wheelSteps(event.angleDelta.y);
+                        if (steps !== 0)
+                            root.selected = Math.max(0, Math.min(root.results.length - 1, root.selected + steps));
+                    }
                 }
 
                 highlight: Rectangle {
@@ -754,7 +852,10 @@ PanelWindow {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onPositionChanged: mouse => root.pointerMoved(row.index, mapToItem(null, mouse.x, mouse.y))
+                        onPositionChanged: mouse => {
+                            if (root.pointerMoved(mapToItem(null, mouse.x, mouse.y)))
+                                root.selected = row.index;
+                        }
                         onClicked: root.execute(row.index)
                     }
                 }
@@ -783,6 +884,7 @@ PanelWindow {
                 spacing: 8
                 cacheBuffer: 400
                 currentIndex: root.wallSelected
+                interactive: false
                 highlightMoveDuration: 300
                 highlightMoveVelocity: -1
                 highlightRangeMode: ListView.ApplyRange
@@ -790,6 +892,15 @@ PanelWindow {
                 preferredHighlightEnd: (width + root.wallCard.width) / 2
                 model: ScriptModel {
                     values: root.wallFiles
+                }
+
+                WheelHandler {
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                    onWheel: event => {
+                        const steps = root.wheelSteps(event.angleDelta.y);
+                        if (steps !== 0)
+                            root.stepWall(steps);
+                    }
                 }
 
                 add: Transition {
@@ -875,21 +986,6 @@ PanelWindow {
                             source: Wallpapers.thumbOf(wall.modelData)
                             asynchronous: true
                         }
-                        Rectangle {
-                            x: 8
-                            y: 8
-                            width: 24
-                            height: 24
-                            radius: 12
-                            color: Theme.pill
-                            visible: Wallpapers.liveFiles.indexOf(wall.modelData) >= 0
-
-                            Icon {
-                                anchors.centerIn: parent
-                                name: "play"
-                                size: 12
-                            }
-                        }
                     }
                     Label {
                         y: root.wallCard.height + 8
@@ -909,12 +1005,13 @@ PanelWindow {
                     }
                     MouseArea {
                         anchors.fill: parent
+                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: root.setWallpaper(wall.modelData)
-                        onWheel: wheel => {
-                            const step = wheel.angleDelta.y > 0 ? -1 : 1;
-                            root.wallSelected = Math.max(0, Math.min(wallView.count - 1, root.wallSelected + step));
+                        onPositionChanged: mouse => {
+                            if (root.pointerMoved(mapToItem(null, mouse.x, mouse.y)))
+                                root.wallSelected = wall.index;
                         }
+                        onClicked: root.setWallpaper(wall.modelData)
                     }
                 }
             }
@@ -1028,13 +1125,13 @@ PanelWindow {
                     }
                     Keys.onLeftPressed: event => {
                         if (root.wallpaperMode)
-                            root.wallSelected = Math.max(0, root.wallSelected - 1);
+                            root.stepWall(-1);
                         else
                             event.accepted = false;
                     }
                     Keys.onRightPressed: event => {
                         if (root.wallpaperMode)
-                            root.wallSelected = Math.min(wallView.count - 1, root.wallSelected + 1);
+                            root.stepWall(1);
                         else
                             event.accepted = false;
                     }

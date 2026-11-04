@@ -16,7 +16,8 @@ LazyLoader {
         property string query: ""
         property int selected: 0
         property var clips: []
-        property var lastPointer: null
+        property var pointerStart: null
+        property bool pointerLive: false
 
         readonly property var results: {
             const q = query.trim().toLowerCase();
@@ -39,11 +40,14 @@ LazyLoader {
             Toasts.show(Tr.t("Copied"), clip.text, "check");
         }
 
-        // A row left under the pointer stays unselected until the pointer really moves.
+        // A row left under the pointer stays unselected until the pointer has really moved.
         function pointerMoved(index, point) {
-            if (lastPointer && Math.abs(lastPointer.x - point.x) + Math.abs(lastPointer.y - point.y) > 3)
+            if (!pointerStart)
+                pointerStart = point;
+            else if (Math.abs(pointerStart.x - point.x) + Math.abs(pointerStart.y - point.y) > 3)
+                pointerLive = true;
+            if (pointerLive)
                 selected = index;
-            lastPointer = point;
         }
 
         function report() {
