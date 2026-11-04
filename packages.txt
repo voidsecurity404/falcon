@@ -32,6 +32,7 @@ xdg-desktop-portal-gtk
 gnome-keyring
 nautilus
 gtk3
+qt6ct
 # Clipboard, skrinshot, yozish, OCR
 wl-clipboard
 cliphist

@@ -49,6 +49,7 @@ targets=(
     .config/hypr/niri-desk-colors.conf
     .config/gtk-3.0/gtk.css
     .config/gtk-4.0/gtk.css
+    .config/qt6ct
     .local/bin/niri-desk-claude-status
     .local/bin/niri-desk-claude-usage
     .local/bin/niri-desk-spectrum

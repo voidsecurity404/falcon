@@ -330,6 +330,18 @@ def kitty_conf(s):
     ]) + "\n"
 
 
+def qt6ct_conf():
+    return "\n".join([
+        "; Generated file: niri-desk-apply writes it.",
+        "[Appearance]",
+        f"color_scheme_path={CONFIG}/qt6ct/colors/niri-desk.conf",
+        "custom_palette=true",
+        "icon_theme=Adwaita",
+        "standard_dialogs=default",
+        "style=Fusion",
+    ]) + "\n"
+
+
 def write_if_changed(path, text):
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and path.read_text() == text:
@@ -408,8 +420,9 @@ def main(argv):
         subprocess.Popen(["hypridle"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     if write_if_changed(CONFIG / "kitty/niri-desk-user.conf", kitty_text):
         run_quiet("pkill", "-USR1", "-x", "kitty")
+    write_if_changed(CONFIG / "qt6ct/qt6ct.conf", qt6ct_conf())
     key = STATE / "theme-key"
-    if not key.exists() or key.read_text() != theme_key(s):
+    if not key.exists() or not (CONFIG / "qt6ct/colors/niri-desk.conf").exists() or key.read_text() != theme_key(s):
         colors(s)
 
 
