@@ -44,7 +44,11 @@ report(not missing, tr("Installed: {count} of {total}", count=len(COMMANDS) - le
 print(tr("Running now"))
 for name in PROCESSES:
     report(quiet("pgrep", "-x", name), name, tr("Not running. Log out and in, or start it by hand."))
-report(quiet("pgrep", "-f", "niri-desk-super"), "niri-desk-super", tr("Tapping Super will not open the menu."))
+keyd = quiet("systemctl", "is-active", "-q", "keyd.service")
+if keyd:
+    report(True, "keyd")
+else:
+    report(quiet("pgrep", "-f", "niri-desk-super"), "niri-desk-super", tr("Tapping Super will not open the menu."))
 report(quiet("pgrep", "-f", "wl-paste --watch"), tr("Clipboard history"), tr("New copies are not being saved."))
 
 print(tr("Configuration"))
@@ -59,11 +63,12 @@ report((STATE / "wallpaper").exists(), tr("Current wallpaper"), tr("Choose a wal
 report(os.environ.get("QT_QPA_PLATFORMTHEME") == "qt6ct", tr("Qt theme in this session"), tr("Log out and in to apply it."))
 
 print(tr("Permissions"))
-try:
-    member = os.environ.get("USER", "") in grp.getgrnam("input").gr_mem
-except KeyError:
-    member = False
-report(member, tr("Member of the input group"), tr("Tapping Super needs it: sudo gpasswd -a $USER input"))
+if not keyd:
+    try:
+        member = os.environ.get("USER", "") in grp.getgrnam("input").gr_mem
+    except KeyError:
+        member = False
+    report(member, tr("Member of the input group"), tr("Tapping Super needs it: sudo gpasswd -a $USER input"))
 
 print(tr("Result: {count} problem(s)", count=problems))
 sys.exit(1 if problems else 0)
