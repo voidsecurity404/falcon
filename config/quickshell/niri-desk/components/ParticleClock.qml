@@ -16,6 +16,10 @@ Item {
     readonly property string wanted: Ui.pad(clock.hours) + ":" + Ui.pad(clock.minutes)
     readonly property int pool: 3400
     readonly property int grid: 5
+    // Each of the five characters owns its dots, so a new minute moves only the digit that changed.
+    // The widest digit, 8, needs 739 places at the size used on the Today tab, and the colon 152.
+    readonly property int digitDots: 800
+    readonly property int colonDots: pool - digitDots * 4
     readonly property real reach: 8100
     // The dots tremble only under a real load, so an idle computer stays idle.
     readonly property bool trembling: Sys.cpu >= 25
@@ -35,8 +39,8 @@ Item {
     readonly property var phase: new Float32Array(pool)
     readonly property var awake: new Uint8Array(pool)
 
-    // Sends the dots to new places, in shuffled order so that they cross the whole time.
-    function aim(points) {
+    // Sends one character's dots to new places, in shuffled order so that they cross the whole character.
+    function aim(slot, points) {
         const count = points.length / 2;
         const order = new Int32Array(count);
         for (let i = 0; i < count; i++)
@@ -50,9 +54,12 @@ Item {
         const hx = homeX;
         const hy = homeY;
         const live = awake;
-        for (let i = 0; i < pool; i++) {
+        const first = slotStart(slot);
+        const size = slotDots(slot);
+        for (let n = 0; n < size; n++) {
             // With fewer places than dots, some dots share a place.
-            const at = order[i % count];
+            const at = order[n % count];
+            const i = first + n;
             hx[i] = points[at * 2];
             hy[i] = points[at * 2 + 1];
             live[i] = 1;
@@ -73,6 +80,14 @@ Item {
             live[i] = 1;
         }
         settled = false;
+    }
+
+    function slotDots(slot) {
+        return slot === 2 ? colonDots : digitDots;
+    }
+
+    function slotStart(slot) {
+        return slot <= 2 ? slot * digitDots : colonDots + (slot - 1) * digitDots;
     }
 
     function step() {
@@ -188,23 +203,41 @@ Item {
             ctx.font = "800 " + root.fontSize + "px \"Unbounded\"";
             // The variable font has overlapping outlines. fillText would cut holes where they cross.
             ctx.fillRule = Qt.WindingFill;
-            ctx.beginPath();
-            // text() ignores the alignment settings. The digits are 0.75 of the font size tall.
-            ctx.text(root.wanted, (width - ctx.measureText(root.wanted).width) / 2, root.centerY + root.fontSize * 0.375);
-            ctx.fill();
-            const pixels = ctx.getImageData(0, 0, width, height).data;
-            ctx.clearRect(0, 0, width, height);
+            // Digits differ in width. Fixed cells keep the other digits in place when one changes.
+            let cell = 0;
+            for (let digit = 0; digit <= 9; digit++)
+                cell = Math.max(cell, ctx.measureText(String(digit)).width);
+            const colon = ctx.measureText(":").width;
+            let left = Math.round((width - cell * 4 - colon) / 2);
             const w = Math.floor(width);
-            const points = [];
-            for (let y = 0; y < height; y += root.grid) {
-                for (let x = 0; x < w; x += root.grid) {
-                    if (pixels[(y * w + x) * 4 + 3] > 128)
-                        points.push(x, y);
+            const changes = [];
+            for (let slot = 0; slot < root.wanted.length; slot++) {
+                const glyph = root.wanted[slot];
+                const size = slot === 2 ? colon : cell;
+                if (glyph !== root.shown[slot]) {
+                    ctx.clearRect(0, 0, width, height);
+                    ctx.beginPath();
+                    // text() ignores the alignment settings. The digits are 0.75 of the font size tall.
+                    ctx.text(glyph, Math.round(left + (size - ctx.measureText(glyph).width) / 2), root.centerY + root.fontSize * 0.375);
+                    ctx.fill();
+                    const pixels = ctx.getImageData(0, 0, width, height).data;
+                    const points = [];
+                    for (let y = 0; y < height; y += root.grid) {
+                        for (let x = 0; x < w; x += root.grid) {
+                            if (pixels[(y * w + x) * 4 + 3] > 128)
+                                points.push(x, y);
+                        }
+                    }
+                    changes.push({ slot: slot, points: points });
                 }
+                left += size;
             }
-            if (points.length > 0) {
+            ctx.clearRect(0, 0, width, height);
+            // A font that is not ready yet gives no places: try again at the next paint.
+            if (changes.every(change => change.points.length > 0)) {
                 root.shown = root.wanted;
-                root.aim(points);
+                for (const change of changes)
+                    root.aim(change.slot, change.points);
             }
         }
     }
