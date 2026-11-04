@@ -20,11 +20,15 @@ Item {
         }
     }
 
+    // A centered column of glass bubbles over the aurora.
+    readonly property int column: 860
+
     Flickable {
         id: chat
 
-        width: parent.width
-        height: parent.height - composer.height - 10
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: root.column
+        height: parent.height - composer.height - 16
         contentHeight: list.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
@@ -44,15 +48,18 @@ Item {
             id: list
 
             width: parent.width
-            spacing: 10
+            spacing: 12
 
             Label {
                 visible: Ai.messages.length === 0
                 width: parent.width
+                topPadding: 8
+                horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
                 elide: Text.ElideNone
                 text: Tr.t("Type your question below. Enter sends, Shift+Enter adds a line. The chat is sent to Claude over the internet.")
-                color: Theme.muted
+                color: Qt.alpha(Theme.text, 0.75)
+                size: 15
             }
 
             Repeater {
@@ -80,27 +87,32 @@ Item {
                         id: back
 
                         x: bubble.mine ? parent.width - width : 0
-                        width: bubble.mine ? Math.min(parent.width * 0.8, natural.advanceWidth + 28) : parent.width
-                        height: body.implicitHeight + 16
-                        radius: 11
-                        color: bubble.mine ? Qt.alpha(Theme.accent, 0.18) : bubble.failed ? Qt.alpha(Theme.error, 0.16) : "transparent"
+                        width: Math.min(parent.width * 0.78, natural.advanceWidth + 36)
+                        height: body.implicitHeight + 24
+                        topLeftRadius: 20
+                        topRightRadius: 20
+                        bottomLeftRadius: bubble.mine ? 20 : 6
+                        bottomRightRadius: bubble.mine ? 6 : 20
+                        color: bubble.mine ? Qt.alpha(Theme.text, 0.92) : bubble.failed ? Qt.alpha(Theme.error, 0.2) : Qt.alpha(Theme.text, 0.13)
+                        border.width: bubble.mine ? 0 : 1
+                        border.color: Qt.alpha(Theme.text, 0.2)
 
                         TextEdit {
                             id: body
 
-                            x: bubble.mine || bubble.failed ? 12 : 0
-                            y: 8
+                            x: 16
+                            y: 12
                             width: parent.width - 2 * x
                             readOnly: true
                             selectByMouse: true
                             wrapMode: TextEdit.Wrap
                             textFormat: TextEdit.PlainText
                             text: bubble.modelData.text
-                            color: bubble.failed ? Theme.error : Theme.text
+                            color: bubble.mine ? Theme.pill : bubble.failed ? Theme.error : Theme.text
                             selectionColor: Theme.accent
                             selectedTextColor: Theme.accentText
                             font.family: Theme.sans
-                            font.pixelSize: Math.round(14 * Theme.fontScale)
+                            font.pixelSize: Math.round(15 * Theme.fontScale)
                             Keys.onEscapePressed: Ui.popup = ""
                         }
                     }
@@ -110,91 +122,137 @@ Item {
             Label {
                 visible: Ai.busy && (Ai.messages.length === 0 || Ai.messages[Ai.messages.length - 1].role !== "assistant")
                 text: Tr.t("Waiting for a reply…")
-                color: Theme.muted
+                color: Qt.alpha(Theme.text, 0.75)
             }
         }
     }
 
-    Row {
+    Rectangle {
         id: composer
 
         anchors.bottom: parent.bottom
-        width: parent.width
-        spacing: 6
+        anchors.bottomMargin: 6
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: root.column
+        height: Math.min(112, Math.max(50, input.implicitHeight + 24))
+        radius: 25
+        color: Qt.alpha(Theme.text, 0.13)
+        border.width: 1
+        border.color: Qt.alpha(Theme.text, input.activeFocus ? 0.45 : 0.27)
 
+        Flickable {
+            x: 22
+            y: 12
+            width: parent.width - 22 - send.width - 18
+            height: parent.height - 24
+            contentHeight: input.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+
+            TextEdit {
+                id: input
+
+                width: parent.width
+                wrapMode: TextEdit.Wrap
+                textFormat: TextEdit.PlainText
+                color: Theme.text
+                selectionColor: Theme.accent
+                selectedTextColor: Theme.accentText
+                font.family: Theme.sans
+                font.pixelSize: Math.round(15 * Theme.fontScale)
+                Keys.onEscapePressed: Ui.popup = ""
+                Keys.onTabPressed: Ui.nextDashTab(1)
+                Keys.onBacktabPressed: Ui.nextDashTab(-1)
+                Keys.onReturnPressed: event => {
+                    if (event.modifiers & Qt.ShiftModifier) {
+                        event.accepted = false;
+                    } else if (Ai.send(input.text)) {
+                        input.text = "";
+                    }
+                }
+                Keys.onEnterPressed: event => {
+                    if (Ai.send(input.text))
+                        input.text = "";
+                }
+            }
+        }
+
+        Label {
+            x: 22
+            y: 12
+            visible: input.text === ""
+            text: Tr.t("Ask Claude…")
+            size: 15
+            color: Qt.alpha(Theme.text, 0.65)
+        }
+
+        // Sends, or stops a reply that is still being written.
         Rectangle {
-            width: parent.width - 104
-            height: Math.min(96, input.implicitHeight + 18)
-            radius: 11
-            color: Qt.alpha(Theme.text, 0.07)
-            border.width: input.activeFocus ? 1 : 0
-            border.color: Theme.accent
+            id: send
 
-            Flickable {
-                x: 12
-                y: 9
-                width: parent.width - 24
-                height: parent.height - 18
-                contentHeight: input.implicitHeight
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
+            anchors.right: parent.right
+            anchors.rightMargin: 6
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 6
+            width: sendLabel.implicitWidth + 36
+            height: 38
+            radius: 19
+            color: Theme.text
+            scale: sendArea.pressed ? 0.94 : 1
 
-                TextEdit {
-                    id: input
-
-                    width: parent.width
-                    wrapMode: TextEdit.Wrap
-                    textFormat: TextEdit.PlainText
-                    color: Theme.text
-                    selectionColor: Theme.accent
-                    selectedTextColor: Theme.accentText
-                    font.family: Theme.sans
-                    font.pixelSize: Math.round(14 * Theme.fontScale)
-                    Keys.onEscapePressed: Ui.popup = ""
-                    Keys.onTabPressed: Ui.nextDashTab(1)
-                    Keys.onBacktabPressed: Ui.nextDashTab(-1)
-                    Keys.onReturnPressed: event => {
-                        if (event.modifiers & Qt.ShiftModifier) {
-                            event.accepted = false;
-                        } else if (Ai.send(input.text)) {
-                            input.text = "";
-                        }
-                    }
-                    Keys.onEnterPressed: event => {
-                        if (Ai.send(input.text))
-                            input.text = "";
-                    }
+            Behavior on scale {
+                NumberAnimation {
+                    duration: 110
                 }
             }
 
             Label {
-                x: 12
-                anchors.verticalCenter: parent.verticalCenter
-                visible: input.text === ""
-                text: Tr.t("Ask Claude…")
-                color: Qt.alpha(Theme.text, 0.4)
-            }
-        }
+                id: sendLabel
 
-        Rectangle {
-            width: 98
-            height: 36
-            radius: 11
-            color: Qt.alpha(Theme.text, actionArea.containsMouse ? 0.14 : 0.08)
-
-            Label {
                 anchors.centerIn: parent
-                text: Ai.busy ? Tr.t("Stop") : Tr.t("Clear")
-                size: 13
+                text: Ai.busy ? Tr.t("Stop") : Tr.t("Send")
+                color: Theme.pill
+                font.weight: Font.DemiBold
             }
             MouseArea {
-                id: actionArea
+                id: sendArea
 
                 anchors.fill: parent
-                hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: Ai.busy ? Ai.stop() : Ai.clear()
+                onClicked: {
+                    if (Ai.busy)
+                        Ai.stop();
+                    else if (Ai.send(input.text))
+                        input.text = "";
+                    input.forceActiveFocus();
+                }
             }
+        }
+    }
+
+    // Clears the conversation.
+    Rectangle {
+        anchors.left: composer.right
+        anchors.leftMargin: 10
+        anchors.verticalCenter: composer.verticalCenter
+        width: 40
+        height: 40
+        radius: 20
+        visible: Ai.messages.length > 0 && !Ai.busy
+        color: Qt.alpha(Theme.text, clearArea.containsMouse ? 0.24 : 0.13)
+
+        Icon {
+            anchors.centerIn: parent
+            name: "close"
+            size: 15
+        }
+        MouseArea {
+            id: clearArea
+
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: Ai.clear()
         }
     }
 }

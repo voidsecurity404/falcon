@@ -81,9 +81,9 @@ Click the clock. Three tabs, switched with `1`–`3` or `Tab`.
 
 | Tab | Purpose |
 | --- | --- |
-| Today | Round watch face with a sweeping second hand and date window. Ring gauges for CPU, memory, temperature, disk and battery, CPU history, network speed. Weather, calendar, settings button |
+| Today | The time made of living dots that flee from the pointer and tremble with the CPU load, the date and weather, CPU, memory, temperature, disk and battery, settings button |
 | Music | Blurred, slowly moving cover in the background, colors taken from the cover, a spinning record, seekable progress bar, and a visualizer that follows the real sound. The sound is only measured on this computer |
-| AI | Chat with Claude |
+| AI | Chat with Claude in glass bubbles over a slowly moving aurora |
 
 ## AI chat
 
@@ -137,7 +137,7 @@ config/hypr/        hyprlock and hypridle
 config/niri-desk/   defaults, Russian catalog, profiles
 bin/                wallpaper, focus, recording, OCR and other scripts
 wallpapers/         sample wallpapers
-fonts/              Geist and Geist Mono (SIL OFL 1.1)
+fonts/              Geist, Geist Mono and Unbounded (SIL OFL 1.1)
 ```
 
 ## Where the ideas came from

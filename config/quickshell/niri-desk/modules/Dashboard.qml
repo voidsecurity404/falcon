@@ -123,7 +123,7 @@ FocusScope {
             width: root.tabWidth
             height: 36
             radius: 18
-            color: Ui.dashTab === 1 ? Media.artAccent : Theme.accent
+            color: Ui.dashTab === 1 ? Media.artAccent : Theme.text
 
             Behavior on x {
                 NumberAnimation {
@@ -161,7 +161,7 @@ FocusScope {
                         anchors.centerIn: parent
                         text: tab.modelData
                         size: 14
-                        color: tab.current ? (Ui.dashTab === 1 ? Media.artAccentText : Theme.accentText) : tabArea.containsMouse ? Theme.text : Theme.muted
+                        color: tab.current ? (Ui.dashTab === 1 ? Media.artAccentText : Theme.pill) : tabArea.containsMouse ? Theme.text : Theme.muted
                         font.weight: tab.current ? Font.DemiBold : Font.Normal
                         scale: tabArea.pressed ? 0.95 : 1
 

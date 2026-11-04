@@ -7,6 +7,8 @@ import qs.services
 Item {
     id: root
 
+    // 0 Today, 1 Music, 2 AI. Each page has its own scene over the wallpaper.
+    property int page: 0
     property string art: ""
     property bool playing: false
     property real bottomRadius: 18
@@ -70,6 +72,48 @@ Item {
             GradientStop {
                 position: 1
                 color: Qt.alpha(Theme.pill, 0.86)
+            }
+        }
+    }
+
+    // Today: a dark room with a soft light where the time stands.
+    Canvas {
+        id: room
+
+        anchors.fill: parent
+        visible: opacity > 0
+        opacity: root.page === 0 ? 1 : 0
+        onPaint: {
+            const ctx = getContext("2d");
+            ctx.reset();
+            ctx.fillStyle = Theme.pill;
+            ctx.fillRect(0, 0, width, height);
+            ctx.save();
+            ctx.translate(width / 2, height * 0.4);
+            ctx.scale(1, 0.57);
+            const light = ctx.createRadialGradient(0, 0, 0, 0, 0, 700);
+            light.addColorStop(0, Qt.tint(Theme.pill, Qt.alpha(Theme.accent, 0.17)));
+            light.addColorStop(1, Qt.alpha(Theme.pill, 0));
+            ctx.fillStyle = light;
+            ctx.fillRect(-width, -height * 2, width * 2, height * 4);
+            ctx.restore();
+        }
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 480
+            }
+        }
+    }
+
+    Aurora {
+        anchors.fill: parent
+        visible: opacity > 0
+        opacity: root.page === 2 ? 1 : 0
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 480
             }
         }
     }
@@ -153,6 +197,7 @@ Item {
     Connections {
         target: Theme
         function onAccentChanged() {
+            room.requestPaint();
             wall.source = "";
             wall.source = root.wallpaper;
         }

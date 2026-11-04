@@ -15,8 +15,6 @@ Singleton {
     property int ram: 0
     property real ramGb: 0
     property real ramTotalGb: 0
-    property real netDown: 0
-    property real netUp: 0
     property int disk: 0
     property int temperature: 0
     // CPU yuklamasi: oxirgi ikki daqiqa.
@@ -29,7 +27,6 @@ Singleton {
     readonly property bool charging: hasBattery && battery.state === UPowerDeviceState.Charging
 
     property var previousCpu: null
-    property var previousNet: null
     property int warnedAt: 101
 
     // Batareya kamayganda har chegarada bir marta ogohlantiradi.
@@ -74,31 +71,6 @@ Singleton {
         ramTotalGb = total / 1048576;
     }
 
-    // Bytes per second over all interfaces except loopback.
-    function readNetwork(content) {
-        let down = 0;
-        let up = 0;
-        for (const line of content.split("\n").slice(2)) {
-            const m = line.trim().match(/^([^:]+):\s*(.*)$/);
-            if (!m || m[1] === "lo")
-                continue;
-            const f = m[2].split(/\s+/).map(Number);
-            down += f[0];
-            up += f[8];
-        }
-        const now = Date.now();
-        if (previousNet) {
-            const seconds = (now - previousNet.at) / 1000;
-            netDown = Math.max(0, down - previousNet.down) / seconds;
-            netUp = Math.max(0, up - previousNet.up) / seconds;
-        }
-        previousNet = {
-            at: now,
-            down: down,
-            up: up
-        };
-    }
-
     FileView {
         id: stat
 
@@ -111,13 +83,6 @@ Singleton {
 
         path: "/proc/meminfo"
         onLoaded: root.readMemory(text())
-    }
-
-    FileView {
-        id: netdev
-
-        path: "/proc/net/dev"
-        onLoaded: root.readNetwork(text())
     }
 
     Process {
@@ -157,7 +122,6 @@ Singleton {
         onTriggered: {
             stat.reload();
             meminfo.reload();
-            netdev.reload();
             if (root.hwmon !== "")
                 thermal.reload();
         }
