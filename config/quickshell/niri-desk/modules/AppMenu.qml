@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import qs.components
 import qs.services
@@ -41,7 +42,14 @@ PanelWindow {
     readonly property string commandRest: commandText.slice(commandWord.length).trim()
     readonly property bool schemeMode: commandMode && wordIs(["scheme", "стиль"]) && commandText.length > commandWord.length
     readonly property bool calcMode: commandMode && wordIs(["calc", "счёт", "счет"]) && commandText.length > commandWord.length
-    readonly property string mode: calcMode ? "calc" : schemeMode ? "scheme" : commandMode ? "commands" : "apps"
+    readonly property bool windowMode: commandMode && wordIs(["win", "окна"]) && commandText.length > commandWord.length
+    readonly property bool emojiMode: commandMode && wordIs(["emoji", "эмодзи"]) && commandText.length > commandWord.length
+    readonly property bool fileMode: commandMode && wordIs(["file", "файл"]) && commandText.length > commandWord.length
+    readonly property string mode: calcMode ? "calc" : schemeMode ? "scheme" : windowMode ? "windows" : emojiMode ? "emoji" : fileMode ? "files" : commandMode ? "commands" : "apps"
+
+    property var emojiRows: []
+    property bool emojiWanted: false
+    property var fileRows: []
 
     // What is on screen follows the text. A change of mode first fades the old content away.
     property string shownMode: "apps"
@@ -127,6 +135,30 @@ PanelWindow {
             complete: "calc "
         },
         {
+            id: "win",
+            icon: "windows",
+            name: Tr.t("Open windows"),
+            detail: Tr.t("Go to a window"),
+            keywords: "win windows окна",
+            complete: "win "
+        },
+        {
+            id: "file",
+            icon: "note",
+            name: Tr.t("Find a file"),
+            detail: Tr.t("In the home folder"),
+            keywords: "file find файл поиск",
+            complete: "file "
+        },
+        {
+            id: "emoji",
+            icon: "sparkle",
+            name: Tr.t("Emoji"),
+            detail: Tr.t("Enter: copy"),
+            keywords: "emoji эмодзи смайлик",
+            complete: "emoji "
+        },
+        {
             id: "settings",
             icon: "settings",
             name: Tr.t("Settings"),
@@ -156,6 +188,12 @@ PanelWindow {
             return calcRows();
         if (schemeMode)
             return schemeRows();
+        if (windowMode)
+            return windowRows();
+        if (emojiMode)
+            return ranked(emojiRows, r => r.name, r => r.extra, commandRest.toLowerCase()).slice(0, 60);
+        if (fileMode)
+            return ranked(fileRows, r => r.name, r => r.detail, commandRest.toLowerCase());
         if (commandMode)
             return ranked(commands, c => c.name, c => c.keywords, commandText.toLowerCase());
         return ranked(appEntries, a => a.name, a => a.extra, query.trim().toLowerCase());
@@ -175,6 +213,47 @@ PanelWindow {
                 })).filter(r => r.rank > 0).sort((a, b) => b.rank - a.rank || a.order - b.order);
         const exact = rows.some(r => r.rank >= 300);
         return rows.filter(r => !exact || r.rank >= 300).map(r => r.item);
+    }
+
+    function windowRows() {
+        const rows = Object.keys(Niri.windows).map(key => {
+            const w = Niri.windows[key];
+            return {
+                id: "win:" + w.id,
+                image: Quickshell.iconPath(w.app_id || "", true),
+                icon: "windows",
+                name: w.title || w.app_id || "",
+                detail: w.app_id || "",
+                run: () => Niri.action("focus-window", "--id", String(w.id))
+            };
+        });
+        return ranked(rows, r => r.name, r => r.detail, commandRest.toLowerCase());
+    }
+
+    function loadEmoji(content) {
+        const russian = Settings.get("appearance.language", "ru") === "ru";
+        emojiRows = JSON.parse(content).map(e => ({
+                    id: "emoji:" + e.e,
+                    glyph: e.e,
+                    icon: "sparkle",
+                    name: russian ? e.ru : e.en,
+                    detail: "",
+                    extra: e.ru + " " + e.en + " " + e.k,
+                    run: () => {
+                        Quickshell.clipboardText = e.e;
+                        Toasts.show(Tr.t("Copied"), e.e, "check");
+                    }
+                }));
+    }
+
+    function searchFiles() {
+        if (!fileMode || commandRest === "") {
+            fileSearch.running = false;
+            if (fileRows.length > 0)
+                fileRows = [];
+            return;
+        }
+        fileSearch.exec(["fd", "--type", "f", "--ignore-case", "--fixed-strings", "--max-results", "40", "--", commandRest, Quickshell.env("HOME")]);
     }
 
     function schemeRows() {
@@ -278,6 +357,7 @@ PanelWindow {
 
     function clearForNextTime() {
         modeSwap.stop();
+        fileTimer.stop();
         input.text = "";
         armed = "";
         hoveredSession = "";
@@ -305,6 +385,12 @@ PanelWindow {
     onQueryChanged: {
         selected = 0;
         armed = "";
+        // Runs on every change: here the file mode binding may still hold its old value.
+        fileTimer.restart();
+    }
+    onEmojiModeChanged: {
+        if (emojiMode)
+            emojiWanted = true;
     }
     onModeChanged: modeSwap.restart()
     onResultsChanged: {
@@ -313,6 +399,37 @@ PanelWindow {
     }
     onSelectedChanged: Ui.launcherSelected = selected
     Component.onCompleted: syncRows()
+
+    // The list is large, so it is read when the emoji mode is first opened.
+    FileView {
+        path: root.emojiWanted ? Quickshell.env("HOME") + "/.config/niri-desk/emoji.json" : ""
+        printErrors: false
+        onLoaded: root.loadEmoji(text())
+    }
+
+    Timer {
+        id: fileTimer
+
+        interval: 180
+        onTriggered: root.searchFiles()
+    }
+
+    Process {
+        id: fileSearch
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const home = Quickshell.env("HOME");
+                root.fileRows = text.split("\n").filter(l => l !== "").map(path => ({
+                            id: "file:" + path,
+                            icon: "note",
+                            name: path.slice(path.lastIndexOf("/") + 1),
+                            detail: path.startsWith(home) ? "~" + path.slice(home.length) : path,
+                            run: () => Quickshell.execDetached(["xdg-open", path])
+                        }));
+            }
+        }
+    }
 
     visible: Ui.menuAlive
     anchors {
@@ -666,9 +783,15 @@ PanelWindow {
                                 asynchronous: true
                                 visible: row.hasImage
                             }
+                            Label {
+                                anchors.centerIn: parent
+                                visible: !!row.entry && !!row.entry.glyph
+                                text: row.entry && row.entry.glyph ? row.entry.glyph : ""
+                                size: 22
+                            }
                             Icon {
                                 anchors.centerIn: parent
-                                visible: !row.hasImage
+                                visible: !row.hasImage && !(row.entry && row.entry.glyph)
                                 name: row.entry ? row.entry.icon : "windows"
                                 size: 22
                                 color: row.nameColor

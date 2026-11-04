@@ -57,6 +57,7 @@ networkmanager
 bluez
 wlsunset
 curl
+fd
 xdg-utils
 gvfs
 mesa
