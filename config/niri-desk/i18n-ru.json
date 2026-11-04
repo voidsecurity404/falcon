@@ -446,6 +446,7 @@
  "{key} is invalid: {value}. Allowed: {options}": "{key} неверно: {value}. Допустимо: {options}",
  "{key} must be a number: {value}": "{key} должно быть числом: {value}",
  "{key} must be between {low} and {high}: {value}": "{key} должно быть от {low} до {high}: {value}",
+ "{key} or the control center turns it off": "Выключается через {key} или центр управления",
  "{m} min": "{m} мин",
  "{name} opened": "{name}: открыто",
  "{n} min": "{n} мин",

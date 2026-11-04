@@ -1759,6 +1759,22 @@ def _():
     wait(lambda: focused()["layout"]["tile_size"][1] == h0, 4)
 
 
+@case("Zen'da chiqish yo'li haqida xabar chiqadi")
+def _():
+    key("mod", "f"); wait(lambda: st()["zen"], 3)
+    wait(lambda: st()["toast"] == "Focus mode", 3, st()["toast"])
+
+
+@case("Zen'dan boshqaruv paneli orqali chiqiladi")
+def _():
+    key("mod", "f"); wait(lambda: st()["zen"], 3)
+    ipc("control")
+    wait(lambda: st()["popup"] == "control", 3)
+    key("esc")
+    wait(lambda: st()["popup"] == "", 3)
+    key("mod", "f"); wait(lambda: not st()["zen"], 3)
+
+
 @case("Zen'da Mod+D ochilishi shell'ni buzmaydi")
 def _():
     key("mod", "f"); wait(lambda: st()["zen"], 3)

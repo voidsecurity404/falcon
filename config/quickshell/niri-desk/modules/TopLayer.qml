@@ -10,6 +10,9 @@ PanelWindow {
 
     readonly property bool isFocusedScreen: !!screen && (Niri.focusedOutput === "" || Niri.focusedOutput === screen.name)
     readonly property bool panelHere: Ui.topPanelOpen && isFocusedScreen
+    // Focus mode hides the bar. The island still opens for the dashboard and for the way-out hint.
+    readonly property bool barShown: !Ui.zen
+    readonly property bool islandShown: !Ui.zen || (panelHere && Ui.popup === "dashboard") || (!!Toasts.current && Toasts.current.inZen === true)
 
     anchors {
         top: true
@@ -26,15 +29,15 @@ PanelWindow {
     // Faqat panellar orqasi xiralashadi, qolgan ekran toza qoladi.
     BackgroundEffect.blurRegion: Region {
         Region {
-            item: ribbon
+            item: root.barShown ? ribbon : null
             radius: 11
         }
         Region {
-            item: status
+            item: root.barShown ? status : null
             radius: 11
         }
         Region {
-            item: island.showDashboard ? null : island.body
+            item: island.showDashboard || !root.islandShown ? null : island.body
             bottomLeftRadius: Settings.bottom ? 0 : island.body.animatedRadius
             bottomRightRadius: Settings.bottom ? 0 : island.body.animatedRadius
             topLeftRadius: Settings.bottom ? island.body.animatedRadius : 0
@@ -47,13 +50,13 @@ PanelWindow {
             item: catcher
         }
         Region {
-            item: ribbon
+            item: root.barShown ? ribbon : null
         }
         Region {
-            item: status
+            item: root.barShown ? status : null
         }
         Region {
-            item: island.body
+            item: root.islandShown ? island.body : null
         }
     }
 
@@ -87,7 +90,7 @@ PanelWindow {
 
     Item {
         anchors.fill: parent
-        opacity: Ui.zen ? 0 : 1
+        opacity: root.barShown ? 1 : 0
         visible: opacity > 0
 
         Behavior on opacity {
@@ -111,6 +114,18 @@ PanelWindow {
             anchors.rightMargin: 14
             y: Settings.bottom ? parent.height - height - 10 : 10
         }
+    }
+
+    Item {
+        anchors.fill: parent
+        opacity: root.islandShown ? 1 : 0
+        visible: opacity > 0
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 220
+            }
+        }
 
         Island {
             id: island
@@ -119,29 +134,29 @@ PanelWindow {
             y: Settings.bottom ? parent.height - height : 0
             showDashboard: root.panelHere && Ui.popup === "dashboard"
         }
+    }
 
-        TrayMenu {
-            anchors.right: parent.right
-            anchors.rightMargin: 14
-            y: Settings.bottom ? parent.height - height - 52 : 52
-            shown: root.panelHere && Ui.popup === "tray"
-        }
+    TrayMenu {
+        anchors.right: parent.right
+        anchors.rightMargin: 14
+        y: Settings.bottom ? parent.height - height - 52 : 52
+        shown: root.panelHere && Ui.popup === "tray"
+    }
 
-        ClaudePanel {
-            anchors.right: parent.right
-            anchors.rightMargin: 14
-            y: Settings.bottom ? parent.height - height - 52 : 52
-            shown: root.panelHere && Ui.popup === "claude"
-        }
+    ClaudePanel {
+        anchors.right: parent.right
+        anchors.rightMargin: 14
+        y: Settings.bottom ? parent.height - height - 52 : 52
+        shown: root.panelHere && Ui.popup === "claude"
+    }
 
-        ControlCenter {
-            id: control
+    ControlCenter {
+        id: control
 
-            anchors.right: parent.right
-            anchors.rightMargin: 14
-            y: Settings.bottom ? parent.height - height - 52 : 52
-            shown: root.panelHere && Ui.popup === "control"
-            onReleaseFocus: keyScope.forceActiveFocus()
-        }
+        anchors.right: parent.right
+        anchors.rightMargin: 14
+        y: Settings.bottom ? parent.height - height - 52 : 52
+        shown: root.panelHere && Ui.popup === "control"
+        onReleaseFocus: keyScope.forceActiveFocus()
     }
 }

@@ -41,6 +41,21 @@ Singleton {
 
     // Tez takrorlanadigan holat (ovoz, yorqinlik): faqat eng oxirgi qiymat muhim.
     // Boshqa daraja xabarini darhol almashtiradi. Oddiy xabar ochiq bo'lsa, navbatda har turdan bittasi turadi.
+    // Focus mode hides the island. This one message still shows there, it says how to get out.
+    function zenHint() {
+        enqueue({
+            title: Tr.t("Focus mode"),
+            sub: Tr.t("{key} or the control center turns it off").replace("{key}", Settings.get("binds.zen", "Mod+F")),
+            icon: "focus",
+            value: -1,
+            key: "",
+            notification: null,
+            sticky: false,
+            run: null,
+            inZen: true
+        });
+    }
+
     function level(key, title, value, icon) {
         const item = {
             title: title,
@@ -160,6 +175,14 @@ Singleton {
                 sticky: critical,
                 run: null
             });
+        }
+    }
+
+    Connections {
+        target: Ui
+        function onZenChanged() {
+            if (Ui.zen)
+                root.zenHint();
         }
     }
 
