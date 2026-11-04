@@ -66,24 +66,10 @@ animations {
 
 prefer-no-csd
 
-// Alt+Tab: oxirgi ishlatilgan oynalar, jonli ko'rinish bilan.
+// Alt+Tab is our own card fan (modules/WindowSwitcher.qml). niri still keeps the order of recent windows.
 recent-windows {
+    off
     debounce-ms 500
-    open-delay-ms 120
-    highlight {
-        padding 18
-        corner-radius 16
-    }
-    previews {
-        max-height 320
-        max-scale 0.4
-    }
-    binds {
-        Alt+Tab { next-window; }
-        Alt+Shift+Tab { previous-window; }
-        Alt+grave { next-window filter="app-id"; }
-        Alt+Shift+grave { previous-window filter="app-id"; }
-    }
 }
 
 hotkey-overlay {

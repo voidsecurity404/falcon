@@ -41,7 +41,13 @@ Singleton {
 
     readonly property bool topPanelOpen: popup === "dashboard" || popup === "control" || popup === "tray" || popup === "claude"
 
+    property string switcherPhase: ""
+    property var switcherRows: []
+    property int switcherSelected: 0
+
     signal launcherInject(string text)
+    signal switcherStep(int step, bool sameApp)
+    signal switcherEnd(bool confirm)
 
     function togglePopup(name) {
         popup = popup === name ? "" : name;

@@ -41,6 +41,7 @@ ShellRoot {
     AppMenu {}
     WallpaperPicker {}
     SettingsWindow {}
+    WindowSwitcher {}
 
     // niri bindlari shu funksiyalarni chaqiradi: qs -c niri-desk ipc call desk <nom>
     IpcHandler {
@@ -102,6 +103,9 @@ ShellRoot {
                 lang: Tr.language,
                 sample: Tr.t("Settings"),
                 dashTab: Ui.dashTab,
+                switcher: Ui.switcherPhase,
+                switcherRows: Ui.switcherRows,
+                switcherSelected: Ui.switcherSelected,
                 rows: Ui.launcherRows,
                 selected: Ui.launcherSelected,
                 pickerSelected: Ui.pickerSelected,
@@ -161,6 +165,12 @@ ShellRoot {
         }
         function widgetsRestack(): void {
             Widgets.restack();
+        }
+        function switcher(step: int, sameApp: bool): void {
+            Ui.switcherStep(step, sameApp);
+        }
+        function switcherEnd(confirm: bool): void {
+            Ui.switcherEnd(confirm);
         }
         function claude(): void {
             Ui.togglePopup("claude");

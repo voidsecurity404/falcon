@@ -9,12 +9,6 @@ layout {
         color "#00000070"
     }
 }
-recent-windows {
-    highlight {
-        active-color "#8fc7ee"
-        urgent-color "#ffb4ab"
-    }
-}
 overview {
     backdrop-color "#0b1a29"
 }

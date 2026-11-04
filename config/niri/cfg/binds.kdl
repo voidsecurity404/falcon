@@ -7,6 +7,10 @@ binds {
 
 
     // Oynalar
+    Alt+Tab { spawn "qs" "-c" "niri-desk" "ipc" "call" "desk" "switcher" "1" "false"; }
+    Alt+Shift+Tab { spawn "qs" "-c" "niri-desk" "ipc" "call" "desk" "switcher" "-1" "false"; }
+    Alt+Grave { spawn "qs" "-c" "niri-desk" "ipc" "call" "desk" "switcher" "1" "true"; }
+    Alt+Shift+Grave { spawn "qs" "-c" "niri-desk" "ipc" "call" "desk" "switcher" "-1" "true"; }
     Mod+H { focus-column-left; }
     Mod+L { focus-column-right; }
     Mod+Left { focus-column-left; }

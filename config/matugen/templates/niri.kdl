@@ -9,12 +9,6 @@ layout {
         color "#00000070"
     }
 }
-recent-windows {
-    highlight {
-        active-color "{{colors.primary.default.hex}}"
-        urgent-color "{{colors.error.default.hex}}"
-    }
-}
 overview {
     backdrop-color "{{colors.surface_container_lowest.default.hex}}"
 }

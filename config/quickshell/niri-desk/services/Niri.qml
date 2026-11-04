@@ -175,6 +175,15 @@ Singleton {
         } else if (e.WindowFocusChanged) {
             const id = e.WindowFocusChanged.id;
             focusedWindowId = id === null || id === undefined ? -1 : id;
+        } else if (e.WindowFocusTimestampChanged) {
+            const change = e.WindowFocusTimestampChanged;
+            if (windows[change.id]) {
+                const next = Object.assign({}, windows);
+                next[change.id] = Object.assign({}, next[change.id], {
+                    focus_timestamp: change.focus_timestamp
+                });
+                windows = next;
+            }
         } else if (e.WindowLayoutsChanged) {
             const next = Object.assign({}, windows);
             for (const change of e.WindowLayoutsChanged.changes) {

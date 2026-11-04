@@ -42,7 +42,7 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | `Mod+,` | Settings |
 | `` Mod+` `` | Scratchpad terminal (the session survives closing) |
 | `Mod+S` | Sticky window: visible on every workspace |
-| `Alt+Tab` | Recent windows with live previews |
+| `Alt+Tab` | Recent windows spread like cards, each showing how the window last looked |
 | `Mod+B` / `Mod+E` / `Mod+N` | Browser, files, notes: focus if open, otherwise launch |
 | `Mod+X` | Lock screen |
 | `Mod+H` / `Mod+L` | Previous or next column |
@@ -119,7 +119,7 @@ fonts/              Geist, Geist Mono and Unbounded (SIL OFL 1.1)
 
 | Idea | Source |
 | --- | --- |
-| Alt+Tab, per-window keyboard layout, marking the shared window | [niri docs](https://github.com/niri-wm/niri/tree/v26.04/docs/wiki) |
+| Per-window keyboard layout, marking the shared window | [niri docs](https://github.com/niri-wm/niri/tree/v26.04/docs/wiki) |
 | Scratchpad terminal | [niri-scratchpad](https://github.com/gvolpe/niri-scratchpad) |
 | Focus an app if it is open | [niri-ror](https://github.com/boomskats/niri-ror) |
 | Sticky window | [nsticky](https://github.com/lonerOrz/nsticky), [niri-float-sticky](https://github.com/probeldev/niri-float-sticky) |
