@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Saves settings to a single file or restores them. The API key is never included.
+"""Saves settings to a single file or restores them.
 
   niri-desk-backup export [FAYL]
   niri-desk-backup import FAYL

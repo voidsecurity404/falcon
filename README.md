@@ -61,7 +61,7 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 
 ## Dashboard
 
-Click the clock. Three tabs, switched with `1`–`3` or `Tab`.
+Click the clock. Two tabs, switched with `1`, `2` or `Tab`.
 
 | Tab | Purpose |
 | --- | --- |
@@ -92,7 +92,7 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 
 ## Configuration
 
-Most things change from the `Mod+,` window and apply immediately: appearance, wallpaper, panel, widgets, windows, per-app rules, monitors, keyboard, mouse and touchpad, shortcuts, terminal, AI and system. Reset to defaults is on the System page. If a value from that window is rejected, it is reverted and the reason is shown. If you edit `settings.json` by hand, the file is left as is, and no setting applies until you fix the value named in the error. From the command line: `niri-desk-set windows.gaps 8`.
+Most things change from the `Mod+,` window and apply immediately: appearance, wallpaper, panel, widgets, windows, per-app rules, monitors, keyboard, mouse and touchpad, shortcuts, terminal and system. Reset to defaults is on the System page. If a value from that window is rejected, it is reverted and the reason is shown. If you edit `settings.json` by hand, the file is left as is, and no setting applies until you fix the value named in the error. From the command line: `niri-desk-set windows.gaps 8`.
 
 | What | Where |
 | --- | --- |

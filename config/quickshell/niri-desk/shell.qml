@@ -92,8 +92,6 @@ ShellRoot {
                 lang: Tr.language,
                 sample: Tr.t("Settings"),
                 dashTab: Ui.dashTab,
-                aiBusy: Ai.busy,
-                aiMessages: Ai.messages.map(m => m.role + ":" + m.text),
                 profiles: Library.profiles.length,
                 rows: Ui.launcherRows,
                 selected: Ui.launcherSelected,
@@ -133,7 +131,6 @@ ShellRoot {
             Night.enabled = Settings.get("nightlight.auto", false);
             Ui.dashTab = 0;
             Widgets.editMode = false;
-            Ai.clear();
         }
         function controlPage(name: string): void {
             Ui.popup = "control";

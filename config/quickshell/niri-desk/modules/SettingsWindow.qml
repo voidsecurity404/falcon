@@ -367,31 +367,6 @@ LazyLoader {
                 ]
             },
             {
-                title: Tr.t("AI"),
-                subtitle: Tr.t("Dashboard chat"),
-                icon: "sparkle",
-                group: 3,
-                sections: [
-                    {
-                        title: Tr.t("Connection"),
-                        items: [
-                            { key: "ai.backend", label: Tr.t("Connection"), type: "choice", options: ["auto", "claude-code", "api"], names: [Tr.t("Automatic"), Tr.t("Claude Code subscription"), Tr.t("API key")], fallback: "auto" },
-                            { label: Tr.t("Anthropic API key"), hint: Tr.t("Only used with an API key"), type: "secret", placeholder: Tr.t("Type and press Enter"), run: value => { Ai.setKey(value); Toasts.show(Tr.t("Key saved"), Tr.t("Other users cannot read it"), "check"); } }
-                        ]
-                    },
-                    {
-                        title: Tr.t("Model"),
-                        items: [
-                            { key: "ai.model", label: Tr.t("Model"), type: "text" },
-                            { key: "ai.effort", label: Tr.t("Effort"), hint: Tr.t("Higher is slower and costs more"), type: "choice", options: ["low", "medium", "high", "xhigh"], names: [Tr.t("Low"), Tr.t("Medium"), Tr.t("High"), Tr.t("Very high")] },
-                            { key: "ai.maxTokens", label: Tr.t("Longest answer, tokens"), hint: Tr.t("Only used with an API key"), type: "slider", min: 1000, max: 64000, step: 1000, unit: "lines" },
-                            { key: "ai.fallbacks", label: Tr.t("Switch model when overloaded"), hint: Tr.t("Only used with an API key"), type: "toggle" },
-                            { key: "ai.system", label: Tr.t("Custom instructions"), hint: Tr.t("Empty means default"), type: "text", fallback: "" }
-                        ]
-                    }
-                ]
-            },
-            {
                 title: Tr.t("System"),
                 subtitle: Tr.t("Power, schedules, weather and reset"),
                 icon: "chip",

@@ -125,14 +125,6 @@
     "translate": "Mod+Alt+P",
     "widgets": "Mod+Shift+W"
   },
-  "ai": {
-    "model": "claude-opus-5-5",
-    "effort": "medium",
-    "maxTokens": 16000,
-    "fallbacks": true,
-    "system": "",
-    "backend": "auto"
-  },
   "session": {
     "restore": true
   },

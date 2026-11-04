@@ -61,7 +61,6 @@ targets=(
     .local/bin/niri-desk-tr
     .local/bin/niri_desk_tr.py
     .config/hypr/niri-desk-lang.conf
-    .local/bin/niri-desk-ai
     .local/bin/niri-desk-profile
     .local/bin/niri-desk-session
     .local/bin/niri-desk-translate
@@ -271,16 +270,8 @@ if command -v niri >/dev/null; then
     do_it niri validate -c "$HOME/.config/niri/config.kdl"
 fi
 
-# AI chat uchun rasmiy SDK alohida muhitda: tizim Python'iga aralashmaydi.
-venv="$HOME/.local/share/niri-desk/venv"
-if ((packages)); then
-    say "Installing the anthropic SDK (only used with an API key)"
-    soft python3 -m venv "$venv"
-    do_it "$venv/bin/pip" install --quiet --upgrade "anthropic>=2.3,<3" || say "The SDK was not installed: the API key option will not work, everything else will"
-fi
-
 if ! command -v claude >/dev/null && ((dry == 0)); then
-    say "Claude Code was not found. Install it to use the AI chat with your subscription."
+    say "Claude Code was not found. Install it and sign in to see Claude limits in the panel."
 fi
 say "Done. Backup: $backup"
 if [[ -e "$state/login-manager" ]] || ((dry && packages && login)); then

@@ -3524,13 +3524,6 @@ def _():
     p.unlink()
 
 
-@case("API kaliti zaxiraga kirmaydi")
-def _():
-    sh(f"echo sk-test | {LBIN}/niri-desk-ai set-key")
-    export()
-    ok(not any("secret" in n or "key" in n for n in members()), members())
-
-
 @case("Sozlama va profillar bor")
 def _():
     export()
@@ -4664,13 +4657,6 @@ def _():
 def _():
     settings(appearance__language="ru", windows__gaps=9999)
     wait(lambda: "должно быть" in st()["error"], 4, st()["error"])
-
-
-@case("AI xatosi tilga ergashadi")
-def _():
-    settings(appearance__language="ru", ai__backend="api", ai__baseUrl="http://127.0.0.1:1")
-    r = sh(f"echo x | {LBIN}/niri-desk-ai send")
-    ok("интернету" in r.stdout or "Ключ" in r.stdout, r.stdout)
 
 
 @case("Kodda ishlatilgan har bir matnning ruscha tarjimasi bor")
