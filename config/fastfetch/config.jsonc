@@ -1,13 +1,22 @@
 // Salomlashuv: chapda Berserk qurbonlik tamg'asi, o'ngda tizim ma'lumoti.
 {
-  "logo": { "type": "file-raw", "source": "~/.config/fastfetch/brand.txt", "width": 42, "height": 34, "padding": { "right": 2 } },
-  "display": { "separator": "  ", "key": { "width": 8 }, "color": { "keys": "blue" } },
+  "logo": { "type": "file-raw", "source": "~/.config/fastfetch/brand.txt", "width": 22, "height": 14, "padding": { "left": 1, "right": 3 } },
+  "display": { "separator": "  ", "key": { "width": 10 }, "color": { "keys": "blue" } },
   "modules": [
     { "type": "os", "key": "os", "format": "{name}" },
+    { "type": "host", "key": "host", "format": "{name}" },
     { "type": "kernel", "key": "kernel", "format": "{release}" },
-    { "type": "wm", "key": "wm", "format": "{pretty-name}" },
     { "type": "uptime", "key": "uptime" },
+    { "type": "packages", "key": "packages", "format": "{all}" },
+    { "type": "shell", "key": "shell", "format": "{pretty-name}" },
+    { "type": "wm", "key": "wm", "format": "{pretty-name}" },
+    { "type": "terminal", "key": "terminal", "format": "{pretty-name}" },
+    { "type": "display", "key": "display", "format": "{width}x{height} {refresh-rate} Hz" },
+    { "type": "cpu", "key": "cpu", "format": "{name}" },
+    { "type": "gpu", "key": "gpu", "format": "{name}" },
     { "type": "memory", "key": "memory", "format": "{used} / {total}" },
-    { "type": "disk", "key": "disk", "folders": "/", "format": "{size-used} / {size-total}" }
+    { "type": "swap", "key": "swap", "format": "{used} / {total}" },
+    { "type": "disk", "key": "disk", "folders": "/", "format": "{size-used} / {size-total}" },
+    { "type": "battery", "key": "battery", "format": "{capacity} {status}" }
   ]
 }
