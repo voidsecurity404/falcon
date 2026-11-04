@@ -406,28 +406,5 @@ Rectangle {
                 }
             }
         }
-
-        Reveal {
-            shown: root.shown
-            delay: 220
-            visible: !!Media.player
-
-            Rectangle {
-                width: parent.width
-                height: media.implicitHeight + 24
-                radius: 15
-                color: Qt.alpha(Theme.text, 0.05)
-
-                MediaCard {
-                    id: media
-
-                    x: 12
-                    y: 12
-                    width: parent.width - 24
-                    artSize: 56
-                    showControls: false
-                }
-            }
-        }
     }
 }
