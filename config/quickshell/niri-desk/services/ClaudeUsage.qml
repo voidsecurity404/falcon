@@ -55,18 +55,42 @@ Singleton {
     // Only while the numbers are on screen.
     readonly property bool checking: Ui.popup === "claude" || ((Widgets.shownNow || Widgets.editMode) && Widgets.hasType("claude"))
 
+    // Seconds until the next fetch. Stays at 0 while a fetch runs.
+    property int countdown: 0
+    property bool failed: false
+    // The countdown while fetches work, otherwise the real age of the numbers.
+    readonly property string statusText: checking && !failed ? Tr.t("Updating in {s} s").replace("{s}", countdown) : updatedText
+
+    function refresh() {
+        countdown = 0;
+        fetch.running = true;
+    }
+
+    onCheckingChanged: {
+        if (checking)
+            refresh();
+    }
+
     Process {
         id: fetch
 
         command: ["niri-desk-claude-usage"]
+        onExited: code => {
+            root.failed = code !== 0;
+            root.countdown = 10;
+        }
     }
 
     Timer {
-        interval: 10000
-        running: root.checking
+        interval: 1000
+        running: root.checking && !fetch.running
         repeat: true
-        triggeredOnStart: true
-        onTriggered: fetch.running = true
+        onTriggered: {
+            if (root.countdown <= 1)
+                root.refresh();
+            else
+                root.countdown--;
+        }
     }
 
     FileView {

@@ -127,8 +127,8 @@ Rectangle {
             reset: ClaudeUsage.weeklyReset
         }
         Label {
-            visible: ClaudeUsage.hasData && ClaudeUsage.updatedText !== ""
-            text: ClaudeUsage.updatedText
+            visible: ClaudeUsage.hasData && ClaudeUsage.statusText !== ""
+            text: ClaudeUsage.statusText
             color: Qt.alpha(Theme.text, 0.4)
             size: 11
         }

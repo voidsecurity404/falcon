@@ -323,6 +323,7 @@
  "Limit has reset": "Лимит сброшен",
  "Updated just now": "Обновлено только что",
  "Updated {time} ago": "Обновлено {time} назад",
+ "Updating in {s} s": "Обновление через {s} с",
  "{d} d {h} h": "{d} д {h} ч",
  "{h} h {m} min": "{h} ч {m} мин",
  "{m} min": "{m} мин",
