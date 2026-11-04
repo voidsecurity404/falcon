@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import Quickshell.Widgets
 import qs.components
 import qs.services
 import "../services/tools.js" as Tools
@@ -18,6 +19,9 @@ LazyLoader {
         property var clips: []
         property var pointerStart: null
         property bool pointerLive: false
+        property bool thumbsReady: false
+        // Pictures are decoded to memory-backed storage, so copies of them do not stay on the disk.
+        readonly property string thumbDir: Quickshell.env("XDG_RUNTIME_DIR") + "/niri-desk-clip"
 
         readonly property var results: {
             const q = query.trim().toLowerCase();
@@ -91,13 +95,24 @@ LazyLoader {
                 onStreamFinished: {
                     root.clips = text.split("\n").filter(l => /^\d+\t/.test(l)).map(l => {
                         const tab = l.indexOf("\t");
+                        const raw = l.slice(tab + 1).trim();
+                        const picture = raw.match(/^\[\[ binary data (.+) (png|jpe?g|webp|bmp|gif) (\d+x\d+) \]\]$/);
                         return {
                             id: l.slice(0, tab),
-                            text: l.slice(tab + 1).trim()
+                            text: picture ? Tr.t("Image") + " " + picture[3] + " · " + picture[1] : raw,
+                            image: !!picture
                         };
                     });
+                    thumbs.command = ["sh", "-c", 'umask 077; mkdir -p "$0" && cd "$0" || exit 1; for f in *; do case " $* " in *" $f "*) ;; *) rm -f -- "$f";; esac; done; for id; do [ -s "$id" ] || cliphist decode "$id" > "$id"; done', root.thumbDir].concat(root.clips.filter(c => c.image).slice(0, 20).map(c => c.id));
+                    thumbs.running = true;
                 }
             }
+        }
+
+        Process {
+            id: thumbs
+
+            onExited: root.thumbsReady = true
         }
 
         MouseArea {
@@ -212,13 +227,34 @@ LazyLoader {
                             readonly property bool isSelected: index === root.selected
 
                             width: parent.width
-                            height: 40
+                            height: modelData.image ? 64 : 40
                             radius: 9
                             color: isSelected ? Theme.accent : "transparent"
 
+                            ClippingRectangle {
+                                id: thumb
+
+                                visible: row.modelData.image
+                                x: 8
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 84
+                                height: 52
+                                radius: 6
+                                color: Qt.alpha(Theme.text, 0.08)
+
+                                Image {
+                                    anchors.fill: parent
+                                    source: row.modelData.image && root.thumbsReady ? "file://" + root.thumbDir + "/" + row.modelData.id : ""
+                                    sourceSize: Qt.size(168, 104)
+                                    fillMode: Image.PreserveAspectCrop
+                                    asynchronous: true
+                                    cache: false
+                                }
+                            }
+
                             Label {
                                 anchors.left: parent.left
-                                anchors.leftMargin: 14
+                                anchors.leftMargin: row.modelData.image ? 104 : 14
                                 anchors.right: parent.right
                                 anchors.rightMargin: 14
                                 anchors.verticalCenter: parent.verticalCenter
