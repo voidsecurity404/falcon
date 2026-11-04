@@ -30,3 +30,8 @@ output_path = "~/.config/gtk-4.0/gtk.css"
 [templates.qt6ct]
 input_path = "~/.config/matugen/templates/qt6ct.conf"
 output_path = "~/.config/qt6ct/colors/niri-desk.conf"
+
+[templates.firefox]
+input_path = "~/.config/matugen/templates/firefox.css"
+output_path = "~/.local/state/niri-desk/firefox-userChrome.css"
+post_hook = "~/.local/bin/niri-desk-firefox"

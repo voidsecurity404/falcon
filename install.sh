@@ -70,6 +70,7 @@ targets=(
     .local/bin/niri-desk-super
     .local/bin/niri-desk-set
     .local/bin/niri-desk-raise
+    .local/bin/niri-desk-firefox
     .local/bin/niri-desk-scratch
     .local/bin/niri-desk-color
     .config/niri-desk/tmux.conf
