@@ -15,14 +15,47 @@ Rectangle {
     property bool clearing: false
     property var clearingIds: []
 
+    // Notifications of one app stay together. The app with the newest one comes first.
+    readonly property var rows: {
+        const groups = [];
+        for (const item of Toasts.history) {
+            let group = groups.find(g => g.app === item.app);
+            if (!group) {
+                group = {
+                    app: item.app,
+                    items: []
+                };
+                groups.push(group);
+            }
+            group.items.push(item);
+        }
+        return groups.reduce((all, g) => all.concat(g.items), []);
+    }
+    // For each notification id: the ids of its group, and whether it comes first there.
+    readonly property var groupInfo: {
+        const info = {};
+        for (const item of rows) {
+            const ids = rows.filter(r => r.app === item.app).map(r => r.id);
+            info[item.id] = {
+                ids: ids,
+                first: ids[0] === item.id
+            };
+        }
+        return info;
+    }
+
     signal sweep(var ids, int first)
 
     function clearAll() {
-        if (clearing || Toasts.history.length === 0)
+        clearIds(rows.map(h => h.id), Math.max(0, list.indexAt(10, list.contentY + 4)));
+    }
+
+    function clearIds(ids, first) {
+        if (clearing || ids.length === 0)
             return;
         clearing = true;
-        clearingIds = Toasts.history.map(h => h.id);
-        sweep(clearingIds, Math.max(0, list.indexAt(10, list.contentY + 4)));
+        clearingIds = ids;
+        sweep(clearingIds, first);
         // Cards leave the model together, so the ones still flying do not jump.
         clearTimer.interval = Math.min(clearingIds.length, sweepMax + 1) * sweepStep + sweepTime;
         clearTimer.restart();
@@ -116,7 +149,7 @@ Rectangle {
 
         // Cards keep their delegates across changes, matched by id.
         model: ScriptModel {
-            values: Toasts.history
+            values: root.rows
             objectProp: "id"
         }
 
@@ -149,6 +182,11 @@ Rectangle {
 
             property bool leaving: false
             property real lastSpeed: 0
+            readonly property var group: root.groupInfo[modelData.id] || ({
+                    ids: [],
+                    first: false
+                })
+            readonly property int headerHeight: group.first ? 26 : 0
 
             // dir is -1 or 1. The card only flies here, the model removes it afterward.
             function leave(dir, delay, swiped) {
@@ -165,7 +203,42 @@ Rectangle {
             }
 
             width: ListView.view.width
-            height: card.height
+            height: card.height + headerHeight
+
+            Item {
+                visible: note.group.first
+                width: parent.width
+                height: note.headerHeight
+                opacity: 1 - 0.9 * Math.min(1, Math.abs(card.x) / Math.max(1, card.width))
+
+                Label {
+                    x: 4
+                    width: parent.width - 34
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: (note.modelData.app || Tr.t("Other")) + (note.group.ids.length > 1 ? " · " + note.group.ids.length : "")
+                    color: Theme.muted
+                    size: 12
+                    elide: Text.ElideRight
+                }
+                Icon {
+                    anchors.right: parent.right
+                    anchors.rightMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "close"
+                    size: 12
+                    color: groupClear.containsMouse ? Theme.text : Theme.muted
+                }
+                MouseArea {
+                    id: groupClear
+
+                    anchors.right: parent.right
+                    width: 26
+                    height: parent.height
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.clearIds(note.group.ids, note.index)
+                }
+            }
 
             Connections {
                 target: root
@@ -210,6 +283,7 @@ Rectangle {
             Rectangle {
                 id: card
 
+                y: note.headerHeight
                 width: parent.width
                 height: noteText.implicitHeight + 20
                 radius: 14
