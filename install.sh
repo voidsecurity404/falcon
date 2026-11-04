@@ -4,7 +4,7 @@
 #   ./install.sh                    packages, drivers, services, login screen and configs
 #   ./install.sh --dry-run          shows what would happen, changes nothing
 #   ./install.sh --no-packages      configs only: no packages, services or login screen
-#   ./install.sh --no-login-manager does not set up the greetd login screen
+#   ./install.sh --no-login-manager does not set up the SDDM login screen
 #   ./install.sh --uninstall        restores previous configs from backup
 #   ./install.sh --yes              does not prompt when installing packages
 #   ./install.sh --force            allows running on Omarchy (not recommended)
@@ -70,6 +70,9 @@ targets=(
     .local/bin/niri-desk-set
     .local/bin/niri-desk-raise
     .local/bin/niri-desk-firefox
+    .local/bin/niri-desk-keyd
+    .local/bin/niri-desk-login
+    .local/bin/niri-desk-sddm-colors
     .local/bin/niri-desk-sync
     .local/bin/niri-desk-doctor
     .local/bin/niri-desk-scratch
@@ -101,13 +104,10 @@ if ((uninstall)); then
     do_it rm -rf "$HOME/.local/share/niri-desk"
     if ((dry == 0)) && [[ -f "$HOME/.bashrc" ]]; then sed -i '/niri-desk\/shell\.bash/d' "$HOME/.bashrc"; fi
     if [[ -e "$state/login-manager" ]] && ((dry == 0)); then
-        sudo systemctl disable greetd.service || true
+        sudo systemctl disable sddm.service || true
         sudo systemctl set-default "$(cat "$state/login-manager")" || true
-        if [[ -e /etc/greetd/config.toml.niri-desk-backup ]]; then
-            sudo mv /etc/greetd/config.toml.niri-desk-backup /etc/greetd/config.toml
-        fi
         rm -f "$state/login-manager"
-        say "The greetd login screen was turned off, the system boots to a tty again."
+        say "The SDDM login screen was turned off, the system boots to a tty again."
     fi
     say "Previous configs restored. Packages were not removed, use pacman if you want them gone."
     exit 0
@@ -147,7 +147,7 @@ gpu_packages() {
 if ((packages)); then
     mapfile -t list < <(grep -vE '^\s*(#|$)' "$root/packages.txt"; gpu_packages | sort -u)
     if ((login)) && [[ ! -e /etc/systemd/system/display-manager.service ]]; then
-        list+=(greetd greetd-tuigreet)
+        list+=(sddm qt6-svg qt6-virtualkeyboard qt6-multimedia-ffmpeg)
     fi
     # Claude Code CachyOS omborida bor. Arch'da yo'q bo'lsa, oxirida ko'rsatma chiqadi.
     if ! command -v claude >/dev/null && pacman -Si claude-code >/dev/null 2>&1; then
@@ -250,22 +250,15 @@ fi
 
 # Kirish ekrani. Boshqa display manager bo'lsa tegilmaydi, tty'dan ishga tushmasin deb --now yo'q.
 if ((packages && login)); then
-    if [[ -e /etc/systemd/system/display-manager.service ]] && [[ "$(readlink -f /etc/systemd/system/display-manager.service)" != *greetd* ]]; then
+    if [[ -e /etc/systemd/system/display-manager.service ]] && [[ "$(readlink -f /etc/systemd/system/display-manager.service)" != *sddm* ]]; then
         say "A display manager is already enabled, leaving it alone. Pick the niri session there."
-    elif [[ -x /usr/bin/tuigreet ]] || ((dry)); then
-        say "Setting up the greetd login screen"
+    else
+        say "Setting up the SDDM login screen"
         if [[ ! -e "$state/login-manager" ]] && ((dry == 0)); then
             mkdir -p "$state"
             systemctl get-default >"$state/login-manager"
-            [[ -e /etc/greetd/config.toml.niri-desk-backup ]] || sudo cp -a /etc/greetd/config.toml /etc/greetd/config.toml.niri-desk-backup
         fi
-        if ((dry)); then
-            printf '  [dry-run] write /etc/greetd/config.toml, enable greetd, default target graphical\n'
-        else
-            printf '[terminal]\nvt = 1\n\n[default_session]\ncommand = "tuigreet --time --remember --asterisks --cmd niri-session"\nuser = "greeter"\n' | sudo tee /etc/greetd/config.toml >/dev/null
-        fi
-        do_it sudo systemctl enable greetd.service
-        do_it sudo systemctl set-default graphical.target
+        do_it env NIRI_DESK_REPO="$root" "$HOME/.local/bin/niri-desk-login"
     fi
 fi
 
@@ -283,5 +276,4 @@ else
     say "Pick the niri session on your login screen, or run niri-session from a tty."
 fi
 if command -v claude >/dev/null; then
-    say "For the AI chat, sign in once: claude auth login"
 fi

@@ -35,3 +35,8 @@ output_path = "~/.config/qt6ct/colors/niri-desk.conf"
 input_path = "~/.config/matugen/templates/firefox.css"
 output_path = "~/.local/state/niri-desk/firefox-userChrome.css"
 post_hook = "~/.local/bin/niri-desk-firefox"
+
+[templates.sddm]
+input_path = "~/.config/matugen/templates/sddm.conf"
+output_path = "~/.local/state/niri-desk/sddm-colors.conf"
+post_hook = "~/.local/bin/niri-desk-sddm-colors"

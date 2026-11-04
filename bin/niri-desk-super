@@ -59,6 +59,9 @@ def locked():
 
 
 def main():
+    # keyd does this job when it is on, see niri-desk-keyd.
+    if subprocess.run(["systemctl", "is-active", "-q", "keyd.service"], check=False).returncode == 0:
+        return
     # A second copy would close the menu that the first one has just opened.
     lock = open(os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "niri-desk-super.lock"), "w")
     try:

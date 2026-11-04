@@ -17,9 +17,9 @@ cd niri-desk
 sudo reboot
 ```
 
-The installer adds packages, GPU drivers (Intel and AMD), Claude Code when your repositories have it, and turns on NetworkManager, Bluetooth and audio. It sets up the greetd login screen, unless another display manager is already enabled or you pass `--no-login-manager`. If the login screen does not start, press `Ctrl+Alt+F2`, log in and fix it from there. NVIDIA drivers are not installed for you: on CachyOS run `sudo chwd -a`.
+The installer adds packages, GPU drivers (Intel and AMD), Claude Code when your repositories have it, and turns on NetworkManager, Bluetooth and audio. It sets up the SDDM login screen, unless another display manager is already enabled or you pass `--no-login-manager`. If the login screen does not start, press `Ctrl+Alt+F2`, log in and fix it from there. NVIDIA drivers are not installed for you: on CachyOS run `sudo chwd -a`.
 
-Existing configs are saved to `~/.local/state/niri-desk/backup-*`. `./install.sh --uninstall` restores them, turns greetd off and leaves packages installed. Your own binds from `user.kdl` are kept in `~/.local/state/niri-desk/user.kdl` and come back on the next install.
+Existing configs are saved to `~/.local/state/niri-desk/backup-*`. `./install.sh --uninstall` restores them, turns SDDM off and leaves packages installed. Your own binds from `user.kdl` are kept in `~/.local/state/niri-desk/user.kdl` and come back on the next install.
 
 ## Language
 
@@ -86,6 +86,8 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 - `niri-desk-backup export [file]`, `import file`: save settings to one file.
 - `niri-desk-doctor`: checks programs, running services, config and permissions, and says what to fix.
 - `niri-desk-sync [--check] [--pull]`: copies changed files from the repo to the live desktop, leaving generated files and user data alone.
+- `niri-desk-keyd [--off]`: moves the Super tap to keyd, so your user can leave the `input` group.
+- `niri-desk-login`: sets up the SDDM login screen, it asks for sudo.
 - `niri-desk-translate`: the text is sent to an online translation service (`translate-shell`).
 
 ## Configuration
