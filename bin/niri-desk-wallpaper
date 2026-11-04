@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
-# Fon rasmini o'rnatadi va ranglarni shu rasmdan oladi.
-#   niri-desk-wallpaper RASM       tanlangan rasmni qo'yish
-#   niri-desk-wallpaper --restore  oxirgi rasmni qaytarish (sessiya boshida)
+# Fon rasmi yoki jonli fonni o'rnatadi va ranglarni shundan oladi.
+#   niri-desk-wallpaper FAYL       rasm yoki videoni fon qilish
+#   niri-desk-wallpaper --restore  oxirgi fonni qaytarish (sessiya boshida)
 #   niri-desk-wallpaper --colors RASM  faqat ranglarni yozish, rasm qo'ymasdan
+#   niri-desk-wallpaper --posters [PAPKA]  videolar uchun yetishmagan kadrlarni yasash
 set -euo pipefail
 
 state="${XDG_STATE_HOME:-$HOME/.local/state}/niri-desk"
 link="$state/wallpaper"
+live_link="$state/wallpaper-live"
+posters="$state/live-posters"
 dir="$HOME/Pictures/Wallpapers"
-mkdir -p "$state"
+mkdir -p "$state" "$posters"
 
 colors() {
     "$HOME/.local/bin/niri-desk-apply" --colors "$1"
@@ -32,8 +35,73 @@ first_image() {
     find "$dir" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) | sort | head -n 1
 }
 
+is_video() {
+    case "${1,,}" in
+        *.mp4 | *.webm | *.mkv | *.mov) return 0 ;;
+    esac
+    return 1
+}
+
+# Videoning birinchi kadri: u rang manbai, qulf ekrani foni va tanlagichdagi rasm.
+poster() {
+    local name out
+    name="$(basename "$1")"
+    out="$posters/${name%.*}.jpg"
+    [[ -s "$out" ]] || ffmpeg -v error -y -i "$1" -frames:v 1 -q:v 3 "$out" </dev/null >&2
+    printf '%s\n' "$out"
+}
+
+stop_live() {
+    pkill -x mpvpaper 2>/dev/null || true
+}
+
+# Ovozsiz, aylanib, ekranni to'ldirib o'ynaydi; ko'rinmaganda to'xtaydi.
+play() {
+    setsid -f mpvpaper -p -o "no-audio loop panscan=1.0 hwdec=auto" '*' "$1" >/dev/null 2>&1
+}
+
+toast() {
+    qs -c niri-desk ipc call desk toast "$("$HOME/.local/bin/niri-desk-tr" "$1")" "$2" >/dev/null 2>&1 || true
+}
+
+set_live() {
+    local video="$1" image
+    if ! command -v mpvpaper >/dev/null; then
+        toast "Live wallpapers need mpvpaper" "sudo pacman -S mpvpaper"
+        echo "mpvpaper is not installed" >&2
+        exit 1
+    fi
+    image="$(poster "$video")"
+    # Kadr ochilmasa joriy fon va ranglar o'zgarishsiz qoladi.
+    stop_live
+    show "$image"
+    colors "$image"
+    ln -sfn "$image" "$link"
+    ln -sfn "$video" "$live_link"
+    # Avval kadrga o'tish tugasin, video xuddi shu kadrdan boshlanadi.
+    sleep 1
+    play "$video"
+}
+
 case "${1:-}" in
+    --posters)
+        find "${2:-$dir/Live}" -maxdepth 1 -type f 2>/dev/null | while read -r file; do
+            if is_video "$file"; then
+                poster "$file" >/dev/null || true
+            fi
+        done
+        ;;
     --restore)
+        video="$(readlink -f "$live_link" 2>/dev/null || true)"
+        if [[ -f "$video" ]] && command -v mpvpaper >/dev/null; then
+            image="$(poster "$video")"
+            ln -sfn "$image" "$link"
+            show "$image"
+            [[ -f "$state/colors.json" ]] || colors "$image"
+            sleep 1
+            play "$video"
+            exit 0
+        fi
         image="$(readlink -f "$link" 2>/dev/null || true)"
         [[ -f "$image" ]] || image="$(first_image)"
         [[ -n "$image" ]] || exit 0
@@ -47,15 +115,21 @@ case "${1:-}" in
         colors "$image"
         ;;
     "" | -h | --help)
-        sed -n '2,5p' "$0" | cut -c3-
+        sed -n '2,6p' "$0" | cut -c3-
         ;;
     *)
         image="$(readlink -f "$1")"
-        [[ -f "$image" ]] || { echo "Image not found: $1" >&2; exit 1; }
-        # Rasm ochilmasa joriy fon va ranglar o'zgarishsiz qoladi.
-        show "$image"
-        colors "$image"
-        ln -sfn "$image" "$link"
-        qs -c niri-desk ipc call desk toast "$("$HOME/.local/bin/niri-desk-tr" "Colors updated")" "$(basename "${image%.*}")" >/dev/null 2>&1 || true
+        [[ -f "$image" ]] || { echo "File not found: $1" >&2; exit 1; }
+        if is_video "$image"; then
+            set_live "$image"
+        else
+            # Rasm ochilmasa joriy fon va ranglar o'zgarishsiz qoladi.
+            show "$image"
+            stop_live
+            rm -f "$live_link"
+            colors "$image"
+            ln -sfn "$image" "$link"
+        fi
+        toast "Colors updated" "$(basename "${image%.*}")"
         ;;
 esac

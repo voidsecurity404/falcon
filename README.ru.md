@@ -124,7 +124,7 @@ sudo reboot
 | Все настройки | `~/.config/niri-desk/settings.json` |
 | Свои привязки клавиш | `~/.config/niri/cfg/user.kdl` |
 | Дополнительные настройки анимации | `~/.config/niri/cfg/layout.kdl` |
-| Обои | `~/Pictures/Wallpapers`, папку можно сменить в настройках |
+| Обои | `~/Pictures/Wallpapers`, видео для вкладки живых обоев в папке `Live`. Папку можно сменить в настройках |
 | Скриншоты | `Screenshots` в папке изображений (`xdg-user-dir PICTURES`) |
 
 ## Статус

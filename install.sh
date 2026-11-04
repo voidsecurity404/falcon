@@ -206,7 +206,7 @@ do_it cp -a "$root/config/rofi/." "$HOME/.config/rofi/"
 do_it cp -a "$root/bin/." "$HOME/.local/bin/"
 
 # Foydalanuvchi sozlamalari va fon rasmlari ustidan yozilmaydi.
-do_it mkdir -p "$HOME/.config/niri-desk" "$HOME/Pictures/Wallpapers" "$HOME/.local/share/fonts/niri-desk"
+do_it mkdir -p "$HOME/.config/niri-desk" "$HOME/Pictures/Wallpapers" "$HOME/Pictures/Wallpapers/Live" "$HOME/.local/share/fonts/niri-desk"
 do_it cp "$root/config/niri-desk/tmux.conf" "$root/config/niri-desk/defaults.json" "$root/config/niri-desk/i18n-ru.json" "$HOME/.config/niri-desk/"
 [[ -e "$HOME/.config/niri-desk/profiles.json" ]] || do_it cp "$root/config/niri-desk/profiles.json" "$HOME/.config/niri-desk/profiles.json"
 [[ -e "$HOME/.config/niri-desk/settings.json" ]] || do_it cp "$root/config/niri-desk/settings.json" "$HOME/.config/niri-desk/settings.json"

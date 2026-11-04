@@ -50,6 +50,10 @@ ShellRoot {
         function wallpapers(): void {
             Ui.togglePopup("wallpapers");
         }
+
+        function wallpapersTab(tab: int): void {
+            Ui.pickerTab = tab;
+        }
         function dashboard(): void {
             Ui.togglePopup("dashboard");
         }
@@ -90,6 +94,7 @@ ShellRoot {
                 selected: Ui.launcherSelected,
                 pickerSelected: Ui.pickerSelected,
                 pickerFiles: Ui.pickerFiles,
+                pickerTab: Ui.pickerTab,
                 controlHeight: Ui.controlHeight,
                 controlPage: Ui.controlPage,
                 widgetEdit: Widgets.editMode,

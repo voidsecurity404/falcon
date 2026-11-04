@@ -1396,6 +1396,21 @@ def _():
     ok(wp_name() == "ormon.jpg", wp_name())
 
 
+@case("Jonli va oddiy fon vkladkalari almashadi")
+def _():
+    set_wp("moviy-tun.jpg")
+    picker()
+    ok(st()["pickerTab"] == 1, st()["pickerTab"])
+    images = st()["pickerFiles"]
+    sh(["qs", "-c", "niri-desk", "ipc", "call", "desk", "wallpapersTab", "0"])
+    wait(lambda: st()["pickerTab"] == 0, 2)
+    ok(st()["pickerFiles"] == len([f for f in (WDIR / "Live").glob("*") if f.is_file()]) if (WDIR / "Live").exists() else st()["pickerFiles"] == 0)
+    sh(["qs", "-c", "niri-desk", "ipc", "call", "desk", "wallpapersTab", "1"])
+    wait(lambda: st()["pickerTab"] == 1, 2)
+    ok(st()["pickerFiles"] == images, st()["pickerFiles"])
+    key("esc")
+
+
 @case("Papka bo'sh bo'lsa xabar chiqadi")
 def _():
     Path("/tmp/nd-empty").mkdir(exist_ok=True)

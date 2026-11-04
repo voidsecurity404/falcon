@@ -117,6 +117,12 @@ layer-rule {
     place-within-backdrop true
 }
 
+// Jonli fon ham xuddi shunday.
+layer-rule {
+    match namespace="^mpvpaper"
+    place-within-backdrop true
+}
+
 // Vidjetlar ham fon bilan birga turadi: ish stoli almashganda surilmaydi.
 layer-rule {
     match namespace="^niri-desk-widgets-face$"

@@ -23,6 +23,7 @@ Singleton {
     property int launcherSelected: 0
     property int pickerSelected: 0
     property int pickerFiles: 0
+    property int pickerTab: 1
     property real controlHeight: 0
     property bool recording: false
     property int recordSeconds: 0
