@@ -526,6 +526,13 @@ PanelWindow {
             duration: 200
             easing.type: Easing.OutCubic
         }
+        // Results that arrived during the fade, such as file search output.
+        ScriptAction {
+            script: {
+                if (root.mode === root.shownMode)
+                    root.syncRows();
+            }
+        }
     }
     Timer {
         id: disarm
