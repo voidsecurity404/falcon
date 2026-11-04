@@ -1,13 +1,12 @@
 import QtQuick
 import QtQuick.Effects
-import Quickshell
 import qs.services
 
-// Blurred picture behind the panel: the wallpaper, or the album art when one is given.
+// Scene over the panel's glass. The compositor blurs what is behind it, so each page only adds a see-through tint.
 Item {
     id: root
 
-    // 0 Today, 1 Music, 2 AI. Each page has its own scene over the wallpaper.
+    // 0 Today, 1 Music, 2 AI. Each page has its own scene over the glass.
     property int page: 0
     property string art: ""
     property bool playing: false
@@ -24,8 +23,6 @@ Item {
         shownArt = art;
         frontSlot = 1 - frontSlot;
     }
-
-    readonly property string wallpaper: "file://" + Quickshell.env("HOME") + "/.local/state/niri-desk/wallpaper"
 
     layer.enabled: true
     layer.effect: MultiEffect {
@@ -52,35 +49,17 @@ Item {
         width: root.fullWidth
         height: root.fullHeight
 
-        Image {
-            id: wall
-
-            anchors.fill: parent
-            source: root.wallpaper
-            cache: false
-            fillMode: Image.PreserveAspectCrop
-            sourceSize.width: 140
-            visible: false
-        }
-        MultiEffect {
-            anchors.fill: parent
-            source: wall
-            blurEnabled: true
-            blur: 1
-            blurMax: 64
-            saturation: 0.25
-        }
-        // Darker for the wallpaper, lighter over a cover, which should stay visible.
+        // Keeps the words readable over a bright window.
         Rectangle {
             anchors.fill: parent
             gradient: Gradient {
                 GradientStop {
                     position: 0
-                    color: Qt.alpha(Theme.pill, 0.62)
+                    color: Qt.alpha(Theme.pill, 0.58)
                 }
                 GradientStop {
                     position: 1
-                    color: Qt.alpha(Theme.pill, 0.86)
+                    color: Qt.alpha(Theme.pill, 0.7)
                 }
             }
         }
@@ -95,14 +74,14 @@ Item {
             onPaint: {
                 const ctx = getContext("2d");
                 ctx.reset();
-                ctx.fillStyle = Theme.pill;
+                ctx.fillStyle = Qt.alpha(Theme.pill, 0.25);
                 ctx.fillRect(0, 0, width, height);
                 ctx.save();
                 ctx.translate(width / 2, height * 0.4);
                 ctx.scale(1, 0.57);
                 const light = ctx.createRadialGradient(0, 0, 0, 0, 0, 700);
-                light.addColorStop(0, Qt.tint(Theme.pill, Qt.alpha(Theme.accent, 0.17)));
-                light.addColorStop(1, Qt.alpha(Theme.pill, 0));
+                light.addColorStop(0, Qt.alpha(Theme.accent, 0.17));
+                light.addColorStop(1, Qt.alpha(Theme.accent, 0));
                 ctx.fillStyle = light;
                 ctx.fillRect(-width, -height * 2, width * 2, height * 4);
                 ctx.restore();
@@ -158,6 +137,7 @@ Item {
                     width: slot.side
                     height: slot.side
                     source: slot.picture
+                    opacity: 0.7
                     turnSeconds: 70
                     turning: root.playing
                 }
@@ -188,15 +168,15 @@ Item {
                     gradient: Gradient {
                         GradientStop {
                             position: 0
-                            color: Qt.alpha(Theme.pill, 0.42)
+                            color: Qt.alpha(Theme.pill, 0.56)
                         }
                         GradientStop {
                             position: 0.55
-                            color: Qt.alpha(Theme.pill, 0.34)
+                            color: Qt.alpha(Theme.pill, 0.56)
                         }
                         GradientStop {
                             position: 1
-                            color: Qt.alpha(Theme.pill, 0.68)
+                            color: Qt.alpha(Theme.pill, 0.72)
                         }
                     }
                 }
@@ -208,8 +188,6 @@ Item {
         target: Theme
         function onAccentChanged() {
             room.requestPaint();
-            wall.source = "";
-            wall.source = root.wallpaper;
         }
     }
 }

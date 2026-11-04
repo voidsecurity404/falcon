@@ -124,7 +124,7 @@ Item {
             }
         }
 
-        // Panel orqasida xiralashgan rasm: fon rasmi, musiqa bo'limida albom.
+        // Panel shishasi ustidagi sahna: har bo'limning rangi, musiqa bo'limida albom.
         Loader {
             anchors.fill: parent
             asynchronous: true

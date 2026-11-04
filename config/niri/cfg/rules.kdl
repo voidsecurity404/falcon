@@ -129,9 +129,10 @@ layer-rule {
     place-within-backdrop true
 }
 
-// Ilovalar menyusi shisha: orqasidagi oyna ko'rinadi, faqat fon rasmi emas.
+// Menyu va panellar shisha: orqasidagi oyna ko'rinadi, faqat fon rasmi emas.
 layer-rule {
     match namespace="^niri-desk-menu$"
+    match namespace="^niri-desk-top$"
     background-effect {
         xray false
     }

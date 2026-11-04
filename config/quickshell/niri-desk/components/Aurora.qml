@@ -9,7 +9,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: Qt.tint(Theme.pill, "#100b2e")
+        color: Qt.alpha(Qt.tint(Theme.pill, "#100b2e"), 0.25)
     }
 
     Blob {
