@@ -15,39 +15,61 @@ Rectangle {
     property bool clearing: false
     property var clearingIds: []
 
+    // Ids of the cards flying away, so that a header goes together with the last card of its app.
+    property var gone: ({})
+
     // Notifications of one app stay together. The app with the newest one comes first.
-    readonly property var rows: {
-        const groups = [];
+    readonly property var groups: {
+        const all = [];
         for (const item of Toasts.history) {
-            let group = groups.find(g => g.app === item.app);
+            let group = all.find(g => g.app === item.app);
             if (!group) {
                 group = {
                     app: item.app,
                     items: []
                 };
-                groups.push(group);
+                all.push(group);
             }
             group.items.push(item);
         }
-        return groups.reduce((all, g) => all.concat(g.items), []);
+        return all;
     }
-    // For each notification id: the ids of its group, and whether it comes first there.
-    readonly property var groupInfo: {
-        const info = {};
-        for (const item of rows) {
-            const ids = rows.filter(r => r.app === item.app).map(r => r.id);
-            info[item.id] = {
-                ids: ids,
-                first: ids[0] === item.id
-            };
+    // A header is a row of its own. Had it been part of a group's first card, removing that card would
+    // make the next one taller while the list is moving, and the cards below would stay where they were.
+    readonly property var rows: groups.reduce((all, g) => all.concat([{
+                id: "app:" + g.app,
+                app: g.app,
+                isHeader: true
+            }], g.items), [])
+    readonly property var rowsById: {
+        const byId = {};
+        for (const row of rows)
+            byId[row.id] = row;
+        return byId;
+    }
+    readonly property var rowIds: rows.map(row => row.id)
+    readonly property var cardIds: groups.reduce((all, g) => all.concat(g.items.map(item => item.id)), [])
+    // For each app: the ids of its cards.
+    readonly property var groupIds: {
+        const ids = {};
+        for (const g of groups)
+            ids[g.app] = g.items.map(item => item.id);
+        return ids;
+    }
+
+    onCardIdsChanged: {
+        const still = {};
+        for (const id of cardIds) {
+            if (gone[id])
+                still[id] = true;
         }
-        return info;
+        gone = still;
     }
 
     signal sweep(var ids, int first)
 
     function clearAll() {
-        clearIds(rows.map(h => h.id), Math.max(0, list.indexAt(10, list.contentY + 4)));
+        clearIds(cardIds, Math.max(0, list.indexAt(10, list.contentY + 4)));
     }
 
     function clearIds(ids, first) {
@@ -147,10 +169,9 @@ Rectangle {
         boundsBehavior: Flickable.StopAtBounds
         interactive: !root.clearing
 
-        // Cards keep their delegates across changes, matched by id.
+        // Plain ids: a card keeps its delegate across changes, and a removal moves the others.
         model: ScriptModel {
-            values: root.rows
-            objectProp: "id"
+            values: root.rowIds
         }
 
         add: Transition {
@@ -182,17 +203,19 @@ Rectangle {
 
             property bool leaving: false
             property real lastSpeed: 0
-            readonly property var group: root.groupInfo[modelData.id] || ({
-                    ids: [],
-                    first: false
-                })
-            readonly property int headerHeight: group.first ? 26 : 0
+            // A delegate outlives its row for a moment when the row is removed.
+            readonly property var row: root.rowsById[modelData] || ({})
+            readonly property bool isHeader: row.isHeader === true
+            readonly property var groupCards: root.groupIds[row.app] || []
 
             // dir is -1 or 1. The card only flies here, the model removes it afterward.
             function leave(dir, delay, swiped) {
                 if (leaving)
                     return;
                 leaving = true;
+                root.gone = Object.assign({}, root.gone, {
+                    [modelData]: true
+                });
                 settle.stop();
                 flyMove.to = dir * (width + 24);
                 flyMove.duration = swiped ? 200 : root.sweepTime;
@@ -203,19 +226,26 @@ Rectangle {
             }
 
             width: ListView.view.width
-            height: card.height + headerHeight
+            // The list's spacing lies between a header and its first card.
+            height: isHeader ? 20 : card.height
 
             Item {
-                visible: note.group.first
+                visible: note.isHeader
                 width: parent.width
-                height: note.headerHeight
-                opacity: 1 - 0.9 * Math.min(1, Math.abs(card.x) / Math.max(1, card.width))
+                height: parent.height
+                opacity: note.groupCards.every(id => root.gone[id]) ? 0 : 1
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 200
+                    }
+                }
 
                 Label {
                     x: 4
                     width: parent.width - 34
                     anchors.verticalCenter: parent.verticalCenter
-                    text: (note.modelData.app || Tr.t("Other")) + (note.group.ids.length > 1 ? " · " + note.group.ids.length : "")
+                    text: (note.row.app || Tr.t("Other")) + (note.groupCards.length > 1 ? " · " + note.groupCards.length : "")
                     color: Theme.muted
                     size: 12
                     elide: Text.ElideRight
@@ -236,7 +266,7 @@ Rectangle {
                     height: parent.height
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: root.clearIds(note.group.ids, note.index)
+                    onClicked: root.clearIds(note.groupCards, note.index)
                 }
             }
 
@@ -244,7 +274,7 @@ Rectangle {
                 target: root
 
                 function onSweep(ids, first) {
-                    if (ids.includes(note.modelData.id))
+                    if (ids.includes(note.modelData))
                         note.leave(1, Math.min(Math.max(0, note.index - first), root.sweepMax) * root.sweepStep, false);
                 }
             }
@@ -266,7 +296,7 @@ Rectangle {
                 ScriptAction {
                     script: {
                         if (fly.swiped)
-                            Toasts.forget([note.modelData.id]);
+                            Toasts.forget([note.modelData]);
                     }
                 }
             }
@@ -283,7 +313,7 @@ Rectangle {
             Rectangle {
                 id: card
 
-                y: note.headerHeight
+                visible: !note.isHeader
                 width: parent.width
                 height: noteText.implicitHeight + 20
                 radius: 14
@@ -340,7 +370,7 @@ Rectangle {
                             anchors.left: parent.left
                             anchors.right: noteTime.left
                             anchors.rightMargin: 8
-                            text: note.modelData.title
+                            text: note.row.title || ""
                             size: 13
                             font.weight: Font.Medium
                             elide: Text.ElideRight
@@ -349,15 +379,15 @@ Rectangle {
                             id: noteTime
 
                             anchors.right: parent.right
-                            text: Toasts.timeLabel(note.modelData)
+                            text: note.row.title ? Toasts.timeLabel(note.row) : ""
                             color: Theme.muted
                             size: 12
                         }
                     }
                     Label {
                         width: parent.width
-                        visible: note.modelData.sub !== ""
-                        text: note.modelData.sub
+                        visible: text !== ""
+                        text: note.row.sub || ""
                         color: Theme.muted
                         size: 12
                         wrapMode: Text.Wrap
