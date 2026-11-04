@@ -40,7 +40,7 @@ targets=(
     .config/quickshell/niri-desk
     .config/matugen
     .config/fastfetch/config.jsonc
-    .config/fastfetch/berserk.txt
+    .config/fastfetch/brand.txt
     .config/kitty/kitty.conf
     .config/kitty/niri-desk-colors.conf
     .config/kitty/niri-desk-user.conf
@@ -201,7 +201,7 @@ do_it cp -a "$root/config/matugen" "$HOME/.config/matugen"
 do_it cp -a "$root/config/kitty/." "$HOME/.config/kitty/"
 do_it mkdir -p "$HOME/.config/fastfetch"
 do_it cp "$root/config/fastfetch/config.jsonc" "$HOME/.config/fastfetch/config.jsonc"
-do_it cp "$root/config/fastfetch/berserk.txt" "$HOME/.config/fastfetch/berserk.txt"
+do_it cp "$root/config/fastfetch/brand.txt" "$HOME/.config/fastfetch/brand.txt"
 do_it cp -a "$root/config/hypr/." "$HOME/.config/hypr/"
 do_it mkdir -p "$HOME/.config/rofi"
 do_it cp -a "$root/config/rofi/." "$HOME/.config/rofi/"
