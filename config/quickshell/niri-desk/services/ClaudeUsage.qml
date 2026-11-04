@@ -4,7 +4,8 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// Claude subscription limits, saved by niri-desk-claude-status while Claude Code runs.
+// Claude subscription limits. niri-desk-claude-usage fetches them while they are on screen,
+// niri-desk-claude-status saves them while Claude Code runs.
 Singleton {
     id: root
 
@@ -49,6 +50,23 @@ Singleton {
         if (window.resets <= now)
             return Tr.t("Limit has reset");
         return Tr.t("Resets in {time}").replace("{time}", span(window.resets - now));
+    }
+
+    // Only while the numbers are on screen.
+    readonly property bool checking: Ui.popup === "claude" || ((Widgets.shownNow || Widgets.editMode) && Widgets.hasType("claude"))
+
+    Process {
+        id: fetch
+
+        command: ["niri-desk-claude-usage"]
+    }
+
+    Timer {
+        interval: 10000
+        running: root.checking
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: fetch.running = true
     }
 
     FileView {

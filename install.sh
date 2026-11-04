@@ -51,6 +51,7 @@ targets=(
     .config/rofi/niri-desk.rasi
     .config/rofi/niri-desk-colors.rasi
     .local/bin/niri-desk-claude-status
+    .local/bin/niri-desk-claude-usage
     .local/bin/niri-desk-lyrics
     .local/bin/niri-desk-rofi
     .local/bin/niri-desk-rofi-search

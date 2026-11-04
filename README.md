@@ -99,7 +99,7 @@ Clock, analog clock, calendar, weather, system load, music, Claude limits and no
 
 ## Claude limits
 
-The Claude icon sits next to the keyboard layout. Click it for the 5-hour and weekly usage and the time left until each resets. The numbers come from Claude Code's status line: it checks them every 5 seconds while running, and new values arrive after its replies. Add this to `~/.claude/settings.json` once:
+The Claude icon sits next to the keyboard layout. Click it for the 5-hour and weekly usage and the time left until each resets. While the popup or the desktop widget is on screen, `niri-desk-claude-usage` fetches the numbers from Anthropic every 10 seconds using Claude Code's sign-in in `~/.claude/.credentials.json`, even when Claude Code is closed. This is an undocumented API, so it can stop working; the time under the numbers then shows how old they are. Claude Code's status line also saves the limits while it runs. Add this to `~/.claude/settings.json` once:
 
 ```json
 "statusLine": { "type": "command", "command": "~/.local/bin/niri-desk-claude-status", "refreshInterval": 5 }
