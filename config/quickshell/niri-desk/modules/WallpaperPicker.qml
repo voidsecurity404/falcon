@@ -10,26 +10,30 @@ import qs.services
 LazyLoader {
     active: Ui.popup === "wallpapers"
 
+    // Reading this starts the service with the shell, so the pictures are ready before the first opening.
+    readonly property int known: Wallpapers.liveFiles.length + Wallpapers.imageFiles.length
+
     PanelWindow {
         id: root
 
-        readonly property string stateDir: Ui.home + "/.local/state/niri-desk"
         readonly property string liveDir: Settings.wallpaperDir + "/Live"
 
         // 0: jonli fonlar, 1: oddiy rasmlar. Har biri o'z o'rnini eslab qoladi.
         property int tab: 1
-        property var liveFiles: []
-        property var imageFiles: []
         property var marks: [0, 0]
-        readonly property var files: tab === 0 ? liveFiles : imageFiles
+        // Once the user has moved, a late answer about the current wallpaper must not move the carousel.
+        property bool moved: false
+        readonly property var files: tab === 0 ? Wallpapers.liveFiles : Wallpapers.imageFiles
         property int selected: 0
         onSelectedChanged: Ui.pickerSelected = selected
         onFilesChanged: Ui.pickerFiles = files.length
         onTabChanged: Ui.pickerTab = tab
         Component.onCompleted: {
-            Ui.pickerSelected = 0;
-            Ui.pickerFiles = 0;
+            startAtCurrent();
+            Ui.pickerSelected = selected;
+            Ui.pickerFiles = files.length;
             Ui.pickerTab = tab;
+            Wallpapers.refresh();
         }
         readonly property real cardHeight: Math.min(620, height * 0.62)
         readonly property real skew: 0.12
@@ -41,9 +45,32 @@ LazyLoader {
             }
         }
 
+        Connections {
+            target: Wallpapers
+            function onCurrentChanged() {
+                if (!root.moved)
+                    root.startAtCurrent();
+            }
+        }
+
+        // Starts on the tab of the current wallpaper, at that wallpaper.
+        function startAtCurrent() {
+            const live = Wallpapers.liveFiles.indexOf(Wallpapers.currentLive);
+            const image = Wallpapers.imageFiles.indexOf(Wallpapers.currentImage);
+            marks = [Math.max(0, live), Math.max(0, image)];
+            tab = live >= 0 ? 0 : 1;
+            selected = marks[tab];
+        }
+
+        function step(by) {
+            moved = true;
+            selected = Math.max(0, Math.min(files.length - 1, selected + by));
+        }
+
         function setTab(next) {
             if (next === tab)
                 return;
+            moved = true;
             const saved = marks.slice();
             saved[tab] = selected;
             marks = saved;
@@ -51,19 +78,11 @@ LazyLoader {
             selected = Math.min(marks[next], Math.max(0, files.length - 1));
         }
 
-        function posterOf(path) {
-            const name = path.split("/").pop().replace(/\.[^.]+$/, "");
-            return "file://" + stateDir + "/live-posters/" + name + ".jpg";
-        }
-
-        function lines(text) {
-            return text.trim().split("\n").filter(l => l.length > 0).sort();
-        }
-
         function apply(index) {
             const path = files[index];
             if (!path)
                 return;
+            Wallpapers.chosen(path, tab === 0);
             Ui.popup = "";
             Ui.run("niri-desk-wallpaper", path);
         }
@@ -80,54 +99,6 @@ LazyLoader {
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "niri-desk-picker"
         WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
-
-        // Avval videolarning kadrlari, keyin ikkala ro'yxat, oxirida hozirgi fon.
-        Process {
-            command: [Ui.binDir + "niri-desk-wallpaper", "--posters", root.liveDir]
-            running: true
-            onExited: findLive.running = true
-        }
-
-        Process {
-            id: findLive
-
-            command: ["find", root.liveDir, "-maxdepth", "1", "-type", "f", "(", "-iname", "*.mp4", "-o", "-iname", "*.webm", "-o", "-iname", "*.mkv", "-o", "-iname", "*.mov", ")"]
-            stdout: StdioCollector {
-                onStreamFinished: {
-                    root.liveFiles = root.lines(text);
-                    findImages.running = true;
-                }
-            }
-        }
-
-        Process {
-            id: findImages
-
-            command: ["find", Settings.wallpaperDir, "-maxdepth", "1", "-type", "f", "(", "-iname", "*.jpg", "-o", "-iname", "*.jpeg", "-o", "-iname", "*.png", "-o", "-iname", "*.webp", ")"]
-            stdout: StdioCollector {
-                onStreamFinished: {
-                    root.imageFiles = root.lines(text);
-                    current.running = true;
-                }
-            }
-        }
-
-        // Hozirgi fon turgan vkladkadan va o'sha fondan boshlaymiz.
-        Process {
-            id: current
-
-            command: ["readlink", "-f", root.stateDir + "/wallpaper-live", root.stateDir + "/wallpaper"]
-            stdout: StdioCollector {
-                onStreamFinished: {
-                    const paths = text.trim().split("\n");
-                    const live = root.liveFiles.indexOf(paths[0]);
-                    const image = root.imageFiles.indexOf(paths[paths.length - 1]);
-                    root.marks = [Math.max(0, live), Math.max(0, image)];
-                    root.tab = live >= 0 ? 0 : 1;
-                    root.selected = root.marks[root.tab];
-                }
-            }
-        }
 
         MouseArea {
             anchors.fill: parent
@@ -148,13 +119,13 @@ LazyLoader {
                     sum += event.angleDelta.y + event.angleDelta.x;
                     if (Math.abs(sum) < 120)
                         return;
-                    root.selected = Math.max(0, Math.min(root.files.length - 1, root.selected + (sum > 0 ? -1 : 1)));
+                    root.step(sum > 0 ? -1 : 1);
                     sum = 0;
                 }
             }
 
-            Keys.onLeftPressed: root.selected = Math.max(0, root.selected - 1)
-            Keys.onRightPressed: root.selected = Math.min(root.files.length - 1, root.selected + 1)
+            Keys.onLeftPressed: root.step(-1)
+            Keys.onRightPressed: root.step(1)
             Keys.onTabPressed: root.setTab(1 - root.tab)
             Keys.onBacktabPressed: root.setTab(1 - root.tab)
             Keys.onReturnPressed: root.apply(root.selected)
@@ -286,8 +257,9 @@ LazyLoader {
                             anchors.centerIn: parent
                             width: parent.width + root.cardHeight * root.skew + 8
                             height: parent.height
-                            source: root.tab === 0 ? root.posterOf(card.modelData) : "file://" + card.modelData
-                            sourceSize.height: root.cardHeight
+                            source: Wallpapers.thumbOf(card.modelData)
+                            // The same size as in the service: this finds the picture already in memory.
+                            sourceSize: Wallpapers.thumbSize
                             fillMode: Image.PreserveAspectCrop
                             asynchronous: true
                             transform: Matrix4x4 {

@@ -3,7 +3,7 @@
 #   niri-desk-wallpaper FAYL       rasm yoki videoni fon qilish
 #   niri-desk-wallpaper --restore  oxirgi fonni qaytarish (sessiya boshida)
 #   niri-desk-wallpaper --colors RASM  faqat ranglarni yozish, rasm qo'ymasdan
-#   niri-desk-wallpaper --posters [PAPKA]  videolar uchun yetishmagan kadrlarni yasash
+#   niri-desk-wallpaper --thumbs           tanlagich uchun yetishmagan kichik rasmlarni yasash
 set -euo pipefail
 
 state="${XDG_STATE_HOME:-$HOME/.local/state}/niri-desk"
@@ -90,11 +90,21 @@ set_live() {
 }
 
 case "${1:-}" in
-    --posters)
-        find "${2:-$dir/Live}" -maxdepth 1 -type f 2>/dev/null | while read -r file; do
+    --thumbs)
+        # Kartaga moslab kesilgan kichik nusxalar: tanlagich ularni oldindan xotirada saqlaydi.
+        mkdir -p "$state/thumbs"
+        find "$dir" "$dir/Live" -maxdepth 1 -type f 2>/dev/null | while read -r file; do
             if is_video "$file"; then
-                poster "$file" >/dev/null || true
+                source="$(poster "$file")" || continue
+            else
+                case "${file,,}" in
+                    *.jpg | *.jpeg | *.png | *.webp) source="$file" ;;
+                    *) continue ;;
+                esac
             fi
+            out="$state/thumbs/$(basename "$file").jpg"
+            [[ -s "$out" && "$out" -nt "$file" ]] && continue
+            nice -n 10 ffmpeg -v error -y -i "$source" -vf "scale=530:620:force_original_aspect_ratio=increase,crop=530:620" -frames:v 1 -update 1 -q:v 3 "$out" </dev/null >&2 || rm -f "$out"
         done
         ;;
     --restore)
