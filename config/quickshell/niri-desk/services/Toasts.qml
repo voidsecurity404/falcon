@@ -57,6 +57,28 @@ Singleton {
         });
     }
 
+    // Battery warnings show in focus mode too. An urgent one stays until it is clicked or the charger is plugged in.
+    function batteryAlert(title, sub, urgent) {
+        enqueue({
+            title: title,
+            sub: sub,
+            icon: "alert",
+            value: -1,
+            key: "",
+            notification: null,
+            sticky: urgent,
+            run: null,
+            inZen: true,
+            battery: true
+        });
+    }
+
+    function clearBatteryAlerts() {
+        queue = queue.filter(q => !q.battery);
+        if (current && current.battery)
+            advance();
+    }
+
     function level(key, title, value, icon) {
         const item = {
             title: title,

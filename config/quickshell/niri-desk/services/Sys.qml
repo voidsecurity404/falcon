@@ -38,9 +38,16 @@ Singleton {
         for (const limit of [5, 10, 20]) {
             if (batteryPercent <= limit && warnedAt > limit) {
                 warnedAt = limit;
-                Toasts.show(Tr.t("Battery") + " " + batteryPercent + "%", limit === 5 ? Tr.t("Shutting down soon, plug in the charger") : Tr.t("Time to plug in"), "alert");
+                Toasts.batteryAlert(Tr.t("Battery") + " " + batteryPercent + "%", limit === 5 ? Tr.t("Shutting down soon, plug in the charger") : Tr.t("Time to plug in"), limit === 5);
                 break;
             }
+        }
+    }
+
+    onChargingChanged: {
+        if (charging) {
+            warnedAt = 101;
+            Toasts.clearBatteryAlerts();
         }
     }
 
