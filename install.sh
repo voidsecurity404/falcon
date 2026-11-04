@@ -275,5 +275,3 @@ if [[ -e "$state/login-manager" ]] || ((dry && packages && login)); then
 else
     say "Pick the niri session on your login screen, or run niri-session from a tty."
 fi
-if command -v claude >/dev/null; then
-fi
