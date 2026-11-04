@@ -17,7 +17,6 @@ PanelWindow {
     property string phase: ""
     property var items: []
     property int selected: 0
-    property bool fading: false
     property var pointerStart: null
     property bool pointerLive: false
     property var stamps: ({})
@@ -113,7 +112,6 @@ PanelWindow {
         if (list.length < 2)
             return;
         leaveEnd.stop();
-        fading = false;
         Ui.popup = "";
         pointerStart = null;
         pointerLive = false;
@@ -149,15 +147,12 @@ PanelWindow {
             return;
         }
         phase = "leave";
-        leaveFade.restart();
         leaveEnd.restart();
     }
 
     function hide() {
-        leaveFade.stop();
         leaveEnd.stop();
         phase = "";
-        fading = false;
         items = [];
     }
 
@@ -260,16 +255,9 @@ PanelWindow {
     }
 
     Timer {
-        id: leaveFade
-
-        interval: 210
-        onTriggered: root.fading = true
-    }
-
-    Timer {
         id: leaveEnd
 
-        interval: 340
+        interval: 210
         onTriggered: root.hide()
     }
 
@@ -321,7 +309,7 @@ PanelWindow {
 
             Behavior on opacity {
                 NumberAnimation {
-                    duration: 260
+                    duration: root.phase === "leave" ? 190 : 240
                     easing.type: Easing.OutCubic
                 }
             }
@@ -343,22 +331,24 @@ PanelWindow {
 
                 readonly property int count: root.items.length
                 readonly property bool on: index === root.selected
-                readonly property var desk: root.windowRect(modelData)
-                readonly property real deskScale: desk.w / width
-                readonly property real deskX: desk.x + desk.w / 2 - root.width / 2
-                readonly property real deskY: desk.y + desk.h / 2 - root.height / 2
                 // Cards keep the same curve however many there are.
                 readonly property real spacing: Math.min(170, 320 / Math.max(0.5, (count - 1) / 2))
                 readonly property real spread: (index - (count - 1) / 2) * spacing / 128
                 readonly property real unit: root.unit
                 property bool entered: false
                 readonly property int stage: root.phase === "leave" ? 2 : (root.phase === "fan" && entered ? 1 : 0)
-                readonly property bool atDesk: (stage === 0 && index === 0) || (stage === 2 && on)
 
-                readonly property real goX: atDesk ? deskX : stage === 1 ? spread * 128 * unit : spread * 12 * unit
-                readonly property real goY: atDesk ? deskY : stage === 1 ? (spread * spread * 12 + 105 - (on ? 115 : 0)) * unit : 560 * unit
-                readonly property real goAngle: atDesk ? 0 : stage === 1 ? spread * 7 : spread * 2
-                readonly property real goScale: atDesk ? deskScale : stage === 1 ? (on ? 1.22 : 1) : 0.9
+                // Cards open from a loose stack. On leaving nothing flies: the chosen card lifts
+                // slightly and melts away while niri brings the real window in underneath.
+                readonly property real goX: stage === 0 ? spread * 46 * unit : spread * 128 * unit
+                readonly property real goY: {
+                    const fan = (spread * spread * 12 + 105 - (on ? 115 : 0)) * unit;
+                    if (stage === 0)
+                        return (spread * spread * 4 + 125) * unit;
+                    return stage === 2 && !on ? fan + 18 * unit : fan;
+                }
+                readonly property real goAngle: stage === 0 ? spread * 2.5 : spread * 7
+                readonly property real goScale: stage === 0 ? 0.94 : stage === 2 ? (on ? 1.27 : 0.97) : (on ? 1.22 : 1)
 
                 visible: root.phase !== "wait"
                 width: root.cardWidth
@@ -367,47 +357,47 @@ PanelWindow {
                 y: (root.height - height) / 2 + goY
                 rotation: goAngle
                 scale: goScale
-                opacity: root.fading && on ? 0 : 1
+                opacity: stage === 1 ? 1 : 0
                 z: on ? 100 : 50 - Math.abs(index - root.selected)
                 antialiasing: true
 
                 Behavior on x {
                     SpringAnimation {
-                        spring: root.phase === "leave" ? 6 : 4.2
-                        damping: root.phase === "leave" ? 0.5 : 0.27
+                        spring: 3.4
+                        damping: 0.42
                         epsilon: 0.2
                     }
                 }
                 Behavior on y {
                     SpringAnimation {
-                        spring: root.phase === "leave" ? 6 : 4.2
-                        damping: root.phase === "leave" ? 0.5 : 0.27
+                        spring: 3.4
+                        damping: 0.42
                         epsilon: 0.2
                     }
                 }
                 Behavior on rotation {
                     SpringAnimation {
-                        spring: root.phase === "leave" ? 6 : 4.2
-                        damping: root.phase === "leave" ? 0.5 : 0.27
+                        spring: 3.4
+                        damping: 0.42
                         epsilon: 0.05
                     }
                 }
                 Behavior on scale {
                     SpringAnimation {
-                        spring: root.phase === "leave" ? 6 : 4.2
-                        damping: root.phase === "leave" ? 0.5 : 0.27
+                        spring: 3.4
+                        damping: 0.42
                         epsilon: 0.002
                     }
                 }
                 Behavior on opacity {
                     NumberAnimation {
-                        duration: 110
+                        duration: card.stage === 2 ? (card.on ? 185 : 130) : 170
+                        easing.type: Easing.OutCubic
                     }
                 }
 
-                // The first card is already in place, the others rise from below one after another.
                 Timer {
-                    interval: 1 + card.index * 45
+                    interval: 1 + card.index * 28
                     running: root.phase === "fan"
                     onTriggered: card.entered = true
                 }
