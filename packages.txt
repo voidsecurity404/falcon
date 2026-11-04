@@ -7,7 +7,6 @@ qt6-declarative
 jq
 python
 python-numpy
-python-evdev
 translate-shell
 tmux
 power-profiles-daemon

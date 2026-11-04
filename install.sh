@@ -66,11 +66,9 @@ targets=(
     .local/bin/niri-desk-translate
     .local/bin/niri-desk-backup
     .local/bin/niri-desk-shell
-    .local/bin/niri-desk-super
     .local/bin/niri-desk-set
     .local/bin/niri-desk-raise
     .local/bin/niri-desk-firefox
-    .local/bin/niri-desk-keyd
     .local/bin/niri-desk-login
     .local/bin/niri-desk-sddm-colors
     .local/bin/niri-desk-sync
@@ -244,8 +242,6 @@ if ((packages)); then
     done
     # Yorqinlikni o'zgartirish uchun.
     soft sudo usermod -aG video "$USER"
-    # niri-desk-super Super tugmasini kuzatadi.
-    soft sudo usermod -aG input "$USER"
 fi
 
 # Kirish ekrani. Boshqa display manager bo'lsa tegilmaydi, tty'dan ishga tushmasin deb --now yo'q.

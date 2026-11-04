@@ -110,7 +110,7 @@
   "wallpaperDir": "~/Pictures/Wallpapers",
   "binds": {
     "terminal": "Mod+Return",
-    "apps": "",
+    "apps": "Mod+Space",
     "clipboard": "Mod+V",
     "dashboard": "Mod+D",
     "control": "Mod+C",

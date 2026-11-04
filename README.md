@@ -32,7 +32,7 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | Shortcut | Action |
 | --- | --- |
 | `Mod+Return` | Terminal |
-| `Super` tapped alone | App menu from the bottom of the screen: type an app name, or `>` for commands. Lock, sleep, log out, reboot and shut down are beside the search field |
+| `Mod+Space` | App menu from the bottom of the screen: type an app name, or `>` for commands. Lock, sleep, log out, reboot and shut down are beside the search field |
 | `Mod+V` | Clipboard history |
 | `Mod+D` | Dashboard |
 | `Mod+C` | Control center |
@@ -86,7 +86,6 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 - `niri-desk-backup export [file]`, `import file`: save settings to one file.
 - `niri-desk-doctor`: checks programs, running services, config and permissions, and says what to fix.
 - `niri-desk-sync [--check] [--pull]`: copies changed files from the repo to the live desktop, leaving generated files and user data alone.
-- `niri-desk-keyd [--off]`: moves the Super tap to keyd, so your user can leave the `input` group.
 - `niri-desk-login`: sets up the SDDM login screen, it asks for sudo.
 - Lock screen: Settings → System chooses hyprlock or the shell's own lock screen. `qs -c niri-desk ipc call desk lockPreview` shows the shell's one without locking, Esc closes it.
 - `niri-desk-translate`: the text is sent to an online translation service (`translate-shell`).
