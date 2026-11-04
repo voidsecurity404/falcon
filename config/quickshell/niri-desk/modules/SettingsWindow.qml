@@ -376,9 +376,22 @@ LazyLoader {
                         title: Tr.t("Session and power"),
                         items: [
                             { key: "session.restore", label: Tr.t("Restore windows at login"), type: "toggle" },
+                        ]
+                    },
+                    {
+                        title: Tr.t("On the charger"),
+                        items: [
                             { key: "idle.lock", label: Tr.t("Lock after"), type: "slider", min: 0, max: 3600, step: 60, unit: "time" },
                             { key: "idle.screenOff", label: Tr.t("Screen off after"), type: "slider", min: 0, max: 3600, step: 60, unit: "time" },
                             { key: "idle.suspend", label: Tr.t("Sleep after"), type: "slider", min: 0, max: 7200, step: 60, unit: "time" }
+                        ]
+                    },
+                    {
+                        title: Tr.t("On battery"),
+                        items: [
+                            { key: "idle.battery.lock", label: Tr.t("Lock after"), type: "slider", min: 0, max: 3600, step: 60, unit: "time" },
+                            { key: "idle.battery.screenOff", label: Tr.t("Screen off after"), type: "slider", min: 0, max: 3600, step: 60, unit: "time" },
+                            { key: "idle.battery.suspend", label: Tr.t("Sleep after"), type: "slider", min: 0, max: 7200, step: 60, unit: "time" }
                         ]
                     },
                     {

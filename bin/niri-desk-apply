@@ -301,14 +301,30 @@ def idle_conf(s):
         "    after_sleep_cmd = niri msg action power-on-monitors",
         "}",
     ]
-    lock, off, sleep = (int(number(i, key, 0, 86400)) for key in ("lock", "screenOff", "suspend"))
-    if lock:
-        out += ["", "listener {", f"    timeout = {lock}", "    on-timeout = loginctl lock-session", "}"]
-    if off:
-        out += ["", "listener {", f"    timeout = {off}", "    on-timeout = niri msg action power-off-monitors", "    on-resume = niri msg action power-on-monitors", "}"]
-    if sleep:
-        out += ["", "listener {", f"    timeout = {sleep}", "    on-timeout = systemctl suspend", "}"]
-    if not (lock or off or sleep):
+    battery = i.get("battery", {})
+    actions = {
+        "lock": ("loginctl lock-session", None),
+        "screenOff": ("niri msg action power-off-monitors", "niri msg action power-on-monitors"),
+        "suspend": ("systemctl suspend", None),
+    }
+    active = False
+    for key, (run, resume) in actions.items():
+        on_ac = int(number(i, key, 0, 86400))
+        on_battery = int(number(battery, key, 0, 86400))
+        # Equal times need no check of the power source. Otherwise each listener acts only on its own source.
+        if on_ac == on_battery:
+            pairs = [(on_ac, run)]
+        else:
+            pairs = [(on_ac, f"systemd-ac-power && {run}"), (on_battery, f"systemd-ac-power || {run}")]
+        for timeout, command in pairs:
+            if not timeout:
+                continue
+            active = True
+            out += ["", "listener {", f"    timeout = {timeout}", f"    on-timeout = {command}"]
+            if resume:
+                out.append(f"    on-resume = {resume}")
+            out.append("}")
+    if not active:
         # Kuzatuvchi bo'lmasa hypridle to'xtaydi va qo'lda bloklash ham ishlamay qoladi.
         out += ["", "listener {", "    timeout = 31536000", "    on-timeout = true", "}"]
     return "\n".join(out) + "\n"

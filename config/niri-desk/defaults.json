@@ -80,7 +80,12 @@
   "idle": {
     "lock": 300,
     "screenOff": 360,
-    "suspend": 1800
+    "suspend": 1800,
+    "battery": {
+      "lock": 300,
+      "screenOff": 300,
+      "suspend": 900
+    }
   },
   "notifications": {
     "seconds": 3.6,
