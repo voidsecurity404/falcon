@@ -29,6 +29,9 @@ ShellRoot {
                 TopLayer {
                     screen: perScreen.modelData
                 }
+                Dock {
+                    screen: perScreen.modelData
+                }
             }
         }
     }

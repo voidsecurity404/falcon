@@ -133,6 +133,7 @@ layer-rule {
 layer-rule {
     match namespace="^niri-desk-menu$"
     match namespace="^niri-desk-top$"
+    match namespace="^niri-desk-dock$"
     background-effect {
         xray false
     }

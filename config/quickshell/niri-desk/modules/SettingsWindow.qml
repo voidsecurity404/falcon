@@ -124,6 +124,12 @@ LazyLoader {
                         ]
                     },
                     {
+                        title: Tr.t("Dock"),
+                        items: [
+                            { key: "dock.enabled", label: Tr.t("Show the dock at the bottom edge"), hint: Tr.t("Right click an icon to pin or unpin it"), type: "toggle" }
+                        ]
+                    },
+                    {
                         title: Tr.t("Clock"),
                         items: [
                             { key: "panel.clock24", label: Tr.t("24-hour clock"), type: "toggle" },

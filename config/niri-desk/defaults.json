@@ -87,6 +87,10 @@
       "suspend": 900
     }
   },
+  "dock": {
+    "enabled": true,
+    "pinned": ["firefox", "org.gnome.Nautilus", "kitty"]
+  },
   "notifications": {
     "seconds": 3.6,
     "history": 30
