@@ -293,10 +293,14 @@ def binds_kdl(s):
 
 def idle_conf(s):
     i = s["idle"]
+    shell_lock = choice(s["session"], "lockScreen", ["hyprlock", "shell"]) == "shell"
+    # If the shell does not answer, the session still gets locked by hyprlock.
+    hyprlock = "pgrep -u $(id -u) -x hyprlock || hyprlock"
+    lock = f"qs -c niri-desk ipc call desk lock || {hyprlock}" if shell_lock else hyprlock
     out = [
         "# Generated file: change it in the Settings window.",
         "general {",
-        "    lock_cmd = pgrep -u $(id -u) -x hyprlock || hyprlock",
+        f"    lock_cmd = {lock}",
         "    before_sleep_cmd = loginctl lock-session",
         "    after_sleep_cmd = niri msg action power-on-monitors",
         "}",

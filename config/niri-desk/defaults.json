@@ -135,7 +135,8 @@
     "widgets": "Mod+Shift+W"
   },
   "session": {
-    "restore": true
+    "restore": true,
+    "lockScreen": "hyprlock"
   },
   "translate": {
     "to": ""

@@ -36,6 +36,7 @@ ShellRoot {
         }
     }
 
+    LockScreen {}
     ClipboardMenu {}
     AppMenu {}
     WallpaperPicker {}
@@ -45,6 +46,12 @@ ShellRoot {
     IpcHandler {
         target: "desk"
 
+        function lock(): void {
+            Lock.lock();
+        }
+        function lockPreview(): void {
+            Lock.preview = !Lock.preview;
+        }
         function menu(): void {
             Ui.togglePopup("menu");
         }

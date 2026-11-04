@@ -88,6 +88,7 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 - `niri-desk-sync [--check] [--pull]`: copies changed files from the repo to the live desktop, leaving generated files and user data alone.
 - `niri-desk-keyd [--off]`: moves the Super tap to keyd, so your user can leave the `input` group.
 - `niri-desk-login`: sets up the SDDM login screen, it asks for sudo.
+- Lock screen: Settings → System chooses hyprlock or the shell's own lock screen. `qs -c niri-desk ipc call desk lockPreview` shows the shell's one without locking, Esc closes it.
 - `niri-desk-translate`: the text is sent to an online translation service (`translate-shell`).
 
 ## Configuration
