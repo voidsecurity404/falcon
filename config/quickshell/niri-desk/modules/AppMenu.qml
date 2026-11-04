@@ -35,6 +35,21 @@ PanelWindow {
     // Dangerous actions need a second press, this holds the first one.
     property string armed: ""
     property string hoveredSession: ""
+    // The session buttons stay hidden behind the red button until it is pressed.
+    property bool powerOpen: false
+    property real powerReveal: powerOpen ? 1 : 0
+    readonly property color powerRed: "#e5343a"
+    readonly property var powerMenu: ({
+            id: "powerMenu",
+            name: Tr.t("Power menu")
+        })
+
+    Behavior on powerReveal {
+        NumberAnimation {
+            duration: root.powerOpen ? 680 : 420
+            easing.type: Easing.Linear
+        }
+    }
 
     readonly property bool commandMode: query[0] === ">" || query[0] === "Ю"
     readonly property string commandText: commandMode ? query.slice(1).replace(/^\s+/, "") : ""
@@ -81,7 +96,7 @@ PanelWindow {
             name: Tr.t("Log out"),
             keywords: "logout quit выход",
             confirm: true,
-            run: () => Quickshell.execDetached(["niri", "msg", "action", "quit", "--skip-confirmation"])
+            run: () => root.leave("niri msg action quit --skip-confirmation")
         },
         {
             id: "reboot",
@@ -89,7 +104,7 @@ PanelWindow {
             name: Tr.t("Reboot"),
             keywords: "reboot restart перезагрузка",
             confirm: true,
-            run: () => Quickshell.execDetached(["systemctl", "reboot"])
+            run: () => root.leave("systemctl reboot")
         },
         {
             id: "power",
@@ -97,7 +112,7 @@ PanelWindow {
             name: Tr.t("Shut down"),
             keywords: "shutdown poweroff выключение",
             confirm: true,
-            run: () => Quickshell.execDetached(["systemctl", "poweroff"])
+            run: () => root.leave("systemctl poweroff")
         }
     ]
 
@@ -292,6 +307,26 @@ PanelWindow {
         ];
     }
 
+    // The open windows are saved first, so they come back exactly as they are now.
+    function leave(command) {
+        Quickshell.execDetached(["sh", "-c", "\"$HOME/.local/bin/niri-desk-session\" save; " + command]);
+    }
+
+    function togglePower() {
+        powerOpen = !powerOpen;
+        armed = "";
+    }
+
+    // How far a session button has come out of the red button. Those going furthest start
+    // first, so no button passes over another. Closing plays it backward.
+    function powerProgress(index) {
+        const delay = index * 0.09;
+        const t = Math.max(0, Math.min(1, (powerReveal * (1 + 0.09 * (session.length - 1)) - delay)));
+        const s = 1.9;
+        const u = t - 1;
+        return 1 + (s + 1) * u * u * u + s * u * u;
+    }
+
     function runSession(item) {
         if (item.confirm && armed !== item.id) {
             armed = item.id;
@@ -360,6 +395,7 @@ PanelWindow {
         fileTimer.stop();
         input.text = "";
         armed = "";
+        powerOpen = false;
         hoveredSession = "";
         pointerStart = null;
         pointerLive = false;
@@ -385,6 +421,8 @@ PanelWindow {
     onQueryChanged: {
         selected = 0;
         armed = "";
+        if (query !== "")
+            powerOpen = false;
         // Runs on every change: here the file mode binding may still hold its old value.
         fileTimer.restart();
     }
@@ -961,7 +999,12 @@ PanelWindow {
                     font.family: Theme.sans
                     font.pixelSize: Math.round(15 * Theme.fontScale)
                     onTextChanged: root.query = text
-                    Keys.onEscapePressed: Ui.popup = ""
+                    Keys.onEscapePressed: {
+                        if (root.powerOpen)
+                            root.powerOpen = false;
+                        else
+                            Ui.popup = "";
+                    }
                     Keys.onReturnPressed: root.execute(root.selected)
                     Keys.onEnterPressed: root.execute(root.selected)
                     Keys.onDownPressed: root.selected = Math.min(root.results.length - 1, root.selected + 1)
@@ -997,12 +1040,18 @@ PanelWindow {
                 }
             }
 
-            Row {
+            Item {
                 id: sessionRow
+
+                readonly property int buttonSize: 42
+                readonly property int step: buttonSize + 4
+                readonly property real pop: root.progress(0.1)
 
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 4
+                // The search field gives way to the button going furthest, bounce included.
+                width: buttonSize + step * root.session.length * root.powerProgress(0)
+                height: buttonSize
 
                 Repeater {
                     model: root.session
@@ -1013,12 +1062,18 @@ PanelWindow {
                         required property var modelData
                         required property int index
 
-                        readonly property real pop: root.progress(0.1 + index * 0.07)
+                        readonly property real out: root.powerProgress(index)
+                        readonly property real distance: (root.session.length - index) * sessionRow.step
 
-                        width: 42
-                        height: 42
-                        opacity: pop
-                        scale: 0.6 + 0.4 * pop
+                        anchors.right: parent.right
+                        anchors.rightMargin: distance * out
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: sessionRow.buttonSize
+                        height: sessionRow.buttonSize
+                        opacity: Math.min(1, Math.max(0, out * 1.6))
+                        scale: 0.45 + 0.55 * Math.min(1.15, Math.max(0, out))
+                        rotation: (1 - Math.min(1, Math.max(0, out))) * 90
+                        visible: root.powerReveal > 0
 
                         Rectangle {
                             id: sessionButton
@@ -1027,7 +1082,7 @@ PanelWindow {
 
                             anchors.fill: parent
                             radius: isArmed || sessionArea.containsMouse ? 14 : 21
-                            color: isArmed ? Theme.error : Qt.alpha(Theme.text, sessionArea.containsMouse ? 0.15 : 0.06)
+                            color: isArmed ? root.powerRed : Qt.alpha(Theme.text, sessionArea.containsMouse ? 0.15 : 0.06)
                             scale: sessionArea.pressed ? 0.88 : sessionArea.containsMouse ? 1.06 : 1
 
                             Behavior on radius {
@@ -1054,12 +1109,13 @@ PanelWindow {
                                 anchors.centerIn: parent
                                 name: sessionSlot.modelData.icon
                                 size: 18
-                                color: sessionButton.isArmed ? Theme.pill : Theme.text
+                                color: sessionButton.isArmed ? "white" : Theme.text
                             }
                             MouseArea {
                                 id: sessionArea
 
                                 anchors.fill: parent
+                                enabled: root.powerOpen
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onContainsMouseChanged: {
@@ -1071,6 +1127,55 @@ PanelWindow {
                                 onClicked: root.runSession(sessionSlot.modelData)
                             }
                         }
+                    }
+                }
+
+                // Drawn last: the buttons come out from behind it.
+                Rectangle {
+                    id: powerButton
+
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: sessionRow.buttonSize
+                    height: sessionRow.buttonSize
+                    radius: root.powerOpen || powerArea.containsMouse ? 14 : 21
+                    color: powerArea.containsMouse ? Qt.lighter(root.powerRed, 1.14) : root.powerRed
+                    opacity: sessionRow.pop
+                    scale: (0.6 + 0.4 * sessionRow.pop) * (powerArea.pressed ? 0.88 : powerArea.containsMouse ? 1.06 : 1)
+
+                    Behavior on radius {
+                        NumberAnimation {
+                            duration: 300
+                            easing.type: Easing.OutBack
+                            easing.overshoot: 1.4
+                        }
+                    }
+                    Behavior on color {
+                        ColorAnimation {
+                            duration: 160
+                        }
+                    }
+
+                    Icon {
+                        anchors.centerIn: parent
+                        name: "power"
+                        size: 18
+                        color: "white"
+                        rotation: root.powerReveal * 360
+                    }
+                    MouseArea {
+                        id: powerArea
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onContainsMouseChanged: {
+                            if (containsMouse)
+                                root.hoveredSession = root.powerMenu.id;
+                            else if (root.hoveredSession === root.powerMenu.id)
+                                root.hoveredSession = "";
+                        }
+                        onClicked: root.togglePower()
                     }
                 }
             }
@@ -1086,7 +1191,7 @@ PanelWindow {
 
                 onCurrentChanged: {
                     if (current !== "")
-                        item = root.session.find(s => s.id === current) || null;
+                        item = current === root.powerMenu.id ? root.powerMenu : root.session.find(s => s.id === current) || null;
                 }
 
                 anchors.right: parent.right
@@ -1094,7 +1199,7 @@ PanelWindow {
                 width: tip.implicitWidth + 20
                 height: 28
                 radius: 10
-                color: root.armed !== "" ? Theme.error : Theme.pill
+                color: root.armed !== "" ? root.powerRed : Theme.pill
                 opacity: showing ? 1 : 0
                 visible: opacity > 0
 
@@ -1126,7 +1231,7 @@ PanelWindow {
 
                     anchors.centerIn: parent
                     text: tipBox.item ? (root.armed !== "" ? tipBox.item.name + ": " + Tr.t("Press once more to proceed") : tipBox.item.name) : ""
-                    color: root.armed !== "" ? Theme.pill : Theme.text
+                    color: root.armed !== "" ? "white" : Theme.text
                     size: 12
                 }
             }

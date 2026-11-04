@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
-"""Saves open windows and restores them after a reboot.
+"""Keeps the open windows on disk and brings them back after a reboot.
 
-  niri-desk-session save     save the state
+  niri-desk-session run      at login: restore, then keep the saved state current
+  niri-desk-session watch    keep the saved state current (one copy runs at a time)
+  niri-desk-session save     save the state now
   niri-desk-session restore  restore (does nothing when windows are open)
 
-Only the app is restored, not its arguments, so a one-off terminal command never runs again.
+Each window comes back on its workspace and monitor, in its column, with its size, and floating
+windows at their position. A terminal comes back in its folder. Only the app is started, never its
+arguments, so a one-off terminal command does not run again. What is inside a window is up to the app.
 """
+import fcntl
 import json
 import os
+import select
+import shlex
 import shutil
 import subprocess
 import sys
@@ -16,8 +23,22 @@ from pathlib import Path
 
 STATE = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "niri-desk"
 FILE = STATE / "session.json"
-CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "niri-desk"
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
 SKIP = {"org.quickshell", "niri-desk-scratch", "niri-desk-tool", "com.gabm.satty"}
+# Folder option of each terminal. Their windows are separate processes, so the next can start at once.
+TERMINALS = {"kitty": "--directory", "alacritty": "--working-directory", "foot": "--working-directory"}
+# These only name a runtime, so the app cannot be started from them.
+RUNTIMES = {"python", "python3", "node", "electron", "java", "bwrap", "sh", "bash", "zsh", "fish", "wine", "gjs"}
+HELPERS = {"kitten", "kitty"}
+
+SAVE_DELAY = 1.5        # after a change, so a burst of events writes once
+SAVE_EVERY = 30         # also catches a terminal changing folder, which sends no event
+SETTLE = 2.5            # an app may open several windows itself, such as a browser restoring its own
+LAUNCH_WAIT = 20        # a launch that opened nothing by then is given up
+RESTORE_WAIT = 60
+IGNORED_EVENTS = {"KeyboardLayoutsChanged", "KeyboardLayoutSwitched", "OverviewOpenedOrClosed", "ConfigLoaded",
+                  "ScreenshotCaptured", "CastsChanged", "CastStartedOrChanged", "CastStopped", "WindowUrgencyChanged",
+                  "WorkspaceUrgencyChanged"}
 
 
 def niri_json(what):
@@ -36,44 +57,316 @@ def executable(pid):
     return os.path.basename(argv)
 
 
-def save():
-    workspaces = {w["id"]: w["idx"] for w in niri_json("workspaces")}
+def terminal_folder(pid):
+    """The folder of the terminal's shell."""
+    try:
+        children = Path(f"/proc/{pid}/task/{pid}/children").read_text().split()
+    except OSError:
+        return ""
+    for child in children:
+        if executable(child) in HELPERS:
+            continue
+        try:
+            return os.readlink(f"/proc/{child}/cwd")
+        except OSError:
+            continue
+    return ""
+
+
+def zen_on():
+    try:
+        with (CONFIG / "niri/generated/zen.kdl").open() as f:
+            return f.readline().strip() == "// zen"
+    except OSError:
+        return False
+
+
+def snapshot():
+    workspaces = {w["id"]: w for w in niri_json("workspaces")}
     outputs = niri_json("outputs")
-    width = next(iter(outputs.values()), {}).get("logical", {}).get("width", 1920) if isinstance(outputs, dict) else 1920
+    zen = zen_on()
     items = []
     for w in niri_json("windows"):
         app = w.get("app_id") or ""
-        if app in SKIP or w.get("workspace_id") not in workspaces or not w.get("pid"):
+        space = workspaces.get(w.get("workspace_id"))
+        if not app or app in SKIP or not space or not w.get("pid"):
             continue
         exe = executable(w["pid"])
         if not exe:
             continue
-        pos = (w.get("layout") or {}).get("pos_in_scrolling_layout") or [999, 1]
-        items.append({
+        layout = w.get("layout") or {}
+        pos = layout.get("pos_in_scrolling_layout") or [999, 1]
+        tile = layout.get("tile_size") or [0, 0]
+        logical = (outputs.get(space.get("output")) or {}).get("logical") or {}
+        floating = w.get("is_floating", False)
+        item = {
             "app": app,
             "exe": exe,
-            "workspace": workspaces[w["workspace_id"]],
+            "title": w.get("title") or "",
+            "output": space.get("output") or "",
+            "workspace": space["idx"],
             "column": pos[0],
             "row": pos[1],
-            "floating": w.get("is_floating", False),
-            "share": round((w.get("layout") or {}).get("tile_size", [0])[0] / width, 3) if width else 0,
-        })
-    items.sort(key=lambda i: (i["workspace"], i["column"], i["row"]))
+            "floating": floating,
+            "width": tile[0],
+            "height": tile[1],
+            # niri has no fullscreen flag. Focus mode has no gaps, so a column can fill the screen there.
+            "fullscreen": not floating and not zen and tile[0] >= logical.get("width", 1e9) and tile[1] >= logical.get("height", 1e9),
+            "active": space.get("active_window_id") == w["id"],
+            "workspaceActive": bool(space.get("is_active")),
+            "focused": bool(w.get("is_focused")),
+        }
+        if floating:
+            where = layout.get("tile_pos_in_workspace_view")
+            if where:
+                item["x"], item["y"] = where
+        if exe in TERMINALS:
+            item["folder"] = terminal_folder(w["pid"])
+        items.append(item)
+    items.sort(key=lambda i: (i["output"], i["workspace"], i["floating"], i["column"], i["row"]))
+    return items
+
+
+def write(items):
+    text = json.dumps(items, ensure_ascii=False, indent=1)
+    try:
+        if FILE.read_text() == text:
+            return
+    except OSError:
+        pass
     STATE.mkdir(parents=True, exist_ok=True)
     tmp = FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(items, ensure_ascii=False, indent=1))
+    tmp.write_text(text)
     os.replace(tmp, FILE)
+
+
+def save():
+    write(snapshot())
+
+
+def shutting_down():
+    # Windows close one by one on the way down, and that must not become the saved state.
+    state = subprocess.run(["systemctl", "is-system-running"], capture_output=True, text=True, check=False).stdout.strip()
+    return state == "stopping"
+
+
+def watch():
+    STATE.mkdir(parents=True, exist_ok=True)
+    lock = (STATE / "session.lock").open("w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return 0
+    stream = subprocess.Popen(["niri", "msg", "--json", "event-stream"], stdout=subprocess.PIPE, text=True)
+    next_save = time.monotonic() + SAVE_EVERY
+    while True:
+        ready, _, _ = select.select([stream.stdout], [], [], max(0, next_save - time.monotonic()))
+        if ready:
+            line = stream.stdout.readline()
+            if not line:
+                # niri is gone. A change still waiting may be part of that, so it is dropped.
+                return 0
+            try:
+                event = next(iter(json.loads(line)), "")
+            except (ValueError, TypeError):
+                continue
+            if event not in IGNORED_EVENTS:
+                next_save = min(next_save, time.monotonic() + SAVE_DELAY)
+        if time.monotonic() >= next_save:
+            next_save = time.monotonic() + SAVE_EVERY
+            try:
+                if not shutting_down():
+                    save()
+            except (OSError, ValueError, subprocess.CalledProcessError):
+                pass
 
 
 def enabled():
     for name in ("settings.json", "defaults.json"):
         try:
-            value = json.loads((CONFIG / name).read_text() or "{}").get("session", {}).get("restore")
+            value = json.loads((CONFIG / "niri-desk" / name).read_text() or "{}").get("session", {}).get("restore")
         except (OSError, ValueError):
             continue
         if value is not None:
             return value
     return True
+
+
+def desktop_command(app):
+    """The app's own start command from its desktop file."""
+    dirs = os.environ.get("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":")
+    dirs.insert(0, os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share")))
+    dirs.append(str(Path.home() / ".local/share/flatpak/exports/share"))
+    dirs.append("/var/lib/flatpak/exports/share")
+    files = [f for d in dirs for f in sorted(Path(d, "applications").glob("*.desktop"))]
+    named = [f for f in files if f.stem.lower() == app.lower()]
+    for path in named + files:
+        try:
+            fields = {}
+            for line in path.read_text(errors="replace").splitlines():
+                if line.startswith("[") and fields:
+                    break
+                key, sep, value = line.partition("=")
+                if sep:
+                    fields.setdefault(key.strip(), value.strip())
+        except OSError:
+            continue
+        if path not in named and fields.get("StartupWMClass", "").lower() != app.lower():
+            continue
+        if fields.get("Terminal") == "true" or not fields.get("Exec"):
+            continue
+        try:
+            argv = shlex.split(fields["Exec"])
+        except ValueError:
+            continue
+        argv = [a for a in argv if not (len(a) == 2 and a[0] == "%") and a not in ("@@", "@@u")]
+        while argv and argv[-1] == "--":
+            argv.pop()
+        if argv and shutil.which(argv[0]):
+            return argv
+    return None
+
+
+def launch_command(item):
+    exe = item.get("exe", "")
+    # A path in the file is never run, only a name found the normal way.
+    safe_exe = exe if exe and "/" not in exe and exe not in RUNTIMES and shutil.which(exe) else ""
+    if safe_exe in TERMINALS:
+        folder = item.get("folder") or ""
+        return [safe_exe, TERMINALS[safe_exe], folder] if os.path.isdir(folder) else [safe_exe]
+    app = item.get("app") or ""
+    command = desktop_command(app) if app else None
+    if command:
+        return command
+    return [safe_exe] if safe_exe else None
+
+
+class Group:
+    """Windows still to come from one app."""
+
+    def __init__(self, command):
+        self.command = command
+        self.items = []
+        self.launched = 0.0
+        self.arrived = 0.0
+        self.got_window = False
+
+    def launch(self, now):
+        action("spawn", "--", *self.launch_args())
+        self.launched = now
+        self.got_window = False
+
+    def launch_args(self):
+        return launch_command(self.items[0]) or self.command
+
+    def due(self, now):
+        if not self.items:
+            return False
+        if not self.launched:
+            return True
+        if self.got_window:
+            return self.items[0].get("exe") in TERMINALS or now - self.arrived >= SETTLE
+        return now - self.launched >= LAUNCH_WAIT
+
+
+def pick(group, window):
+    if group.items[0].get("exe") not in TERMINALS:
+        for i, item in enumerate(group.items):
+            if item.get("title") and item.get("title") == window.get("title"):
+                return group.items.pop(i)
+    return group.items.pop(0)
+
+
+def workspace_ranks(items):
+    """niri drops empty workspaces, so saved numbers can have holes in them."""
+    ranks = {}
+    for output in {i.get("output", "") for i in items}:
+        used = sorted({i.get("workspace", 1) for i in items if i.get("output", "") == output})
+        for rank, number in enumerate(used, 1):
+            ranks[output, number] = rank
+    return ranks
+
+
+def place(bound, ranks, outputs):
+    """Puts windows on their workspaces, lowest first, because a higher one exists only after that."""
+    for window_id, item in sorted(bound.items(), key=lambda b: ranks[b[1].get("output", ""), b[1].get("workspace", 1)]):
+        output = item.get("output")
+        if output in outputs:
+            action("move-window-to-monitor", "--id", window_id, output)
+        action("move-window-to-workspace", "--window-id", window_id, "--focus", "false", ranks[item.get("output", ""), item.get("workspace", 1)])
+
+
+def float_window(window_id, item):
+    action("move-window-to-floating", "--id", window_id)
+    if item.get("width") and item.get("height"):
+        action("set-window-width", "--id", window_id, int(item["width"]))
+        action("set-window-height", "--id", window_id, int(item["height"]))
+    if "x" in item and "y" in item:
+        action("move-floating-window", "--id", window_id, "-x", int(item["x"]), "-y", int(item["y"]))
+
+
+def arrange_columns(bound, ranks):
+    """Rebuilds columns of each workspace. Moving a column needs focus, so a right one is left alone."""
+    current = {w["id"]: w for w in niri_json("windows")}
+    spaces = {}
+    for window_id, item in bound.items():
+        if not item.get("floating") and window_id in current:
+            spaces.setdefault((item.get("output", ""), ranks[item.get("output", ""), item.get("workspace", 1)]), []).append((window_id, item))
+    for members in spaces.values():
+        members.sort(key=lambda m: (m[1].get("column", 999), m[1].get("row", 1)))
+        wanted = {}
+        column = 0
+        last = None
+        for window_id, item in members:
+            if item.get("column") != last or last is None:
+                column += 1
+                row = 1
+                last = item.get("column")
+            else:
+                row += 1
+            wanted[window_id] = (column, row)
+        now = {i: ((current[i].get("layout") or {}).get("pos_in_scrolling_layout") or [0, 0]) for i, _ in members}
+        if all(tuple(now[i]) == wanted[i] for i in wanted):
+            continue
+        for window_id, _ in members:
+            column, row = wanted[window_id]
+            action("focus-window", "--id", window_id)
+            if row == 1:
+                action("move-column-to-index", column)
+            else:
+                action("move-column-to-index", column + 1)
+                action("consume-or-expel-window-left", "--id", window_id)
+
+
+def fix_sizes(bound, outputs):
+    current = {w["id"]: w for w in niri_json("windows")}
+    columns = {}
+    for item in bound.values():
+        key = (item.get("output"), item.get("workspace"), item.get("column"))
+        columns[key] = columns.get(key, 0) + 1
+    for window_id, item in bound.items():
+        if item.get("floating") or item.get("fullscreen") or window_id not in current or not item.get("width"):
+            continue
+        tile = (current[window_id].get("layout") or {}).get("tile_size") or [0, 0]
+        if abs(tile[0] - item["width"]) > 1:
+            action("set-window-width", "--id", window_id, int(item["width"]))
+        # A lone window normally fills the height, and the panel may not be up yet. A fixed
+        # height would stop it following the panel, so only a clearly shorter one is set.
+        screen = ((outputs.get(item.get("output")) or {}).get("logical") or {}).get("height", 0)
+        stacked = columns[item.get("output"), item.get("workspace"), item.get("column")] > 1
+        if item.get("height") and abs(tile[1] - item["height"]) > 1 and (stacked or item["height"] < screen * 0.85):
+            action("set-window-height", "--id", window_id, int(item["height"]))
+
+
+def restore_focus(bound, ranks):
+    for window_id, item in bound.items():
+        if item.get("fullscreen"):
+            action("fullscreen-window", "--id", window_id)
+    # The window each workspace had in view, then the one with the keyboard last.
+    ordered = sorted(bound.items(), key=lambda b: (b[1].get("workspaceActive", False), b[1].get("focused", False)))
+    for window_id, item in ordered:
+        if item.get("active") or item.get("focused"):
+            action("focus-window", "--id", window_id)
 
 
 def restore(force):
@@ -85,39 +378,86 @@ def restore(force):
         items = json.loads(FILE.read_text())
     except (OSError, ValueError):
         return 0
-    opened = 0
+    if not isinstance(items, list):
+        return 0
+
+    groups = {}
+    wanted = []
     for item in items:
-        exe = item.get("exe", "")
-        if not exe or "/" in exe or not shutil.which(exe):
+        if not isinstance(item, dict):
             continue
-        before = {w["id"] for w in niri_json("windows")}
-        action("focus-workspace", item.get("workspace", 1))
-        time.sleep(0.15)
-        action("spawn", "--", exe)
-        end = time.time() + 10
-        new = set()
-        while time.time() < end and not new:
-            new = {w["id"] for w in niri_json("windows")} - before
-            time.sleep(0.15)
-        if new:
-            opened += 1
-            time.sleep(0.5)
-            share = item.get("share") or 0
-            if 0.1 < share <= 1 and not item.get("floating"):
-                action("set-column-width", f"{round(share * 100, 1)}%")
+        command = launch_command(item)
+        if not command:
+            continue
+        wanted.append(item)
+        groups.setdefault(item.get("app") or item.get("exe"), Group(command)).items.append(item)
+    if not wanted:
+        return 0
+
+    ranks = workspace_ranks(wanted)
+    outputs = niri_json("outputs")
+    bound = {}
+    start = time.monotonic()
+    while time.monotonic() - start < RESTORE_WAIT and any(g.items for g in groups.values()):
+        now = time.monotonic()
+        arrived = False
+        for window in niri_json("windows"):
+            if window["id"] in bound:
+                continue
+            app = window.get("app_id") or ""
+            group = groups.get(app) or groups.get(executable(window.get("pid")))
+            if not group or not group.items:
+                continue
+            item = pick(group, window)
+            bound[window["id"]] = item
+            group.arrived = now
+            group.got_window = True
+            arrived = True
             if item.get("floating"):
-                action("move-window-to-floating")
-    action("focus-workspace", 1)
+                float_window(window["id"], item)
+        if arrived:
+            place(bound, ranks, outputs)
+        for group in groups.values():
+            if group.due(now):
+                # A launch that opened nothing costs that window, not the rest of the app.
+                if group.launched and not group.got_window:
+                    group.items.pop(0)
+                    if not group.items:
+                        continue
+                group.launch(now)
+        if not any(g.items for g in groups.values()):
+            break
+        time.sleep(0.15)
+
+    # Sizes settle only after the app answers, so they get a second look.
+    time.sleep(0.5)
+    arrange_columns(bound, ranks)
+    fix_sizes(bound, outputs)
+    time.sleep(0.4)
+    fix_sizes(bound, outputs)
+    restore_focus(bound, ranks)
     return 0
 
 
 def main():
     args = sys.argv[1:]
-    if args[:1] == ["save"]:
-        save()
-        return 0
-    if args[:1] == ["restore"]:
-        return restore("--force" in args)
+    try:
+        if args[:1] == ["save"]:
+            save()
+            return 0
+        if args[:1] == ["restore"]:
+            return restore("--force" in args)
+        if args[:1] == ["watch"]:
+            return watch()
+        if args[:1] == ["run"]:
+            try:
+                restore(False)
+            except (OSError, ValueError, subprocess.CalledProcessError) as error:
+                print(error, file=sys.stderr)
+            return watch()
+    except subprocess.CalledProcessError as error:
+        print(f"niri is not answering: {error}", file=sys.stderr)
+        return 1
     print(__doc__.strip(), file=sys.stderr)
     return 2
 

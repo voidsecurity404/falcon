@@ -3093,6 +3093,18 @@ def _():
     ok(wsof("foot") == 1 and wsof("kitty") == 2, windows())
 
 
+@case("Ustun kengligi va suzuvchi oyna joyi tiklanadi")
+def _():
+    write_json(SESSION, [
+        {"app": "foot", "exe": "foot", "workspace": 1, "column": 1, "row": 1, "width": 500, "height": 0},
+        {"app": "kitty", "exe": "kitty", "workspace": 1, "floating": True, "width": 420, "height": 310, "x": 200, "y": 120},
+    ])
+    run("niri-desk-session", "restore", "--force")
+    found = {w["app_id"]: w["layout"] for w in wait(lambda: len(windows()) == 2 and windows(), 8)}
+    ok(found["foot"]["tile_size"][0] == 500, found)
+    ok(found["kitty"]["tile_size"] == [420, 310] and found["kitty"]["tile_pos_in_workspace_view"] == [200, 120], found)
+
+
 feature("layoutfix", "Noto'g'ri klaviatura tuzatish")
 
 for _q, _want in [("лшеен", "kitty"), ("ащще", "foot"), ("ащ", "foot")]:

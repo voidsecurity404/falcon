@@ -9,6 +9,15 @@ MARK = "/* niri-desk */\n"
 PREF = 'user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);\n'
 HOME = Path.home()
 SOURCE = HOME / ".local/state/niri-desk/firefox-userChrome.css"
+# Opens the previous windows and tabs, so a restored Firefox window has what it had.
+RESUME = 'user_pref("browser.startup.page", 3);\n'
+
+for root in (HOME / ".config/mozilla/firefox", HOME / ".mozilla/firefox"):
+    for prefs in root.glob("*/prefs.js"):
+        user = prefs.parent / "user.js"
+        text = user.read_text() if user.exists() else ""
+        if RESUME not in text:
+            user.write_text(text + RESUME)
 
 if SOURCE.exists():
     css = MARK + SOURCE.read_text()

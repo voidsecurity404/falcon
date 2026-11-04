@@ -32,7 +32,7 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | Shortcut | Action |
 | --- | --- |
 | `Mod+Return` | Terminal |
-| `Mod+Space` | App menu from the bottom of the screen: type an app name, or `>` for commands. Lock, sleep, log out, reboot and shut down are beside the search field |
+| `Mod+Space` | App menu from the bottom of the screen: type an app name, or `>` for commands. The red button beside the search field brings out lock, sleep, log out, reboot and shut down |
 | `Mod+V` | Clipboard history |
 | `Mod+D` | Dashboard |
 | `Mod+C` | Control center |
@@ -82,7 +82,7 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 
 ## Helper commands
 
-- `niri-desk-session save|restore`: restore windows. Saved every minute, restored at login. Arguments are never replayed, so a terminal opens empty.
+- `niri-desk-session run|watch|save|restore`: windows come back after a reboot on their workspace and monitor, in their column, with their size, floating ones at their position, and terminals in their folder. Saved on every change. Arguments are never replayed, and what is inside a window is up to the app.
 - `niri-desk-backup export [file]`, `import file`: save settings to one file.
 - `niri-desk-doctor`: checks programs, running services, config and permissions, and says what to fix.
 - `niri-desk-sync [--check] [--pull]`: copies changed files from the repo to the live desktop, leaving generated files and user data alone.
