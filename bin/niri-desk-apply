@@ -97,7 +97,10 @@ def settings_kdl(s):
         out.append("        natural-scroll")
     if p["disableWhileTyping"]:
         out.append("        dwt")
+    out.append(f"        click-method {q(choice(p, 'clickMethod', ['button-areas', 'clickfinger']))}")
     out += [f"        accel-speed {float(number(p, 'touchpadSpeed', -1, 1))}", f"        scroll-factor {float(number(p, 'scrollFactor', 0.1, 5))}", "    }", "    mouse {"]
+    if p["mouseNaturalScroll"]:
+        out.append("        natural-scroll")
     out += [f"        accel-profile {q('flat' if p['mouseFlat'] else 'adaptive')}", f"        accel-speed {float(number(p, 'mouseSpeed', -1, 1))}", "    }"]
     if w["focusFollowsMouse"]:
         out.append('    focus-follows-mouse max-scroll-amount="0%"')
@@ -105,7 +108,13 @@ def settings_kdl(s):
         out.append("    warp-mouse-to-focus")
     if w["autoBackForth"]:
         out.append("    workspace-auto-back-and-forth")
-    out += ["}", "", "cursor {", f"    xcursor-theme {q(a['cursorTheme'])}", f"    xcursor-size {int(number(a, 'cursorSize', 8, 96))}", "    hide-when-typing", "}", ""]
+    out += ["}", "", "cursor {", f"    xcursor-theme {q(a['cursorTheme'])}", f"    xcursor-size {int(number(a, 'cursorSize', 8, 96))}"]
+    if a["cursorHideTyping"]:
+        out.append("    hide-when-typing")
+    hide_after = number(a, "cursorHideAfter", 0, 600)
+    if hide_after:
+        out.append(f"    hide-after-inactive-ms {int(hide_after * 1000)}")
+    out += ["}", ""]
 
     out += ["layout {", f"    gaps {number(w, 'gaps', 0, 64)}"]
     out.append(f"    center-focused-column {q(choice(w, 'centerFocused', ['never', 'on-overflow', 'always']))}")
@@ -114,11 +123,16 @@ def settings_kdl(s):
     if w["tabbedByDefault"]:
         out.append('    default-column-display "tabbed"')
     out.append(f"    default-column-width {{ proportion {float(number(w, 'defaultWidth', 0.1, 1))}; }}")
+    margin = number(w, "edgeMargin", 0, 200)
+    out += ["    struts {", f"        left {margin}", f"        right {margin}", f"        top {margin}", f"        bottom {margin}", "    }"]
     ring = number(w, "focusRing", 0, 16)
     out += ["    focus-ring {", "        off" if ring == 0 else f"        width {ring}", "    }"]
-    out += ["    shadow {", "        on" if w["shadow"] else "        off", "    }", "}", ""]
-    if not w["blur"]:
+    out += ["    shadow {", "        on" if w["shadow"] else "        off", f"        softness {number(w, 'shadowSoftness', 0, 100)}", "    }", "}", ""]
+    if w["blur"]:
+        out += ["blur {", f"    passes {int(number(w, 'blurStrength', 1, 6))}", "}", ""]
+    else:
         out += ["blur {", "    off", "}", ""]
+    out += ["overview {", f"    zoom {float(number(w, 'overviewZoom', 0.2, 0.75))}", "}", ""]
     if not w["animations"]:
         out += ["animations {", "    off", "}", ""]
     else:
@@ -302,12 +316,18 @@ def idle_conf(s):
 
 
 def kitty_conf(s):
-    a = s["appearance"]
+    a, t = s["appearance"], s["terminal"]
+    padding = int(number(t, "padding", 0, 60))
     return "\n".join([
         "# Generated file: change it in the Settings window.",
         f"font_family {a['monoFont']}",
         f"font_size {number(a, 'terminalFontSize', 6, 40)}",
         f"background_opacity {number(a, 'terminalOpacity', 0.1, 1)}",
+        f"cursor_shape {choice(t, 'cursorShape', ['block', 'beam', 'underline'])}",
+        f"cursor_blink_interval {-1 if t['cursorBlink'] else 0}",
+        f"window_padding_width {padding} {padding + 2}",
+        f"adjust_line_height {int(number(t, 'lineHeight', 80, 200))}%",
+        f"scrollback_lines {int(number(t, 'scrollback', 0, 200000))}",
     ]) + "\n"
 
 

@@ -6,6 +6,7 @@ Item {
     id: root
 
     property real value: 0
+    property bool handle: false
 
     signal moved(real value)
 
@@ -52,8 +53,8 @@ Item {
         height: 14
         radius: 7
         color: Theme.text
-        opacity: area.containsMouse || area.pressed ? 1 : 0
-        scale: area.pressed ? 1.25 : area.containsMouse ? 1 : 0.5
+        opacity: handle || area.containsMouse || area.pressed ? 1 : 0
+        scale: area.pressed ? 1.25 : handle || area.containsMouse ? 1 : 0.5
 
         Behavior on opacity {
             NumberAnimation {

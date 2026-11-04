@@ -400,7 +400,7 @@ def _():
     ipc("settings")
     w = wait(lambda: next(x for x in windows() if x["title"] == "niri-desk settings"))
     ok(w["is_floating"])
-    ok(w["layout"]["window_size"][0] == 860, w["layout"])
+    ok(w["layout"]["window_size"][0] == 1000, w["layout"])
 
 
 # ---------------------------------------------------------------------------------------
@@ -2489,6 +2489,14 @@ def accent():
 
 def gen():
     return (GEN / "settings.kdl").read_text()
+
+
+@case("Yangi oyna va terminal sozlamalari generated fayllarga yoziladi")
+def _():
+    settings(windows__edgeMargin=20, windows__blurStrength=5, windows__overviewZoom=0.6, appearance__cursorHideAfter=5, terminal__cursorShape="beam", terminal__scrollback=9000)
+    wait(lambda: "left 20" in gen() and "passes 5" in gen() and "zoom 0.6" in gen() and "hide-after-inactive-ms 5000" in gen(), 6)
+    kitty = (HOME / ".config/kitty/niri-desk-user.conf").read_text()
+    ok("cursor_shape beam" in kitty and "scrollback_lines 9000" in kitty, kitty)
 
 
 @case("Yorug' rejim ranglarni o'zgartiradi")

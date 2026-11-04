@@ -77,8 +77,8 @@ window-rule {
 window-rule {
     match title="^niri-desk settings$"
     open-floating true
-    default-column-width { fixed 860; }
-    default-window-height { fixed 640; }
+    default-column-width { fixed 1000; }
+    default-window-height { fixed 720; }
 }
 
 // Scratchpad terminal tepada suzib turadi.

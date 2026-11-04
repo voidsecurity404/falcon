@@ -57,16 +57,18 @@ Column {
             required property int index
 
             width: root.width
-            height: cardColumn.implicitHeight + 24
-            radius: 11
-            color: Qt.alpha(Theme.text, 0.05)
+            height: cardColumn.implicitHeight + 28
+            radius: 18
+            color: Qt.alpha(Theme.text, 0.045)
+            border.width: 1
+            border.color: Qt.alpha(Theme.text, 0.06)
 
             Column {
                 id: cardColumn
 
-                x: 12
-                y: 12
-                width: parent.width - 24
+                x: 16
+                y: 14
+                width: parent.width - 32
                 spacing: 8
 
                 Repeater {
@@ -92,7 +94,7 @@ Column {
                         Rectangle {
                             width: cardColumn.width - 78
                             height: 30
-                            radius: 7
+                            radius: 9
                             color: Qt.alpha(Theme.text, 0.07)
 
                             TextInput {
@@ -136,7 +138,7 @@ Column {
 
                             width: flagLabel.implicitWidth + 16
                             height: 28
-                            radius: 7
+                            radius: 9
                             color: on ? Qt.alpha(Theme.accent, 0.24) : Qt.alpha(Theme.text, 0.07)
 
                             Label {
@@ -158,7 +160,7 @@ Column {
                     Rectangle {
                         width: 74
                         height: 28
-                        radius: 7
+                        radius: 9
                         color: Qt.alpha(Theme.error, 0.2)
 
                         Label {
@@ -179,12 +181,14 @@ Column {
     }
 
     Rectangle {
-        width: 190
-        height: 34
-        radius: 9
+        width: addLabel.implicitWidth + 36
+        height: 36
+        radius: 11
         color: Theme.accent
 
         Label {
+            id: addLabel
+
             anchors.centerIn: parent
             text: Tr.t("Add a rule")
             color: Theme.accentText

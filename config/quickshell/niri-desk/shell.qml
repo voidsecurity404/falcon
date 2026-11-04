@@ -63,6 +63,10 @@ ShellRoot {
         function settings(): void {
             Ui.settingsOpen = !Ui.settingsOpen;
         }
+        function settingsPage(index: int): void {
+            Ui.settingsPage = index;
+            Ui.settingsOpen = true;
+        }
         function state(): string {
             return JSON.stringify({
                 popup: Ui.popup,

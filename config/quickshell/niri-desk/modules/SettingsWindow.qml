@@ -4,29 +4,32 @@ import Quickshell.Io
 import qs.components
 import qs.services
 
-// Sozlamalar: har bir bo'lim ro'yxat ko'rinishida tasvirlangan, o'zgarish darhol qo'llanadi.
+// Settings: sidebar with grouped pages, each page made of titled cards. Changes apply at once.
 LazyLoader {
     active: Ui.settingsOpen
 
     FloatingWindow {
         id: win
 
-        property int page: 0
+        readonly property int page: Math.max(0, Math.min(pages.length - 1, Ui.settingsPage))
         property string filter: ""
 
         onPageChanged: scroller.contentY = 0
 
         property var outputs: []
-        readonly property var monitorItems: {
+        readonly property var monitorSections: {
             let list = [];
             for (const name of outputs) {
-                list = list.concat([
-                    { key: "monitors." + name + ".scale", label: Tr.t("{name}: scale").replace("{name}", name), type: "slider", min: 0.5, max: 3, step: 0.05, fallback: 1 },
-                    { key: "monitors." + name + ".transform", label: Tr.t("{name}: rotation").replace("{name}", name), type: "choice", options: ["normal", "90", "180", "270"], names: [Tr.t("None"), "90°", "180°", "270°"], fallback: "normal" },
-                    { key: "monitors." + name + ".x", label: Tr.t("{name}: X position").replace("{name}", name), type: "number", fallback: 0 },
-                    { key: "monitors." + name + ".y", label: Tr.t("{name}: Y position").replace("{name}", name), type: "number", fallback: 0 },
-                    { key: "monitors." + name + ".off", label: Tr.t("{name}: disabled").replace("{name}", name), type: "toggle", fallback: false }
-                ]);
+                list.push({
+                    title: name,
+                    items: [
+                        { key: "monitors." + name + ".scale", label: Tr.t("Scale"), type: "slider", min: 0.5, max: 3, step: 0.05, fallback: 1, unit: "scale" },
+                        { key: "monitors." + name + ".transform", label: Tr.t("Rotation"), type: "choice", options: ["normal", "90", "180", "270"], names: [Tr.t("None"), "90°", "180°", "270°"], fallback: "normal" },
+                        { key: "monitors." + name + ".x", label: Tr.t("X position"), type: "number", fallback: 0, width: 120 },
+                        { key: "monitors." + name + ".y", label: Tr.t("Y position"), type: "number", fallback: 0, width: 120 },
+                        { key: "monitors." + name + ".off", label: Tr.t("Turn off this monitor"), type: "toggle", fallback: false }
+                    ]
+                });
             }
             return list;
         }
@@ -45,167 +48,403 @@ LazyLoader {
             }
         }
 
-        readonly property var schemes: ["scheme-tonal-spot", "scheme-vibrant", "scheme-expressive", "scheme-fidelity", "scheme-content", "scheme-neutral", "scheme-monochrome", "scheme-rainbow", "scheme-fruit-salad"]
+        function bind(name, label) {
+            return { key: "binds." + name, label: label, type: "text", width: 200 };
+        }
+
+        readonly property var groups: [Tr.t("Personalization"), Tr.t("Workspace"), Tr.t("Input"), Tr.t("Other")]
+
         readonly property var pages: [
             {
                 title: Tr.t("Appearance"),
+                subtitle: Tr.t("Language, colors, fonts and cursor"),
                 icon: "palette",
-                items: [
-                    { key: "appearance.language", label: Tr.t("Language"), type: "choice", options: ["auto", "en", "ru"], names: [Tr.t("Automatic"), "English", "Русский"], fallback: "auto" },
-                    { key: "appearance.mode", label: Tr.t("Mode"), type: "choice", options: ["dark", "light"], names: [Tr.t("Dark"), Tr.t("Light")] },
-                    { key: "appearance.scheme", label: Tr.t("Color style"), type: "choice", options: schemes },
-                    { key: "appearance.accent", label: Tr.t("Custom color"), hint: Tr.t("#rrggbb. Empty means taken from the wallpaper"), type: "text" },
-                    { key: "appearance.font", label: Tr.t("Font"), type: "text" },
-                    { key: "appearance.monoFont", label: Tr.t("Terminal font"), type: "text" },
-                    { key: "appearance.fontScale", label: Tr.t("Text size"), type: "slider", min: 0.8, max: 1.3, step: 0.05 },
-                    { key: "appearance.terminalOpacity", label: Tr.t("Terminal opacity"), type: "slider", min: 0.3, max: 1, step: 0.02 },
-                    { key: "appearance.terminalFontSize", label: Tr.t("Terminal font size"), type: "slider", min: 8, max: 20, step: 1 },
-                    { key: "appearance.cursorTheme", label: Tr.t("Cursor theme"), type: "text" },
-                    { key: "appearance.cursorSize", label: Tr.t("Cursor size"), type: "slider", min: 16, max: 48, step: 2 }
+                group: 0,
+                sections: [
+                    {
+                        title: Tr.t("Theme"),
+                        items: [
+                            { key: "appearance.language", label: Tr.t("Language"), type: "choice", options: ["auto", "en", "ru"], names: [Tr.t("Automatic"), "English", "Русский"], fallback: "auto" },
+                            { key: "appearance.mode", label: Tr.t("Mode"), type: "choice", options: ["dark", "light"], names: [Tr.t("Dark"), Tr.t("Light")] },
+                            { key: "appearance.accent", label: Tr.t("Accent color"), type: "color", autoText: Tr.t("From wallpaper"), colors: ["#7aa2f7", "#bb9af7", "#f7768e", "#ff9e64", "#e0af68", "#9ece6a", "#2ac3de", "#c0caf5"] },
+                            { key: "appearance.scheme", label: Tr.t("Color style"), type: "choice", layout: "chips", options: ["scheme-tonal-spot", "scheme-vibrant", "scheme-expressive", "scheme-fidelity", "scheme-content", "scheme-neutral", "scheme-monochrome", "scheme-rainbow", "scheme-fruit-salad"], names: [Tr.t("Tonal"), Tr.t("Vibrant"), Tr.t("Expressive"), Tr.t("Faithful"), Tr.t("Content"), Tr.t("Neutral"), Tr.t("Monochrome"), Tr.t("Rainbow"), Tr.t("Fruit salad")] }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Text"),
+                        items: [
+                            { key: "appearance.font", label: Tr.t("Font"), type: "text" },
+                            { key: "appearance.fontScale", label: Tr.t("Text size"), type: "slider", min: 0.8, max: 1.3, step: 0.05, unit: "percent" }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Cursor"),
+                        items: [
+                            { key: "appearance.cursorTheme", label: Tr.t("Cursor theme"), type: "text" },
+                            { key: "appearance.cursorSize", label: Tr.t("Cursor size"), type: "slider", min: 16, max: 48, step: 2, unit: "px" },
+                            { key: "appearance.cursorHideTyping", label: Tr.t("Hide cursor while typing"), type: "toggle" },
+                            { key: "appearance.cursorHideAfter", label: Tr.t("Hide idle cursor after"), type: "slider", min: 0, max: 60, step: 1, unit: "time" }
+                        ]
+                    }
                 ]
             },
             {
-                title: Tr.t("Windows"),
-                icon: "windows",
-                items: [
-                    { key: "windows.gaps", label: Tr.t("Gaps between windows"), type: "slider", min: 0, max: 40, step: 1 },
-                    { key: "windows.radius", label: Tr.t("Corner radius"), type: "slider", min: 0, max: 32, step: 1 },
-                    { key: "windows.focusRing", label: Tr.t("Focus ring width"), type: "slider", min: 0, max: 8, step: 1 },
-                    { key: "windows.shadow", label: Tr.t("Shadow"), type: "toggle" },
-                    { key: "windows.blur", label: Tr.t("Blur"), type: "toggle" },
-                    { key: "windows.inactiveOpacity", label: Tr.t("Inactive window opacity"), type: "slider", min: 0.4, max: 1, step: 0.02 },
-                    { key: "windows.defaultWidth", label: Tr.t("New window width"), type: "choice", options: [0.33333, 0.5, 0.66667, 1], names: ["1/3", "1/2", "2/3", Tr.t("Full")] },
-                    { key: "windows.centerFocused", label: Tr.t("Center focused column"), type: "choice", options: ["never", "on-overflow", "always"], names: [Tr.t("Never"), Tr.t("If it doesn't fit"), Tr.t("Always")] },
-                    { key: "windows.centerSingle", label: Tr.t("Center a single window"), type: "toggle" },
-                    { key: "windows.tabbedByDefault", label: Tr.t("Columns as tabs"), type: "toggle" },
-                    { key: "windows.focusFollowsMouse", label: Tr.t("Focus follows cursor"), type: "toggle" },
-                    { key: "windows.warpMouse", label: Tr.t("Cursor follows focus"), type: "toggle" },
-                    { key: "windows.autoBackForth", label: Tr.t("Same number again goes to previous workspace"), type: "toggle" },
-                    { key: "windows.animations", label: Tr.t("Animations"), type: "toggle" },
-                    { key: "windows.animationSpeed", label: Tr.t("Animation speed"), type: "slider", min: 0.3, max: 3, step: 0.1 }
+                title: Tr.t("Wallpaper"),
+                subtitle: Tr.t("Folder and how wallpapers change"),
+                icon: "wallpaper",
+                group: 0,
+                sections: [
+                    {
+                        title: Tr.t("Wallpapers"),
+                        items: [
+                            { key: "wallpaperDir", label: Tr.t("Wallpaper folder"), type: "text" },
+                            { label: Tr.t("Choose a wallpaper"), type: "action", text: Tr.t("Open"), run: () => { Ui.settingsOpen = false; Ui.popup = "wallpapers"; } }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Transition"),
+                        items: [
+                            { key: "wallpaper.transition", label: Tr.t("Effect"), type: "choice", options: ["grow", "fade", "wipe", "wave", "none"], names: [Tr.t("Grow"), Tr.t("Fade"), Tr.t("Wipe"), Tr.t("Wave"), Tr.t("None")] },
+                            { key: "wallpaper.duration", label: Tr.t("Duration"), type: "slider", min: 0.2, max: 4, step: 0.2, unit: "sec" }
+                        ]
+                    }
                 ]
-            },
-            {
-                title: Tr.t("Window rules"),
-                icon: "rules",
-                rules: true,
-                items: []
             },
             {
                 title: Tr.t("Panel"),
+                subtitle: Tr.t("Top bar, clock and notifications"),
                 icon: "panel",
-                items: [
-                    { key: "appearance.panelOpacity", label: Tr.t("Panel opacity"), hint: Tr.t("Lower is more see-through"), type: "slider", min: 0.15, max: 1, step: 0.05 },
-                    { key: "panel.position", label: Tr.t("Position"), type: "choice", options: ["top", "bottom"], names: [Tr.t("Top"), Tr.t("Bottom")] },
-                    { key: "panel.ribbon", label: Tr.t("Workspace numbers"), type: "toggle" },
-                    { key: "panel.hideEmpty", label: Tr.t("Hide empty workspaces"), type: "toggle" },
-                    { key: "panel.tray", label: Tr.t("Tray"), type: "toggle" },
-                    { key: "panel.lang", label: Tr.t("Keyboard layout"), type: "toggle" },
-                    { key: "panel.wifi", label: Tr.t("Wi-Fi icon"), type: "toggle" },
-                    { key: "panel.volume", label: Tr.t("Volume"), type: "toggle" },
-                    { key: "panel.battery", label: Tr.t("Battery"), type: "toggle" },
-                    { key: "panel.clockSeconds", label: Tr.t("Seconds"), type: "toggle" },
-                    { key: "panel.clockDate", label: Tr.t("Date"), type: "toggle" },
-                    { key: "notifications.seconds", label: Tr.t("Notification duration, seconds"), type: "slider", min: 1, max: 15, step: 0.5 },
-                    { key: "notifications.history", label: Tr.t("Notifications kept in history"), type: "slider", min: 5, max: 100, step: 5 }
-                ]
-            },
-            {
-                title: Tr.t("Keyboard"),
-                icon: "keyboard",
-                items: [
-                    { key: "keyboard.layouts", label: Tr.t("Layouts"), hint: Tr.t("Example: us,ru"), type: "text" },
-                    { key: "keyboard.options", label: Tr.t("XKB options"), type: "text" },
-                    { key: "keyboard.perWindow", label: Tr.t("Remember layout per window"), type: "toggle" },
-                    { key: "keyboard.repeatDelay", label: Tr.t("Repeat delay, ms"), type: "slider", min: 150, max: 800, step: 10 },
-                    { key: "keyboard.repeatRate", label: Tr.t("Repeat rate"), type: "slider", min: 10, max: 80, step: 1 },
-                    { key: "keyboard.numlock", label: Tr.t("NumLock on"), type: "toggle" },
-                    { key: "pointer.tap", label: Tr.t("Touchpad: tap to click"), type: "toggle" },
-                    { key: "pointer.naturalScroll", label: Tr.t("Touchpad: natural scroll"), type: "toggle" },
-                    { key: "pointer.disableWhileTyping", label: Tr.t("Disable touchpad while typing"), type: "toggle" },
-                    { key: "pointer.touchpadSpeed", label: Tr.t("Touchpad speed"), type: "slider", min: -1, max: 1, step: 0.05 },
-                    { key: "pointer.scrollFactor", label: Tr.t("Scroll speed"), type: "slider", min: 0.2, max: 3, step: 0.1 },
-                    { key: "pointer.mouseFlat", label: Tr.t("No mouse acceleration"), type: "toggle" },
-                    { key: "pointer.mouseSpeed", label: Tr.t("Mouse speed"), type: "slider", min: -1, max: 1, step: 0.05 }
-                ]
-            },
-            {
-                title: Tr.t("Shortcuts"),
-                icon: "shortcut",
-                items: [
-                    { key: "binds.terminal", label: Tr.t("Terminal"), type: "text" },
-                    { key: "binds.apps", label: Tr.t("Apps"), type: "text" },
-                    { key: "binds.launcher", label: Tr.t("Search"), type: "text" },
-                    { key: "binds.clipboard", label: Tr.t("Clipboard history"), type: "text" },
-                    { key: "binds.dashboard", label: Tr.t("Dashboard"), type: "text" },
-                    { key: "binds.control", label: Tr.t("Control center"), type: "text" },
-                    { key: "binds.wallpapers", label: Tr.t("Wallpaper and color"), type: "text" },
-                    { key: "binds.settings", label: Tr.t("Settings"), type: "text" },
-                    { key: "binds.zen", label: Tr.t("Focus mode"), type: "text" },
-                    { key: "binds.lock", label: Tr.t("Lock screen"), type: "text" },
-                    { key: "binds.overview", label: Tr.t("Overview"), type: "text" },
-                    { key: "binds.scratch", label: Tr.t("Scratchpad terminal"), type: "text" },
-                    { key: "binds.sticky", label: Tr.t("Sticky window"), type: "text" },
-                    { key: "binds.browser", label: Tr.t("Browser"), type: "text" },
-                    { key: "binds.files", label: Tr.t("Files"), type: "text" },
-                    { key: "binds.notes", label: Tr.t("Notes"), type: "text" },
-                    { key: "binds.close", label: Tr.t("Close window"), type: "text" },
-                    { key: "binds.widthCycle", label: Tr.t("Column width"), type: "text" },
-                    { key: "binds.maximize", label: Tr.t("Maximize column"), type: "text" },
-                    { key: "binds.fullscreen", label: Tr.t("Fullscreen"), type: "text" },
-                    { key: "binds.screenshot", label: Tr.t("Screenshot"), type: "text" },
-                    { key: "binds.record", label: Tr.t("Record screen"), type: "text" },
-                    { key: "binds.ocr", label: Tr.t("Copy text from screen"), type: "text" },
-                    { key: "binds.translate", label: Tr.t("Translate from screen"), type: "text" },
-                    { key: "binds.widgets", label: Tr.t("Edit widgets"), type: "text" }
-                ]
-            },
-            {
-                title: Tr.t("Monitors"),
-                icon: "monitor",
-                items: win.monitorItems
-            },
-            {
-                title: Tr.t("AI"),
-                icon: "sparkle",
-                aiKey: true,
-                items: [
-                    { key: "ai.backend", label: Tr.t("Connection"), type: "choice", options: ["auto", "claude-code", "api"], names: [Tr.t("Automatic"), Tr.t("Claude Code subscription"), Tr.t("API key")], fallback: "auto" },
-                    { key: "ai.model", label: Tr.t("Model"), type: "text" },
-                    { key: "ai.effort", label: Tr.t("Effort"), hint: Tr.t("Higher is slower and costs more"), type: "choice", options: ["low", "medium", "high", "xhigh"], names: [Tr.t("Low"), Tr.t("Medium"), Tr.t("High"), Tr.t("Very high")] },
-                    { key: "ai.system", label: Tr.t("Custom instructions"), hint: Tr.t("Empty means default"), type: "text", fallback: "" }
+                group: 0,
+                sections: [
+                    {
+                        title: Tr.t("Look"),
+                        items: [
+                            { key: "appearance.panelOpacity", label: Tr.t("Panel opacity"), hint: Tr.t("Lower is more see-through"), type: "slider", min: 0.15, max: 1, step: 0.05, unit: "percent" },
+                            { key: "panel.position", label: Tr.t("Position"), type: "choice", options: ["top", "bottom"], names: [Tr.t("Top"), Tr.t("Bottom")] }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Clock"),
+                        items: [
+                            { key: "panel.clock24", label: Tr.t("24-hour clock"), type: "toggle" },
+                            { key: "panel.clockSeconds", label: Tr.t("Seconds"), type: "toggle" },
+                            { key: "panel.clockDate", label: Tr.t("Date"), type: "toggle" }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Shown on the panel"),
+                        items: [
+                            { key: "panel.ribbon", label: Tr.t("Workspace numbers"), type: "toggle" },
+                            { key: "panel.hideEmpty", label: Tr.t("Hide empty workspaces"), type: "toggle" },
+                            { key: "panel.tray", label: Tr.t("Tray"), type: "toggle" },
+                            { key: "panel.claude", label: Tr.t("Claude icon"), type: "toggle" },
+                            { key: "panel.lang", label: Tr.t("Keyboard layout"), type: "toggle" },
+                            { key: "panel.wifi", label: Tr.t("Wi-Fi icon"), type: "toggle" },
+                            { key: "panel.volume", label: Tr.t("Volume"), type: "toggle" },
+                            { key: "panel.battery", label: Tr.t("Battery"), type: "toggle" }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Notifications"),
+                        items: [
+                            { key: "notifications.seconds", label: Tr.t("Notification duration"), type: "slider", min: 1, max: 15, step: 0.5, unit: "sec" },
+                            { key: "notifications.history", label: Tr.t("Notifications kept in history"), type: "slider", min: 5, max: 100, step: 5 }
+                        ]
+                    }
                 ]
             },
             {
                 title: Tr.t("Widgets"),
+                subtitle: Tr.t("Clock, weather and notes on the desktop"),
+                icon: "widgets",
+                group: 0,
+                sections: [
+                    {
+                        title: Tr.t("Desktop"),
+                        items: [
+                            { key: "widgets.enabled", label: Tr.t("Widgets on the desktop"), type: "toggle" },
+                            { key: "widgets.firstOnly", label: Tr.t("Only on the first workspace"), type: "toggle" },
+                            { key: "widgets.opacity", label: Tr.t("Widget opacity"), hint: Tr.t("Lower is more see-through"), type: "slider", min: 0.1, max: 1, step: 0.05, unit: "percent" },
+                            { label: Tr.t("Move, add and remove widgets"), hint: Tr.t("Right click the desktop or press the shortcut"), type: "action", text: Tr.t("Edit widgets"), run: () => { Ui.settingsOpen = false; Widgets.editMode = true; } }
+                        ]
+                    }
+                ]
+            },
+            {
+                title: Tr.t("Windows"),
+                subtitle: Tr.t("Layout, decoration and animations"),
                 icon: "windows",
-                items: [
-                    { key: "widgets.enabled", label: Tr.t("Widgets on the desktop"), type: "toggle" },
-                    { key: "widgets.firstOnly", label: Tr.t("Only on the first workspace"), type: "toggle" },
-                    { key: "widgets.opacity", label: Tr.t("Widget opacity"), hint: Tr.t("Lower is more see-through"), type: "slider", min: 0.1, max: 1, step: 0.05 },
-                    { label: Tr.t("Move, add and remove widgets"), hint: Tr.t("Right click the desktop or press the shortcut"), type: "action", text: Tr.t("Edit widgets"), run: () => { Ui.settingsOpen = false; Widgets.editMode = true; } }
+                group: 1,
+                sections: [
+                    {
+                        title: Tr.t("Layout"),
+                        items: [
+                            { key: "windows.gaps", label: Tr.t("Gaps between windows"), type: "slider", min: 0, max: 40, step: 1, unit: "px" },
+                            { key: "windows.edgeMargin", label: Tr.t("Margin from screen edges"), type: "slider", min: 0, max: 80, step: 2, unit: "px" },
+                            { key: "windows.defaultWidth", label: Tr.t("New window width"), type: "choice", options: [0.33333, 0.5, 0.66667, 1], names: ["1/3", "1/2", "2/3", Tr.t("Full")] },
+                            { key: "windows.centerFocused", label: Tr.t("Center focused column"), type: "choice", options: ["never", "on-overflow", "always"], names: [Tr.t("Never"), Tr.t("If it doesn't fit"), Tr.t("Always")] },
+                            { key: "windows.centerSingle", label: Tr.t("Center a single window"), type: "toggle" },
+                            { key: "windows.tabbedByDefault", label: Tr.t("Columns as tabs"), type: "toggle" }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Decoration"),
+                        items: [
+                            { key: "windows.radius", label: Tr.t("Corner radius"), type: "slider", min: 0, max: 32, step: 1, unit: "px" },
+                            { key: "windows.focusRing", label: Tr.t("Focus ring width"), type: "slider", min: 0, max: 8, step: 1, unit: "px" },
+                            { key: "windows.inactiveOpacity", label: Tr.t("Inactive window opacity"), type: "slider", min: 0.4, max: 1, step: 0.02, unit: "percent" },
+                            { key: "windows.shadow", label: Tr.t("Shadow"), type: "toggle" },
+                            { key: "windows.shadowSoftness", label: Tr.t("Shadow softness"), type: "slider", min: 0, max: 80, step: 2, unit: "px" },
+                            { key: "windows.blur", label: Tr.t("Blur"), type: "toggle" },
+                            { key: "windows.blurStrength", label: Tr.t("Blur strength"), type: "slider", min: 1, max: 6, step: 1 }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Behavior"),
+                        items: [
+                            { key: "windows.focusFollowsMouse", label: Tr.t("Focus follows cursor"), type: "toggle" },
+                            { key: "windows.warpMouse", label: Tr.t("Cursor follows focus"), type: "toggle" },
+                            { key: "windows.autoBackForth", label: Tr.t("Same number again goes to previous workspace"), type: "toggle" }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Animations"),
+                        items: [
+                            { key: "windows.animations", label: Tr.t("Animations"), type: "toggle" },
+                            { key: "windows.animationSpeed", label: Tr.t("Animation speed"), type: "slider", min: 0.3, max: 3, step: 0.1, unit: "scale" },
+                            { key: "windows.overviewZoom", label: Tr.t("Overview zoom"), type: "slider", min: 0.25, max: 0.75, step: 0.01, unit: "percent" }
+                        ]
+                    }
+                ]
+            },
+            {
+                title: Tr.t("Window rules"),
+                subtitle: Tr.t("How chosen apps open"),
+                icon: "rules",
+                group: 1,
+                rules: true,
+                sections: []
+            },
+            {
+                title: Tr.t("Monitors"),
+                subtitle: Tr.t("Scale, rotation and position"),
+                icon: "monitor",
+                group: 1,
+                sections: win.monitorSections
+            },
+            {
+                title: Tr.t("Keyboard"),
+                subtitle: Tr.t("Layouts and key repeat"),
+                icon: "keyboard",
+                group: 2,
+                sections: [
+                    {
+                        title: Tr.t("Layouts"),
+                        items: [
+                            { key: "keyboard.layouts", label: Tr.t("Layouts"), hint: Tr.t("Example: us,ru"), type: "text" },
+                            { key: "keyboard.options", label: Tr.t("XKB options"), type: "text", width: 340 },
+                            { key: "keyboard.perWindow", label: Tr.t("Remember layout per window"), type: "toggle" }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Typing"),
+                        items: [
+                            { key: "keyboard.repeatDelay", label: Tr.t("Repeat delay"), type: "slider", min: 150, max: 800, step: 10, unit: "ms" },
+                            { key: "keyboard.repeatRate", label: Tr.t("Repeat rate"), type: "slider", min: 10, max: 80, step: 1 },
+                            { key: "keyboard.numlock", label: Tr.t("NumLock on"), type: "toggle" }
+                        ]
+                    }
+                ]
+            },
+            {
+                title: Tr.t("Mouse and touchpad"),
+                subtitle: Tr.t("Speed, scrolling and clicks"),
+                icon: "mouse",
+                group: 2,
+                sections: [
+                    {
+                        title: Tr.t("Touchpad"),
+                        items: [
+                            { key: "pointer.tap", label: Tr.t("Tap to click"), type: "toggle" },
+                            { key: "pointer.naturalScroll", label: Tr.t("Natural scrolling"), type: "toggle" },
+                            { key: "pointer.disableWhileTyping", label: Tr.t("Disable while typing"), type: "toggle" },
+                            { key: "pointer.clickMethod", label: Tr.t("Right click"), type: "choice", options: ["button-areas", "clickfinger"], names: [Tr.t("Bottom right corner"), Tr.t("Two fingers")] },
+                            { key: "pointer.touchpadSpeed", label: Tr.t("Touchpad speed"), type: "slider", min: -1, max: 1, step: 0.05 },
+                            { key: "pointer.scrollFactor", label: Tr.t("Scroll speed"), type: "slider", min: 0.2, max: 3, step: 0.1, unit: "scale" }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Mouse"),
+                        items: [
+                            { key: "pointer.mouseFlat", label: Tr.t("No mouse acceleration"), type: "toggle" },
+                            { key: "pointer.mouseNaturalScroll", label: Tr.t("Natural scrolling"), type: "toggle" },
+                            { key: "pointer.mouseSpeed", label: Tr.t("Mouse speed"), type: "slider", min: -1, max: 1, step: 0.05 }
+                        ]
+                    }
+                ]
+            },
+            {
+                title: Tr.t("Shortcuts"),
+                subtitle: Tr.t("Example: Mod+Shift+T. Mod is the Super key"),
+                icon: "shortcut",
+                group: 2,
+                sections: [
+                    {
+                        title: Tr.t("Panels and menus"),
+                        items: [
+                            win.bind("apps", Tr.t("Apps")),
+                            win.bind("launcher", Tr.t("Search")),
+                            win.bind("clipboard", Tr.t("Clipboard history")),
+                            win.bind("dashboard", Tr.t("Dashboard")),
+                            win.bind("control", Tr.t("Control center")),
+                            win.bind("wallpapers", Tr.t("Wallpaper and color")),
+                            win.bind("settings", Tr.t("Settings")),
+                            win.bind("widgets", Tr.t("Edit widgets"))
+                        ]
+                    },
+                    {
+                        title: Tr.t("Apps"),
+                        items: [
+                            win.bind("terminal", Tr.t("Terminal")),
+                            win.bind("scratch", Tr.t("Scratchpad terminal")),
+                            win.bind("browser", Tr.t("Browser")),
+                            win.bind("files", Tr.t("Files")),
+                            win.bind("notes", Tr.t("Notes"))
+                        ]
+                    },
+                    {
+                        title: Tr.t("Windows"),
+                        items: [
+                            win.bind("close", Tr.t("Close window")),
+                            win.bind("widthCycle", Tr.t("Column width")),
+                            win.bind("maximize", Tr.t("Maximize column")),
+                            win.bind("fullscreen", Tr.t("Fullscreen")),
+                            win.bind("sticky", Tr.t("Sticky window")),
+                            win.bind("overview", Tr.t("Overview")),
+                            win.bind("zen", Tr.t("Focus mode"))
+                        ]
+                    },
+                    {
+                        title: Tr.t("Screen"),
+                        items: [
+                            win.bind("lock", Tr.t("Lock screen")),
+                            win.bind("screenshot", Tr.t("Screenshot")),
+                            win.bind("record", Tr.t("Record screen")),
+                            win.bind("ocr", Tr.t("Copy text from screen")),
+                            win.bind("translate", Tr.t("Translate from screen"))
+                        ]
+                    }
+                ]
+            },
+            {
+                title: Tr.t("Terminal"),
+                subtitle: Tr.t("Kitty look. Some changes apply to new windows"),
+                icon: "terminal",
+                group: 3,
+                sections: [
+                    {
+                        title: Tr.t("Look"),
+                        items: [
+                            { key: "appearance.monoFont", label: Tr.t("Terminal font"), type: "text" },
+                            { key: "appearance.terminalFontSize", label: Tr.t("Terminal font size"), type: "slider", min: 8, max: 20, step: 1, unit: "px" },
+                            { key: "appearance.terminalOpacity", label: Tr.t("Terminal opacity"), type: "slider", min: 0.3, max: 1, step: 0.02, unit: "percent" },
+                            { key: "terminal.lineHeight", label: Tr.t("Line height"), type: "slider", min: 100, max: 160, step: 5, unit: "lineHeight" },
+                            { key: "terminal.padding", label: Tr.t("Padding"), type: "slider", min: 0, max: 40, step: 2, unit: "px" }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Cursor"),
+                        items: [
+                            { key: "terminal.cursorShape", label: Tr.t("Cursor shape"), type: "choice", options: ["block", "beam", "underline"], names: [Tr.t("Block"), Tr.t("Beam"), Tr.t("Underline")] },
+                            { key: "terminal.cursorBlink", label: Tr.t("Blinking cursor"), type: "toggle" }
+                        ]
+                    },
+                    {
+                        title: Tr.t("History"),
+                        items: [
+                            { key: "terminal.scrollback", label: Tr.t("Scrollback lines"), type: "slider", min: 1000, max: 50000, step: 1000, unit: "lines" }
+                        ]
+                    }
+                ]
+            },
+            {
+                title: Tr.t("AI"),
+                subtitle: Tr.t("Dashboard chat"),
+                icon: "sparkle",
+                group: 3,
+                sections: [
+                    {
+                        title: Tr.t("Connection"),
+                        items: [
+                            { key: "ai.backend", label: Tr.t("Connection"), type: "choice", options: ["auto", "claude-code", "api"], names: [Tr.t("Automatic"), Tr.t("Claude Code subscription"), Tr.t("API key")], fallback: "auto" },
+                            { label: Tr.t("Anthropic API key"), hint: Tr.t("Only used with an API key"), type: "secret", placeholder: Tr.t("Type and press Enter"), run: value => { Ai.setKey(value); Toasts.show(Tr.t("Key saved"), Tr.t("Other users cannot read it"), "check"); } }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Model"),
+                        items: [
+                            { key: "ai.model", label: Tr.t("Model"), type: "text" },
+                            { key: "ai.effort", label: Tr.t("Effort"), hint: Tr.t("Higher is slower and costs more"), type: "choice", options: ["low", "medium", "high", "xhigh"], names: [Tr.t("Low"), Tr.t("Medium"), Tr.t("High"), Tr.t("Very high")] },
+                            { key: "ai.maxTokens", label: Tr.t("Longest answer, tokens"), hint: Tr.t("Only used with an API key"), type: "slider", min: 1000, max: 64000, step: 1000, unit: "lines" },
+                            { key: "ai.fallbacks", label: Tr.t("Switch model when overloaded"), hint: Tr.t("Only used with an API key"), type: "toggle" },
+                            { key: "ai.system", label: Tr.t("Custom instructions"), hint: Tr.t("Empty means default"), type: "text", fallback: "" }
+                        ]
+                    }
                 ]
             },
             {
                 title: Tr.t("System"),
-                icon: "system",
-                items: [
-                    { key: "session.restore", label: Tr.t("Restore windows at login"), type: "toggle" },
-                    { key: "schedule.mode", label: Tr.t("Switch light and dark by time"), type: "toggle" },
-                    { key: "schedule.lightFrom", label: Tr.t("Light mode starts"), type: "text" },
-                    { key: "schedule.darkFrom", label: Tr.t("Dark mode starts"), type: "text" },
-                    { key: "nightlight.auto", label: Tr.t("Night light schedule"), type: "toggle" },
-                    { key: "nightlight.from", label: Tr.t("Night light starts"), type: "text" },
-                    { key: "nightlight.to", label: Tr.t("Night light ends"), type: "text" },
-                    { key: "translate.to", label: Tr.t("Translate to"), hint: Tr.t("ru, en, de. Empty means the interface language"), type: "text", fallback: "" },
-                    { key: "idle.lock", label: Tr.t("Lock after, seconds (0 is off)"), type: "slider", min: 0, max: 3600, step: 60 },
-                    { key: "idle.screenOff", label: Tr.t("Screen off after, seconds"), type: "slider", min: 0, max: 3600, step: 60 },
-                    { key: "idle.suspend", label: Tr.t("Sleep after, seconds"), type: "slider", min: 0, max: 7200, step: 60 },
-                    { key: "nightlight.temperature", label: Tr.t("Night light temperature"), type: "slider", min: 2500, max: 6000, step: 100 },
-                    { key: "weather.enabled", label: Tr.t("Weather"), type: "toggle" },
-                    { key: "weather.lat", label: Tr.t("Latitude"), type: "number" },
-                    { key: "weather.lon", label: Tr.t("Longitude"), type: "number" },
-                    { key: "wallpaperDir", label: Tr.t("Wallpaper folder"), type: "text" }
+                subtitle: Tr.t("Power, schedules, weather and reset"),
+                icon: "chip",
+                group: 3,
+                sections: [
+                    {
+                        title: Tr.t("Session and power"),
+                        items: [
+                            { key: "session.restore", label: Tr.t("Restore windows at login"), type: "toggle" },
+                            { key: "idle.lock", label: Tr.t("Lock after"), type: "slider", min: 0, max: 3600, step: 60, unit: "time" },
+                            { key: "idle.screenOff", label: Tr.t("Screen off after"), type: "slider", min: 0, max: 3600, step: 60, unit: "time" },
+                            { key: "idle.suspend", label: Tr.t("Sleep after"), type: "slider", min: 0, max: 7200, step: 60, unit: "time" }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Light and dark by time"),
+                        items: [
+                            { key: "schedule.mode", label: Tr.t("Switch light and dark by time"), type: "toggle" },
+                            { key: "schedule.lightFrom", label: Tr.t("Light mode starts"), type: "text", width: 100 },
+                            { key: "schedule.darkFrom", label: Tr.t("Dark mode starts"), type: "text", width: 100 }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Night light"),
+                        items: [
+                            { key: "nightlight.auto", label: Tr.t("Night light schedule"), type: "toggle" },
+                            { key: "nightlight.from", label: Tr.t("Night light starts"), type: "text", width: 100 },
+                            { key: "nightlight.to", label: Tr.t("Night light ends"), type: "text", width: 100 },
+                            { key: "nightlight.temperature", label: Tr.t("Night light temperature"), type: "slider", min: 2500, max: 6000, step: 100, unit: "kelvin" }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Weather"),
+                        items: [
+                            { key: "weather.enabled", label: Tr.t("Weather"), type: "toggle" },
+                            { key: "weather.unit", label: Tr.t("Temperature"), type: "choice", options: ["celsius", "fahrenheit"], names: ["°C", "°F"] },
+                            { key: "weather.lat", label: Tr.t("Latitude"), type: "number", width: 120 },
+                            { key: "weather.lon", label: Tr.t("Longitude"), type: "number", width: 120 }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Translation"),
+                        items: [
+                            { key: "translate.to", label: Tr.t("Translate to"), hint: Tr.t("ru, en, de. Empty means the interface language"), type: "text", width: 120, fallback: "" }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Reset"),
+                        items: [
+                            { label: Tr.t("Restore default values"), hint: Tr.t("Location and wallpaper folder are kept"), type: "action", danger: true, text: Tr.t("Reset to defaults"), confirm: Tr.t("Press to confirm"), run: () => { Settings.resetAll(); Toasts.show(Tr.t("Settings reset"), Tr.t("Location was kept"), "check"); } }
+                        ]
+                    }
                 ]
             }
         ]
@@ -213,16 +452,24 @@ LazyLoader {
         readonly property var shown: {
             const q = filter.trim().toLowerCase();
             if (q === "")
-                return pages[page].items;
+                return pages[page].sections;
             let found = [];
-            for (const p of pages)
-                found = found.concat(p.items.filter(i => i.label.toLowerCase().indexOf(q) >= 0 || i.key.toLowerCase().indexOf(q) >= 0));
+            for (const p of pages) {
+                let items = [];
+                for (const s of p.sections)
+                    items = items.concat(s.items.filter(i => (i.label + " " + (i.hint || "") + " " + (i.text || "") + " " + (i.key || "")).toLowerCase().indexOf(q) >= 0));
+                if (items.length > 0)
+                    found.push({ title: p.title, items: items });
+            }
             return found;
         }
 
+        readonly property int tabHeight: 36
+        readonly property int groupHeight: 28
+
         title: "niri-desk settings"
-        implicitWidth: 860
-        implicitHeight: 640
+        implicitWidth: 1000
+        implicitHeight: 720
         color: Theme.pill
         visible: true
         onVisibleChanged: {
@@ -230,10 +477,10 @@ LazyLoader {
                 Ui.settingsOpen = false;
         }
 
-        // Tepadan tushadigan yengil rang, panel bilan bir xil.
+        // A soft wash of the theme color from the top.
         Rectangle {
             width: parent.width
-            height: 180
+            height: 220
             gradient: Gradient {
                 GradientStop {
                     position: 0
@@ -246,7 +493,7 @@ LazyLoader {
             }
         }
 
-        Row {
+        Item {
             id: body
 
             anchors.fill: parent
@@ -270,202 +517,266 @@ LazyLoader {
                 }
             }
 
-            // Bo'limlar
-            Column {
-                width: 190
-                height: parent.height
-                topPadding: 18
-                leftPadding: 10
-                spacing: 2
+            // Sidebar
+            Rectangle {
+                id: sidebar
 
-                Label {
-                    leftPadding: 12
-                    bottomPadding: 12
-                    text: Tr.t("Settings")
-                    size: 19
-                    font.weight: Font.Medium
+                width: 248
+                height: parent.height
+                color: Qt.alpha(Theme.text, 0.03)
+
+                Rectangle {
+                    anchors.right: parent.right
+                    width: 1
+                    height: parent.height
+                    color: Qt.alpha(Theme.text, 0.07)
                 }
 
-                Item {
-                    width: 170
-                    height: win.pages.length * 38 - 2
+                Row {
+                    id: brand
 
-                    // Tanlov belgisi bo'limlar orasida sirpanadi.
+                    x: 20
+                    y: 20
+                    spacing: 11
+
                     Rectangle {
-                        y: win.page * 38
-                        width: 170
-                        height: 36
+                        width: 34
+                        height: 34
                         radius: 11
-                        color: Theme.accent
-                        opacity: win.filter === "" ? 1 : 0
+                        color: Qt.alpha(Theme.accent, 0.2)
 
-                        Behavior on y {
-                            NumberAnimation {
-                                duration: 420
-                                easing.type: Easing.BezierSpline
-                                easing.bezierCurve: [0.3, 1.35, 0.4, 1, 1, 1]
-                            }
-                        }
-                        Behavior on opacity {
-                            NumberAnimation {
-                                duration: 160
-                            }
+                        Icon {
+                            anchors.centerIn: parent
+                            name: "settings"
+                            size: 19
+                            color: Theme.accent
                         }
                     }
+                    Label {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Tr.t("Settings")
+                        size: 18
+                        font.weight: Font.DemiBold
+                    }
+                }
 
-                    Column {
-                        spacing: 2
+                // Search
+                Rectangle {
+                    id: searchBox
 
-                        Repeater {
-                            model: win.pages
+                    x: 14
+                    y: 66
+                    width: parent.width - 28
+                    height: 36
+                    radius: 11
+                    color: Qt.alpha(Theme.text, search.activeFocus ? 0.1 : 0.07)
 
-                            delegate: Rectangle {
-                                id: tab
+                    Icon {
+                        x: 11
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "search"
+                        size: 15
+                        color: Theme.muted
+                    }
+                    TextInput {
+                        id: search
 
-                                required property var modelData
-                                required property int index
+                        anchors.fill: parent
+                        leftPadding: 34
+                        rightPadding: 10
+                        verticalAlignment: TextInput.AlignVCenter
+                        color: Theme.text
+                        font.family: Theme.sans
+                        font.pixelSize: 13
+                        clip: true
+                        focus: true
+                        onTextChanged: win.filter = text
+                        Keys.onEscapePressed: Ui.settingsOpen = false
+                    }
+                    Label {
+                        x: 34
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: search.text === ""
+                        text: Tr.t("Search settings…")
+                        color: Qt.alpha(Theme.text, 0.4)
+                        size: 13
+                    }
+                }
 
-                                readonly property bool current: win.page === index && win.filter === ""
+                // Pages, in groups
+                Flickable {
+                    x: 14
+                    y: 108
+                    width: parent.width - 28
+                    height: parent.height - y - 8
+                    contentHeight: tabs.height + 8
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
 
-                                width: 170
-                                height: 36
-                                radius: 11
-                                color: !current && tabArea.containsMouse ? Qt.alpha(Theme.text, 0.08) : "transparent"
+                    Item {
+                        id: tabs
 
-                                Behavior on color {
-                                    ColorAnimation {
-                                        duration: 130
-                                    }
+                        width: parent.width
+                        height: win.pages.length * win.tabHeight + win.groups.length * win.groupHeight
+
+                        // The highlight slides between pages.
+                        Rectangle {
+                            y: win.page * win.tabHeight + (win.pages[win.page].group + 1) * win.groupHeight
+                            width: parent.width
+                            height: win.tabHeight - 2
+                            radius: 11
+                            color: Theme.accent
+                            opacity: win.filter === "" ? 1 : 0
+
+                            Behavior on y {
+                                NumberAnimation {
+                                    duration: 420
+                                    easing.type: Easing.BezierSpline
+                                    easing.bezierCurve: [0.3, 1.25, 0.4, 1, 1, 1]
                                 }
+                            }
+                            Behavior on opacity {
+                                NumberAnimation {
+                                    duration: 160
+                                }
+                            }
+                        }
 
-                                Row {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    x: 12
-                                    spacing: 10
-                                    scale: tabArea.pressed ? 0.96 : 1
+                        Column {
+                            width: parent.width
 
-                                    Behavior on scale {
-                                        NumberAnimation {
-                                            duration: 110
+                            Repeater {
+                                model: win.pages
+
+                                delegate: Column {
+                                    id: tab
+
+                                    required property var modelData
+                                    required property int index
+
+                                    readonly property bool current: win.page === index && win.filter === ""
+                                    readonly property bool opensGroup: index === 0 || win.pages[index - 1].group !== modelData.group
+
+                                    width: parent.width
+
+                                    Item {
+                                        visible: tab.opensGroup
+                                        width: parent.width
+                                        height: win.groupHeight
+
+                                        Label {
+                                            x: 12
+                                            anchors.bottom: parent.bottom
+                                            anchors.bottomMargin: 7
+                                            text: win.groups[tab.modelData.group]
+                                            color: Theme.muted
+                                            size: 11
+                                            font.weight: Font.Medium
                                         }
                                     }
 
-                                    Icon {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        name: tab.modelData.icon
-                                        size: 15
-                                        color: tab.current ? Theme.accentText : Theme.text
-                                    }
-                                    Label {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: tab.modelData.title
-                                        size: 13
-                                        color: tab.current ? Theme.accentText : Theme.text
-                                        font.weight: tab.current ? Font.DemiBold : Font.Normal
-                                    }
-                                }
-                                MouseArea {
-                                    id: tabArea
+                                    Rectangle {
+                                        width: parent.width
+                                        height: win.tabHeight - 2
+                                        radius: 11
+                                        color: !tab.current && tabArea.containsMouse ? Qt.alpha(Theme.text, 0.07) : "transparent"
 
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        win.filter = "";
-                                        search.text = "";
-                                        win.page = tab.index;
+                                        Behavior on color {
+                                            ColorAnimation {
+                                                duration: 130
+                                            }
+                                        }
+
+                                        Row {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            x: 12
+                                            spacing: 11
+                                            scale: tabArea.pressed ? 0.97 : 1
+
+                                            Behavior on scale {
+                                                NumberAnimation {
+                                                    duration: 110
+                                                }
+                                            }
+
+                                            Icon {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                name: tab.modelData.icon
+                                                size: 16
+                                                color: tab.current ? Theme.accentText : Theme.text
+                                            }
+                                            Label {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: tab.modelData.title
+                                                size: 13
+                                                color: tab.current ? Theme.accentText : Theme.text
+                                                font.weight: tab.current ? Font.DemiBold : Font.Normal
+                                            }
+                                        }
+                                        MouseArea {
+                                            id: tabArea
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                win.filter = "";
+                                                search.text = "";
+                                                Ui.settingsPage = tab.index;
+                                            }
+                                        }
+                                    }
+
+                                    Item {
+                                        width: 1
+                                        height: 2
                                     }
                                 }
                             }
                         }
-                    }
-                }
-
-                Item {
-                    width: 1
-                    height: 14
-                }
-
-                Rectangle {
-                    id: resetButton
-
-                    property bool armed: false
-
-                    width: 170
-                    height: 36
-                    radius: 9
-                    color: armed ? Theme.error : Qt.alpha(Theme.text, resetArea.containsMouse ? 0.13 : 0.06)
-
-                    Label {
-                        anchors.centerIn: parent
-                        text: resetButton.armed ? Tr.t("Press to confirm") : Tr.t("Reset to defaults")
-                        color: resetButton.armed ? Theme.pill : Theme.text
-                        size: 13
-                    }
-                    MouseArea {
-                        id: resetArea
-
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (resetButton.armed) {
-                                resetButton.armed = false;
-                                Settings.resetAll();
-                                Toasts.show(Tr.t("Settings reset"), Tr.t("Location was kept"), "check");
-                            } else {
-                                resetButton.armed = true;
-                                disarm.restart();
-                            }
-                        }
-                    }
-                    Timer {
-                        id: disarm
-
-                        interval: 4000
-                        onTriggered: resetButton.armed = false
                     }
                 }
             }
 
-            // Tarkib
-            Column {
-                width: parent.width - 190
+            // Content
+            Item {
+                x: sidebar.width
+                width: parent.width - sidebar.width
                 height: parent.height
 
-                Item {
-                    width: parent.width
-                    height: 62
+                Row {
+                    id: pageHeader
+
+                    x: 28
+                    y: 22
+                    spacing: 14
 
                     Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: 14
-                        anchors.bottomMargin: 10
-                        radius: 9
-                        color: Qt.alpha(Theme.text, 0.07)
+                        width: 46
+                        height: 46
+                        radius: 15
+                        color: Qt.alpha(Theme.accent, 0.18)
 
-                        TextInput {
-                            id: search
+                        Icon {
+                            anchors.centerIn: parent
+                            name: win.filter === "" ? win.pages[win.page].icon : "search"
+                            size: 23
+                            color: Theme.accent
+                        }
+                    }
+                    Column {
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 1
 
-                            anchors.fill: parent
-                            leftPadding: 12
-                            rightPadding: 12
-                            verticalAlignment: TextInput.AlignVCenter
-                            color: Theme.text
-                            font.family: Theme.sans
-                            font.pixelSize: 14
-                            clip: true
-                            onTextChanged: win.filter = text
-                            Keys.onEscapePressed: Ui.settingsOpen = false
-
-                            Label {
-                                anchors.fill: parent
-                                leftPadding: 12
-                                verticalAlignment: Text.AlignVCenter
-                                visible: search.text === ""
-                                text: Tr.t("Search settings…")
-                                color: Qt.alpha(Theme.text, 0.4)
-                            }
+                        Label {
+                            text: win.filter === "" ? win.pages[win.page].title : Tr.t("Search results")
+                            size: 22
+                            font.weight: Font.DemiBold
+                        }
+                        Label {
+                            text: win.filter === "" ? win.pages[win.page].subtitle : win.filter
+                            color: Theme.muted
+                            size: 13
                         }
                     }
                 }
@@ -473,35 +784,85 @@ LazyLoader {
                 Flickable {
                     id: scroller
 
+                    y: 86
                     width: parent.width
-                    height: parent.height - 62
-                    contentHeight: items.implicitHeight + 24
+                    height: parent.height - y
+                    contentHeight: cards.implicitHeight + 28
                     clip: true
                     boundsBehavior: Flickable.StopAtBounds
 
                     Column {
-                        id: items
+                        id: cards
 
-                        x: 14
-                        width: parent.width - 28
-                        spacing: 2
+                        x: 28
+                        width: scroller.width - 56
+                        spacing: 16
 
                         Repeater {
                             model: win.shown
 
-                            // Bo'lim almashganda qatorlar navbat bilan chiqadi, qidiruvda esa darhol.
+                            // Cards rise one after another when the page changes, at once while searching.
                             delegate: Reveal {
+                                id: section
+
                                 required property var modelData
                                 required property int index
 
-                                width: items.width
-                                height: 46
+                                width: cards.width
                                 animate: win.filter === ""
-                                delay: Math.min(index, 12) * 22
+                                delay: Math.min(index, 5) * 40
 
-                                SettingRow {
+                                Column {
                                     width: parent.width
-                                    item: modelData
+                                    spacing: 7
+
+                                    Label {
+                                        x: 6
+                                        text: section.modelData.title
+                                        color: Theme.muted
+                                        size: 12
+                                        font.weight: Font.Medium
+                                    }
+                                    Rectangle {
+                                        width: parent.width
+                                        height: rows.implicitHeight + 8
+                                        radius: 18
+                                        color: Qt.alpha(Theme.text, 0.045)
+                                        border.width: 1
+                                        border.color: Qt.alpha(Theme.text, 0.06)
+
+                                        Column {
+                                            id: rows
+
+                                            x: 18
+                                            y: 4
+                                            width: parent.width - 36
+
+                                            Repeater {
+                                                model: section.modelData.items
+
+                                                delegate: Column {
+                                                    id: rowHolder
+
+                                                    required property var modelData
+                                                    required property int index
+
+                                                    width: rows.width
+
+                                                    Rectangle {
+                                                        visible: rowHolder.index > 0
+                                                        width: parent.width
+                                                        height: 1
+                                                        color: Qt.alpha(Theme.text, 0.06)
+                                                    }
+                                                    SettingRow {
+                                                        width: parent.width
+                                                        item: rowHolder.modelData
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -512,66 +873,23 @@ LazyLoader {
                             color: Theme.muted
                         }
 
-                        // API kaliti settings.json'ga emas, alohida himoyalangan faylga yoziladi.
-                        Item {
-                            visible: win.filter === "" && !!win.pages[win.page].aiKey
-                            width: items.width
-                            height: 46
-
-                            Column {
-                                anchors.verticalCenter: parent.verticalCenter
-
-                                Label {
-                                    text: Tr.t("Anthropic API key")
-                                }
-                                Label {
-                                    text: Tr.t("Only used with an API key")
-                                    color: Theme.muted
-                                    size: 12
-                                }
-                            }
-                            Rectangle {
-                                anchors.right: parent.right
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: 300
-                                height: 32
-                                radius: 8
-                                color: Qt.alpha(Theme.text, 0.07)
-
-                                TextInput {
-                                    id: keyInput
-
-                                    anchors.fill: parent
-                                    leftPadding: 10
-                                    rightPadding: 10
-                                    verticalAlignment: TextInput.AlignVCenter
-                                    clip: true
-                                    color: Theme.text
-                                    font.family: Theme.mono
-                                    font.pixelSize: 13
-                                    echoMode: TextInput.Password
-                                    onAccepted: {
-                                        Ai.setKey(text);
-                                        text = "";
-                                        Toasts.show(Tr.t("Key saved"), Tr.t("Other users cannot read it"), "check");
-                                    }
-                                }
-                                Label {
-                                    x: 10
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    visible: keyInput.text === ""
-                                    text: Tr.t("Type and press Enter")
-                                    color: Qt.alpha(Theme.text, 0.4)
-                                    size: 13
-                                }
-                            }
-                        }
-
                         RulesEditor {
                             visible: win.filter === "" && !!win.pages[win.page].rules
-                            width: items.width
+                            width: cards.width
                         }
                     }
+                }
+
+                // Thin scrollbar, only while there is more to see.
+                Rectangle {
+                    visible: scroller.contentHeight > scroller.height
+                    anchors.right: parent.right
+                    anchors.rightMargin: 6
+                    y: scroller.y + scroller.visibleArea.yPosition * scroller.height
+                    width: 4
+                    height: scroller.visibleArea.heightRatio * scroller.height
+                    radius: 2
+                    color: Qt.alpha(Theme.text, 0.18)
                 }
             }
         }

@@ -147,7 +147,7 @@ Item {
         Icon {
             anchors.centerIn: parent
             name: "settings"
-            size: 17
+            size: 20
             color: gearArea.containsMouse ? Theme.accent : Theme.text
             rotation: gearArea.containsMouse ? 90 : 0
 

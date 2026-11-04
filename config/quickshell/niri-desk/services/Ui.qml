@@ -15,6 +15,7 @@ Singleton {
     property string popup: ""
     property bool zen: false
     property bool settingsOpen: false
+    property int settingsPage: 0
     property int dashTab: 0
     // "", wifi, bluetooth, sound
     property string controlPage: ""

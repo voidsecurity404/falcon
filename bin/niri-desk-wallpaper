@@ -26,9 +26,25 @@ wait_daemon() {
     return 1
 }
 
+# Prints the wallpaper section of the settings as: type duration
+transition() {
+    python3 - <<'PY' 2>/dev/null || echo "grow 1"
+import json, os
+base = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "niri-desk")
+out = {"transition": "grow", "duration": 1}
+for name in ("defaults.json", "settings.json"):
+    try:
+        out.update(json.load(open(os.path.join(base, name))).get("wallpaper", {}))
+    except (OSError, ValueError):
+        pass
+print(out["transition"], out["duration"])
+PY
+}
+
 show() {
     wait_daemon
-    awww img "$1" --transition-type grow --transition-pos 0.5,1.0 --transition-duration 1 --transition-fps 60
+    read -r kind seconds < <(transition)
+    awww img "$1" --transition-type "$kind" --transition-pos 0.5,1.0 --transition-duration "$seconds" --transition-fps 60
 }
 
 first_image() {
@@ -85,7 +101,7 @@ set_live() {
     ln -sfn "$image" "$link"
     ln -sfn "$video" "$live_link"
     # Avval kadrga o'tish tugasin, video xuddi shu kadrdan boshlanadi.
-    sleep 1
+    sleep "$seconds"
     play "$video"
 }
 
@@ -114,7 +130,7 @@ case "${1:-}" in
             ln -sfn "$image" "$link"
             show "$image"
             [[ -f "$state/colors.json" ]] || colors "$image"
-            sleep 1
+            sleep "$seconds"
             play "$video"
             exit 0
         fi

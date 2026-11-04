@@ -29,7 +29,7 @@ Singleton {
     Process {
         id: fetch
 
-        command: ["curl", "-fsS", "--max-time", "8", "https://api.open-meteo.com/v1/forecast?latitude=" + Settings.weatherLat + "&longitude=" + Settings.weatherLon + "&current=temperature_2m,weather_code&timezone=auto"]
+        command: ["curl", "-fsS", "--max-time", "8", "https://api.open-meteo.com/v1/forecast?latitude=" + Settings.weatherLat + "&longitude=" + Settings.weatherLon + "&current=temperature_2m,weather_code&timezone=auto&temperature_unit=" + Settings.get("weather.unit", "celsius")]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {

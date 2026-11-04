@@ -11,7 +11,16 @@
     "terminalFontSize": 11,
     "cursorTheme": "Adwaita",
     "cursorSize": 24,
-    "language": "auto"
+    "language": "auto",
+    "cursorHideTyping": true,
+    "cursorHideAfter": 0
+  },
+  "terminal": {
+    "cursorShape": "block",
+    "cursorBlink": true,
+    "padding": 14,
+    "lineHeight": 120,
+    "scrollback": 2000
   },
   "windows": {
     "gaps": 14,
@@ -29,7 +38,11 @@
     "autoBackForth": false,
     "animations": true,
     "animationSpeed": 1.0,
-    "rules": []
+    "rules": [],
+    "edgeMargin": 0,
+    "shadowSoftness": 34,
+    "blurStrength": 3,
+    "overviewZoom": 0.46
   },
   "panel": {
     "position": "top",
@@ -41,7 +54,9 @@
     "battery": true,
     "tray": true,
     "clockSeconds": false,
-    "clockDate": false
+    "clockDate": false,
+    "clock24": true,
+    "claude": true
   },
   "keyboard": {
     "layouts": "us,ru",
@@ -58,7 +73,9 @@
     "touchpadSpeed": 0.0,
     "scrollFactor": 0.8,
     "mouseFlat": true,
-    "mouseSpeed": 0.0
+    "mouseSpeed": 0.0,
+    "clickMethod": "button-areas",
+    "mouseNaturalScroll": false
   },
   "idle": {
     "lock": 300,
@@ -78,7 +95,8 @@
   "weather": {
     "enabled": true,
     "lat": 41.31,
-    "lon": 69.28
+    "lon": 69.28,
+    "unit": "celsius"
   },
   "wallpaperDir": "~/Pictures/Wallpapers",
   "binds": {
@@ -132,5 +150,9 @@
     "enabled": true,
     "firstOnly": false,
     "opacity": 0.5
+  },
+  "wallpaper": {
+    "transition": "grow",
+    "duration": 1.0
   }
 }

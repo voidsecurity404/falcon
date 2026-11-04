@@ -75,6 +75,7 @@ Rectangle {
 
         // Claude limiti: faqat ikonka, limitlar bosilganda ochiladi.
         Rectangle {
+            visible: Settings.get("panel.claude", true)
             width: 34
             height: 34
             radius: 9

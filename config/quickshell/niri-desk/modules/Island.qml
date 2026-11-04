@@ -14,7 +14,8 @@ Item {
     readonly property string mode: showDashboard ? "dashboard" : Toasts.current ? "toast" : "idle"
     readonly property bool showSeconds: Settings.get("panel.clockSeconds", false)
     readonly property bool showDate: Settings.get("panel.clockDate", false)
-    readonly property int targetWidth: mode === "dashboard" ? 1160 : mode === "toast" ? 440 : (Ui.recording ? 232 : 186) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0)
+    readonly property bool clock24: Settings.get("panel.clock24", true)
+    readonly property int targetWidth: mode === "dashboard" ? 1160 : mode === "toast" ? 440 : (Ui.recording ? 232 : 186) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0) + (clock24 ? 0 : 26)
     readonly property int cornerRadius: mode === "dashboard" ? 32 : 18
     readonly property int targetHeight: mode === "dashboard" ? 580 : mode === "toast" ? 68 : 44
 
@@ -198,7 +199,8 @@ Item {
             }
             Label {
                 text: {
-                    const time = Ui.pad(clock.hours) + ":" + Ui.pad(clock.minutes) + (root.showSeconds ? ":" + Ui.pad(clock.seconds) : "");
+                    const hours = root.clock24 ? clock.hours : clock.hours % 12 || 12;
+                    const time = Ui.pad(hours) + ":" + Ui.pad(clock.minutes) + (root.showSeconds ? ":" + Ui.pad(clock.seconds) : "") + (root.clock24 ? "" : clock.hours < 12 ? " AM" : " PM");
                     return root.showDate ? Ui.pad(clock.date.getDate()) + "." + Ui.pad(clock.date.getMonth() + 1) + "  " + time : time;
                 }
                 size: 15
