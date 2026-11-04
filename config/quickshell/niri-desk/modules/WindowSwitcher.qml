@@ -5,6 +5,7 @@ import Quickshell.Wayland
 import Quickshell.Widgets
 import qs.components
 import qs.services
+import "../services/tools.js" as Tools
 
 // Alt+Tab: recent windows spread like a hand of cards.
 // niri gives no per-window picture to clients, so a card shows the window as it last looked
@@ -27,6 +28,8 @@ PanelWindow {
     readonly property real unit: (screen ? screen.height : 1080) / 720
     readonly property real cardWidth: 384 * unit
     readonly property real cardHeight: 216 * unit
+    // Cards keep the same curve however many there are.
+    readonly property real spacing: Math.min(170, 320 / Math.max(0.5, (items.length - 1) / 2))
     readonly property string shotDir: Quickshell.env("XDG_RUNTIME_DIR") + "/niri-desk-switcher"
     readonly property bool capturable: phase === "" && Ui.popup === "" && !Ui.menuAlive && !Ui.pickerAlive && !Lock.active && !Lock.preview && !Niri.overview
 
@@ -140,8 +143,6 @@ PanelWindow {
         const target = items[selected];
         if (confirm && target && target.id !== Niri.focusedWindowId)
             Niri.action("focus-window", "--id", String(target.id));
-        if (!confirm)
-            selected = 0;
         if (!wasShown) {
             hide();
             return;
@@ -156,16 +157,54 @@ PanelWindow {
         items = [];
     }
 
+    // The cards move and overlap, so the pointer is judged against the fixed place of the fan.
+    function insideFan(x, y) {
+        const reach = (items.length - 1) / 2 * spacing * unit + cardWidth * 0.62;
+        const outer = (items.length - 1) / 2 * spacing / 128;
+        const top = height / 2 - 10 * unit - cardHeight * 0.61;
+        const bottom = height / 2 + (outer * outer * 12 + 105) * unit + cardHeight * 0.62;
+        return Math.abs(x - width / 2) <= reach && y >= top && y <= bottom;
+    }
+
+    function slotAt(x) {
+        return Tools.fanSlot(x, width / 2, spacing * unit, items.length, selected);
+    }
+
     // A card left under the pointer stays unselected until the pointer has really moved.
-    function pointerMoved(index, point) {
+    function pointerMoved(x, y) {
+        if (phase !== "fan")
+            return;
         if (!pointerStart)
-            pointerStart = point;
-        else if (Math.abs(pointerStart.x - point.x) + Math.abs(pointerStart.y - point.y) > 3)
+            pointerStart = Qt.point(x, y);
+        else if (Math.abs(pointerStart.x - x) + Math.abs(pointerStart.y - y) > 3)
             pointerLive = true;
-        if (pointerLive && selected !== index) {
-            selected = index;
-            autoConfirm.restart();
+        if (!pointerLive)
+            return;
+        autoConfirm.restart();
+        if (insideFan(x, y))
+            selected = slotAt(x);
+    }
+
+    function pointerClicked(x, y) {
+        if (phase !== "fan")
+            return;
+        const inside = insideFan(x, y);
+        if (inside)
+            selected = slotAt(x);
+        finish(inside);
+    }
+
+    function dropCard(id) {
+        const index = items.findIndex(w => w.id === id);
+        if (index < 0 || (phase !== "wait" && phase !== "fan"))
+            return;
+        if (items.length <= 2) {
+            finish(false);
+            return;
         }
+        const nextSelected = index < selected ? selected - 1 : Math.min(selected, items.length - 2);
+        items = items.filter(w => w.id !== id);
+        selected = nextSelected;
     }
 
     function report() {
@@ -193,14 +232,8 @@ PanelWindow {
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: "niri-desk-switcher"
     WlrLayershell.keyboardFocus: phase === "wait" || phase === "fan" ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
-    mask: phase === "leave" ? noInput : allInput
-
-    Region {
-        id: noInput
-    }
-    Region {
-        id: allInput
-
+    // Input stays here until the end, or a moving pointer would focus the window under it.
+    mask: Region {
         item: keys
     }
 
@@ -224,6 +257,7 @@ PanelWindow {
             const next = Object.assign({}, root.stamps);
             delete next[id];
             root.stamps = next;
+            root.dropCard(id);
         }
     }
 
@@ -313,11 +347,6 @@ PanelWindow {
                     easing.type: Easing.OutCubic
                 }
             }
-
-            MouseArea {
-                anchors.fill: parent
-                onClicked: root.finish(false)
-            }
         }
 
         Repeater {
@@ -331,9 +360,7 @@ PanelWindow {
 
                 readonly property int count: root.items.length
                 readonly property bool on: index === root.selected
-                // Cards keep the same curve however many there are.
-                readonly property real spacing: Math.min(170, 320 / Math.max(0.5, (count - 1) / 2))
-                readonly property real spread: (index - (count - 1) / 2) * spacing / 128
+                readonly property real spread: (index - (count - 1) / 2) * root.spacing / 128
                 readonly property real unit: root.unit
                 property bool entered: false
                 readonly property int stage: root.phase === "leave" ? 2 : (root.phase === "fan" && entered ? 1 : 0)
@@ -476,16 +503,15 @@ PanelWindow {
                 }
                 readonly property var entry: DesktopEntries.heuristicLookup(modelData.app_id || "")
 
-                MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onPositionChanged: mouse => root.pointerMoved(card.index, mapToItem(keys, mouse.x, mouse.y))
-                    onClicked: {
-                        root.selected = card.index;
-                        root.finish(true);
-                    }
-                }
             }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            z: 200
+            hoverEnabled: true
+            onPositionChanged: mouse => root.pointerMoved(mouse.x, mouse.y)
+            onClicked: mouse => root.pointerClicked(mouse.x, mouse.y)
         }
     }
 }

@@ -99,3 +99,12 @@ function scoreOne(name, q, extra) {
     }
     return 100 - at;
 }
+
+// Which card of a fan a pointer means. Slots are fixed, so the moving cards cannot change the
+// answer under a still pointer, and the current card keeps a margin past the middle between two.
+function fanSlot(x, center, spacing, count, current) {
+    const offset = (x - center) / spacing + (count - 1) / 2;
+    if (current >= 0 && current < count && Math.abs(offset - current) < 0.64)
+        return current;
+    return Math.max(0, Math.min(count - 1, Math.round(offset)));
+}
