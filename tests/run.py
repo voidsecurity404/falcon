@@ -1583,6 +1583,28 @@ def _():
     ok(len(st()["history"]) == 5, st()["history"])
 
 
+@case("Xabarni sichqoncha bilan surib yo'qotsa bo'ladi")
+def _():
+    notify("Surish")
+    ipc("dashboardTab", "0")
+    wait(lambda: st()["popup"] == "dashboard")
+    drag(1040, 145, 1070, 145)
+    time.sleep(0.5)
+    ok("Surish" in st()["history"], st()["history"])
+    drag(1040, 145, 1180, 145)
+    wait(lambda: "Surish" not in st()["history"], 2)
+
+
+@case("Tozalash hammasini animatsiya bilan yo'qotadi")
+def _():
+    notify("Bir"); notify("Ikki")
+    ipc("dashboardTab", "0")
+    wait(lambda: st()["popup"] == "dashboard")
+    click(1105, 93)
+    ok(len(st()["history"]) >= 2, st()["history"])
+    wait(lambda: st()["history"] == [], 2)
+
+
 @case("Xabar vaqtini sozlash ishlaydi")
 def _():
     settings(notifications__seconds=1.0)

@@ -13,8 +13,9 @@ Singleton {
     property var queue: []
     property bool doNotDisturb: false
 
-    // Oxirgi xabarlar: {title, sub, app, time}
+    // Oxirgi xabarlar: {id, title, sub, app, time}
     property var history: []
+    property int nextHistoryId: 1
     property int unread: 0
     // The history is on the Today tab of the dashboard.
     readonly property bool historySeen: Ui.popup === "dashboard" && Ui.dashTab === 0
@@ -118,6 +119,7 @@ Singleton {
     function remember(title, sub, app) {
         history = [
             {
+                id: nextHistoryId++,
                 title: title,
                 sub: sub,
                 app: app,
@@ -128,9 +130,10 @@ Singleton {
             unread += 1;
     }
 
-    function clearHistory() {
-        history = [];
-        unread = 0;
+    function forget(ids) {
+        history = history.filter(h => !ids.includes(h.id));
+        if (history.length === 0)
+            unread = 0;
     }
 
     Timer {
