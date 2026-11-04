@@ -143,7 +143,8 @@ ShellRoot {
         }
         function controlPage(name: string): void {
             Ui.popup = "control";
-            Ui.controlPage = name;
+            // An unknown name would show an empty panel, so it opens the main page.
+            Ui.controlPage = ["wifi", "bluetooth", "sound"].includes(name) ? name : "";
         }
         function dashboardTab(index: int): void {
             Ui.dashTab = Math.max(0, Math.min(2, index));
