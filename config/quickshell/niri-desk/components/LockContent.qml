@@ -64,7 +64,9 @@ Item {
     Image {
         id: wallpaper
 
+        // Larger than the screen, so the blur does not darken the edges.
         anchors.fill: parent
+        anchors.margins: -60
         source: "file://" + Quickshell.env("HOME") + "/.local/state/niri-desk/wallpaper"
         sourceSize: Qt.size(960, 540)
         fillMode: Image.PreserveAspectCrop
@@ -72,7 +74,7 @@ Item {
         visible: false
     }
     MultiEffect {
-        anchors.fill: parent
+        anchors.fill: wallpaper
         source: wallpaper
         blurEnabled: true
         blur: 1

@@ -111,7 +111,8 @@ Item {
 
                     required property var modelData
 
-                    readonly property bool own: modelData.user === Processes.user
+                    // Ending these would close the whole session.
+                    readonly property bool own: modelData.user === Processes.user && !["niri", "niri-session", "qs", "systemd", "dbus-broker", "dbus-broker-lau", "pipewire", "wireplumber"].includes(modelData.name)
                     readonly property bool armed: root.armed === modelData.pid
 
                     width: parent.width
