@@ -382,7 +382,7 @@ LazyLoader {
                         title: Tr.t("Session and power"),
                         items: [
                             { key: "session.restore", label: Tr.t("Restore windows at login"), type: "toggle" },
-                            { key: "session.lockScreen", label: Tr.t("Lock screen"), hint: Tr.t("The shell one matches the panels and has had less testing"), type: "choice", options: ["hyprlock", "shell"], names: [Tr.t("Standard"), Tr.t("Shell")] },
+                            { key: "session.lockScreen", label: Tr.t("Lock screen style"), hint: Tr.t("The shell one matches the panels and has had less testing"), type: "choice", options: ["hyprlock", "shell"], names: [Tr.t("Standard"), Tr.t("Shell")] },
                         ]
                     },
                     {
