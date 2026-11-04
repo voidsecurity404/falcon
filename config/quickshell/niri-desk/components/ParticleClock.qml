@@ -153,12 +153,13 @@ Item {
             const ctx = getContext("2d");
             ctx.clearRect(0, 0, width, height);
             ctx.fillStyle = "#ffffff";
-            // The variable font has overlapping outlines: the other rule would cut holes in the digits.
-            ctx.fillRule = Qt.WindingFill;
             ctx.font = "800 240px \"Unbounded\"";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText(root.wanted, width / 2, root.centerY);
+            // The variable font has overlapping outlines. fillText would cut holes where they cross.
+            ctx.fillRule = Qt.WindingFill;
+            ctx.beginPath();
+            // text() ignores the alignment settings. The digits are 180 px tall at this size.
+            ctx.text(root.wanted, (width - ctx.measureText(root.wanted).width) / 2, root.centerY + 90);
+            ctx.fill();
             const pixels = ctx.getImageData(0, 0, width, height).data;
             ctx.clearRect(0, 0, width, height);
             const w = Math.floor(width);

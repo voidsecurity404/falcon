@@ -43,7 +43,7 @@ Item {
 
     ParticleClock {
         anchors.fill: parent
-        centerY: 188
+        centerY: 160
         pointerX: pointer.containsMouse ? pointer.mouseX : -999
         pointerY: pointer.containsMouse ? pointer.mouseY : -999
     }
