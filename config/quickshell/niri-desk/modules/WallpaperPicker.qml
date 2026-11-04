@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -23,6 +24,9 @@ LazyLoader {
         property var marks: [0, 0]
         // Once the user has moved, a late answer about the current wallpaper must not move the carousel.
         property bool moved: false
+        // True during the opening: cards made later, while scrolling, appear without it.
+        property bool opening: true
+        property real reveal: 0
         readonly property var files: tab === 0 ? Wallpapers.liveFiles : Wallpapers.imageFiles
         property int selected: 0
         onSelectedChanged: Ui.pickerSelected = selected
@@ -34,6 +38,29 @@ LazyLoader {
             Ui.pickerFiles = files.length;
             Ui.pickerTab = tab;
             Wallpapers.refresh();
+            fadeIn.start();
+        }
+
+        SequentialAnimation {
+            id: fadeIn
+
+            // The surface reaches the screen a moment after it is created.
+            PauseAnimation {
+                duration: 40
+            }
+            NumberAnimation {
+                target: root
+                property: "reveal"
+                to: 1
+                duration: 460
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Timer {
+            interval: 900
+            running: true
+            onTriggered: root.opening = false
         }
         readonly property real cardHeight: Math.min(620, height * 0.62)
         readonly property real skew: 0.12
@@ -95,10 +122,38 @@ LazyLoader {
         }
         screen: Quickshell.screens.find(s => s.name === Niri.focusedOutput) || Quickshell.screens[0]
         exclusionMode: ExclusionMode.Ignore
-        color: Qt.rgba(0, 0, 0, 0.3)
+        color: "transparent"
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "niri-desk-picker"
         WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+
+        // The blurred current wallpaper and a dim layer fade in together. It is already in memory,
+        // and it is blurred once into a small texture.
+        Item {
+            anchors.fill: parent
+            opacity: root.reveal
+
+            Image {
+                anchors.fill: parent
+                source: Wallpapers.thumbOf(Wallpapers.currentLive || Wallpapers.currentImage)
+                sourceSize: Wallpapers.thumbSize
+                fillMode: Image.PreserveAspectCrop
+                asynchronous: true
+                layer.enabled: true
+                layer.textureSize: Qt.size(480, 270)
+                layer.smooth: true
+                layer.effect: MultiEffect {
+                    blurEnabled: true
+                    blur: 1
+                    blurMax: 48
+                    saturation: 0.1
+                }
+            }
+            Rectangle {
+                anchors.fill: parent
+                color: Qt.rgba(0, 0, 0, 0.42)
+            }
+        }
 
         MouseArea {
             anchors.fill: parent
@@ -142,8 +197,9 @@ LazyLoader {
             Row {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: carousel.top
-                anchors.bottomMargin: 30
+                anchors.bottomMargin: 30 + (1 - root.reveal) * 18
                 spacing: 8
+                opacity: root.reveal
 
                 Repeater {
                     model: [
@@ -232,6 +288,31 @@ LazyLoader {
 
                     readonly property bool active: index === root.selected
                     readonly property string title: modelData.split("/").pop().replace(/\.[^.]+$/, "").replace(/[-_]/g, " ")
+                    // Cards rise one after another, from the selected one outwards.
+                    property real appear: root.opening ? 0 : 1
+
+                    opacity: Math.min(1, appear)
+
+                    Component.onCompleted: {
+                        if (root.opening)
+                            rise.start();
+                    }
+
+                    SequentialAnimation {
+                        id: rise
+
+                        PauseAnimation {
+                            duration: 40 + Math.min(6, Math.abs(card.index - root.selected)) * 55
+                        }
+                        NumberAnimation {
+                            target: card
+                            property: "appear"
+                            to: 1
+                            duration: 620
+                            easing.type: Easing.BezierSpline
+                            easing.bezierCurve: [0.22, 1.2, 0.36, 1, 1, 1]
+                        }
+                    }
 
                     z: active ? 2 : 1
                     width: active ? 440 : 340
@@ -244,9 +325,14 @@ LazyLoader {
                         }
                     }
 
-                    transform: Matrix4x4 {
-                        matrix: Qt.matrix4x4(1, -root.skew, 0, root.skew * root.cardHeight / 2, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
-                    }
+                    transform: [
+                        Matrix4x4 {
+                            matrix: Qt.matrix4x4(1, -root.skew, 0, root.skew * root.cardHeight / 2, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+                        },
+                        Translate {
+                            y: (1 - card.appear) * 90
+                        }
+                    ]
 
                     ClippingRectangle {
                         anchors.fill: parent

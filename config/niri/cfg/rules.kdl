@@ -140,11 +140,3 @@ layer-rule {
         blur true
     }
 }
-
-// Fon tanlash oynasi orqasi xiralashsin.
-layer-rule {
-    match namespace="^niri-desk-picker$"
-    background-effect {
-        blur true
-    }
-}
