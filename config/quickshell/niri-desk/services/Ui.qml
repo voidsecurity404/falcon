@@ -71,12 +71,12 @@ Singleton {
         onTriggered: root.recordSeconds += 1
     }
 
-    // Fokus rejimi yoqilganda zen.kdl bo'sh bo'lmaydi.
+    // Focus mode writes "// zen" first in zen.kdl. The file also holds steps of its corner animation.
     FileView {
         path: root.home + "/.config/niri/generated/zen.kdl"
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
-        onLoaded: root.zen = text().trim().length > 0
+        onLoaded: root.zen = text().startsWith("// zen")
     }
 }

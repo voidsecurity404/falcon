@@ -10,9 +10,44 @@ PanelWindow {
 
     readonly property bool isFocusedScreen: !!screen && (Niri.focusedOutput === "" || Niri.focusedOutput === screen.name)
     readonly property bool panelHere: Ui.topPanelOpen && isFocusedScreen
-    // Focus mode hides the bar. The island still opens for the dashboard and for the way-out hint.
+    // Focus mode sends the bar off the screen. The island still comes back for the dashboard and
+    // for the way-out hint. Each part has its own distance out, 0 is in place and 1 is gone.
     readonly property bool barShown: !Ui.zen
     readonly property bool islandShown: !Ui.zen || (panelHere && Ui.popup === "dashboard") || (!!Toasts.current && Toasts.current.inZen === true)
+    readonly property int edgeSign: Settings.bottom ? 1 : -1
+    readonly property var leaveCurve: [0.4, 0, 0.9, 0.3, 1, 1]
+    readonly property var arriveCurve: [0.25, 1.25, 0.35, 1, 1, 1]
+    property real ribbonOut: barShown ? 0 : 1
+    property real statusOut: barShown ? 0 : 1
+    property real islandOut: islandShown ? 0 : 1
+
+    Behavior on ribbonOut {
+        NumberAnimation {
+            duration: root.barShown ? 460 : 300
+            easing.type: Easing.BezierSpline
+            easing.bezierCurve: root.barShown ? root.arriveCurve : root.leaveCurve
+        }
+    }
+    Behavior on statusOut {
+        SequentialAnimation {
+            PauseAnimation {
+                duration: 50
+            }
+            NumberAnimation {
+                duration: root.barShown ? 460 : 300
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: root.barShown ? root.arriveCurve : root.leaveCurve
+            }
+        }
+    }
+    // The island is joined to the edge, so it must not overshoot and leave a gap.
+    Behavior on islandOut {
+        NumberAnimation {
+            duration: root.islandShown ? 460 : 300
+            easing.type: Easing.BezierSpline
+            easing.bezierCurve: root.islandShown ? [0.2, 0, 0, 1, 1, 1] : root.leaveCurve
+        }
+    }
 
     anchors {
         top: true
@@ -29,15 +64,15 @@ PanelWindow {
     // Faqat panellar orqasi xiralashadi, qolgan ekran toza qoladi.
     BackgroundEffect.blurRegion: Region {
         Region {
-            item: root.barShown ? ribbon : null
+            item: root.ribbonOut < 1 ? ribbon : null
             radius: 11
         }
         Region {
-            item: root.barShown ? status : null
+            item: root.statusOut < 1 ? status : null
             radius: 11
         }
         Region {
-            item: island.showDashboard || !root.islandShown ? null : island.body
+            item: island.showDashboard || root.islandOut === 1 ? null : island.body
             bottomLeftRadius: Settings.bottom ? 0 : island.body.animatedRadius
             bottomRightRadius: Settings.bottom ? 0 : island.body.animatedRadius
             topLeftRadius: Settings.bottom ? island.body.animatedRadius : 0
@@ -56,7 +91,7 @@ PanelWindow {
             item: root.barShown ? status : null
         }
         Region {
-            item: root.islandShown ? island.body : null
+            item: root.islandOut < 1 ? island.body : null
         }
     }
 
@@ -88,52 +123,34 @@ PanelWindow {
         }
     }
 
-    Item {
-        anchors.fill: parent
-        opacity: root.barShown ? 1 : 0
-        visible: opacity > 0
+    Ribbon {
+        id: ribbon
 
-        Behavior on opacity {
-            NumberAnimation {
-                duration: 220
-            }
-        }
-
-        Ribbon {
-            id: ribbon
-
-            x: 14
-            y: Settings.bottom ? parent.height - height - 10 : 10
-            screenInfo: root.screen
-        }
-
-        StatusPill {
-            id: status
-
-            anchors.right: parent.right
-            anchors.rightMargin: 14
-            y: Settings.bottom ? parent.height - height - 10 : 10
-        }
+        x: 14
+        y: (Settings.bottom ? parent.height - height - 10 : 10) + root.edgeSign * root.ribbonOut * 64
+        opacity: Math.min(1, (1 - root.ribbonOut) * 3)
+        visible: root.ribbonOut < 1
+        screenInfo: root.screen
     }
 
-    Item {
-        anchors.fill: parent
-        opacity: root.islandShown ? 1 : 0
-        visible: opacity > 0
+    StatusPill {
+        id: status
 
-        Behavior on opacity {
-            NumberAnimation {
-                duration: 220
-            }
-        }
+        anchors.right: parent.right
+        anchors.rightMargin: 14
+        y: (Settings.bottom ? parent.height - height - 10 : 10) + root.edgeSign * root.statusOut * 64
+        opacity: Math.min(1, (1 - root.statusOut) * 3)
+        visible: root.statusOut < 1
+    }
 
-        Island {
-            id: island
+    Island {
+        id: island
 
-            anchors.horizontalCenter: parent.horizontalCenter
-            y: Settings.bottom ? parent.height - height : 0
-            showDashboard: root.panelHere && Ui.popup === "dashboard"
-        }
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: Settings.bottom ? parent.height - height : 0
+        slide: root.islandOut
+        visible: root.islandOut < 1
+        showDashboard: root.panelHere && Ui.popup === "dashboard"
     }
 
     TrayMenu {

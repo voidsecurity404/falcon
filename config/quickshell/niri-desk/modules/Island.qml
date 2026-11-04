@@ -9,6 +9,8 @@ Item {
     id: root
 
     property bool showDashboard: false
+    // How far the island has left the screen edge, for focus mode. 0 is in place.
+    property real slide: 0
     property alias body: body
 
     readonly property string mode: showDashboard ? "dashboard" : Toasts.current ? "toast" : "idle"
@@ -25,7 +27,7 @@ Item {
     // Ekran chetiga qo'shilib turadigan ichki egilgan burchaklar.
     Shape {
         x: -18
-        y: Settings.bottom ? body.height - 18 : 0
+        y: body.y + (Settings.bottom ? body.height - 18 : 0)
         width: 18
         height: 18
         transform: Scale {
@@ -46,7 +48,7 @@ Item {
     }
     Shape {
         x: body.width
-        y: Settings.bottom ? body.height - 18 : 0
+        y: body.y + (Settings.bottom ? body.height - 18 : 0)
         width: 18
         height: 18
         transform: Scale {
@@ -69,6 +71,7 @@ Item {
     Rectangle {
         id: body
 
+        y: (Settings.bottom ? 1 : -1) * root.slide * (body.height + 18)
         width: root.targetWidth
         height: root.targetHeight
         border.width: 1
