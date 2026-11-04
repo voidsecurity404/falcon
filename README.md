@@ -34,7 +34,7 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | Shortcut | Action |
 | --- | --- |
 | `Mod+Return` | Terminal |
-| `Mod+Space` | App menu from the bottom of the screen: type an app name, or `>` for commands such as `>wallpaper`. Lock, sleep, log out, reboot and shut down are beside the search field |
+| `Super` tapped alone, or `Mod+Space` | App menu from the bottom of the screen: type an app name, or `>` for commands such as `>wallpaper`. Lock, sleep, log out, reboot and shut down are beside the search field |
 | `Mod+A` | App menu with tiles, `Tab` opens the search tab: actions, profiles and typed commands. Calculator results appear after `Enter` |
 | `Mod+V` | Clipboard history |
 | `Mod+D` | Dashboard |
