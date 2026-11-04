@@ -11,6 +11,13 @@ Item {
     property bool showDashboard: false
     // How far the island has left the screen edge, for focus mode. 0 is in place.
     property real slide: 0
+    // The last message stays here while the island closes, so its text and icon leave with it.
+    property var shownToast: null
+    readonly property var currentToast: Toasts.current
+    onCurrentToastChanged: {
+        if (currentToast)
+            shownToast = currentToast;
+    }
     property alias body: body
 
     readonly property string mode: showDashboard ? "dashboard" : Toasts.current ? "toast" : "idle"
@@ -235,7 +242,7 @@ Item {
 
                 Icon {
                     anchors.centerIn: parent
-                    name: Toasts.current ? Toasts.current.icon : "check"
+                    name: root.shownToast ? root.shownToast.icon : "check"
                     color: Theme.accentText
                     size: 18
                 }
@@ -248,25 +255,25 @@ Item {
 
                 Label {
                     width: parent.width
-                    text: Toasts.current ? Toasts.current.title : ""
+                    text: root.shownToast ? root.shownToast.title : ""
                     font.weight: Font.Medium
                 }
                 Label {
                     width: parent.width
-                    visible: !!Toasts.current && Toasts.current.value < 0 && Toasts.current.sub !== ""
-                    text: Toasts.current ? Toasts.current.sub : ""
+                    visible: !!root.shownToast && root.shownToast.value < 0 && root.shownToast.sub !== ""
+                    text: root.shownToast ? root.shownToast.sub : ""
                     color: Theme.muted
                     size: 13
                 }
                 Rectangle {
-                    visible: !!Toasts.current && Toasts.current.value >= 0
+                    visible: !!root.shownToast && root.shownToast.value >= 0
                     width: parent.width
                     height: 4
                     radius: 2
                     color: Qt.alpha(Theme.text, 0.14)
 
                     Rectangle {
-                        width: parent.width * (Toasts.current ? Math.max(0, Toasts.current.value) : 0)
+                        width: parent.width * (root.shownToast ? Math.max(0, root.shownToast.value) : 0)
                         height: parent.height
                         radius: 2
                         color: Theme.accent
