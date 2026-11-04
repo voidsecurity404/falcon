@@ -1377,6 +1377,15 @@ def _():
     ok(sh("pgrep -u $(id -u) -c -x wlsunset").stdout.strip() == "1")
 
 
+@case("Xabarlar tarixi shell qayta ishga tushganda saqlanadi")
+def _():
+    sh(["notify-send", "Saqlanadigan xabar"])
+    wait(lambda: "Saqlanadigan xabar" in st()["history"])
+    sh("pkill -x qs"); time.sleep(1.2)
+    wait(lambda: st() is not None, 10)
+    wait(lambda: "Saqlanadigan xabar" in st()["history"], 5, "saqlanmadi")
+
+
 @case("'Bezovta qilmang' xabarlarni to'xtatadi")
 def _():
     open_control()

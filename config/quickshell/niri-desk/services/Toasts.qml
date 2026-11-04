@@ -13,13 +13,26 @@ Singleton {
     property var queue: []
     property bool doNotDisturb: false
     onDoNotDisturbChanged: Saved.set("doNotDisturb", doNotDisturb)
-    Component.onCompleted: doNotDisturb = Saved.get("doNotDisturb", false)
+    Component.onCompleted: {
+        doNotDisturb = Saved.get("doNotDisturb", false);
+        const saved = Saved.get("notifications", null);
+        if (saved && Array.isArray(saved.history)) {
+            history = saved.history;
+            unread = saved.unread || 0;
+            nextHistoryId = history.reduce((top, h) => Math.max(top, h.id), 0) + 1;
+        }
+        historyLoaded = true;
+    }
     readonly property int maxWaiting: 3
 
     // Oxirgi xabarlar: {id, title, sub, app, time}
     property var history: []
     property int nextHistoryId: 1
     property int unread: 0
+    // The first value of history also fires its handler, and it must not overwrite the saved list.
+    property bool historyLoaded: false
+    onHistoryChanged: saveHistory()
+    onUnreadChanged: saveHistory()
     // The history is on the Today tab of the dashboard.
     readonly property bool historySeen: Ui.popup === "dashboard" && Ui.dashTab === 0
     onHistorySeenChanged: {
@@ -151,6 +164,22 @@ Singleton {
         advance();
     }
 
+    function saveHistory() {
+        if (historyLoaded)
+            Saved.set("notifications", {
+                history: history,
+                unread: unread
+            });
+    }
+
+    // A saved notification can be from another day, then the time alone would mislead.
+    function timeLabel(entry) {
+        const today = Qt.formatDate(new Date(), "yyyy-MM-dd");
+        if (!entry.date || entry.date === today)
+            return entry.time;
+        return entry.date.slice(8, 10) + "." + entry.date.slice(5, 7) + " " + entry.time;
+    }
+
     function remember(title, sub, app) {
         history = [
             {
@@ -158,7 +187,8 @@ Singleton {
                 title: title,
                 sub: sub,
                 app: app,
-                time: Qt.formatTime(new Date(), "hh:mm")
+                time: Qt.formatTime(new Date(), "hh:mm"),
+                date: Qt.formatDate(new Date(), "yyyy-MM-dd")
             }
         ].concat(history).slice(0, Settings.get("notifications.history", 30));
         if (!historySeen)

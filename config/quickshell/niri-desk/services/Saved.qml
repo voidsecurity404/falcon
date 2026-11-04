@@ -4,8 +4,8 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// Quick toggles that must outlive a shell restart. They live outside settings.json,
-// so pressing one does not rewrite the niri, kitty and hypridle files.
+// Quick toggles and the notification history, which must outlive a shell restart. They live
+// outside settings.json, so a change does not rewrite the niri, kitty and hypridle files.
 Singleton {
     id: root
 

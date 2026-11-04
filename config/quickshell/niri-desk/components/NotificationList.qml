@@ -349,7 +349,7 @@ Rectangle {
                             id: noteTime
 
                             anchors.right: parent.right
-                            text: note.modelData.time
+                            text: Toasts.timeLabel(note.modelData)
                             color: Theme.muted
                             size: 12
                         }
