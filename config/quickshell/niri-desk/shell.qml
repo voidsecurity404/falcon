@@ -137,7 +137,7 @@ ShellRoot {
             Ui.controlPage = name;
         }
         function dashboardTab(index: int): void {
-            Ui.dashTab = Math.max(0, Math.min(1, index));
+            Ui.dashTab = Math.max(0, Math.min(2, index));
             Ui.popup = "dashboard";
         }
         function launcherQuery(text: string): void {

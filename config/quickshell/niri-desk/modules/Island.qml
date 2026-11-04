@@ -132,7 +132,7 @@ Item {
             opacity: root.mode === "dashboard" ? 1 : 0
             visible: opacity > 0
             sourceComponent: Backdrop {
-                page: Ui.dashTab
+                page: Ui.dashTab === 1 ? 1 : 0
                 art: Ui.dashTab === 1 ? Media.art : ""
                 playing: !!Media.player && Media.player.isPlaying
                 bottomRadius: body.animatedRadius

@@ -7,7 +7,7 @@ import qs.services
 FocusScope {
     id: root
 
-    readonly property var tabs: [Tr.t("Today"), Tr.t("Music")]
+    readonly property var tabs: [Tr.t("Today"), Tr.t("Music"), Tr.t("System")]
     readonly property int tabWidth: 118
     readonly property int pageGap: 24
 
@@ -19,11 +19,11 @@ FocusScope {
     Keys.onEscapePressed: Ui.popup = ""
     Keys.onPressed: event => {
         const digit = event.key - Qt.Key_1;
-        if (digit >= 0 && digit <= 1) {
+        if (digit >= 0 && digit <= 2) {
             select(digit);
             event.accepted = true;
         } else if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
-            select(1 - Ui.dashTab);
+            select((Ui.dashTab + (event.key === Qt.Key_Tab ? 1 : 2)) % 3);
             event.accepted = true;
         }
     }
@@ -213,6 +213,12 @@ FocusScope {
                 width: pager.width
                 height: pager.height
                 visible: Ui.dashTab === 1 || slide.running
+            }
+            DashSystem {
+                x: 2 * (pager.width + root.pageGap)
+                width: pager.width
+                height: pager.height
+                visible: Ui.dashTab === 2 || slide.running
             }
         }
     }
