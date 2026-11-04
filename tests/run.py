@@ -1364,6 +1364,19 @@ def _():
     wait(lambda: sh("pgrep -u $(id -u) -x wlsunset").returncode != 0, 4)
 
 
+@case("Kofe, tungi va jim rejim shell qayta ishga tushganda saqlanadi")
+def _():
+    open_control()
+    click(*toggle_xy(2)); wait(lambda: st()["caffeine"])
+    click(*toggle_xy(3)); wait(lambda: st()["night"])
+    click(*toggle_xy(4)); wait(lambda: st()["dnd"])
+    key("esc")
+    sh("pkill -x qs"); time.sleep(1.2)
+    wait(lambda: st() is not None, 10)
+    wait(lambda: st()["caffeine"] and st()["night"] and st()["dnd"], 5, "saqlanmadi")
+    ok(sh("pgrep -u $(id -u) -c -x wlsunset").stdout.strip() == "1")
+
+
 @case("'Bezovta qilmang' xabarlarni to'xtatadi")
 def _():
     open_control()

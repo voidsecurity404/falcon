@@ -7,7 +7,27 @@ import Quickshell
 Singleton {
     id: root
 
+    // Window ids mean something only within one niri session, so they are saved with its socket.
+    readonly property string session: Quickshell.env("NIRI_SOCKET") || ""
     property var ids: []
+    property bool checked: false
+
+    property bool loaded: false
+
+    // The first value of ids also lands here, and it must not overwrite the saved list.
+    onIdsChanged: {
+        if (loaded)
+            Saved.set("sticky", {
+                session: session,
+                ids: ids
+            });
+    }
+    Component.onCompleted: {
+        const saved = Saved.get("sticky", null);
+        if (saved && saved.session === session)
+            ids = saved.ids;
+        loaded = true;
+    }
 
     function toggle() {
         const id = Niri.focusedWindowId;
@@ -38,6 +58,13 @@ Singleton {
 
     Connections {
         target: Niri
+        // The first window list drops windows that closed while the shell was down.
+        function onWindowsChanged() {
+            if (root.checked)
+                return;
+            root.checked = true;
+            root.ids = root.ids.filter(id => Niri.windows[id]);
+        }
         function onWorkspaceFocused(workspace) {
             root.follow(workspace);
         }

@@ -137,7 +137,7 @@ ShellRoot {
             Toasts.doNotDisturb = false;
             Caffeine.enabled = false;
             Sticky.ids = [];
-            Night.enabled = Settings.get("nightlight.auto", false);
+            Night.setEnabled(Settings.get("nightlight.auto", false));
             Ui.dashTab = 0;
             Widgets.editMode = false;
         }
@@ -183,5 +183,6 @@ ShellRoot {
         Toasts.start();
         Schedule.check();
         Sticky.ids;
+        Night.enabled;
     }
 }

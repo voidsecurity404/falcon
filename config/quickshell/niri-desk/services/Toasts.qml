@@ -12,6 +12,8 @@ Singleton {
     property var current: null
     property var queue: []
     property bool doNotDisturb: false
+    onDoNotDisturbChanged: Saved.set("doNotDisturb", doNotDisturb)
+    Component.onCompleted: doNotDisturb = Saved.get("doNotDisturb", false)
     readonly property int maxWaiting: 3
 
     // Oxirgi xabarlar: {id, title, sub, app, time}

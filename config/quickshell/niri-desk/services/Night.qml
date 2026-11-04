@@ -8,19 +8,43 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    property alias enabled: proc.running
+    readonly property alias enabled: proc.running
+    readonly property bool auto: Settings.get("nightlight.auto", false)
+    readonly property bool settingsLoaded: Settings.loaded
+    property bool started: false
 
-    function toggle() {
-        proc.running = !proc.running;
+    function setEnabled(on) {
+        proc.running = on;
+        Saved.set("night", on);
     }
 
-    // Jadval yoqilgan bo'lsa, tungi rejim sessiya boshida o'zi ishga tushadi.
-    Connections {
-        target: Settings
-        function onReadyChanged() {
-            if (Settings.ready && Settings.get("nightlight.auto", false))
-                proc.running = true;
-        }
+    function toggle() {
+        setEnabled(!proc.running);
+    }
+
+    // The saved choice wins. Without one, the schedule decides. The process command
+    // reads the settings, so nothing starts before the user's file is in.
+    function start() {
+        if (started || !settingsLoaded)
+            return;
+        started = true;
+        leftover.running = true;
+    }
+
+    onSettingsLoadedChanged: start()
+    Component.onCompleted: start()
+
+    onAutoChanged: {
+        if (started && auto)
+            setEnabled(true);
+    }
+
+    // A shell that was killed leaves its wlsunset running, and nothing could stop that one later.
+    Process {
+        id: leftover
+
+        command: ["pkill", "-x", "wlsunset"]
+        onExited: proc.running = Saved.get("night", root.auto)
     }
 
     Process {

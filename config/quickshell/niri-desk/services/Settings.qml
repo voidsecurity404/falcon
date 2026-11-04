@@ -16,6 +16,9 @@ Singleton {
     property var data: ({})
     property string lastError: ""
     property bool ready: false
+    property bool userLoaded: false
+    // defaults.json and settings.json are both in, so get() returns the user's values.
+    readonly property bool loaded: ready && userLoaded
 
     // Oynadan kelgan o'zgarishdan oldingi holat: qo'llanmasa shunga qaytiladi.
     // Aks holda rad etilgan qiymat faylda qolib, keyingi sozlamalarni ham to'xtatadi.
@@ -118,6 +121,7 @@ Singleton {
         printErrors: false
         atomicWrites: true
         onFileChanged: reload()
+        onLoadFailed: root.userLoaded = true
         onLoaded: {
             const before = JSON.stringify(root.user);
             try {
@@ -131,6 +135,7 @@ Singleton {
                 root.lastError = "settings.json: " + e;
                 Toasts.show(Tr.t("The settings file is invalid"), Tr.t("The previous settings stay active"), "alert");
             }
+            root.userLoaded = true;
         }
     }
 
