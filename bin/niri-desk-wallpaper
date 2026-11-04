@@ -162,7 +162,6 @@ case "${1:-}" in
             colors "$image"
             ln -sfn "$image" "$link"
         fi
-        # The app menu tries pictures as you move, and the screen already shows the result.
-        [[ -n "${NIRI_DESK_WALLPAPER_QUIET:-}" ]] || toast "Colors updated" "$(basename "${image%.*}")"
+        toast "Colors updated" "$(basename "${image%.*}")"
         ;;
 esac

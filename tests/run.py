@@ -956,12 +956,10 @@ def _():
     key("esc")
 
 
-@case("> buyruqlarni ko'rsatadi, >wallpaper rasmlar qatorini ochadi")
+@case("> buyruqlarni ko'rsatadi")
 def _():
     open_menu(">")
     ok(len(st()["rows"]) >= 10, st()["rows"])
-    typ("wallpaper")
-    wait(lambda: st()["rows"] == [], 3)
     key("esc")
 
 

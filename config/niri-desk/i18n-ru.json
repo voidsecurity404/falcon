@@ -53,7 +53,6 @@
  "Change wallpaper": "Сменить обои",
  "Check the internet. The original text was copied": "Проверьте интернет. Исходный текст скопирован",
  "Choose a wallpaper": "Выбрать обои",
- "Choose from your pictures": "Выбрать из ваших картинок",
  "Claude Code did not respond.": "Claude Code не ответил.",
  "Claude Code error: {detail}": "Ошибка Claude Code: {detail}",
  "Claude Code is not signed in. Run in a terminal: claude auth login": "Claude Code не авторизован. Выполните в терминале: claude auth login",

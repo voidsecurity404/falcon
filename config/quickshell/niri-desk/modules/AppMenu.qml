@@ -1,15 +1,13 @@
 import QtQuick
 import QtQuick.Shapes
 import Quickshell
-import Quickshell.Io
 import Quickshell.Wayland
-import Quickshell.Widgets
 import qs.components
 import qs.services
 import "../services/tools.js" as Tools
 
 // App menu: rises from the bottom center of the screen. Typing searches apps, and ">" lists
-// commands, ">wallpaper" among them. The session buttons sit beside the search field.
+// commands. The session buttons sit beside the search field.
 // The window stays built between openings, so it opens at once with its icons ready.
 PanelWindow {
     id: root
@@ -22,12 +20,10 @@ PanelWindow {
     readonly property int rowHeight: 54
     readonly property int maxRows: 7
     readonly property int padding: 12
-    readonly property size wallCard: Qt.size(180, 210)
     readonly property var emphasized: [0.2, 0, 0, 1, 1, 1]
 
     property string query: ""
     property int selected: 0
-    property int wallSelected: 0
     property real reveal: 0
     // Drives the rows and buttons that follow the card on opening, 0 to 1.
     property real stagger: 0
@@ -35,13 +31,6 @@ PanelWindow {
     property var pointerStart: null
     property bool pointerLive: false
     property real wheelRest: 0
-    // The wallpaper as it was when the row of pictures opened, and the one being tried instead.
-    property string wallStartImage: ""
-    property string wallStartLive: ""
-    property string wallTried: ""
-    // Runs of the wallpaper script go one at a time, the last wish wins.
-    property string wallWanted: ""
-    property string wallDone: ""
     // Dangerous actions need a second press, this holds the first one.
     property string armed: ""
     property string hoveredSession: ""
@@ -50,10 +39,9 @@ PanelWindow {
     readonly property string commandText: commandMode ? query.slice(1).replace(/^\s+/, "") : ""
     readonly property string commandWord: commandText.split(/\s+/)[0]
     readonly property string commandRest: commandText.slice(commandWord.length).trim()
-    readonly property bool wallpaperMode: commandMode && wordIs(["wallpaper", "обои"])
     readonly property bool schemeMode: commandMode && wordIs(["scheme", "стиль"]) && commandText.length > commandWord.length
     readonly property bool calcMode: commandMode && wordIs(["calc", "счёт", "счет"]) && commandText.length > commandWord.length
-    readonly property string mode: wallpaperMode ? "wallpaper" : calcMode ? "calc" : schemeMode ? "scheme" : commandMode ? "commands" : "apps"
+    readonly property string mode: calcMode ? "calc" : schemeMode ? "scheme" : commandMode ? "commands" : "apps"
 
     // What is on screen follows the text. A change of mode first fades the old content away.
     property string shownMode: "apps"
@@ -61,7 +49,6 @@ PanelWindow {
     property var shownIds: []
     property var rowsById: ({})
     property real viewFade: 1
-    readonly property bool shownWide: shownMode === "wallpaper"
 
     readonly property var session: [
         {
@@ -107,14 +94,6 @@ PanelWindow {
     ]
 
     readonly property var commands: [
-        {
-            id: "wallpaper",
-            icon: "wallpaper",
-            name: Tr.t("Change wallpaper"),
-            detail: Tr.t("Choose from your pictures"),
-            keywords: "wallpaper обои",
-            complete: "wallpaper "
-        },
         {
             id: "random",
             icon: "sparkle",
@@ -169,13 +148,6 @@ PanelWindow {
 
     readonly property var schemes: [["scheme-tonal-spot", "Tonal"], ["scheme-vibrant", "Vibrant"], ["scheme-expressive", "Expressive"], ["scheme-fidelity", "Faithful"], ["scheme-content", "Content"], ["scheme-neutral", "Neutral"], ["scheme-monochrome", "Monochrome"], ["scheme-rainbow", "Rainbow"], ["scheme-fruit-salad", "Fruit salad"]]
 
-    // Pictures only: live wallpapers are chosen in the picker, Mod+W.
-    readonly property var wallFiles: {
-        const key = commandRest.toLowerCase();
-        const all = Wallpapers.imageFiles;
-        return key === "" ? all : all.filter(path => Tools.score(Wallpapers.nameOf(path), key, "") > 0);
-    }
-
     // One row object per app, built once: searching only chooses among them.
     readonly property var appEntries: DesktopEntries.applications.values.filter(a => !a.noDisplay).sort((a, b) => a.name.localeCompare(b.name)).map(entry => ({
                 id: "app:" + entry.id,
@@ -188,8 +160,6 @@ PanelWindow {
             }))
 
     readonly property var results: {
-        if (wallpaperMode)
-            return [];
         if (calcMode)
             return calcRows();
         if (schemeMode)
@@ -253,55 +223,11 @@ PanelWindow {
 
     function randomWallpaper() {
         const all = Wallpapers.imageFiles.filter(path => path !== Wallpapers.currentImage);
-        if (all.length > 0)
-            setWallpaper(all[Math.floor(Math.random() * all.length)]);
-    }
-
-    function runWallpaper(path) {
-        wallWanted = path;
-        if (!wallProcess.running)
-            startWallpaper();
-    }
-
-    function startWallpaper() {
-        wallDone = wallWanted;
-        wallProcess.command = [Ui.binDir + "niri-desk-wallpaper", wallDone];
-        wallProcess.running = true;
-    }
-
-    // Enter or a click: this picture stays.
-    function setWallpaper(path) {
-        tryTimer.stop();
-        if (path !== wallTried) {
-            Wallpapers.chosen(path, false);
-            runWallpaper(path);
-        }
-        wallTried = "";
-        Ui.popup = "";
-    }
-
-    // Moving with the arrows or the wheel puts the picture on the screen.
-    function stepWall(by) {
-        wallSelected = Math.max(0, Math.min(wallFiles.length - 1, wallSelected + by));
-        tryTimer.restart();
-    }
-
-    // Esc, a click outside or leaving >wallpaper gives back what was there.
-    function undoWallTry() {
-        tryTimer.stop();
-        if (wallTried === "")
+        if (all.length === 0)
             return;
-        wallTried = "";
-        Wallpapers.chosen(wallStartLive || wallStartImage, wallStartLive !== "");
-        runWallpaper(wallStartLive || wallStartImage);
-    }
-
-    function startWallpapers() {
-        Wallpapers.refresh();
-        wallStartImage = Wallpapers.currentImage;
-        wallStartLive = Wallpapers.currentLive;
-        wallSelected = Math.max(0, wallFiles.indexOf(Wallpapers.currentImage));
-        wallView.positionViewAtIndex(wallSelected, ListView.Center);
+        const path = all[Math.floor(Math.random() * all.length)];
+        Wallpapers.chosen(path, false);
+        Ui.run("niri-desk-wallpaper", path);
     }
 
     function runSession(item) {
@@ -316,11 +242,6 @@ PanelWindow {
     }
 
     function execute(index) {
-        if (wallpaperMode) {
-            if (wallFiles[wallSelected])
-                setWallpaper(wallFiles[wallSelected]);
-            return;
-        }
         const item = results[index];
         if (!item)
             return;
@@ -387,7 +308,6 @@ PanelWindow {
 
     onClosingChanged: {
         if (closing) {
-            undoWallTry();
             fadeIn.stop();
             staggerIn.stop();
             fadeOut.start();
@@ -404,16 +324,11 @@ PanelWindow {
         armed = "";
     }
     onModeChanged: modeSwap.restart()
-    onWallpaperModeChanged: {
-        if (!wallpaperMode)
-            undoWallTry();
-    }
     onResultsChanged: {
         if (mode === shownMode && !modeSwap.running)
             syncRows();
     }
     onSelectedChanged: Ui.launcherSelected = selected
-    onWallFilesChanged: wallSelected = Math.min(wallSelected, Math.max(0, wallFiles.length - 1))
     Component.onCompleted: syncRows()
 
     visible: Ui.menuAlive
@@ -502,11 +417,7 @@ PanelWindow {
             easing.type: Easing.InQuad
         }
         ScriptAction {
-            script: {
-                root.syncRows();
-                if (root.wallpaperMode)
-                    root.startWallpapers();
-            }
+            script: root.syncRows()
         }
         NumberAnimation {
             target: root
@@ -514,31 +425,6 @@ PanelWindow {
             to: 1
             duration: 200
             easing.type: Easing.OutCubic
-        }
-    }
-    Timer {
-        id: tryTimer
-
-        // Passing over pictures quickly only shows the one you stop at.
-        interval: 300
-        onTriggered: {
-            const path = root.wallFiles[root.wallSelected];
-            if (!path || path === Wallpapers.currentImage)
-                return;
-            root.wallTried = path;
-            Wallpapers.chosen(path, false);
-            root.runWallpaper(path);
-        }
-    }
-    Process {
-        id: wallProcess
-
-        environment: ({
-                NIRI_DESK_WALLPAPER_QUIET: "1"
-            })
-        onExited: {
-            if (root.wallWanted !== root.wallDone)
-                root.startWallpaper();
         }
     }
     Timer {
@@ -594,7 +480,7 @@ PanelWindow {
 
         x: Math.round((parent.width - width) / 2)
         y: parent.height - root.edgeGap - bodyHeight + (1 - root.reveal) * (bodyHeight + root.edgeGap + 4)
-        width: root.shownWide ? Math.min(980, parent.width - 40) : 640
+        width: 640
         height: bodyHeight + root.overdraw
         topLeftRadius: radiusSize
         topRightRadius: radiusSize
@@ -613,16 +499,6 @@ PanelWindow {
             }
         }
 
-        Behavior on width {
-            enabled: root.reveal > 0.5
-
-            NumberAnimation {
-                duration: 420
-                easing.type: Easing.BezierSpline
-                easing.bezierCurve: root.emphasized
-            }
-        }
-
         // Keeps clicks on the menu from closing it.
         MouseArea {
             anchors.fill: parent
@@ -635,7 +511,7 @@ PanelWindow {
             x: root.padding
             y: root.padding
             width: parent.width - root.padding * 2
-            height: root.shownWide ? root.wallCard.height + 30 : root.rowHeight * Math.min(root.maxRows, Math.max(1, root.shownRows.length))
+            height: root.rowHeight * Math.min(root.maxRows, Math.max(1, root.shownRows.length))
             clip: true
             opacity: root.viewFade
             scale: 0.97 + 0.03 * root.viewFade
@@ -655,7 +531,6 @@ PanelWindow {
                 id: list
 
                 anchors.fill: parent
-                visible: !root.shownWide
                 cacheBuffer: 600
                 currentIndex: root.selected
                 // The wheel moves the selection and the list follows, so nothing fights over it.
@@ -863,7 +738,7 @@ PanelWindow {
 
             Label {
                 anchors.centerIn: parent
-                opacity: !root.shownWide && list.count === 0 ? 1 : 0
+                opacity: list.count === 0 ? 1 : 0
                 text: Tr.t("Nothing found")
                 color: Theme.muted
 
@@ -874,147 +749,6 @@ PanelWindow {
                 }
             }
 
-            // Wallpapers, plain and live
-            ListView {
-                id: wallView
-
-                anchors.fill: parent
-                visible: root.shownWide
-                orientation: ListView.Horizontal
-                spacing: 8
-                cacheBuffer: 400
-                currentIndex: root.wallSelected
-                interactive: false
-                highlightMoveDuration: 300
-                highlightMoveVelocity: -1
-                highlightRangeMode: ListView.ApplyRange
-                preferredHighlightBegin: (width - root.wallCard.width) / 2
-                preferredHighlightEnd: (width + root.wallCard.width) / 2
-                model: ScriptModel {
-                    values: root.wallFiles
-                }
-
-                WheelHandler {
-                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                    onWheel: event => {
-                        const steps = root.wheelSteps(event.angleDelta.y);
-                        if (steps !== 0)
-                            root.stepWall(steps);
-                    }
-                }
-
-                add: Transition {
-                    NumberAnimation {
-                        property: "opacity"
-                        from: 0
-                        to: 1
-                        duration: 200
-                    }
-                }
-                remove: Transition {
-                    NumberAnimation {
-                        property: "opacity"
-                        to: 0
-                        duration: 120
-                    }
-                }
-                displaced: Transition {
-                    NumberAnimation {
-                        property: "x"
-                        duration: 280
-                        easing.type: Easing.BezierSpline
-                        easing.bezierCurve: root.emphasized
-                    }
-                    NumberAnimation {
-                        property: "opacity"
-                        to: 1
-                        duration: 160
-                    }
-                }
-
-                Label {
-                    anchors.centerIn: parent
-                    visible: wallView.count === 0
-                    text: Tr.t("Nothing found")
-                    color: Theme.muted
-                }
-
-                delegate: Item {
-                    id: wall
-
-                    required property string modelData
-                    required property int index
-
-                    readonly property bool isSelected: index === root.wallSelected
-
-                    width: root.wallCard.width
-                    height: wallView.height
-
-                    ClippingRectangle {
-                        width: root.wallCard.width
-                        height: root.wallCard.height
-                        radius: wall.isSelected ? 20 : 16
-                        color: Qt.alpha(Theme.text, 0.06)
-                        border.width: wall.isSelected ? 2 : 0
-                        border.color: Theme.accent
-                        scale: wall.isSelected ? 1 : 0.9
-                        opacity: wall.isSelected ? 1 : 0.55
-
-                        Behavior on scale {
-                            NumberAnimation {
-                                duration: 340
-                                easing.type: Easing.OutBack
-                                easing.overshoot: 1.6
-                            }
-                        }
-                        Behavior on opacity {
-                            NumberAnimation {
-                                duration: 220
-                            }
-                        }
-                        Behavior on radius {
-                            NumberAnimation {
-                                duration: 220
-                            }
-                        }
-
-                        Image {
-                            anchors.fill: parent
-                            // Same size and fill as the service, so the picture is found in memory.
-                            sourceSize: Wallpapers.thumbSize
-                            fillMode: Image.PreserveAspectCrop
-                            source: Wallpapers.thumbOf(wall.modelData)
-                            asynchronous: true
-                        }
-                    }
-                    Label {
-                        y: root.wallCard.height + 8
-                        width: parent.width
-                        horizontalAlignment: Text.AlignHCenter
-                        text: Wallpapers.nameOf(wall.modelData)
-                        opacity: wall.isSelected ? 1 : 0
-                        size: 12
-                        color: Theme.muted
-                        elide: Text.ElideMiddle
-
-                        Behavior on opacity {
-                            NumberAnimation {
-                                duration: 200
-                            }
-                        }
-                    }
-                    MouseArea {
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onPositionChanged: mouse => {
-                            if (root.pointerMoved(mapToItem(null, mouse.x, mouse.y)))
-                                root.wallSelected = wall.index;
-                        }
-                        onClicked: root.setWallpaper(wall.modelData)
-                    }
-                }
-            }
         }
 
         // Search and session buttons
@@ -1123,18 +857,7 @@ PanelWindow {
                         if (root.results.length > 0)
                             root.selected = (root.selected + 1) % root.results.length;
                     }
-                    Keys.onLeftPressed: event => {
-                        if (root.wallpaperMode)
-                            root.stepWall(-1);
-                        else
-                            event.accepted = false;
-                    }
-                    Keys.onRightPressed: event => {
-                        if (root.wallpaperMode)
-                            root.stepWall(1);
-                        else
-                            event.accepted = false;
-                    }
+
 
                     Label {
                         anchors.verticalCenter: parent.verticalCenter
