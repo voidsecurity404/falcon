@@ -81,8 +81,8 @@ Click the clock. Three tabs, switched with `1`–`3` or `Tab`.
 
 | Tab | Purpose |
 | --- | --- |
-| Today | Time, weather, CPU load, memory, temperature, disk, battery, calendar, settings button |
-| Music | Player and live subtitles: the words are recognized from the sound on this computer, so the video needs no captions. Accuracy depends on the song, and sung words are harder than speech |
+| Today | Round watch face with a sweeping second hand and date window. Ring gauges for CPU, memory, temperature, disk and battery, CPU history, network speed. Weather, calendar, settings button |
+| Music | Blurred, slowly moving cover in the background, colors taken from the cover, a spinning record, seekable progress bar, and a visualizer that follows the real sound. The sound is only measured on this computer |
 | AI | Chat with Claude |
 
 ## AI chat

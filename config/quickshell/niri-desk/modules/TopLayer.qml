@@ -35,10 +35,10 @@ PanelWindow {
         }
         Region {
             item: island.body
-            bottomLeftRadius: Settings.bottom ? 0 : 18
-            bottomRightRadius: Settings.bottom ? 0 : 18
-            topLeftRadius: Settings.bottom ? 18 : 0
-            topRightRadius: Settings.bottom ? 18 : 0
+            bottomLeftRadius: Settings.bottom ? 0 : island.body.animatedRadius
+            bottomRightRadius: Settings.bottom ? 0 : island.body.animatedRadius
+            topLeftRadius: Settings.bottom ? island.body.animatedRadius : 0
+            topRightRadius: Settings.bottom ? island.body.animatedRadius : 0
         }
     }
 

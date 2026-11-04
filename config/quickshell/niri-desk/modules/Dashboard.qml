@@ -8,7 +8,7 @@ FocusScope {
     id: root
 
     readonly property var tabs: [Tr.t("Today"), Tr.t("Music"), Tr.t("AI")]
-    readonly property int tabWidth: 130
+    readonly property int tabWidth: 118
     readonly property int pageGap: 24
     // AI sahifasi ko'ringanda yozish maydoni fokusni oladi: boshqa sahifalar orasida surilganda u ochilmasligi kerak.
     property bool leavingAi: false
@@ -52,31 +52,97 @@ FocusScope {
         }
     }
 
-    // Vkladkalar: faqat matn, tagidagi chiziq ular orasida sirpanadi.
-    Item {
+    // Ovozga qarab chayqaladigan pol: panelning butun eni bo'ylab, o'rtadan chetlarga.
+    Row {
+        anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
-        y: 8
-        width: root.tabWidth * root.tabs.length
-        height: 38
+        spacing: 4
+        opacity: Ui.dashTab === 1 ? 1 : 0
+        visible: opacity > 0
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 400
+            }
+        }
+
+        Repeater {
+            model: Spectrum.count * 2
+
+            delegate: Item {
+                required property int index
+
+                readonly property int band: index < Spectrum.count ? Spectrum.count - 1 - index : index - Spectrum.count
+                readonly property real level: (Spectrum.levels[band] || 0) / 100
+
+                width: (root.width - 2 * 44 - 4 * (Spectrum.count * 2 - 1)) / (Spectrum.count * 2)
+                height: 124
+
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    width: parent.width
+                    height: parent.level * 120
+                    visible: height > 1
+                    topLeftRadius: width / 2
+                    topRightRadius: width / 2
+                    gradient: Gradient {
+                        GradientStop {
+                            position: 0
+                            color: Qt.alpha(Media.artAccent, 0.55)
+                        }
+                        GradientStop {
+                            position: 1
+                            color: Qt.alpha(Media.artAccent, 0.04)
+                        }
+                    }
+
+                    Behavior on height {
+                        NumberAnimation {
+                            duration: 70
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Vkladkalar: shisha kapsula, ichida rangli kapsula sirpanib yuradi.
+    Rectangle {
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: 12
+        width: root.tabWidth * root.tabs.length + 8
+        height: 44
+        radius: 22
+        color: Qt.alpha(Theme.text, 0.07)
+        border.width: 1
+        border.color: Qt.alpha(Theme.text, 0.1)
 
         Rectangle {
-            x: Ui.dashTab * root.tabWidth + (root.tabWidth - width) / 2
-            y: 33
-            width: 34
-            height: 3
-            radius: 2
-            color: Theme.accent
+            x: 4 + Ui.dashTab * root.tabWidth
+            y: 4
+            width: root.tabWidth
+            height: 36
+            radius: 18
+            color: Ui.dashTab === 1 ? Media.artAccent : Theme.accent
 
             Behavior on x {
                 NumberAnimation {
                     duration: 460
                     easing.type: Easing.BezierSpline
-                    easing.bezierCurve: [0.3, 1.5, 0.4, 1, 1, 1]
+                    easing.bezierCurve: [0.3, 1.4, 0.4, 1, 1, 1]
+                }
+            }
+            Behavior on color {
+                ColorAnimation {
+                    duration: 400
                 }
             }
         }
 
         Row {
+            x: 4
+            y: 4
+
             Repeater {
                 model: root.tabs
 
@@ -89,19 +155,19 @@ FocusScope {
                     readonly property bool current: Ui.dashTab === index
 
                     width: root.tabWidth
-                    height: 38
+                    height: 36
 
                     Label {
                         anchors.centerIn: parent
                         text: tab.modelData
                         size: 14
-                        color: tab.current || tabArea.containsMouse ? Theme.text : Theme.muted
+                        color: tab.current ? (Ui.dashTab === 1 ? Media.artAccentText : Theme.accentText) : tabArea.containsMouse ? Theme.text : Theme.muted
                         font.weight: tab.current ? Font.DemiBold : Font.Normal
                         scale: tabArea.pressed ? 0.95 : 1
 
                         Behavior on color {
                             ColorAnimation {
-                                duration: 180
+                                duration: 200
                             }
                         }
                         Behavior on scale {
@@ -126,10 +192,10 @@ FocusScope {
     Item {
         id: pager
 
-        x: 24
-        y: 58
-        width: parent.width - 48
-        height: parent.height - 58 - 16
+        x: 28
+        y: 66
+        width: parent.width - 56
+        height: parent.height - 66 - 20
         clip: true
 
         Item {

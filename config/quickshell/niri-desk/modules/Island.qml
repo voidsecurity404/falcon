@@ -14,8 +14,9 @@ Item {
     readonly property string mode: showDashboard ? "dashboard" : Toasts.current ? "toast" : "idle"
     readonly property bool showSeconds: Settings.get("panel.clockSeconds", false)
     readonly property bool showDate: Settings.get("panel.clockDate", false)
-    readonly property int targetWidth: mode === "dashboard" ? 1040 : mode === "toast" ? 440 : (Ui.recording ? 232 : 186) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0)
-    readonly property int targetHeight: mode === "dashboard" ? [470, 470, 560][Ui.dashTab] : mode === "toast" ? 68 : 44
+    readonly property int targetWidth: mode === "dashboard" ? 1160 : mode === "toast" ? 440 : (Ui.recording ? 232 : 186) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0)
+    readonly property int cornerRadius: mode === "dashboard" ? 32 : 18
+    readonly property int targetHeight: mode === "dashboard" ? 580 : mode === "toast" ? 68 : 44
 
     width: body.width
     height: body.height
@@ -81,11 +82,20 @@ Item {
                 color: Theme.panel
             }
         }
-        topLeftRadius: Settings.bottom ? 18 : 0
-        topRightRadius: Settings.bottom ? 18 : 0
-        bottomLeftRadius: Settings.bottom ? 0 : 18
-        bottomRightRadius: Settings.bottom ? 0 : 18
+        topLeftRadius: Settings.bottom ? animatedRadius : 0
+        topRightRadius: Settings.bottom ? animatedRadius : 0
+        bottomLeftRadius: Settings.bottom ? 0 : animatedRadius
+        bottomRightRadius: Settings.bottom ? 0 : animatedRadius
         clip: true
+
+        property real animatedRadius: root.cornerRadius
+
+        Behavior on animatedRadius {
+            NumberAnimation {
+                duration: 420
+                easing.type: Easing.OutCubic
+            }
+        }
 
         // Ochilishda avval kengayadi, keyin yumshoq sakrab pastga tushadi. Yopilish tez va sakrashsiz.
         Behavior on width {
@@ -110,7 +120,9 @@ Item {
             opacity: root.mode === "dashboard" ? 1 : 0
             visible: opacity > 0
             sourceComponent: Backdrop {
-                art: Ui.dashTab === 1 && Media.player ? Media.player.trackArtUrl : ""
+                art: Ui.dashTab === 1 ? Media.art : ""
+                playing: !!Media.player && Media.player.isPlaying
+                bottomRadius: body.animatedRadius
             }
 
             Behavior on opacity {
@@ -264,7 +276,7 @@ Item {
         }
 
         Loader {
-            width: 1040
+            width: 1160
             height: root.targetHeight
             active: root.mode === "dashboard" || opacity > 0
             opacity: root.mode === "dashboard" ? 1 : 0
@@ -274,6 +286,36 @@ Item {
             Behavior on opacity {
                 NumberAnimation {
                     duration: root.mode === "dashboard" ? 260 : 130
+                }
+            }
+        }
+
+        // Light along the free edge of the open panel, in the color of the current page.
+        Rectangle {
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: Settings.bottom ? 0 : parent.height - 1
+            width: parent.width * 0.7
+            height: 1
+            opacity: root.mode === "dashboard" ? 1 : 0
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop {
+                    position: 0
+                    color: "transparent"
+                }
+                GradientStop {
+                    position: 0.5
+                    color: Ui.dashTab === 1 ? Media.artAccent : Theme.accent
+                }
+                GradientStop {
+                    position: 1
+                    color: "transparent"
+                }
+            }
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 300
                 }
             }
         }

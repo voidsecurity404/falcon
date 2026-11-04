@@ -5,6 +5,8 @@ import qs.services
 Column {
     id: root
 
+    property int cellWidth: 30
+    property int cellHeight: 24
     readonly property var today: clock.date
     readonly property var cells: {
         const year = today.getFullYear();
@@ -43,7 +45,7 @@ Column {
             delegate: Label {
                 required property string modelData
 
-                width: 30
+                width: root.cellWidth
                 horizontalAlignment: Text.AlignHCenter
                 text: modelData
                 color: Theme.muted
@@ -54,16 +56,22 @@ Column {
         Repeater {
             model: root.cells
 
-            delegate: Rectangle {
+            delegate: Item {
                 required property int modelData
 
                 readonly property bool isToday: modelData === root.today.getDate()
 
-                width: 30
-                height: 24
-                radius: 7
-                color: isToday ? Theme.accent : "transparent"
+                width: root.cellWidth
+                height: root.cellHeight
 
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: root.cellHeight
+                    height: root.cellHeight
+                    radius: root.cellHeight / 2
+                    visible: parent.isToday
+                    color: Theme.accent
+                }
                 Label {
                     anchors.centerIn: parent
                     visible: parent.modelData > 0

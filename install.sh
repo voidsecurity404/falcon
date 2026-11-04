@@ -53,7 +53,7 @@ targets=(
     .config/rofi/niri-desk-colors.rasi
     .local/bin/niri-desk-claude-status
     .local/bin/niri-desk-claude-usage
-    .local/bin/niri-desk-lyrics
+    .local/bin/niri-desk-spectrum
     .local/bin/niri-desk-rofi
     .local/bin/niri-desk-rofi-search
     .local/bin/niri-desk-shot
@@ -280,13 +280,6 @@ if ((packages)); then
     say "Installing the anthropic SDK (only used with an API key)"
     soft python3 -m venv "$venv"
     do_it "$venv/bin/pip" install --quiet --upgrade "anthropic>=2.3,<3" || say "The SDK was not installed: the API key option will not work, everything else will"
-fi
-
-lyrics_venv="$HOME/.local/share/niri-desk/lyrics-venv"
-if ((packages)); then
-    say "Installing speech recognition for live subtitles (about 500 MB, runs on this computer)"
-    soft python3 -m venv "$lyrics_venv"
-    do_it "$lyrics_venv/bin/pip" install --quiet faster-whisper || say "Speech recognition was not installed: subtitles will not work, everything else will"
 fi
 
 if ! command -v claude >/dev/null && ((dry == 0)); then

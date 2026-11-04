@@ -5568,18 +5568,18 @@ def _():
         sh(f"nmcli radio wifi {'on' if was else 'off'}")
 
 
-feature("music", "Musiqa bo'limi va subtitr")
+feature("music", "Musiqa bo'limi")
 
 
-def lyrics_running():
-    return sh("pgrep -u $(id -u) -f niri-desk-lyrics").returncode == 0
+def spectrum_running():
+    return sh("pgrep -u $(id -u) -f niri-desk-spectrum").returncode == 0
 
 
-@case("Musiqa yo'q paytda bo'lim ochiladi: recognition ishga tushmaydi")
+@case("Musiqa yo'q paytda bo'lim ochiladi: ovoz tinglanmaydi")
 def _():
     dash(1)
     time.sleep(0.8)
-    ok(st()["lyricsWanted"] is False and not lyrics_running())
+    ok(st()["spectrumWanted"] is False and not spectrum_running())
 
 
 @case("Bugun bo'limida CPU va harorat yangilanib turadi")
@@ -5589,26 +5589,20 @@ def _():
     ok(st()["popup"] == "dashboard")
 
 
-@case("Bo'limni tez almashtiradi: subtitr jarayoni qolib ketmaydi")
+@case("Bo'limni tez almashtiradi: vizualizator jarayoni qolib ketmaydi")
 def _():
     for t in (1, 0, 1, 2, 1, 0):
         ipc("dashboardTab", str(t))
         time.sleep(0.2)
     ipc("close")
     time.sleep(1.5)
-    ok(not lyrics_running())
-
-
-@case("Yozuv hook'i ovoz bo'lmasa ham yiqilmaydi: model o'rnatilmagan holat aytiladi")
-def _():
-    r = sh(["python3", "-I", str(HOME / ".local/bin/niri-desk-lyrics")], timeout=20)
-    ok(r.returncode == 0 and '"status"' in r.stdout, r.stdout[-200:] + r.stderr[-200:])
+    ok(not spectrum_running())
 
 
 @case("Panel orqa foni bor: rasmsiz holatda ham ochiladi")
 def _():
     dash(1)
-    a = shot("mu1", "120,60 1040x300")
+    a = shot("mu1", "60,60 1160x300")
     ok(a)
     ok(st()["dashTab"] == 1)
 

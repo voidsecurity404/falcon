@@ -6,6 +6,7 @@ qt6-wayland
 qt6-declarative
 jq
 python
+python-numpy
 fd
 translate-shell
 tmux

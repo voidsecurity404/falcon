@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+"""Prints the loudness of the playing sound as one line of bands, 30 times a second."""
+import subprocess
+import sys
+
+import numpy as np
+
+RATE = 22050
+SIZE = 2048
+HOP = RATE // 30
+BANDS = 36
+
+source = sys.argv[1] if len(sys.argv) > 1 else "@DEFAULT_MONITOR@"
+edges = np.unique(np.geomspace(55, 9000, BANDS + 1) * SIZE / RATE).astype(int)
+window = np.hanning(SIZE)
+samples = np.zeros(SIZE)
+levels = np.zeros(BANDS)
+peak = 1e-3
+
+record = subprocess.Popen(["parec", "-d", source, "--format=s16le", f"--rate={RATE}", "--channels=1", "--latency-msec=30"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+try:
+    while chunk := record.stdout.read(HOP * 2):
+        fresh = np.frombuffer(chunk[:len(chunk) & ~1], dtype=np.int16) / 32768
+        samples = np.concatenate((samples, fresh))[-SIZE:]
+        spectrum = np.abs(np.fft.rfft(samples * window))
+        # Higher bands hold less energy: the tilt keeps the whole width moving.
+        raw = np.array([spectrum[a:max(a + 1, b)].mean() for a, b in zip(edges, edges[1:])]) * np.linspace(1, 6, BANDS)
+        # The loudest recent band sets the scale, so quiet music moves as much as loud music.
+        peak = max(raw.max(), peak * 0.995, 1e-3)
+        target = np.sqrt(raw / peak) if raw.max() > 1e-2 else np.zeros(BANDS)
+        # Rises fast and falls slowly, like the needle of a level meter.
+        levels = np.where(target > levels, levels + (target - levels) * 0.7, levels * 0.86)
+        print(" ".join(str(int(v * 100)) for v in levels), flush=True)
+except (BrokenPipeError, KeyboardInterrupt):
+    pass
+finally:
+    record.terminate()

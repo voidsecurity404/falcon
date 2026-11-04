@@ -13,6 +13,37 @@ Singleton {
         return list.find(p => p.isPlaying) || (list.length > 0 ? list[0] : null);
     }
     readonly property real progress: player && player.lengthSupported && player.length > 0 ? player.position / player.length : 0
+    readonly property string art: player ? player.trackArtUrl : ""
+    // Browsers put the artist into the title as well: "Artist - Song".
+    readonly property string title: {
+        if (!player)
+            return "";
+        const prefix = player.trackArtist + " - ";
+        return player.trackArtist && player.trackTitle.startsWith(prefix) ? player.trackTitle.slice(prefix.length) : player.trackTitle;
+    }
+
+    // The liveliest color of the cover, made readable over the panel. The theme accent without a cover.
+    readonly property color artAccent: {
+        const colors = quantizer.colors;
+        if (art === "" || !colors || colors.length === 0)
+            return Theme.accent;
+        let best = colors[0];
+        for (const c of colors) {
+            if (c.hslSaturation * Math.sqrt(c.hslLightness) > best.hslSaturation * Math.sqrt(best.hslLightness))
+                best = c;
+        }
+        const dark = Theme.text.hslLightness > 0.5;
+        return Qt.hsla(best.hslHue < 0 ? 0 : best.hslHue, Math.min(0.85, Math.max(0.35, best.hslSaturation)), dark ? 0.74 : 0.34, 1);
+    }
+    readonly property color artAccentText: artAccent.hslLightness > 0.5 ? "#10141a" : "#ffffff"
+
+    ColorQuantizer {
+        id: quantizer
+
+        source: Ui.topPanelOpen ? root.art : ""
+        depth: 3
+        rescaleSize: 64
+    }
 
     // Mpris position o'zi yangilanmaydi: ijro paytida so'rab turamiz.
     Timer {

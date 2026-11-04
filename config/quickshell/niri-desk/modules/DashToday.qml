@@ -3,57 +3,198 @@ import Quickshell
 import qs.components
 import qs.services
 
-// Bugun: katta soat, kompyuter yuklamasi va kalendar.
+// Bugun: o'rtada dumaloq soat, chapda kompyuter yuklamasi, o'ngda sana va kalendar.
 Item {
     id: root
+
+    readonly property int sideWidth: (width - clockFace.width - 2 * 28) / 2
+
+    function gigabytes(value) {
+        return value.toFixed(value < 100 ? 1 : 0);
+    }
+
+    function rate(bytes) {
+        if (bytes >= 1048576)
+            return (bytes / 1048576).toFixed(1) + " " + Tr.t("MB/s");
+        return Math.round(bytes / 1024) + " " + Tr.t("KB/s");
+    }
 
     SystemClock {
         id: clock
 
-        precision: SystemClock.Minutes
+        precision: SystemClock.Hours
     }
 
-    // Soat
+    // Kompyuter yuklamasi: bosilganda btop ochiladi.
     Item {
-        id: hero
+        id: system
 
-        width: 300
+        width: root.sideWidth
+        height: parent.height
+
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -8
+            radius: 18
+            color: Qt.alpha(Theme.text, systemArea.containsMouse ? 0.05 : 0)
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: 180
+                }
+            }
+        }
+        MouseArea {
+            id: systemArea
+
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+                Ui.popup = "";
+                Quickshell.execDetached(["kitty", "--class", "niri-desk-tool", "btop"]);
+            }
+        }
+
+        Column {
+            anchors.centerIn: parent
+            width: parent.width
+            spacing: 16
+
+            Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 8
+
+                Gauge {
+                    width: (system.width - 8) / 2
+                    value: Sys.cpu / 100
+                    text: Sys.cpu
+                    unit: "%"
+                    label: Tr.t("Processor")
+                    hot: Sys.cpu >= 85
+                }
+                Gauge {
+                    width: (system.width - 8) / 2
+                    value: Sys.ram / 100
+                    text: root.gigabytes(Sys.ramGb)
+                    detail: Tr.t("of {n} GB").replace("{n}", Math.round(Sys.ramTotalGb))
+                    label: Tr.t("Memory")
+                    hot: Sys.ram >= 90
+                }
+            }
+
+            LoadChart {
+                width: parent.width
+                height: 62
+                values: Sys.history
+            }
+
+            Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 6
+
+                Gauge {
+                    width: (system.width - 12) / 3
+                    value: Sys.temperature / 100
+                    text: Sys.temperature > 0 ? Sys.temperature : "—"
+                    unit: Sys.temperature > 0 ? "°" : ""
+                    label: Tr.t("Temperature")
+                    hot: Sys.temperature >= 90
+                }
+                Gauge {
+                    width: (system.width - 12) / 3
+                    value: Sys.disk / 100
+                    text: Sys.disk
+                    unit: "%"
+                    label: Tr.t("Disk")
+                    hot: Sys.disk >= 90
+                }
+                Gauge {
+                    width: (system.width - 12) / 3
+                    value: Sys.batteryPercent / 100
+                    text: Sys.hasBattery ? Sys.batteryPercent : "—"
+                    unit: Sys.hasBattery ? "%" : ""
+                    label: Tr.t("Battery")
+                    hot: Sys.hasBattery && Sys.batteryPercent <= 15 && !Sys.charging
+                }
+            }
+
+            Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 18
+
+                Label {
+                    text: "↓ " + root.rate(Sys.netDown)
+                    size: 12
+                    color: Theme.muted
+                }
+                Label {
+                    text: "↑ " + root.rate(Sys.netUp)
+                    size: 12
+                    color: Theme.muted
+                }
+            }
+        }
+    }
+
+    AnalogClock {
+        id: clockFace
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
+        width: Math.min(parent.height, 470)
+        height: width
+    }
+
+    // Sana, ob-havo, kalendar
+    Item {
+        anchors.right: parent.right
+        width: root.sideWidth
         height: parent.height
 
         Column {
             anchors.verticalCenter: parent.verticalCenter
             width: parent.width
-            spacing: 2
+            spacing: 22
 
-            Label {
-                text: Ui.pad(clock.hours) + ":" + Ui.pad(clock.minutes)
-                size: 104
-                font.weight: Font.ExtraLight
-                font.letterSpacing: -5
-            }
-            Label {
+            Column {
                 width: parent.width
-                leftPadding: 4
-                text: Tr.capitalized(clock.date.toLocaleDateString(Tr.locale, Tr.language === "ru" ? "dddd, d MMMM" : "dddd, MMMM d"))
-                size: 16
+                spacing: 2
+
+                Label {
+                    width: parent.width
+                    text: Tr.capitalized(clock.date.toLocaleDateString(Tr.locale, "dddd"))
+                    size: 34
+                    font.weight: Font.Light
+                    font.letterSpacing: -0.5
+                }
+                Label {
+                    width: parent.width
+                    text: clock.date.toLocaleDateString(Tr.locale, Tr.language === "ru" ? "d MMMM yyyy" : "MMMM d, yyyy")
+                    size: 15
+                    color: Theme.muted
+                }
+                Label {
+                    width: parent.width
+                    topPadding: 6
+                    visible: !!Weather.summary && Settings.get("weather.enabled", true)
+                    text: Weather.summary
+                    color: Theme.accent
+                    size: 14
+                }
             }
-            Label {
+
+            Calendar {
                 width: parent.width
-                leftPadding: 4
-                topPadding: 6
-                visible: !!Weather.summary && Settings.get("weather.enabled", true)
-                text: Weather.summary
-                color: Theme.muted
-                size: 14
+                cellWidth: Math.floor(parent.width / 7)
+                cellHeight: 26
             }
         }
 
         // Sozlamalar: ustiga kelganda g'ildirak aylanadi.
         Rectangle {
-            anchors.left: parent.left
-            anchors.leftMargin: 4
+            anchors.right: parent.right
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: 4
             width: 38
             height: 38
             radius: gearArea.containsMouse ? 13 : 19
@@ -103,115 +244,6 @@ Item {
                     Ui.settingsOpen = true;
                 }
             }
-        }
-    }
-
-    // Kompyuter yuklamasi
-    DashCard {
-        id: system
-
-        x: hero.width + 24
-        width: 410
-        height: parent.height
-        delay: 60
-        clickable: true
-        onClicked: {
-            Ui.popup = "";
-            Quickshell.execDetached(["kitty", "--class", "niri-desk-tool", "btop"]);
-        }
-
-        Column {
-            x: 22
-            y: 18
-            width: parent.width - 44
-            spacing: 14
-
-            Item {
-                width: parent.width
-                height: 74
-
-                Column {
-                    spacing: 0
-
-                    Label {
-                        text: Tr.t("Processor")
-                        color: Theme.muted
-                        size: 13
-                    }
-                    Label {
-                        text: Sys.cpu + "%"
-                        size: 50
-                        font.weight: Font.Light
-                        font.letterSpacing: -2
-                    }
-                }
-                Row {
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    spacing: 5
-                    visible: Sys.cpu >= 85
-
-                    Icon {
-                        anchors.verticalCenter: parent.verticalCenter
-                        name: "alert"
-                        size: 12
-                        color: Theme.error
-                    }
-                    Label {
-                        text: Tr.t("High load")
-                        color: Theme.error
-                        size: 12
-                    }
-                }
-            }
-
-            LoadChart {
-                width: parent.width
-                height: 142
-                values: Sys.history
-            }
-
-            Row {
-                width: parent.width
-                spacing: 16
-
-                Stat {
-                    label: Tr.t("Memory")
-                    value: Sys.ramGb.toFixed(1) + " GB"
-                    share: Sys.ram / 100
-                    hot: Sys.ram >= 90
-                }
-                Stat {
-                    label: Tr.t("Temperature")
-                    value: Sys.temperature > 0 ? Sys.temperature + "°" : "—"
-                    share: Sys.temperature / 100
-                    hot: Sys.temperature >= 90
-                }
-                Stat {
-                    label: Tr.t("Disk")
-                    value: Sys.disk + "%"
-                    share: Sys.disk / 100
-                    hot: Sys.disk >= 90
-                }
-                Stat {
-                    label: Tr.t("Battery")
-                    value: Sys.hasBattery ? Sys.batteryPercent + "%" : "—"
-                    share: Sys.batteryPercent / 100
-                    hot: Sys.hasBattery && Sys.batteryPercent <= 15 && !Sys.charging
-                }
-            }
-        }
-    }
-
-    DashCard {
-        x: system.x + system.width + 24
-        width: parent.width - x
-        height: parent.height
-        delay: 120
-
-        Calendar {
-            anchors.centerIn: parent
-            width: 210
         }
     }
 }
