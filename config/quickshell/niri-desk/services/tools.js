@@ -60,10 +60,6 @@ function calc(input) {
     return String(Math.round(value * 1e10) / 1e10);
 }
 
-function looksLikeMath(q) {
-    return /^[\d\s+\-*/%^().,]+$/.test(q) && /\d\s*[+\-*/%^]\s*[\d(]/.test(q);
-}
-
 // Qator noto'g'ri tilda yozilsa: ruscha klaviatura harflarini lotin tugmalariga aylantiradi.
 const RU = "йцукенгшщзхъфывапролджэячсмитьбю";
 const EN = "qwertyuiop[]asdfghjkl;'zxcvbnm,.";

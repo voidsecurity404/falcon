@@ -185,19 +185,6 @@ def row(section):
     return [r.split("|", 1)[1] for r in st()["rows"] if r.startswith(section + "|")]
 
 
-def rofi_open():
-    return sh("pgrep -u $(id -u) -x rofi").returncode == 0
-
-
-def launcher(q=""):
-    ipc("launcher")
-    wait(lambda: st()["popup"] == "launcher", 3, "qidiruv ochilmadi")
-    time.sleep(0.5)
-    if q:
-        typ(q)
-    time.sleep(0.2)
-
-
 def clip_text():
     return sh(["wl-paste", "-n", "-t", "text/plain"]).stdout
 
@@ -227,7 +214,7 @@ def reset():
         niri("switch-layout", "0")
     for w in windows():
         niri("close-window", "--id", w["id"])
-    sh("pkill -x rofi; pkill -f 'sleep 900'; pkill -f wf-recorder; pkill -x satty; pkill -x slurp; pkill -x btop; pkill -x nm-applet")
+    sh("pkill -f 'sleep 900'; pkill -f wf-recorder; pkill -x satty; pkill -x slurp; pkill -x btop; pkill -x nm-applet")
     try:
         wait(lambda: not windows(), 2.5)
     except AssertionError:
@@ -989,250 +976,6 @@ def _():
     key("esc")
 
 
-feature("launcher", "Qidiruv oynasi")
-
-
-@case("IPC ochadi, Esc yopadi")
-def _():
-    launcher()
-    key("esc")
-    wait(lambda: st()["popup"] == "")
-
-
-@case("IPC qayta chaqirilsa yopiladi")
-def _():
-    launcher()
-    ipc("launcher")
-    wait(lambda: st()["popup"] == "")
-
-
-@case("Nomi bilan dastur topiladi va birinchi turadi")
-def _():
-    launcher("kit")
-    r = st()["rows"]
-    ok(r and r[0].startswith("Apps|") and "kitty" in r[0].lower(), r)
-
-
-@case("Enter dasturni ochadi va oyna yopiladi")
-def _():
-    launcher("kitty")
-    key("enter")
-    wait(lambda: any(w["app_id"] == "kitty" for w in windows()), 6)
-    wait(lambda: st()["popup"] == "")
-
-
-@case("Topilmaydigan so'z bo'sh ro'yxat beradi, Enter hech narsa qilmaydi")
-def _():
-    launcher("zzxqwjjj")
-    ok(st()["rows"] == [])
-    key("enter")
-    time.sleep(0.4)
-    ok(not windows())
-    key("esc")
-
-
-@case("Pastga va tepaga tugmalari tanlovni siljitadi, chetdan chiqmaydi")
-def _():
-    launcher()
-    key("up")
-    ok(st()["selected"] == 0)
-    key("down"); key("down")
-    ok(st()["selected"] == 2)
-    n = len(st()["rows"])
-    for _n in range(n + 3):
-        key("down")
-    ok(st()["selected"] == n - 1)
-    key("esc")
-
-
-@case("Oyna tashqarisiga bosish yopadi")
-def _():
-    launcher()
-    click(60, 700)
-    wait(lambda: st()["popup"] == "")
-
-
-@case("Qatorni sichqoncha bilan bosish ochadi")
-def _():
-    launcher("kitty")
-    click(640, 257)
-    wait(lambda: any(w["app_id"] == "kitty" for w in windows()), 6)
-
-
-@case("Ochiq oyna nomi bilan unga o'tadi")
-def _():
-    a = term("maxsus-oyna"); b = term("boshqa")
-    launcher("maxsus-oyna")
-    wait(lambda: row("Open windows"))
-    key("enter")
-    wait(lambda: focused()["id"] == a)
-
-
-@case("Aniq moslik bo'lsa taxminiy dastur chiqmaydi")
-def _():
-    sh("cliphist wipe")
-    launcher("color")
-    r = st()["rows"]
-    ok(r and r[0].startswith("Actions|"), r)
-    key("esc")
-
-
-# ---------------------------------------------------------------------------------------
-feature("calc", "Qidiruvda hisoblash")
-
-
-def calc(q):
-    launcher(q)
-    return row("Calculator")
-
-
-@case("2+2*3 amal tartibini to'g'ri hisoblaydi")
-def _():
-    ok(calc("2+2*3") == ["8"])
-    key("esc")
-
-
-@case("=2^10 ishlaydi")
-def _():
-    ok(calc("=2^10") == ["1024"])
-    key("esc")
-
-
-@case("Qavslar ishlaydi")
-def _():
-    ok(calc("(1+2)*3") == ["9"])
-    key("esc")
-
-
-@case("Kasr sonlar ishlaydi")
-def _():
-    ok(calc("0.1+0.2") == ["0.3"])
-    key("esc")
-
-
-@case("Nolga bo'lish xato bermaydi")
-def _():
-    ok("1/0" not in calc("1/0"))
-    ok(st() is not None)
-    key("esc")
-
-
-@case("Tugallanmagan ifoda shell'ni buzmaydi")
-def _():
-    ok(calc("2+") == [])
-    key("esc")
-
-
-@case("Enter natijani nusxalaydi")
-def _():
-    calc("6*7")
-    key("enter")
-    wait(lambda: clip_text() == "42")
-
-
-@case("IP manzil hisob deb qabul qilinmaydi")
-def _():
-    ok(calc("10.10.11.42") == [])
-    key("esc")
-
-
-@case("Kod yuborilsa bajarilmaydi")
-def _():
-    r = calc("=process.exit(1)")
-    ok(r in ([], ["incomplete expression"]), r)
-    ok(st() is not None)
-    key("esc")
-
-
-@case("Juda katta son xato bermaydi")
-def _():
-    calc("=9^9^9")
-    ok(st() is not None)
-    key("esc")
-
-
-# ---------------------------------------------------------------------------------------
-feature("command", "Qidiruvda buyruq va internet")
-
-
-def run_cmd(c):
-    launcher(">" + c)
-    key("enter")
-    time.sleep(0.8)
-
-
-@case(">buyruq terminal ochib ishga tushiradi")
-def _():
-    run_cmd("touch /tmp/nd-a.flag")
-    wait(lambda: os.path.exists("/tmp/nd-a.flag"), 5)
-
-
-@case("Quvur va belgilar buzilmaydi")
-def _():
-    run_cmd("echo salom | tr a-z A-Z > /tmp/nd-b.flag")
-    wait(lambda: Path("/tmp/nd-b.flag").exists() and Path("/tmp/nd-b.flag").read_text().strip() == "SALOM", 5)
-
-
-@case("Qo'shtirnoqli buyruq ishlaydi")
-def _():
-    run_cmd("echo 'a b' > /tmp/nd-c.flag")
-    wait(lambda: Path("/tmp/nd-c.flag").exists() and Path("/tmp/nd-c.flag").read_text().strip() == "a b", 5)
-
-
-@case("Xato buyruqda terminal ochiq qoladi")
-def _():
-    run_cmd("bunday-buyruq-yoq")
-    wait(lambda: any(w["app_id"] == "kitty" for w in windows()), 5)
-
-
-@case("Enter bosilganda terminal yopiladi")
-def _():
-    run_cmd("true")
-    wait(lambda: any(w["app_id"] == "kitty" for w in windows()), 5)
-    time.sleep(0.6)
-    key("enter")
-    wait(lambda: not windows(), 5)
-
-
-@case("Bo'sh > hech narsa ishga tushirmaydi")
-def _():
-    launcher(">")
-    key("enter")
-    time.sleep(0.5)
-    ok(not windows())
-    sh("true")
-
-
-@case("Bo'sh joyli > ham xavfsiz")
-def _():
-    launcher(">   ")
-    key("enter")
-    time.sleep(0.5)
-    ok(not [w for w in windows() if w["app_id"] == "kitty"], windows())
-
-
-@case("?qidiruv qatorini ko'rsatadi")
-def _():
-    launcher("?sql injection")
-    ok(row("Web") == ["sql injection"])
-    key("esc")
-
-
-@case("Bo'sh ? hech narsa ochmaydi")
-def _():
-    launcher("?")
-    ok(row("Web") == [])
-    key("esc")
-
-
-@case("Faqat buyruq qatori chiqadi, boshqalar aralashmaydi")
-def _():
-    launcher(">kitty")
-    ok(st()["rows"] == ["Command|kitty"], st()["rows"])
-    key("esc")
-
-
-# ---------------------------------------------------------------------------------------
 feature("clipboard", "Clipboard tarixi")
 
 
@@ -2018,13 +1761,6 @@ def _():
     wait(lambda: focused()["layout"]["tile_size"][1] == h0, 4)
 
 
-@case("Zen'da qidiruv ishlaydi")
-def _():
-    key("mod", "f"); wait(lambda: st()["zen"], 3)
-    launcher()
-    key("esc")
-
-
 @case("Zen'da Mod+D ochilishi shell'ni buzmaydi")
 def _():
     key("mod", "f"); wait(lambda: st()["zen"], 3)
@@ -2232,15 +1968,6 @@ def _():
     rec_stop()
 
 
-@case("Yozish paytida qidiruv ishlaydi")
-def _():
-    rec_start()
-    launcher()
-    key("esc")
-    ok(st()["recording"])
-    rec_stop()
-
-
 @case("Shell qayta ishga tushsa yozish davom etadi va to'xtatsa bo'ladi")
 def _():
     rec_start()
@@ -2352,35 +2079,6 @@ def _():
     ok(st() is not None)
 
 
-@case("Rang olish hex nusxalaydi")
-def _():
-    launcher("pick color")
-    key("enter")
-    time.sleep(0.8)
-    click(400, 400)
-    wait(lambda: re.fullmatch(r"#[0-9a-fA-F]{6}", clip_text()), 5, clip_text())
-
-
-@case("Rang olishda xabar chiqadi")
-def _():
-    launcher("pick color")
-    key("enter")
-    time.sleep(0.8)
-    click(500, 500)
-    toast("Color copied", 5)
-
-
-@case("Rang olishni Esc bekor qiladi")
-def _():
-    copy("rang-tegmagan")
-    launcher("pick color")
-    key("enter")
-    time.sleep(0.8)
-    key("esc")
-    time.sleep(0.8)
-    ok(clip_text() == "rang-tegmagan", clip_text())
-
-
 @case("OCR ketma-ket ikki marta ishlaydi")
 def _():
     settings(windows__centerSingle=False)
@@ -2447,15 +2145,6 @@ def _():
     key("mod", "x"); wait(locked, 4); time.sleep(0.8)
     key("enter"); time.sleep(1)
     ok(locked())
-    unlock()
-
-
-@case("Bloklanganda Mod+A ishlamaydi")
-def _():
-    need_pw()
-    key("mod", "x"); wait(locked, 4); time.sleep(0.8)
-    key("mod", "a"); time.sleep(0.6)
-    ok(st()["popup"] == "" and not rofi_open(), st()["popup"])
     unlock()
 
 
@@ -2590,14 +2279,6 @@ def _():
 def _():
     settings(appearance__terminalOpacity=0.5)
     wait(lambda: "background_opacity 0.5" in (HOME / ".config/kitty/niri-desk-user.conf").read_text(), 4)
-
-
-@case("Mavjud bo'lmagan shrift shell'ni buzmaydi")
-def _():
-    settings(appearance__font="Bunday Shrift Yoq")
-    ok(st() is not None)
-    launcher()
-    key("esc")
 
 
 @case("Chegaradan tashqari matn o'lchami panelni qulatmaydi")
@@ -2856,23 +2537,6 @@ def binds_text():
     return (GEN / "binds.kdl").read_text()
 
 
-@case("Klavishni o'zgartirish ishlaydi")
-def _():
-    settings(binds__launcher="Mod+Y")
-    time.sleep(0.4)
-    key("mod", "y")
-    wait(rofi_open, 3)
-
-
-@case("Eski klavish endi ishlamaydi")
-def _():
-    settings(binds__launcher="Mod+Y")
-    time.sleep(0.4)
-    key("mod", "a")
-    time.sleep(0.6)
-    ok(not rofi_open())
-
-
 @case("Klavishni bo'sh qoldirish uni o'chiradi")
 def _():
     settings(binds__dashboard="")
@@ -2880,40 +2544,6 @@ def _():
     key("mod", "d")
     time.sleep(0.5)
     ok(st()["popup"] == "")
-
-
-@case("Bir klavish ikki amalga berilsa rad etiladi")
-def _():
-    before = binds_text()
-    settings(binds__launcher="Mod+D")
-    wait(lambda: "two actions" in st()["error"], 5, st()["error"])
-    ok(binds_text() == before)
-
-
-@case("Band tizim klavishi rad etiladi")
-def _():
-    before = binds_text()
-    settings(binds__launcher="Mod+H")
-    wait(lambda: "system shortcut" in st()["error"], 5, st()["error"])
-    ok(binds_text() == before)
-    key("mod", "a")
-    wait(rofi_open, 3)
-
-
-@case("Mavjud bo'lmagan tugma nomi rad etiladi")
-def _():
-    before = binds_text()
-    settings(binds__launcher="Mod+Bunday")
-    wait(lambda: st()["error"], 5)
-    ok(binds_text() == before)
-
-
-@case("Xavfli matn klavish sifatida qabul qilinmaydi")
-def _():
-    before = binds_text()
-    settings(binds__launcher='Mod+Y { spawn "touch" "/tmp/nd-k.flag"; }')
-    wait(lambda: st()["error"], 5)
-    ok(binds_text() == before)
 
 
 @case("Yangi til qo'shiladi")
@@ -2985,13 +2615,6 @@ def _():
 def _():
     open_sw()
     ok(len([w for w in windows() if w["title"] == "niri-desk settings"]) == 1)
-
-
-@case("Qidiruv oynasidan ham ochiladi")
-def _():
-    launcher("settings")
-    key("enter")
-    wait(sw, 4)
 
 
 @case("Tugma bosilganda settings.json o'zgaradi")
@@ -3109,21 +2732,6 @@ def _():
     typ("qizil")
     key("enter")
     wait(lambda: "color" in st()["error"], 5, st()["error"])
-
-
-@case("Klavishni maydondan o'zgartirish ishlaydi")
-def _():
-    ox, oy = page(5)
-    click(ox + 800, row_y(oy, 2))
-    for _n in range(12):
-        key("backspace")
-    typ("Mod+Y")
-    key("enter")
-    wait(lambda: "Mod+Y hotkey" in binds_text(), 4, st()["error"])
-    key("esc")
-    time.sleep(0.4)
-    key("mod", "y")
-    wait(rofi_open, 3)
 
 
 @case("Yangi qoida tugmasi qoida qo'shadi")
@@ -3265,12 +2873,6 @@ LBIN = HOME / ".local/bin"
 PROFILES = HOME / ".config/niri-desk/profiles.json"
 AI_URL = "http://127.0.0.1:8765"
 FAKE = None
-
-
-def lq(q):
-    launcher()
-    ipc("launcherQuery", q)
-    time.sleep(0.5)
 
 
 def run(*argv, stdin=None, timeout=30):
@@ -3647,24 +3249,6 @@ def _():
     ok(run("niri-desk-profile", "T").returncode == 1)
 
 
-@case("Launcher @ bilan profillarni ko'rsatadi")
-def _():
-    write_json(PROFILES, [{"name": "Ish"}, {"name": "Kod"}])
-    lq("@")
-    ok(len(row("Work profiles")) == 2, st()["rows"])
-    ipc("launcherQuery", "@is")
-    time.sleep(0.4)
-    ok(len(row("Work profiles")) == 1)
-
-
-@case("Launcher'dan ochish ishlaydi")
-def _():
-    write_json(PROFILES, [{"name": "T", "windows": [FOOTA]}])
-    lq("@T")
-    key("enter")
-    wait(lambda: wsof("prof-a") == 1, 6, "ochilmadi")
-
-
 @case("Fayl o'zgarsa ro'yxat qayta o'qiladi")
 def _():
     write_json(PROFILES, [{"name": "A"}])
@@ -3760,132 +3344,112 @@ def _():
     ok(wsof("foot") == 1 and wsof("kitty") == 2, windows())
 
 
-feature("files", "Launcher: fayl qidiruvi")
-
-FDIR = HOME / "nd-fayllar"
-
-
-def fileset():
-    sh(["rm", "-rf", str(FDIR)])
-    FDIR.mkdir()
-    (FDIR / "parol-royxat.txt").write_text("x")
-    (FDIR / "hisobot 2026.txt").write_text("x")
-    (FDIR / ".yashirin-parol").write_text("x")
-
-
-def names():
-    return row("Files")
-
-
-for _q, _want in [("/parol-royxat", True), ("/PAROL-ROYXAT", True), ("/hisobot 2026", True), ("/yoq-bunday-fayl", False)]:
-    @case(f"{_q} qidiruvi")
-    def _(q=_q, want=_want):
-        fileset()
-        lq(q)
-        if want:
-            wait(lambda: len(names()) >= 1, 4, "topilmadi")
-        else:
-            time.sleep(1)
-            ok(names() == [])
-
-
-@case("Bitta harfda qidiruv boshlanmaydi")
-def _():
-    lq("/p")
-    ok(names() == ["Type at least 2 letters"], names())
-
-
-@case("Yashirin fayllar chiqmaydi")
-def _():
-    fileset()
-    lq("/yashirin")
-    time.sleep(1)
-    ok(names() == [])
-
-
-@case("Maxsus belgilar buyruq sifatida bajarilmaydi")
-def _():
-    lq("/; touch /tmp/nd-inj.flag")
-    time.sleep(1)
-    ok(not Path("/tmp/nd-inj.flag").exists())
-
-
-@case("-- bilan boshlangan so'z fd bayrog'iga aylanmaydi")
-def _():
-    lq("/--help")
-    time.sleep(1)
-    ok(st()["popup"] == "launcher")
-
-
-@case("Natijalar 9 tadan oshmaydi")
-def _():
-    fileset()
-    for i in range(14):
-        (FDIR / f"ko'p-{i}.txt").write_text("x")
-    lq("/ko'p")
-    wait(lambda: len(names()) >= 1, 4)
-    ok(len(names()) <= 9)
-
-
-@case("Enter faylni ochadi")
-def _():
-    fileset()
-    lq("/parol-royxat")
-    wait(lambda: len(names()) >= 1, 4)
-    key("enter")
-    wait(lambda: st()["popup"] == "", 3, "yopilmadi")
-
-
 feature("layoutfix", "Noto'g'ri klaviatura tuzatish")
 
 for _q, _want in [("лшеен", "kitty"), ("ащще", "foot"), ("ащ", "foot")]:
     @case(f"{_q} -> {_want}")
     def _(q=_q, want=_want):
-        lq(q)
+        ipc("menu")
+        wait(lambda: st()["popup"] == "menu", 3)
+        time.sleep(0.4)
+        ipc("launcherQuery", q)
+        time.sleep(0.5)
         ok(any(want in r.lower() for r in st()["rows"]), st()["rows"])
+        ipc("close")
+        wait(lambda: st()["popup"] == "", 3)
 
 
-@case("Lotin yozuvi oldingidek ishlaydi")
+feature("binds-edit", "Klavishlarni o'zgartirish")
+
+
+def clipboard_open():
+    return st()["popup"] == "clipboard"
+
+
+@case("Klavishni o'zgartirish ishlaydi")
 def _():
-    lq("kitty")
-    ok(any("kitty" in r.lower() for r in st()["rows"]))
+    settings(binds__clipboard="Mod+Y")
+    time.sleep(0.4)
+    key("mod", "y")
+    wait(clipboard_open, 3)
+    key("esc")
 
 
-@case("To'g'ri moslik birinchi turadi")
+@case("Eski klavish endi ishlamaydi")
 def _():
-    lq("kitty")
-    ok("kitty" in st()["rows"][0].lower(), st()["rows"])
+    settings(binds__clipboard="Mod+Y")
+    time.sleep(0.4)
+    key("mod", "v")
+    time.sleep(0.6)
+    ok(not clipboard_open())
 
 
-@case("Enter tuzatilgan natijani ochadi")
+@case("Bir klavish ikki amalga berilsa rad etiladi")
 def _():
-    lq("лшеен")
+    before = binds_text()
+    settings(binds__clipboard="Mod+D")
+    wait(lambda: "two actions" in st()["error"], 5, st()["error"])
+    ok(binds_text() == before)
+
+
+@case("Band tizim klavishi rad etiladi")
+def _():
+    before = binds_text()
+    settings(binds__clipboard="Mod+H")
+    wait(lambda: "system shortcut" in st()["error"], 5, st()["error"])
+    ok(binds_text() == before)
+    key("mod", "v")
+    wait(clipboard_open, 3)
+    key("esc")
+
+
+@case("Mavjud bo'lmagan tugma nomi rad etiladi")
+def _():
+    before = binds_text()
+    settings(binds__clipboard="Mod+Bunday")
+    wait(lambda: st()["error"], 5)
+    ok(binds_text() == before)
+
+
+@case("Xavfli matn klavish sifatida qabul qilinmaydi")
+def _():
+    before = binds_text()
+    settings(binds__clipboard='Mod+Y { spawn "touch" "/tmp/nd-k.flag"; }')
+    wait(lambda: st()["error"], 5)
+    ok(binds_text() == before)
+
+
+@case("Klavishni maydondan o'zgartirish ishlaydi")
+def _():
+    ox, oy = page(5)
+    click(ox + 800, row_y(oy, 2))
+    for _n in range(12):
+        key("backspace")
+    typ("Mod+Y")
     key("enter")
-    wait(windows, 6, "ochilmadi")
+    wait(lambda: "Mod+Y hotkey" in binds_text(), 4, st()["error"])
+    key("esc")
+    time.sleep(0.4)
+    key("mod", "y")
+    wait(clipboard_open, 3)
+    key("esc")
 
 
-@case("Bo'sh qidiruv buzilmaydi")
+@case("Mavjud bo'lmagan shrift shell'ni buzmaydi")
 def _():
-    lq("")
-    ok(st()["popup"] == "launcher" and st()["rows"])
+    settings(appearance__font="Bunday Shrift Yoq")
+    ok(st() is not None)
 
 
-@case("Raqam va belgilar o'zgarmaydi")
+feature("color-pick", "Ekrandan rang olish")
+
+
+@case("Rang olish hex nusxalaydi")
 def _():
-    lq("=2+2")
-    ok(any("4" in r for r in st()["rows"]), st()["rows"])
-
-
-@case("Topilmagan so'z bo'sh ro'yxat beradi")
-def _():
-    lq("зшщзшщзшщ")
-    ok(not any("kitty" in r for r in st()["rows"]))
-
-
-@case("Aralash yozuv yiqitmaydi")
-def _():
-    lq("kлш")
-    ok(st()["popup"] == "launcher")
+    run("niri-desk-color")
+    time.sleep(0.8)
+    click(400, 400)
+    wait(lambda: re.fullmatch(r"#[0-9a-fA-F]{6}", clip_text()), 5, clip_text())
 
 
 feature("translate", "Ekrandan tarjima")
@@ -3988,12 +3552,6 @@ def _():
 @case("Klavish sozlangan")
 def _():
     ok("niri-desk-translate" in (GEN / "binds.kdl").read_text())
-
-
-@case("Launcher'da bor")
-def _():
-    lq("translate")
-    ok(any("translate" in r.lower() for r in st()["rows"]))
 
 
 feature("monitors", "Monitor profillari")
@@ -4247,421 +3805,6 @@ def _():
 def _():
     ok(run("niri-desk-backup", "import", "/tmp/nd-yoq.tar.gz").returncode == 1)
 
-
-
-ROFI_SEARCH = str(HOME / ".local/bin/niri-desk-rofi-search")
-ROFI_BIN = str(HOME / ".local/bin/niri-desk-rofi")
-# Rofi ichidagi joylar, 1280x800 ekranda.
-TILE = (352, 233)
-TAB_APPS, TAB_SEARCH, TAB_WINDOW = (386, 624), (640, 624), (894, 624)
-
-
-def rofi_script(*args, retv="2", info=None):
-    env = dict(os.environ, ROFI_RETV=retv)
-    if info:
-        env["ROFI_INFO"] = json.dumps(info)
-    r = subprocess.run([ROFI_SEARCH, *args], capture_output=True, text=True, env=env, timeout=15)
-    ok(r.returncode == 0, r.stderr[-300:])
-    lines = [l for l in r.stdout.split("\n") if l]
-    return [l.split("\0")[0] for l in lines if not l.startswith("\0")], [l for l in lines if l.startswith("\0message")]
-
-
-def rofi_show(tabs=0):
-    """Mod+A, then Tab to reach another tab: 1 is search, 2 is windows."""
-    key("mod", "a")
-    wait(rofi_open, 3, "rofi ochilmadi")
-    time.sleep(0.6)
-    for _ in range(tabs):
-        key("tab")
-        time.sleep(0.25)
-
-
-def closed():
-    wait(lambda: not rofi_open(), 4, "rofi yopilmadi")
-
-
-feature("rofi-apps", "Mod+A: dasturlar menyusi")
-
-
-@case("Dasturni nomi bilan topib Enter bosadi: dastur ochiladi")
-def _():
-    rofi_show()
-    typ("kitty")
-    key("enter")
-    closed()
-    wait(windows, 6, "dastur ochilmadi")
-
-
-@case("Dastur oynasi ustida ochib, Esc bilan fikridan qaytadi: fokus o'sha oynada qoladi")
-def _():
-    w = term()
-    rofi_show()
-    typ("fire")
-    key("esc")
-    closed()
-    wait(lambda: focused() and focused()["id"] == w, 3, "fokus qaytmadi")
-
-
-@case("Tugmani ikki marta bosadi: menyu yopiladi, ikkinchi nusxa qolmaydi")
-def _():
-    rofi_show()
-    key("mod", "a")
-    closed()
-    ok(len(sh("pgrep -u $(id -u) -x rofi").stdout.split()) == 0)
-
-
-@case("Tugmani ketma-ket tez bosadi: menyular to'planib qolmaydi")
-def _():
-    for _ in range(5):
-        key("mod", "a")
-    time.sleep(1.0)
-    ok(len(sh("pgrep -u $(id -u) -x rofi").stdout.split()) <= 1)
-
-
-@case("Mavjud bo'lmagan nomni yozib Esc bosadi: hech narsa ochilmaydi")
-def _():
-    rofi_show()
-    typ("bundaydasturyoqzzz")
-    time.sleep(0.3)
-    key("esc")
-    closed()
-    ok(not windows())
-
-
-@case("To'rtburchak dasturni sichqoncha bilan bosadi: dastur ochiladi")
-def _():
-    rofi_show()
-    typ("kitty")
-    time.sleep(0.4)
-    click(*TILE)
-    closed()
-    wait(windows, 6, "dastur ochilmadi")
-
-
-feature("rofi-search", "Mod+A: Поиск bo'limi")
-
-
-@case("Tab bilan bo'limlarni aylanib, yana dasturlarga qaytadi")
-def _():
-    rofi_show()
-    a = shot("rt0", "250,52 780x600")
-    key("tab"); time.sleep(0.5)
-    b = shot("rt1", "250,52 780x600")
-    key("tab"); time.sleep(0.5)
-    key("tab"); time.sleep(0.5)
-    c = shot("rt2", "250,52 780x600")
-    ok(a != b and a == c, "bo'limlar almashmadi")
-
-
-@case("Bo'lim nomini sichqoncha bilan bosadi")
-def _():
-    rofi_show()
-    a = shot("rm0", "250,52 780x600")
-    click(*TAB_SEARCH); time.sleep(0.5)
-    b = shot("rm1", "250,52 780x600")
-    ok(a != b, "bo'lim almashmadi")
-    ok(rofi_open())
-
-
-@case("Tizim monitori to'rtburchagini bosadi: btop ochiladi")
-def _():
-    rofi_show(1)
-    typ("monitor")
-    time.sleep(0.4)
-    click(352, 233)
-    closed()
-    wait(lambda: sh("pgrep -u $(id -u) -x btop").returncode == 0, 5, "btop ochilmadi")
-
-
-@case("Olib tashlangan amallar endi menyuda yo'q: Sozlamalar, Lock, Reboot")
-def _():
-    rows = "\n".join(rofi_script(retv="0")[0])
-    for name in ("Settings", "Lock screen", "Reboot", "Shut down", "Record screen"):
-        ok(name not in rows, name)
-
-
-@case("Yozilgan amal ustida Esc: hech narsa bajarilmaydi")
-def _():
-    rofi_show(1)
-    typ("monitor")
-    key("esc")
-    closed()
-    time.sleep(0.8)
-    ok(sh("pgrep -u $(id -u) -x btop").returncode != 0)
-
-
-@case("Profil nomini @ bilan topadi va ochadi")
-def _():
-    write_json(PROFILES, [{"name": "Ish", "windows": [{"workspace": 1, "cmd": "foot --app-id prof-rofi sleep 900", "match": "^prof-rofi$"}]}])
-    time.sleep(0.5)
-    rofi_show(1)
-    typ("@ish")
-    time.sleep(0.4)
-    key("enter")
-    closed()
-    wait(lambda: any(w["app_id"] == "prof-rofi" for w in windows()), 6, "profil ochilmadi")
-
-
-feature("rofi-calc", "Rofi: kalkulyator")
-
-
-@case("2+2*3 yozib Enter: natija chiqadi, yana Enter: clipboard'ga tushadi")
-def _():
-    rofi_show(1)
-    typ("2+2*3")
-    key("enter")
-    time.sleep(0.8)
-    ok(rofi_open(), "natija ko'rsatilmay yopildi")
-    key("enter")
-    closed()
-    wait(lambda: clip_text() == "8", 3, f"clipboard: {clip_text()!r}")
-
-
-@case("2+2 natijasi bitta belgi: baribir matn sifatida joylashadi")
-def _():
-    rofi_show(1)
-    typ("2+2")
-    key("enter")
-    time.sleep(0.8)
-    key("enter")
-    closed()
-    wait(lambda: clip_text() == "4", 3, f"clipboard: {clip_text()!r}")
-    ok("text/plain" in sh("wl-paste -l").stdout)
-
-
-@case("Vergul bilan kasr yozadi: 0,1+0,2 aniq 0.3 chiqadi")
-def _():
-    rofi_show(1)
-    typ("0,1+0,2")
-    key("enter")
-    time.sleep(0.8)
-    key("enter")
-    closed()
-    wait(lambda: clip_text() == "0.3", 3, f"clipboard: {clip_text()!r}")
-
-
-@case("Nolga bo'ladi: menyu buzilmaydi, xato ko'rsatiladi")
-def _():
-    rofi_show(1)
-    typ("=1/0")
-    key("enter")
-    time.sleep(0.8)
-    ok(rofi_open(), "menyu yopilib ketdi")
-    ok(rofi_script("=1/0")[1])
-    typ("=2+3")
-    key("enter")
-    time.sleep(0.8)
-    ok(rofi_open())
-    wait(lambda: clip_text() == "5", 3, f"clipboard: {clip_text()!r}")
-
-
-@case("Yopilmagan qavs yozadi: dastur yiqilmaydi")
-def _():
-    rofi_show(1)
-    typ("=(2+3")
-    key("enter")
-    time.sleep(0.8)
-    ok(rofi_open())
-
-
-@case("Juda katta son yozadi: =9^9^9 yiqitmaydi")
-def _():
-    ok(rofi_script("=9^9^9")[1])
-
-
-feature("rofi-cmd", "Rofi: buyruq, internet va fayl")
-
-
-@case(">buyruq yozadi: terminalda bajariladi")
-def _():
-    sh("rm -f /tmp/nd-cmd.flag")
-    rofi_show(1)
-    typ(">touch /tmp/nd-cmd.flag")
-    key("enter")
-    closed()
-    wait(lambda: os.path.exists("/tmp/nd-cmd.flag"), 6, "bajarilmadi")
-    wait(windows, 4, "terminal ochilmadi")
-
-
-@case("Buyruqda qo'shtirnoq va bo'sh joy bor: to'g'ri bajariladi")
-def _():
-    sh("rm -f /tmp/nd-q.flag")
-    rofi_show(1)
-    typ('>echo "a b" > /tmp/nd-q.flag')
-    key("enter")
-    closed()
-    wait(lambda: Path("/tmp/nd-q.flag").exists() and Path("/tmp/nd-q.flag").read_text().strip() == "a b", 6, "noto'g'ri bajarildi")
-
-
-@case("Faqat > yozadi: hech narsa bajarilmaydi, menyu ochiq qoladi")
-def _():
-    rofi_show(1)
-    typ(">")
-    key("enter")
-    time.sleep(0.8)
-    ok(rofi_open() and not windows())
-
-
-@case("Faylni /nom bilan topadi: ro'yxat chiqadi")
-def _():
-    f = HOME / "nd-rofi-hujjat.txt"
-    f.write_text("x")
-    try:
-        rows = rofi_script("/nd-rofi-hujjat")[0]
-        ok(rows == ["nd-rofi-hujjat.txt"], rows)
-    finally:
-        f.unlink()
-
-
-@case("Topilmaydigan fayl va bitta harf: tushunarli xabar")
-def _():
-    ok(rofi_script("/bundayfaylyoqzzz")[1])
-    ok(rofi_script("/a")[1])
-
-
-@case("Noto'g'ri tilda yozadi: ruscha rejimda kitty terib Enter, kitty topiladi va ochiladi")
-def _():
-    rofi_show(1)
-    niri("switch-layout", "1")
-    time.sleep(0.3)
-    typ("kitty")
-    key("enter")
-    time.sleep(0.9)
-    ok(rofi_open(), "natija ko'rsatilmay yopildi")
-    key("enter")
-    closed()
-    wait(windows, 6, "kitty ochilmadi")
-
-
-feature("rofi-clip", "Mod+V: clipboard tarixi")
-
-
-def clip_put(text):
-    p = subprocess.Popen(["wl-copy"], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True)
-    p.communicate(text)
-    time.sleep(0.5)
-
-
-@case("Oldingi nusxani tanlab Enter: joylashtirishga tayyor bo'ladi")
-def _():
-    clip_put("birinchi-nd")
-    clip_put("ikkinchi-nd")
-    key("mod", "v")
-    wait(rofi_open, 3)
-    time.sleep(0.6)
-    typ("birinchi")
-    time.sleep(0.3)
-    key("enter")
-    closed()
-    wait(lambda: clip_text() == "birinchi-nd", 3, f"clipboard: {clip_text()!r}")
-
-
-@case("Ko'p qatorli matn tanlanadi: qatorlari buzilmaydi")
-def _():
-    clip_put("qator-nd-1\nqator-nd-2")
-    clip_put("boshqa-nd")
-    key("mod", "v")
-    wait(rofi_open, 3)
-    time.sleep(0.6)
-    typ("qator-nd")
-    time.sleep(0.3)
-    key("enter")
-    closed()
-    wait(lambda: clip_text() == "qator-nd-1\nqator-nd-2", 3, f"clipboard: {clip_text()!r}")
-
-
-@case("Esc bosadi: clipboard o'zgarmaydi")
-def _():
-    clip_put("saqlansin-nd")
-    key("mod", "v")
-    wait(rofi_open, 3)
-    time.sleep(0.5)
-    key("esc")
-    closed()
-    ok(clip_text() == "saqlansin-nd")
-
-
-@case("Tarixda yo'q so'zni yozib Enter: hech narsa o'zgarmaydi")
-def _():
-    clip_put("joyida-nd")
-    key("mod", "v")
-    wait(rofi_open, 3)
-    time.sleep(0.5)
-    typ("bundaymatnyoqzzz")
-    key("enter")
-    time.sleep(0.5)
-    sh("pkill -x rofi")
-    ok(clip_text() == "joyida-nd")
-
-
-@case("Qayta Mod+V: yopiladi")
-def _():
-    key("mod", "v")
-    wait(rofi_open, 3)
-    time.sleep(0.5)
-    key("mod", "v")
-    closed()
-
-
-feature("rofi-win", "Rofi: ochiq oynalar")
-
-
-@case("Boshqa oynani tanlaydi: fokus o'sha oynaga o'tadi")
-def _():
-    a = term("nd-birinchi")
-    term("nd-ikkinchi")
-    rofi_show(2)
-    typ("birinchi")
-    time.sleep(0.4)
-    key("enter")
-    closed()
-    wait(lambda: focused() and focused()["id"] == a, 4, "fokus o'tmadi")
-
-
-@case("Boshqa workspace'dagi oynani tanlaydi: u yerga o'tadi")
-def _():
-    a = term("nd-uzoq")
-    niri("focus-workspace", 2)
-    time.sleep(0.3)
-    term("nd-yaqin")
-    rofi_show(2)
-    typ("uzoq")
-    time.sleep(0.4)
-    key("enter")
-    closed()
-    wait(lambda: focused() and focused()["id"] == a, 4, "fokus o'tmadi")
-
-
-@case("Oyna yo'q paytda ochadi: yiqilmaydi")
-def _():
-    rofi_show(2)
-    time.sleep(0.4)
-    ok(rofi_open())
-    key("esc")
-    closed()
-
-
-@case("Ochiq oynalar ko'p: menyu ishlaydi")
-def _():
-    for i in range(12):
-        niri("spawn", "--", "kitty", "--title", f"nd-{i}", "sh", "-c", "sleep 900")
-    wait(lambda: len(windows()) >= 12, 12)
-    rofi_show(2)
-    typ("nd-7")
-    time.sleep(0.4)
-    key("enter")
-    closed()
-    wait(lambda: focused() and focused()["title"] == "nd-7", 4)
-
-
-@case("Esc bosadi: fokus o'zgarmaydi")
-def _():
-    term("nd-a")
-    b = term("nd-b")
-    rofi_show(2)
-    key("esc")
-    closed()
-    wait(lambda: focused() and focused()["id"] == b, 3)
 
 
 feature("wifi-page", "Wi-Fi menyusi")
@@ -5720,14 +4863,6 @@ def _():
 def _():
     settings(appearance__language="ru")
     wait(lambda: st()["lang"] == "ru" and st()["sample"] == "Настройки", 3, "almashmadi")
-
-
-@case("Launcher bo'limlari tilga ergashadi")
-def _():
-    settings(appearance__language="ru")
-    wait(lambda: st()["lang"] == "ru", 3)
-    lq("=2+2")
-    ok(any(r.startswith("Калькулятор|") for r in st()["rows"]), st()["rows"])
 
 
 @case("Skript xabari tilga ergashadi")

@@ -102,7 +102,6 @@
   "binds": {
     "terminal": "Mod+Return",
     "apps": "",
-    "launcher": "Mod+A",
     "clipboard": "Mod+V",
     "dashboard": "Mod+D",
     "control": "Mod+C",

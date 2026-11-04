@@ -237,8 +237,7 @@ def desk(*args):
 ACTIONS = {
     "terminal": ("Terminal", 'spawn "kitty"', True),
     "apps": ("Apps", "spawn " + desk("menu"), False),
-    "launcher": ("Search", f'spawn "{SCRIPTS}niri-desk-rofi"', False),
-    "clipboard": ("Clipboard history", f'spawn "{SCRIPTS}niri-desk-rofi" "clipboard"', False),
+    "clipboard": ("Clipboard history", "spawn " + desk("clipboard"), False),
     "dashboard": ("Dashboard", "spawn " + desk("dashboard"), False),
     "control": ("Control center", "spawn " + desk("control"), False),
     "wallpapers": ("Wallpaper and color", "spawn " + desk("wallpapers"), False),

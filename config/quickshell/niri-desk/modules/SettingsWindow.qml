@@ -293,7 +293,6 @@ LazyLoader {
                         title: Tr.t("Panels and menus"),
                         items: [
                             win.bind("apps", Tr.t("Apps")),
-                            win.bind("launcher", Tr.t("Search")),
                             win.bind("clipboard", Tr.t("Clipboard history")),
                             win.bind("dashboard", Tr.t("Dashboard")),
                             win.bind("control", Tr.t("Control center")),

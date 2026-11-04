@@ -128,15 +128,3 @@ layer-rule {
     match namespace="^niri-desk-widgets-face$"
     place-within-backdrop true
 }
-
-// Rofi menyusi panel kabi: yumaloq burchak, soya va orqa fon xiralashuvi.
-layer-rule {
-    match namespace="^rofi$"
-    geometry-corner-radius 16
-    shadow {
-        on
-    }
-    background-effect {
-        blur true
-    }
-}

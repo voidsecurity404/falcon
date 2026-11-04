@@ -33,7 +33,7 @@ ShellRoot {
         }
     }
 
-    Launcher {}
+    ClipboardMenu {}
     AppMenu {}
     WallpaperPicker {}
     SettingsWindow {}
@@ -44,9 +44,6 @@ ShellRoot {
 
         function menu(): void {
             Ui.togglePopup("menu");
-        }
-        function launcher(): void {
-            Ui.togglePopup("launcher");
         }
         function clipboard(): void {
             Ui.togglePopup("clipboard");

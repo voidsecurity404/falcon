@@ -49,13 +49,9 @@ targets=(
     .config/hypr/niri-desk-colors.conf
     .config/gtk-3.0/gtk.css
     .config/gtk-4.0/gtk.css
-    .config/rofi/niri-desk.rasi
-    .config/rofi/niri-desk-colors.rasi
     .local/bin/niri-desk-claude-status
     .local/bin/niri-desk-claude-usage
     .local/bin/niri-desk-spectrum
-    .local/bin/niri-desk-rofi
-    .local/bin/niri-desk-rofi-search
     .local/bin/niri-desk-shot
     .local/bin/niri-desk-wallpaper
     .local/bin/niri-desk-zen
@@ -204,8 +200,6 @@ do_it mkdir -p "$HOME/.config/fastfetch"
 do_it cp "$root/config/fastfetch/config.jsonc" "$HOME/.config/fastfetch/config.jsonc"
 do_it cp "$root/config/fastfetch/brand.txt" "$HOME/.config/fastfetch/brand.txt"
 do_it cp -a "$root/config/hypr/." "$HOME/.config/hypr/"
-do_it mkdir -p "$HOME/.config/rofi"
-do_it cp -a "$root/config/rofi/." "$HOME/.config/rofi/"
 do_it cp -a "$root/bin/." "$HOME/.local/bin/"
 
 # Foydalanuvchi sozlamalari va fon rasmlari ustidan yozilmaydi.

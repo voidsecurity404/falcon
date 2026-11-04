@@ -11,7 +11,7 @@ Singleton {
     readonly property string home: Quickshell.env("HOME")
     readonly property string binDir: home + "/.local/bin/"
 
-    // "", menu, launcher, clipboard, wallpapers, dashboard, control, claude
+    // "", menu, clipboard, wallpapers, dashboard, control, claude
     property string popup: ""
     property bool zen: false
     property bool settingsOpen: false

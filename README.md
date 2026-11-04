@@ -35,7 +35,6 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | --- | --- |
 | `Mod+Return` | Terminal |
 | `Super` tapped alone | App menu from the bottom of the screen: type an app name, or `>` for commands such as `>wallpaper`. Lock, sleep, log out, reboot and shut down are beside the search field |
-| `Mod+A` | App menu with tiles, `Tab` opens the search tab: actions, profiles and typed commands. Calculator results appear after `Enter` |
 | `Mod+V` | Clipboard history |
 | `Mod+D` | Dashboard |
 | `Mod+C` | Control center |
@@ -61,19 +60,6 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | `Mod+Shift+R` | Record screen |
 | `Mod+P` | Copy text from screen |
 | `Mod+Alt+P` | Translate a screen area |
-
-## Search
-
-| Type | Result |
-| --- | --- |
-| `kit` | Apps, open windows, clipboard and actions |
-| `2+2*3` or `=2^10` | Calculator, Enter copies the result |
-| `>htop` | Runs the command in a terminal |
-| `?sql injection` | Web search |
-| `/password` | Finds files in your home folder, hidden files excluded |
-| `@development` | Opens a work profile |
-
-Words typed on the wrong keyboard layout are found too: `лшеен` → `kitty`.
 
 ## Dashboard
 
