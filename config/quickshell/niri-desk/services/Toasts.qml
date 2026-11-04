@@ -175,7 +175,7 @@ Singleton {
         keepOnReload: false
         actionsSupported: true
         bodySupported: true
-        imageSupported: false
+        imageSupported: true
         onNotification: n => {
             // niri skrinshot haqida o'zi ham xabar yuboradi: o'rniga o'zbekcha xabarimiz chiqadi.
             if (n.summary === "Screenshot captured") {
@@ -194,6 +194,7 @@ Singleton {
                 title: n.summary || n.appName,
                 sub: body,
                 icon: critical ? "alert" : "bell",
+                image: n.image || "",
                 value: -1,
                 key: "",
                 notification: n,

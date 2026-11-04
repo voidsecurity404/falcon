@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
 import Quickshell
+import Quickshell.Widgets
 import qs.components
 import qs.services
 
@@ -242,9 +243,29 @@ Item {
 
                 Icon {
                     anchors.centerIn: parent
+                    visible: toastImage.status !== Image.Ready
                     name: root.shownToast ? root.shownToast.icon : "check"
                     color: Theme.accentText
                     size: 18
+                }
+
+                // A picture sent with a notification, such as a chat avatar, replaces the icon.
+                ClippingRectangle {
+                    anchors.fill: parent
+                    radius: parent.radius
+                    color: "transparent"
+                    visible: toastImage.status === Image.Ready
+
+                    Image {
+                        id: toastImage
+
+                        anchors.fill: parent
+                        source: root.currentToast && root.currentToast.image ? root.currentToast.image : ""
+                        sourceSize: Qt.size(68, 68)
+                        fillMode: Image.PreserveAspectCrop
+                        asynchronous: true
+                        cache: false
+                    }
                 }
             }
 
