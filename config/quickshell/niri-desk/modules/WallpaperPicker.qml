@@ -9,7 +9,7 @@ import qs.services
 
 // Qiyshiq kartalar: fon tanlanganda ranglar ham undan olinadi.
 LazyLoader {
-    active: Ui.popup === "wallpapers"
+    active: Ui.pickerAlive
 
     // Reading this starts the service with the shell, so the pictures are ready before the first opening.
     readonly property int known: Wallpapers.liveFiles.length + Wallpapers.imageFiles.length
@@ -27,6 +27,17 @@ LazyLoader {
         // True during the opening: cards made later, while scrolling, appear without it.
         property bool opening: true
         property real reveal: 0
+        readonly property bool closing: Ui.popup !== "wallpapers"
+
+        onClosingChanged: {
+            if (closing) {
+                fadeIn.stop();
+                fadeOut.start();
+            } else {
+                fadeOut.stop();
+                fadeIn.start();
+            }
+        }
         readonly property var files: tab === 0 ? Wallpapers.liveFiles : Wallpapers.imageFiles
         property int selected: 0
         onSelectedChanged: Ui.pickerSelected = selected
@@ -54,6 +65,21 @@ LazyLoader {
                 to: 1
                 duration: 460
                 easing.type: Easing.OutCubic
+            }
+        }
+
+        SequentialAnimation {
+            id: fadeOut
+
+            NumberAnimation {
+                target: root
+                property: "reveal"
+                to: 0
+                duration: 340
+                easing.type: Easing.InOutCubic
+            }
+            ScriptAction {
+                script: Ui.pickerAlive = false
             }
         }
 
@@ -125,7 +151,13 @@ LazyLoader {
         color: "transparent"
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "niri-desk-picker"
-        WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+        WlrLayershell.keyboardFocus: closing ? WlrKeyboardFocus.None : WlrKeyboardFocus.Exclusive
+        // While it fades away, clicks already go to what is behind it.
+        mask: closing ? noInput : null
+
+        Region {
+            id: noInput
+        }
 
         // The blurred current wallpaper and a dim layer fade in together. It is already in memory,
         // and it is blurred once into a small texture.
@@ -296,6 +328,35 @@ LazyLoader {
                     Component.onCompleted: {
                         if (root.opening)
                             rise.start();
+                    }
+
+                    Connections {
+                        target: root
+                        function onClosingChanged() {
+                            if (root.closing) {
+                                rise.stop();
+                                fall.start();
+                            } else {
+                                fall.stop();
+                                rise.start();
+                            }
+                        }
+                    }
+
+                    // Closing is the opening in reverse: the outer cards leave first.
+                    SequentialAnimation {
+                        id: fall
+
+                        PauseAnimation {
+                            duration: (6 - Math.min(6, Math.abs(card.index - root.selected))) * 16
+                        }
+                        NumberAnimation {
+                            target: card
+                            property: "appear"
+                            to: 0
+                            duration: 240
+                            easing.type: Easing.InCubic
+                        }
                     }
 
                     SequentialAnimation {

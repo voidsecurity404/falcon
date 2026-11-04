@@ -21,6 +21,12 @@ Singleton {
     property var trayItem: null
     property var launcherRows: []
     property int launcherSelected: 0
+    // The picker stays on screen after the popup changes, until its closing animation ends.
+    property bool pickerAlive: false
+    onPopupChanged: {
+        if (popup === "wallpapers")
+            pickerAlive = true;
+    }
     property int pickerSelected: 0
     property int pickerFiles: 0
     property int pickerTab: 1
