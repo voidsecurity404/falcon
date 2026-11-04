@@ -42,17 +42,6 @@ def load():
     return data
 
 
-def settings_vpn():
-    for name in ("settings.json", "defaults.json"):
-        try:
-            cmd = json.loads((CONFIG / name).read_text() or "{}").get("vpn", {}).get("up", "")
-        except (OSError, ValueError):
-            continue
-        if cmd:
-            return cmd
-    return ""
-
-
 def open_window(item):
     argv = shlex.split(item["cmd"])
     if not argv or not shutil.which(argv[0]):
@@ -96,10 +85,6 @@ def main():
         print(f"Profile not found: {sys.argv[1]}", file=sys.stderr)
         tell(tr("Profile not found"), sys.argv[1])
         return 1
-    if profile.get("vpn"):
-        cmd = settings_vpn()
-        if cmd:
-            subprocess.Popen(["sh", "-c", cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     items = sorted(profile.get("windows", []), key=lambda i: i.get("workspace", 1))
     missing = []
     for item in items:

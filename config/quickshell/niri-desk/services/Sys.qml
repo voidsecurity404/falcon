@@ -9,13 +9,16 @@ import Quickshell.Services.UPower
 Singleton {
     id: root
 
-    property bool active: Ui.popup === "dashboard" || quietVisible
-    property bool quietVisible: false
+    property bool active: Ui.popup === "dashboard" || Widgets.systemLive
 
     property int cpu: 0
     property int ram: 0
     property real ramGb: 0
     property int disk: 0
+    property int temperature: 0
+    // CPU yuklamasi: oxirgi ikki daqiqa.
+    property var history: []
+    property string hwmon: ""
 
     readonly property var battery: UPower.displayDevice
     readonly property bool hasBattery: !!battery && battery.isLaptopBattery && battery.isPresent
@@ -45,7 +48,10 @@ Singleton {
         const idle = fields[3] + (fields[4] || 0);
         const total = fields.reduce((a, b) => a + b, 0);
         if (previousCpu && total > previousCpu.total)
+        {
             cpu = Math.round(100 * (1 - (idle - previousCpu.idle) / (total - previousCpu.total)));
+            history = history.concat([cpu]).slice(-60);
+        }
         previousCpu = {
             idle: idle,
             total: total
@@ -78,6 +84,22 @@ Singleton {
     }
 
     Process {
+        running: true
+        command: ["sh", "-c", 'for d in /sys/class/hwmon/*; do [ "$(cat "$d/name")" = coretemp ] && echo "$d" && exit; done']
+        stdout: StdioCollector {
+            onStreamFinished: root.hwmon = text.trim()
+        }
+    }
+
+    FileView {
+        id: thermal
+
+        path: root.hwmon !== "" ? root.hwmon + "/temp1_input" : ""
+        printErrors: false
+        onLoaded: root.temperature = Math.round(Number(text()) / 1000)
+    }
+
+    Process {
         id: df
 
         command: ["df", "--output=pcent", "/"]
@@ -98,6 +120,8 @@ Singleton {
         onTriggered: {
             stat.reload();
             meminfo.reload();
+            if (root.hwmon !== "")
+                thermal.reload();
         }
     }
 

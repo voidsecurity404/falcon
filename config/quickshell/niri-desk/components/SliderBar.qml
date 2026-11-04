@@ -18,30 +18,53 @@ Item {
     Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         width: parent.width
-        height: 4
-        radius: 2
-        color: Qt.alpha(Theme.text, 0.14)
+        height: area.containsMouse || area.pressed ? 8 : 6
+        radius: height / 2
+        color: Qt.alpha(Theme.text, 0.12)
+
+        Behavior on height {
+            NumberAnimation {
+                duration: 140
+            }
+        }
 
         Rectangle {
             width: parent.width * Math.max(0, Math.min(1, root.value))
             height: parent.height
-            radius: 2
+            radius: parent.radius
             color: Theme.accent
+
+            Behavior on width {
+                enabled: !area.pressed
+
+                NumberAnimation {
+                    duration: 180
+                    easing.type: Easing.OutCubic
+                }
+            }
         }
     }
 
     Rectangle {
         x: parent.width * Math.max(0, Math.min(1, root.value)) - width / 2
         anchors.verticalCenter: parent.verticalCenter
-        width: 13
-        height: 13
-        radius: 6.5
+        width: 14
+        height: 14
+        radius: 7
         color: Theme.text
         opacity: area.containsMouse || area.pressed ? 1 : 0
+        scale: area.pressed ? 1.25 : area.containsMouse ? 1 : 0.5
 
         Behavior on opacity {
             NumberAnimation {
                 duration: 120
+            }
+        }
+        Behavior on scale {
+            NumberAnimation {
+                duration: 200
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: [0.3, 1.5, 0.4, 1, 1, 1]
             }
         }
     }

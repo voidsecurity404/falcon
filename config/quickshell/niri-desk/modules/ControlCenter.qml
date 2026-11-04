@@ -15,13 +15,24 @@ Rectangle {
     // O'chirish va qayta yuklash ikki bosishda bajariladi, tasodifiy bosishdan himoya.
     property string armed: ""
 
-    onShownChanged: armed = ""
+    onShownChanged: {
+        armed = "";
+        Ui.controlPage = "";
+    }
     onHeightChanged: Ui.controlHeight = height
+
+    signal releaseFocus
+
+    function tool(name) {
+        Ui.popup = "";
+        Ui.run(name);
+    }
 
     readonly property var sinks: Pipewire.nodes.values.filter(n => n.isSink && !n.isStream && n.audio)
 
     width: 400
-    height: content.implicitHeight + 32
+    height: (Ui.controlPage === "" ? content.implicitHeight : pageLoader.implicitHeight) + 32
+    clip: true
     radius: 17
     color: Theme.pill
     opacity: shown ? 1 : 0
@@ -31,13 +42,23 @@ Rectangle {
 
     Behavior on opacity {
         NumberAnimation {
-            duration: 180
+            duration: 170
         }
     }
     Behavior on scale {
         NumberAnimation {
-            duration: 240
-            easing.type: Easing.OutCubic
+            duration: 340
+            easing.type: Easing.BezierSpline
+            easing.bezierCurve: [0.3, 1.25, 0.4, 1, 1, 1]
+        }
+    }
+    Behavior on height {
+        enabled: root.shown
+
+        NumberAnimation {
+            duration: 380
+            easing.type: Easing.BezierSpline
+            easing.bezierCurve: [0.25, 1.1, 0.35, 1, 1, 1]
         }
     }
 
@@ -46,199 +67,202 @@ Rectangle {
         anchors.fill: parent
     }
 
+    // Wi-Fi and Bluetooth lists open in place of the main page.
+    Loader {
+        id: pageLoader
+
+        x: 16
+        y: 16
+        width: parent.width - 32
+        active: Ui.controlPage !== ""
+        source: Ui.controlPage === "wifi" ? "WifiPage.qml" : Ui.controlPage === "bluetooth" ? "BluetoothPage.qml" : Ui.controlPage === "sound" ? "SoundPage.qml" : ""
+        opacity: status === Loader.Ready ? 1 : 0
+        transform: Translate {
+            x: pageLoader.status === Loader.Ready ? 0 : 28
+
+            Behavior on x {
+                NumberAnimation {
+                    duration: 360
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: [0.25, 1.2, 0.35, 1, 1, 1]
+                }
+            }
+        }
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 200
+            }
+        }
+    }
+
+    Connections {
+        target: pageLoader.item
+        ignoreUnknownSignals: true
+
+        function onReleaseFocus() {
+            root.releaseFocus();
+        }
+    }
+
     Column {
         id: content
 
         x: 16
         y: 16
         width: parent.width - 32
-        spacing: 15
+        spacing: 12
+        visible: opacity > 0
+        opacity: Ui.controlPage === "" ? 1 : 0
+        transform: Translate {
+            x: Ui.controlPage === "" ? 0 : -28
 
-        Grid {
-            id: toggles
+            Behavior on x {
+                NumberAnimation {
+                    duration: 300
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
 
-            readonly property var adapter: Bluetooth.defaultAdapter
-            readonly property bool vpnConfigured: Settings.vpnUp !== ""
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 180
+            }
+        }
 
-            width: parent.width
-            columns: 6
-            columnSpacing: 7
+        // Tarmoq
+        Reveal {
+            shown: root.shown
+            delay: 20
 
-            Repeater {
-                model: [
-                    {
-                        icon: "wifi",
-                        on: Networking.wifiEnabled,
-                        enabled: Networking.wifiHardwareEnabled,
-                        run: () => Networking.wifiEnabled = !Networking.wifiEnabled
-                    },
-                    {
-                        icon: "bluetooth",
-                        on: !!toggles.adapter && toggles.adapter.enabled,
-                        enabled: !!toggles.adapter,
-                        run: () => toggles.adapter.enabled = !toggles.adapter.enabled
-                    },
-                    {
-                        icon: "shield",
-                        on: Lab.vpnAddress !== "",
-                        enabled: toggles.vpnConfigured,
-                        run: () => {
-                            Quickshell.execDetached(["sh", "-c", Lab.vpnAddress !== "" ? Settings.vpnDown : Settings.vpnUp]);
-                            refreshLab.restart();
-                        }
-                    },
-                    {
-                        icon: "coffee",
-                        on: Caffeine.enabled,
-                        enabled: true,
-                        run: () => {
-                            Caffeine.enabled = !Caffeine.enabled;
-                            Toasts.show(Caffeine.enabled ? Tr.t("Caffeine on") : Tr.t("Caffeine off"), Caffeine.enabled ? Tr.t("The screen stays on and unlocked") : Tr.t("It will lock when idle again"), "coffee");
-                        }
-                    },
-                    {
-                        icon: "moon",
-                        on: Night.enabled,
-                        enabled: true,
-                        run: () => Night.toggle()
-                    },
-                    {
-                        icon: "bell",
-                        on: !Toasts.doNotDisturb,
-                        enabled: true,
-                        run: () => Toasts.doNotDisturb = !Toasts.doNotDisturb
+            Row {
+                id: toggles
+
+                readonly property var adapter: Bluetooth.defaultAdapter
+                readonly property var wifiDevice: Networking.devices.values.find(d => d.type === DeviceType.Wifi) || null
+                readonly property var wifiNet: wifiDevice ? wifiDevice.networks.values.find(n => n.connected) || null : null
+                readonly property bool wired: Networking.devices.values.some(d => d.type === DeviceType.Wired && d.connected)
+                readonly property var btDevice: adapter && adapter.enabled ? adapter.devices.values.find(d => d.connected) || null : null
+
+                width: parent.width
+                spacing: 8
+
+                NetTile {
+                    icon: "wifi"
+                    title: Tr.t("Wi-Fi")
+                    on: Networking.wifiEnabled
+                    active: !!toggles.wifiNet
+                    sub: toggles.wifiNet ? toggles.wifiNet.name : !Networking.wifiEnabled ? Tr.t("Off") : toggles.wired ? Tr.t("Using cable") : Tr.t("Not connected")
+                    onOpen: Ui.controlPage = "wifi"
+                    onToggled: {
+                        if (Networking.wifiHardwareEnabled)
+                            Networking.wifiEnabled = !Networking.wifiEnabled;
                     }
-                ]
-
-                delegate: Rectangle {
-                    id: toggle
-
-                    required property var modelData
-
-                    width: (toggles.width - 35) / 6
-                    height: 46
-                    radius: 12
-                    color: modelData.on ? Theme.accent : Qt.alpha(Theme.text, toggleArea.containsMouse && modelData.enabled ? 0.13 : 0.08)
-                    opacity: modelData.enabled ? 1 : 0.4
-
-                    Icon {
-                        anchors.centerIn: parent
-                        name: toggle.modelData.icon
-                        size: 18
-                        color: toggle.modelData.on ? Theme.accentText : Theme.text
+                }
+                NetTile {
+                    icon: "bluetooth"
+                    title: Tr.t("Bluetooth")
+                    on: !!toggles.adapter && toggles.adapter.enabled
+                    active: !!toggles.btDevice
+                    sub: toggles.btDevice ? toggles.btDevice.name : !!toggles.adapter && toggles.adapter.enabled ? Tr.t("Not connected") : Tr.t("Off")
+                    onOpen: {
+                        if (toggles.adapter)
+                            Ui.controlPage = "bluetooth";
                     }
-
-                    MouseArea {
-                        id: toggleArea
-
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: toggle.modelData.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                        onClicked: {
-                            if (toggle.modelData.enabled)
-                                toggle.modelData.run();
-                        }
+                    onToggled: {
+                        if (toggles.adapter)
+                            toggles.adapter.enabled = !toggles.adapter.enabled;
                     }
                 }
             }
         }
 
-        Timer {
-            id: refreshLab
+        // Tez tugmalar
+        Reveal {
+            shown: root.shown
+            delay: 60
 
-            interval: 3000
-            onTriggered: Lab.refresh()
-        }
+            Row {
+                width: parent.width
+                spacing: 8
 
-        Row {
-            width: parent.width
-            spacing: 11
-            visible: Audio.available
-
-            Item {
-                width: 20
-                height: 20
-
-                Icon {
-                    anchors.centerIn: parent
-                    name: Audio.muted ? "mute" : "volume"
-                    size: 17
+                QuickTile {
+                    icon: "coffee"
+                    title: Tr.t("Awake")
+                    on: Caffeine.enabled
+                    onClicked: {
+                        Caffeine.enabled = !Caffeine.enabled;
+                        Toasts.show(Caffeine.enabled ? Tr.t("Caffeine on") : Tr.t("Caffeine off"), Caffeine.enabled ? Tr.t("The screen stays on and unlocked") : Tr.t("It will lock when idle again"), "coffee");
+                    }
                 }
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: Audio.toggleMute()
+                QuickTile {
+                    icon: "moon"
+                    title: Tr.t("Night")
+                    on: Night.enabled
+                    onClicked: Night.toggle()
+                }
+                QuickTile {
+                    icon: "bell"
+                    title: Tr.t("Silent")
+                    on: Toasts.doNotDisturb
+                    onClicked: Toasts.doNotDisturb = !Toasts.doNotDisturb
                 }
             }
-            SliderBar {
-                width: parent.width - 76
-                value: Audio.volume
-                onMoved: value => Audio.setVolume(value)
-            }
-            Label {
-                width: 34
-                text: Audio.percent + "%"
-                color: Theme.muted
-                size: 13
-                horizontalAlignment: Text.AlignRight
-            }
         }
 
-        Row {
-            width: parent.width
-            spacing: 11
-            visible: Brightness.available
+        // Ovoz va yorqinlik
+        Reveal {
+            shown: root.shown
+            delay: 100
 
-            Icon {
-                anchors.verticalCenter: parent.verticalCenter
-                width: 20
-                name: "sun"
-                size: 17
-            }
-            SliderBar {
-                width: parent.width - 76
-                value: Brightness.percent / 100
-                onMoved: value => Brightness.setPercent(value * 100)
-            }
-            Label {
-                width: 34
-                text: Brightness.percent + "%"
-                color: Theme.muted
-                size: 13
-                horizontalAlignment: Text.AlignRight
-            }
-        }
+            Column {
+                width: parent.width
+                spacing: 8
 
-        // Ovoz chiqishi: bittadan ko'p qurilma bo'lsa ko'rinadi
-        Column {
-            width: parent.width
-            spacing: 2
-            visible: root.sinks.length > 1
-
-            Repeater {
-                model: root.sinks
-
-                delegate: Rectangle {
-                    id: sinkRow
-
-                    required property var modelData
-
-                    readonly property bool current: Pipewire.defaultAudioSink === modelData
-
+                ThickSlider {
+                    width: parent.width
+                    visible: Audio.available
+                    icon: Audio.muted ? "mute" : "volume"
+                    value: Audio.volume
+                    text: Audio.percent + "%"
+                    onMoved: value => Audio.setVolume(value)
+                }
+                ThickSlider {
+                    width: parent.width
+                    visible: Brightness.available
+                    icon: "sun"
+                    value: Brightness.percent / 100
+                    text: Brightness.percent + "%"
+                    onMoved: value => Brightness.setPercent(value * 100)
+                }
+                // Ovoz chiqishi: bittadan ko'p qurilma bo'lsa ochiladi
+                Rectangle {
                     width: parent.width
                     height: 30
-                    radius: 8
-                    color: sinkArea.containsMouse ? Qt.alpha(Theme.text, 0.08) : "transparent"
+                    radius: 10
+                    visible: root.sinks.length > 1
+                    color: Qt.alpha(Theme.text, sinkArea.containsMouse ? 0.08 : 0)
 
                     Label {
                         anchors.left: parent.left
                         anchors.leftMargin: 10
+                        anchors.right: sinkArrow.left
+                        anchors.rightMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Pipewire.defaultAudioSink ? (Pipewire.defaultAudioSink.description || Pipewire.defaultAudioSink.name) : Tr.t("Sound output")
+                        color: Theme.muted
+                        size: 12
+                    }
+                    Icon {
+                        id: sinkArrow
+
                         anchors.right: parent.right
                         anchors.rightMargin: 10
                         anchors.verticalCenter: parent.verticalCenter
-                        text: sinkRow.modelData.description || sinkRow.modelData.name
-                        color: sinkRow.current ? Theme.accent : Theme.muted
-                        size: 13
+                        name: "forward"
+                        size: 12
+                        color: Theme.muted
                     }
                     MouseArea {
                         id: sinkArea
@@ -246,19 +270,62 @@ Rectangle {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: Pipewire.preferredDefaultAudioSink = sinkRow.modelData
+                        onClicked: Ui.controlPage = "sound"
                     }
                 }
             }
         }
 
-        // Quvvat rejimi
-        Row {
-            width: parent.width
-            spacing: 4
+        // Asboblar
+        Reveal {
+            shown: root.shown
+            delay: 140
 
-            Repeater {
-                model: [
+            Row {
+                width: parent.width
+
+                ToolButton {
+                    icon: "record"
+                    title: Tr.t("Record")
+                    onClicked: root.tool("niri-desk-record")
+                }
+                ToolButton {
+                    icon: "ocr"
+                    title: Tr.t("Text")
+                    onClicked: root.tool("niri-desk-ocr")
+                }
+                ToolButton {
+                    icon: "color"
+                    title: Tr.t("Color")
+                    onClicked: root.tool("niri-desk-color")
+                }
+                ToolButton {
+                    icon: "translate"
+                    title: Tr.t("Translate")
+                    onClicked: root.tool("niri-desk-translate")
+                }
+                ToolButton {
+                    icon: "wallpaper"
+                    title: Tr.t("Wallpaper")
+                    onClicked: Ui.popup = "wallpapers"
+                }
+                ToolButton {
+                    icon: "focus"
+                    title: Tr.t("Focus")
+                    onClicked: root.tool("niri-desk-zen")
+                }
+            }
+        }
+
+        // Quvvat rejimi: tanlov belgisi sirpanadi
+        Reveal {
+            shown: root.shown
+            delay: 180
+
+            Rectangle {
+                id: power
+
+                readonly property var modes: [
                     {
                         label: Tr.t("Saver"),
                         value: PowerProfile.PowerSaver
@@ -272,56 +339,90 @@ Rectangle {
                         value: PowerProfile.Performance
                     }
                 ]
+                readonly property int current: modes.findIndex(m => m.value === PowerProfiles.profile)
 
-                delegate: Rectangle {
-                    id: profile
+                width: parent.width
+                height: 36
+                radius: 13
+                color: Qt.alpha(Theme.text, 0.05)
 
-                    required property var modelData
-
-                    readonly property bool current: PowerProfiles.profile === modelData.value
-                    readonly property bool usable: modelData.value !== PowerProfile.Performance || PowerProfiles.hasPerformanceProfile
-
-                    width: (parent.width - 8) / 3
+                Rectangle {
+                    x: 3 + Math.max(0, power.current) * (power.width - 6) / 3
+                    y: 3
+                    width: (power.width - 6) / 3
                     height: 30
-                    radius: 8
-                    color: current ? Qt.alpha(Theme.accent, 0.24) : Qt.alpha(Theme.text, profileArea.containsMouse && usable ? 0.13 : 0.06)
-                    opacity: usable ? 1 : 0.4
+                    radius: 10
+                    color: Qt.alpha(Theme.accent, 0.26)
+                    visible: power.current >= 0
 
-                    Label {
-                        anchors.centerIn: parent
-                        text: profile.modelData.label
-                        color: profile.current ? Theme.accent : Theme.text
-                        size: 13
+                    Behavior on x {
+                        NumberAnimation {
+                            duration: 380
+                            easing.type: Easing.BezierSpline
+                            easing.bezierCurve: [0.3, 1.4, 0.4, 1, 1, 1]
+                        }
                     }
-                    MouseArea {
-                        id: profileArea
+                }
+                Row {
+                    x: 3
+                    y: 3
 
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (profile.usable)
-                                PowerProfiles.profile = profile.modelData.value;
+                    Repeater {
+                        model: power.modes
+
+                        delegate: Item {
+                            id: profile
+
+                            required property var modelData
+                            required property int index
+
+                            readonly property bool usable: modelData.value !== PowerProfile.Performance || PowerProfiles.hasPerformanceProfile
+
+                            width: (power.width - 6) / 3
+                            height: 30
+                            opacity: usable ? 1 : 0.4
+
+                            Label {
+                                anchors.centerIn: parent
+                                text: profile.modelData.label
+                                color: power.current === profile.index ? Theme.accent : Theme.text
+                                size: 12
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (profile.usable)
+                                        PowerProfiles.profile = profile.modelData.value;
+                                }
+                            }
                         }
                     }
                 }
             }
         }
 
-        Rectangle {
-            width: parent.width
-            height: media.implicitHeight + 24
-            radius: 12
-            color: Qt.alpha(Theme.text, 0.05)
+        Reveal {
+            shown: root.shown
+            delay: 220
+            visible: !!Media.player
 
-            MediaCard {
-                id: media
+            Rectangle {
+                width: parent.width
+                height: media.implicitHeight + 24
+                radius: 15
+                color: Qt.alpha(Theme.text, 0.05)
 
-                x: 12
-                y: 12
-                width: parent.width - 24
-                artSize: 56
-                showControls: false
+                MediaCard {
+                    id: media
+
+                    x: 12
+                    y: 12
+                    width: parent.width - 24
+                    artSize: 56
+                    showControls: false
+                }
             }
         }
 
@@ -365,7 +466,7 @@ Rectangle {
             }
 
             Repeater {
-                model: Toasts.history.slice(0, 4)
+                model: Toasts.history.slice(0, 3)
 
                 delegate: Column {
                     id: note

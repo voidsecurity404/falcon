@@ -48,6 +48,19 @@ Singleton {
         return workspaces.find(w => w.output === output && w.is_active) || null;
     }
 
+    // Is this workspace fully hidden by one window (fullscreen or maximized)?
+    function coveredOn(output, outputWidth, outputHeight) {
+        const workspace = activeWorkspaceOn(output);
+        if (!workspace)
+            return false;
+        for (const id in windows) {
+            const w = windows[id];
+            if (w.workspace_id === workspace.id && !w.is_floating && w.layout && w.layout.tile_size[0] >= outputWidth * 0.95 && w.layout.tile_size[1] >= outputHeight * 0.88)
+                return true;
+        }
+        return false;
+    }
+
     function hasWindows(workspaceId) {
         for (const id in windows) {
             if (windows[id].workspace_id === workspaceId)

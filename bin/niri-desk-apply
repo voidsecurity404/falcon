@@ -130,9 +130,7 @@ def settings_kdl(s):
         out += ["window-rule {", "    match is-active=false", f"    opacity {inactive}", "}", ""]
 
     out += monitors_kdl(s)
-    shots = evidence_dir(s)
-    shots = shots / "shots" if shots else pictures_dir() / "Screenshots"
-    out += [f'screenshot-path {q(str(shots) + "/%Y-%m-%d_%H-%M-%S.png")}', ""]
+    out += [f'screenshot-path {q(str(pictures_dir() / "Screenshots") + "/%Y-%m-%d_%H-%M-%S.png")}', ""]
 
     if is_vm():
         out += ["environment {", '    LIBGL_ALWAYS_SOFTWARE "1"', "}", ""]
@@ -173,14 +171,6 @@ def monitors_kdl(s):
             out.append(f"    position x={int(number(place, 'x', -32768, 32767))} y={int(number(place, 'y', -32768, 32767))}")
         out += ["}", ""]
     return out
-
-
-def evidence_dir(s):
-    lab = s.get("lab", {})
-    target = str(lab.get("target", ""))
-    if not lab.get("evidence") or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.:_-]*", target):
-        return None
-    return Path(str(lab.get("dir", "~/Pentest")).replace("~", str(HOME), 1)) / target.replace(":", "_")
 
 
 def regex_kdl(value):
@@ -232,8 +222,9 @@ def desk(*args):
 
 ACTIONS = {
     "terminal": ("Terminal", 'spawn "kitty"', True),
-    "launcher": ("Search", "spawn " + desk("launcher"), False),
-    "clipboard": ("Clipboard history", "spawn " + desk("clipboard"), False),
+    "apps": ("Apps", f'spawn "{SCRIPTS}niri-desk-rofi"', False),
+    "launcher": ("Search", f'spawn "{SCRIPTS}niri-desk-rofi"', False),
+    "clipboard": ("Clipboard history", f'spawn "{SCRIPTS}niri-desk-rofi" "clipboard"', False),
     "dashboard": ("Dashboard", "spawn " + desk("dashboard"), False),
     "control": ("Control center", "spawn " + desk("control"), False),
     "wallpapers": ("Wallpaper and color", "spawn " + desk("wallpapers"), False),
@@ -245,7 +236,6 @@ ACTIONS = {
     "sticky": ("Sticky window", "spawn " + desk("sticky"), False),
     "browser": ("Browser", f'spawn-sh "exec {SCRIPTS}niri-desk-raise \'firefox|chrom|brave|zen|helium\' gtk-launch \\"$(xdg-settings get default-web-browser)\\""', False),
     "files": ("Files", f'spawn "{SCRIPTS}niri-desk-raise" "nautilus" "nautilus"', False),
-    "burp": ("Burp Suite", f'spawn "{SCRIPTS}niri-desk-raise" "burp" "burpsuite"', False),
     "notes": ("Notes", f'spawn "{SCRIPTS}niri-desk-raise" "obsidian" "obsidian"', False),
     "close": ("Close window", "close-window", False),
     "widthCycle": ("Column width", "switch-preset-column-width", True),
@@ -255,6 +245,7 @@ ACTIONS = {
     "record": ("Record screen", f'spawn "{SCRIPTS}niri-desk-record"', False),
     "ocr": ("Copy text from screen", f'spawn "{SCRIPTS}niri-desk-ocr"', False),
     "translate": ("Translate from screen", f'spawn "{SCRIPTS}niri-desk-translate"', False),
+    "widgets": ("Edit widgets", "spawn " + desk("widgets"), False),
 }
 
 
@@ -292,7 +283,7 @@ def idle_conf(s):
     out = [
         "# Generated file: change it in the Settings window.",
         "general {",
-        "    lock_cmd = pidof hyprlock || hyprlock",
+        "    lock_cmd = pgrep -u $(id -u) -x hyprlock || hyprlock",
         "    before_sleep_cmd = loginctl lock-session",
         "    after_sleep_cmd = niri msg action power-on-monitors",
         "}",
@@ -389,12 +380,6 @@ def main(argv):
     choice(s["appearance"], "mode", ["dark", "light"])
     if argv[:1] == ["--check"]:
         return
-    # Nishon va dalil papkasi terminal hamda skriptlar uchun.
-    write_if_changed(STATE / "target", str(s.get("lab", {}).get("target", "")) + "\n")
-    shots = evidence_dir(s)
-    if shots:
-        (shots / "shots").mkdir(parents=True, exist_ok=True)
-    write_if_changed(STATE / "evidence-dir", f"{shots}\n" if shots else "")
     write_if_changed(NIRI / "generated/settings.kdl", settings_text)
     # Bloklash ekrani matnlari interfeys tilida.
     write_if_changed(CONFIG / "hypr/niri-desk-lang.conf", f"$pw_placeholder = {tr('Password')}\n$pw_fail = {tr('Wrong password')}\n")

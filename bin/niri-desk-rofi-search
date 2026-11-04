@@ -1,0 +1,341 @@
+#!/usr/bin/env python3
+"""Rofi script mode: actions, commands and clipboard history.
+
+Rofi calls this with the chosen row, or with the typed text after Enter:
+  niri-desk-rofi-search              actions, profiles, typed commands
+  niri-desk-rofi-search --clipboard  clipboard history
+"""
+import json
+import math
+import os
+import re
+import subprocess
+import sys
+import urllib.parse
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+from niri_desk_tr import tr
+
+HOME = Path.home()
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
+DESK = CONFIG / "niri-desk"
+BIN = HOME / ".local/bin"
+COLORS = CONFIG / "rofi/niri-desk-colors.rasi"
+CACHE = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "niri-desk/rofi-icons"
+
+RU = "йцукенгшщзхъфывапролджэячсмитьбю"
+EN = "qwertyuiop[]asdfghjkl;'zxcvbnm,."
+
+
+def clean(text):
+    return re.sub(r"[\x00-\x1f\x7f]+", " ", str(text)).strip()
+
+
+def escape(text):
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def header(**options):
+    for key, value in options.items():
+        # Rofi reads the message as markup, so > and & in it must be escaped.
+        # The line height follows the theme font: hints are made smaller, a bigger span would be cut off.
+        text = f'<span size="small">{escape(clean(value))}</span>' if key == "message" else clean(value)
+        sys.stdout.write(f"\0{key.replace('_', '-')}\x1f{text}\n")
+
+
+# Line icons on a 24x24 grid, one for each function.
+ICONS = {
+    "backup": "M4 5h16v4H4Z M5 9v10h14V9 M10 13h4",
+    "restore": "M4 12a8 8 0 1 0 2.5-5.8 M4 4v4h4 M12 8v4l3 2",
+    "monitor": "M3 12H7L10 5L14 19L17 12H21",
+    "profile": "M4 8h16v11H4Z M9 8V5h6v3 M4 13h16",
+    "file": "M6 3h8l4 4v14H6Z M14 3v4h4",
+}
+
+
+def accent_color():
+    try:
+        return re.search(r"nd-accent:\s*(#[0-9a-fA-F]{6})", COLORS.read_text())[1]
+    except (OSError, TypeError):
+        return "#8fc7ee"
+
+
+def icon_path(name):
+    """Draws the icon in the wallpaper accent color, once per color."""
+    accent = accent_color()
+    path = CACHE / accent[1:] / f"{name}.svg"
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">'
+                        f'<rect width="96" height="96" rx="26" fill="{accent}" fill-opacity="0.16"/>'
+                        f'<g transform="translate(24 24) scale(2)" fill="none" stroke="{accent}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+                        f'<path d="{ICONS[name]}"/></g></svg>')
+    return str(path)
+
+
+def row(name, icon="", meta="", **info):
+    fields = []
+    if icon:
+        fields += ["icon", icon]
+    if meta:
+        fields += ["meta", clean(meta)]
+    if info:
+        fields += ["info", json.dumps(info)]
+    sys.stdout.write(clean(name)[:200] + "\0" + "\x1f".join(fields) + "\n")
+
+
+def spawn(*command, stdin=None):
+    # Detached with closed pipes: rofi waits for this script's stdout to close.
+    process = subprocess.Popen(command, stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL, start_new_session=True, text=True)
+    if stdin is not None:
+        process.communicate(stdin)
+
+
+def toast(title, sub=""):
+    spawn("qs", "-c", "niri-desk", "ipc", "call", "desk", "toast", title, clean(sub)[:120])
+
+
+def copy(value):
+    # Without the type, wl-copy guesses: a single character like 4 becomes binary and will not paste as text.
+    spawn("wl-copy", "--type", "text/plain", stdin=value)
+    toast(tr("Copied"), value)
+
+
+def terminal(command):
+    close = tr("Press Enter to close")
+    spawn("kitty", "sh", "-c", f'{command}\necho; printf "{close}"; read _')
+
+
+def tool(*command):
+    spawn("kitty", "--class", "niri-desk-tool", *command)
+
+
+def calc(text):
+    """+ - * / % ^ and parentheses. No eval."""
+    source = re.sub(r"\s+", "", text).replace(",", ".")
+    at = 0
+
+    def peek():
+        return source[at] if at < len(source) else ""
+
+    def atom():
+        nonlocal at
+        if peek() == "-":
+            at += 1
+            return -atom()
+        if peek() == "(":
+            at += 1
+            value = total()
+            if peek() != ")":
+                raise ValueError
+            at += 1
+            return value
+        found = re.match(r"\d*\.?\d+", source[at:])
+        if not found:
+            raise ValueError
+        at += len(found[0])
+        return float(found[0])
+
+    def power():
+        nonlocal at
+        base = atom()
+        if peek() == "^":
+            at += 1
+            return math.pow(base, power())
+        return base
+
+    def product():
+        nonlocal at
+        value = power()
+        while peek() in ("*", "/", "%"):
+            op = peek()
+            at += 1
+            right = power()
+            value = value * right if op == "*" else value / right if op == "/" else math.fmod(value, right)
+        return value
+
+    def total():
+        nonlocal at
+        value = product()
+        while peek() in ("+", "-"):
+            op = peek()
+            at += 1
+            right = product()
+            value = value + right if op == "+" else value - right
+        return value
+
+    value = total()
+    if at != len(source) or not math.isfinite(value):
+        raise ValueError
+    value = round(value, 10)
+    return str(int(value)) if value == int(value) else str(value)
+
+
+def looks_like_math(text):
+    return bool(re.fullmatch(r"[\d\s+\-*/%^().,]+", text) and re.search(r"\d\s*[+\-*/%^]\s*[\d(]", text))
+
+
+def load_list(name):
+    try:
+        data = json.loads((DESK / name).read_text())
+    except (OSError, ValueError):
+        return []
+    return [item for item in data if isinstance(item, dict) and item.get("name")] if isinstance(data, list) else []
+
+
+ACTIONS = [
+    ("Back up settings to a file", "backup", "backup export копия", {"backup": True}),
+    ("Restore windows", "restore", "session restore сеанс восстановить", {"bin": ["niri-desk-session", "restore", "--force"]}),
+    ("System monitor", "monitor", "cpu process task процессы", {"tool": "btop"}),
+]
+
+
+def main_list(message=None):
+    header(message=message or tr("App, /file, @profile, =math, >command, ?web…"))
+    for name, icon, keywords, info in ACTIONS:
+        row(tr(name), icon_path(icon), keywords + " " + name, a="action", **info)
+    for profile in load_list("profiles.json"):
+        name = str(profile["name"])
+        row(name, icon_path("profile"), "@" + name, a="profile", profile=name)
+
+
+def keep_open():
+    """Rofi closes when a reload returns no rows. This row is drawn invisible by the theme, Enter on it closes."""
+    sys.stdout.write("\0urgent\x1f0\n")
+    # A line that starts with the separator is a rofi option, so the row text is a space.
+    sys.stdout.write(" \0" + "\x1f".join(["info", json.dumps({"a": "close"})]) + "\n")
+
+
+def show_result(value):
+    """The result is text above the input, not a tile. It is copied, Enter closes, typing starts a new one."""
+    copy(value)
+    big = f'<span weight="600" foreground="{accent_color()}">= {escape(value)}</span>    <span size="small">{escape(tr("Copied"))}</span>'
+    sys.stdout.write(f"\0message\x1f{big}\n")
+    keep_open()
+
+
+def desktop_apps():
+    roots = [Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share"))] + [Path(p) for p in os.environ.get("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":")]
+    seen = {}
+    for root in roots:
+        for path in sorted((root / "applications").glob("*.desktop")):
+            if path.stem in seen:
+                continue
+            seen[path.stem] = None
+            try:
+                body = path.read_text(errors="ignore")
+            except OSError:
+                continue
+            found = re.search(r"^Name=(.+)$", body, re.M)
+            if found and not re.search(r"^NoDisplay=true$", body, re.M) and not re.search(r"^Hidden=true$", body, re.M):
+                icon = re.search(r"^Icon=(.+)$", body, re.M)
+                seen[path.stem] = (found[1], icon[1] if icon else "")
+    return {key: value for key, value in seen.items() if value}
+
+
+def swap_layout(text):
+    out = []
+    for ch in text:
+        out.append(EN[RU.index(ch)] if ch in RU else RU[EN.index(ch)] if ch in EN else ch)
+    return "".join(out)
+
+
+def typed(raw):
+    """Handles text entered with Enter. Returns False to close rofi."""
+    text = raw.strip()
+    if not text:
+        main_list()
+        return True
+    if text[0] == "=" or looks_like_math(text):
+        try:
+            show_result(calc(text[1:] if text[0] == "=" else text))
+        except (ValueError, ZeroDivisionError, OverflowError, RecursionError):
+            header(message=tr("incomplete expression"))
+            keep_open()
+        return True
+    if text[0] == ">" and len(text) > 1:
+        terminal(text[1:].strip())
+        return False
+    if text[0] == "?" and len(text) > 1:
+        spawn("xdg-open", "https://duckduckgo.com/?q=" + urllib.parse.quote(text[1:].strip(), safe=""))
+        return False
+    if text[0] == "/":
+        pattern = text[1:].strip()
+        if len(pattern) < 2:
+            main_list(tr("Type at least 2 letters"))
+            return True
+        files = subprocess.run(["fd", "--fixed-strings", "--ignore-case", "--max-results", "30", "--type", "f", "--", pattern, str(HOME)], capture_output=True, text=True).stdout.splitlines()
+        if not files:
+            main_list(tr("Nothing found"))
+            return True
+        header(message=tr("Files"))
+        for path in files:
+            row(Path(path).name, icon_path("file"), path, a="open", path=path)
+        return True
+    # Wrong keyboard layout: лшеен finds kitty.
+    query = swap_layout(text.lower())
+    matches = [(key, value) for key, value in desktop_apps().items() if query in value[0].lower() or query in key.lower()]
+    if matches:
+        header(message=tr("Apps"))
+        for key, (name, icon) in sorted(matches, key=lambda m: m[1][0].lower())[:16]:
+            row(name, icon or icon_path("file"), a="app", id=key)
+        return True
+    main_list(tr("Nothing found"))
+    return True
+
+
+def chosen(info):
+    kind = info.get("a")
+    if kind == "copy":
+        copy(info["value"])
+    elif kind == "open":
+        spawn("xdg-open", info["path"])
+    elif kind == "app":
+        spawn("gtk-launch", info["id"])
+    elif kind == "profile":
+        spawn(str(BIN / "niri-desk-profile"), info["profile"])
+    elif kind == "clip":
+        # Images keep the guessed type, text must stay text.
+        kind = [] if info["text"].startswith("[[ binary data") else ["--type", "text/plain"]
+        spawn("sh", "-c", 'id="$1"; shift; cliphist decode "$id" | wl-copy "$@"', "sh", info["id"], *kind)
+        toast(tr("Copied"), info["text"])
+    elif "bin" in info:
+        spawn(str(BIN / info["bin"][0]), *info["bin"][1:])
+    elif "tool" in info:
+        tool(info["tool"])
+    elif "cmd" in info:
+        spawn(*info["cmd"])
+    elif info.get("backup"):
+        spawn(str(BIN / "niri-desk-backup"), "export")
+        toast(tr("Backup saved"), tr("In your home folder: niri-desk-settings-*.tar.gz"))
+
+
+def clipboard_list():
+    header(no_custom="true")
+    listing = subprocess.run(["cliphist", "list"], capture_output=True, text=True, errors="replace").stdout
+    for line in listing.splitlines():
+        clip_id, tab, text = line.partition("\t")
+        if tab and clip_id.isdigit():
+            row(text, a="clip", id=clip_id, text=clean(text)[:120])
+
+
+def main():
+    args = sys.argv[1:]
+    clipboard = "--clipboard" in args
+    args = [a for a in args if a != "--clipboard"]
+    state = os.environ.get("ROFI_RETV", "0")
+    if state == "1" and os.environ.get("ROFI_INFO"):
+        chosen(json.loads(os.environ["ROFI_INFO"]))
+        return
+    if clipboard:
+        clipboard_list()
+    elif state == "2" and args:
+        typed(args[0])
+    else:
+        main_list()
+
+
+if __name__ == "__main__":
+    main()

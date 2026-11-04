@@ -18,7 +18,7 @@ Singleton {
     Timer {
         interval: 1000
         repeat: true
-        running: !!root.player && root.player.isPlaying && Ui.topPanelOpen
+        running: !!root.player && root.player.isPlaying && (Ui.topPanelOpen || Widgets.musicLive)
         onTriggered: root.player.positionChanged()
     }
 }

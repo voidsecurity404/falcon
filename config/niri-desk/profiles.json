@@ -1,33 +1,5 @@
 [
   {
-    "name": "Pentest",
-    "detail": "Terminal, Burp, browser, notes",
-    "vpn": true,
-    "windows": [
-      {
-        "workspace": 1,
-        "cmd": "kitty",
-        "match": "^kitty$"
-      },
-      {
-        "workspace": 2,
-        "cmd": "burpsuite",
-        "match": "burp",
-        "timeout": 25
-      },
-      {
-        "workspace": 2,
-        "cmd": "firefox",
-        "match": "firefox"
-      },
-      {
-        "workspace": 3,
-        "cmd": "obsidian",
-        "match": "obsidian"
-      }
-    ]
-  },
-  {
     "name": "Development",
     "detail": "Terminal and browser",
     "windows": [

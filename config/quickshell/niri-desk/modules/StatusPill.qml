@@ -11,7 +11,18 @@ Rectangle {
     implicitWidth: row.implicitWidth + 12
     height: 34
     radius: 11
-    color: Theme.panel
+    gradient: Gradient {
+        GradientStop {
+            position: 0
+            color: Theme.glassTop
+        }
+        GradientStop {
+            position: 1
+            color: Theme.panel
+        }
+    }
+    border.width: 1
+    border.color: Theme.panelEdge
 
     // Belgi radio yoqilganini emas, haqiqiy ulanishni ko'rsatadi. Sim ustun turadi.
     readonly property var netDevices: Networking.devices.values
@@ -59,6 +70,40 @@ Rectangle {
                         }
                     }
                 }
+            }
+        }
+
+        // Claude limiti: halqa 5 soatlik limit ishlatilgani sari to'ladi.
+        Rectangle {
+            width: claudeRow.implicitWidth + 16
+            height: 34
+            radius: 9
+            color: claudeArea.containsMouse || Ui.popup === "claude" ? Qt.alpha(Theme.text, 0.08) : "transparent"
+
+            Row {
+                id: claudeRow
+
+                anchors.centerIn: parent
+                spacing: 6
+
+                MiniRing {
+                    anchors.verticalCenter: parent.verticalCenter
+                    value: ClaudeUsage.fiveHour
+                    opacity: ClaudeUsage.hasData ? 1 : 0.45
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: ClaudeUsage.hasData ? Math.round(ClaudeUsage.fiveHour) + "%" : "—"
+                    size: 13
+                }
+            }
+            MouseArea {
+                id: claudeArea
+
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: Ui.togglePopup("claude")
             }
         }
 

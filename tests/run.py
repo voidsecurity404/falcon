@@ -15,13 +15,13 @@ SET = HOME / ".config/niri-desk/settings.json"
 GEN = HOME / ".config/niri/generated"
 STATE = HOME / ".local/state/niri-desk"
 FAILDIR = Path("/tmp/nd-fail")
-LIB = {p: p.read_text() for p in (HOME / ".config/niri-desk/profiles.json", HOME / ".config/niri-desk/snippets.json") if p.exists()}
+LIB = {p: p.read_text() for p in (HOME / ".config/niri-desk/profiles.json",) if p.exists()}
 PW = os.environ.get("NIRI_DESK_TEST_PW", "")
 FEATURES, CUR = [], None
 KEYC = {**{c: k for c, k in zip("qwertyuiop", range(16, 26))}, **{c: k for c, k in zip("asdfghjkl", range(30, 39))}, **{c: k for c, k in zip("zxcvbnm", range(44, 51))},
         **{str(i): i + 1 for i in range(1, 10)}, "0": 11, "enter": 28, "esc": 1, "space": 57, "tab": 15, "grave": 41, "comma": 51, "minus": 12, "equal": 13,
         "left": 105, "right": 106, "up": 103, "down": 108, "shift": 42, "ctrl": 29, "alt": 56, "mod": 125, "[": 26, "]": 27, "volup": 115, "voldown": 114, "mute": 113,
-        "backspace": 14, "print": 99, "slash": 53}
+        "backspace": 14, "print": 99, "slash": 53, "brightdown": 224, "brightup": 225}
 
 
 class Skip(Exception):
@@ -185,8 +185,12 @@ def row(section):
     return [r.split("|", 1)[1] for r in st()["rows"] if r.startswith(section + "|")]
 
 
+def rofi_open():
+    return sh("pgrep -u $(id -u) -x rofi").returncode == 0
+
+
 def launcher(q=""):
-    key("mod", "space")
+    ipc("launcher")
     wait(lambda: st()["popup"] == "launcher", 3, "qidiruv ochilmadi")
     time.sleep(0.5)
     if q:
@@ -202,10 +206,10 @@ GOOD = None
 
 
 def reset():
-    if sh("pgrep -x hyprlock").returncode == 0 and PW:
+    if sh("pgrep -u $(id -u) -x hyprlock").returncode == 0 and PW:
         typ(PW)
         key("enter")
-        wait(lambda: sh("pgrep -x hyprlock").returncode != 0, 6, "ekran ochilmadi")
+        wait(lambda: sh("pgrep -u $(id -u) -x hyprlock").returncode != 0, 6, "ekran ochilmadi")
     wait(lambda: "niri-desk-top" in layers(), 12, "panel qaytmadi")
     ipc("reset")
     sh("rm -f /tmp/nd-*.flag")
@@ -223,7 +227,7 @@ def reset():
         niri("switch-layout", "0")
     for w in windows():
         niri("close-window", "--id", w["id"])
-    sh("pkill -f 'sleep 900'; pkill -f wf-recorder; pkill -x satty; pkill -x slurp; pkill -x btop; pkill -x nm-applet")
+    sh("pkill -x rofi; pkill -f 'sleep 900'; pkill -f wf-recorder; pkill -x satty; pkill -x slurp; pkill -x btop; pkill -x nm-applet")
     try:
         wait(lambda: not windows(), 2.5)
     except AssertionError:
@@ -939,30 +943,20 @@ def _():
     wait(lambda: "autilus" in focused()["app_id"])
 
 
-@case("Burp o'rnatilmagan bo'lsa Mod+Shift+B xato bermaydi")
-def _():
-    if shutil.which("burpsuite"):
-        raise Skip("burpsuite o'rnatilgan")
-    key("mod", "shift", "b")
-    time.sleep(0.6)
-    ok(st() is not None and not windows())
-
-
-# ---------------------------------------------------------------------------------------
 feature("launcher", "Qidiruv oynasi")
 
 
-@case("Mod+Space ochadi, Esc yopadi")
+@case("IPC ochadi, Esc yopadi")
 def _():
     launcher()
     key("esc")
     wait(lambda: st()["popup"] == "")
 
 
-@case("Mod+Space qayta bosilsa yopiladi")
+@case("IPC qayta chaqirilsa yopiladi")
 def _():
     launcher()
-    key("mod", "space")
+    ipc("launcher")
     wait(lambda: st()["popup"] == "")
 
 
@@ -1112,78 +1106,6 @@ def _():
 
 
 # ---------------------------------------------------------------------------------------
-feature("encode", "Qidiruvda kodlash")
-
-
-def enc(q):
-    launcher(q)
-    return row("Encoding")
-
-
-@case("b64 kodlaydi")
-def _():
-    ok(enc("b64 admin:pass") == ["YWRtaW46cGFzcw=="])
-    key("esc")
-
-
-@case("b64d ochadi")
-def _():
-    ok(enc("b64d YWRtaW46cGFzcw==") == ["admin:pass"])
-    key("esc")
-
-
-@case("url kodlaydi")
-def _():
-    ok(enc("url a b&c") == ["a%20b%26c"])
-    key("esc")
-
-
-@case("urld ochadi")
-def _():
-    ok(enc("urld a%20b") == ["a b"])
-    key("esc")
-
-
-@case("hex kodlaydi")
-def _():
-    ok(enc("hex salom") == ["73616c6f6d"])
-    key("esc")
-
-
-@case("hexd ochadi")
-def _():
-    ok(enc("hexd 73616c6f6d") == ["salom"])
-    key("esc")
-
-
-@case("md5 hisoblaydi")
-def _():
-    ok(enc("md5 admin") == ["21232f297a57a5a743894a0e4a801fc3"])
-    key("esc")
-
-
-@case("Noto'g'ri base64 xato haqida aytadi")
-def _():
-    launcher("b64d @@@")
-    ok(st()["rows"] == ["Encoding|Could not decode"], st()["rows"])
-    key("esc")
-
-
-@case("Enter natijani nusxalaydi")
-def _():
-    enc("b64 salom")
-    key("enter")
-    wait(lambda: clip_text() == "c2Fsb20=")
-
-
-@case("Noto'g'ri urld shell'ni buzmaydi")
-def _():
-    launcher("urld %zz")
-    ok(st() is not None)
-    key("esc")
-
-
-# ---------------------------------------------------------------------------------------
 feature("command", "Qidiruvda buyruq va internet")
 
 
@@ -1265,96 +1187,6 @@ def _():
 
 
 # ---------------------------------------------------------------------------------------
-feature("lab", "Pentest nishoni va lab holati")
-
-
-def lab_wait(fn):
-    wait(fn, 40)
-
-
-@case("target buyrug'i nishonni yozadi")
-def _():
-    launcher("target 10.10.11.42")
-    key("enter")
-    wait(lambda: st()["target"] == "10.10.11.42", 5)
-
-
-@case("Xavfli matn nishon sifatida qabul qilinmaydi")
-def _():
-    launcher("target $(touch /tmp/nd-x.flag)")
-    ok(row("Pentest") == [])
-    key("esc")
-    ok(sh([str(HOME / ".local/bin/niri-desk-target"), "a;b"]).returncode != 0)
-    ok(not os.path.exists("/tmp/nd-x.flag"))
-
-
-@case("Domen nomi ham nishon bo'la oladi")
-def _():
-    launcher("target hack.example.com")
-    key("enter")
-    wait(lambda: st()["target"] == "hack.example.com", 5)
-
-
-@case("Port ochilsa holat yangilanadi")
-def _():
-    settings(lab__target="127.0.0.1")
-    subprocess.Popen(["python3", "-m", "http.server", "8080", "--bind", "127.0.0.1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd="/tmp")
-    try:
-        ipc("dashboard")
-        wait(lambda: 8080 in st()["labOpen"], 12)
-    finally:
-        sh("pkill -f 'http.server 8080'")
-
-
-@case("Port yopilsa holat qaytadi")
-def _():
-    ipc("dashboard")
-    wait(lambda: 8080 not in st()["labOpen"], 12)
-
-
-@case("Bo'sh nishonda dashboard buzilmaydi")
-def _():
-    settings(lab__target="")
-    ipc("dashboard")
-    time.sleep(0.8)
-    ok(st()["popup"] == "dashboard")
-
-
-@case("VPN interfeysi paydo bo'lsa manzili ko'rinadi")
-def _():
-    sh("sudo -n ip link add tun0 type dummy; sudo -n ip addr add 10.8.0.5/24 dev tun0; sudo -n ip link set tun0 up")
-    try:
-        ipc("dashboard")
-        wait(lambda: st()["vpn"] == "10.8.0.5", 12)
-    finally:
-        sh("sudo -n ip link del tun0")
-
-
-@case("Dashboard'da nishonni bosish nusxalaydi")
-def _():
-    settings(lab__target="10.1.2.3")
-    ipc("dashboardTab", "2")
-    time.sleep(1.0)
-    click(545, 73)
-    wait(lambda: clip_text() == "10.1.2.3", 4)
-
-
-@case("Skript noto'g'ri portni e'tiborsiz qoldiradi")
-def _():
-    r = sh([str(HOME / ".local/bin/niri-desk-lab"), "127.0.0.1", "tun0", "abc", "99999"])
-    d = json.loads(r.stdout)
-    ok(d["open"] == [], d)
-
-
-@case("Portlar ro'yxati bo'sh bo'lsa ham ishlaydi")
-def _():
-    settings(lab__ports=[])
-    ipc("dashboard")
-    time.sleep(1.0)
-    ok(st()["labOpen"] == [])
-
-
-# ---------------------------------------------------------------------------------------
 feature("clipboard", "Clipboard tarixi")
 
 
@@ -1367,7 +1199,7 @@ def copy(text):
 @case("Nusxalangan matn tarixda ko'rinadi")
 def _():
     copy("clip-birinchi")
-    key("mod", "v")
+    ipc("clipboard")
     wait(lambda: "clip-birinchi" in row("Clipboard"), 4)
     key("esc")
 
@@ -1375,7 +1207,7 @@ def _():
 @case("Mod+V faqat clipboard'ni ko'rsatadi")
 def _():
     copy("clip-ikki")
-    key("mod", "v")
+    ipc("clipboard")
     wait(lambda: st()["rows"])
     ok(all(r.startswith("Clipboard|") for r in st()["rows"]), st()["rows"])
     key("esc")
@@ -1384,7 +1216,7 @@ def _():
 @case("Yozish tarixni filtrlaydi")
 def _():
     copy("olma-belgi"); copy("nok-belgi")
-    key("mod", "v"); wait(lambda: st()["rows"]); time.sleep(0.5)
+    ipc("clipboard"); wait(lambda: st()["rows"]); time.sleep(0.5)
     typ("nok-")
     wait(lambda: st()["rows"] and "nok-belgi" in st()["rows"][0], 3)
     key("esc")
@@ -1393,7 +1225,7 @@ def _():
 @case("Enter tanlangan matnni qaytaradi")
 def _():
     copy("eski-matn"); copy("yangi-matn")
-    key("mod", "v"); wait(lambda: st()["rows"]); time.sleep(0.5)
+    ipc("clipboard"); wait(lambda: st()["rows"]); time.sleep(0.5)
     typ("eski-matn")
     time.sleep(0.3)
     rows = st()["rows"]
@@ -1405,7 +1237,7 @@ def _():
 def _():
     bad = "$(touch /tmp/nd-pwn.flag);`touch /tmp/nd-pwn.flag`"
     copy(bad)
-    key("mod", "v"); wait(lambda: st()["rows"]); time.sleep(0.5)
+    ipc("clipboard"); wait(lambda: st()["rows"]); time.sleep(0.5)
     key("enter")
     wait(lambda: clip_text() == bad, 4)
     time.sleep(0.4)
@@ -1416,7 +1248,7 @@ def _():
 def _():
     text = "bir\nikki\nuch"
     copy(text)
-    key("mod", "v"); wait(lambda: st()["rows"]); time.sleep(0.5)
+    ipc("clipboard"); wait(lambda: st()["rows"]); time.sleep(0.5)
     first = st()["rows"][0]
     key("enter")
     time.sleep(0.6)
@@ -1426,22 +1258,22 @@ def _():
 @case("Kirill va o'zbek harflari buzilmaydi")
 def _():
     copy("салом o'zbek")
-    key("mod", "v"); wait(lambda: st()["rows"]); time.sleep(0.5)
+    ipc("clipboard"); wait(lambda: st()["rows"]); time.sleep(0.5)
     key("enter")
     wait(lambda: clip_text() == "салом o'zbek", 4)
 
 
 @case("Mod+V ikkinchi bosish yopadi")
 def _():
-    key("mod", "v"); wait(lambda: st()["popup"] == "clipboard")
-    key("mod", "v"); wait(lambda: st()["popup"] == "")
+    ipc("clipboard"); wait(lambda: st()["popup"] == "clipboard")
+    ipc("clipboard"); wait(lambda: st()["popup"] == "")
 
 
 @case("Tarix bo'sh bo'lsa xato bermaydi")
 def _():
     sh("cliphist wipe")
     time.sleep(0.3)
-    key("mod", "v"); wait(lambda: st()["popup"] == "clipboard")
+    ipc("clipboard"); wait(lambda: st()["popup"] == "clipboard")
     time.sleep(0.4)
     ok(st()["rows"] == [])
     key("enter")
@@ -1452,7 +1284,7 @@ def _():
 @case("Juda uzun matn oynani buzmaydi")
 def _():
     copy("x" * 20000)
-    key("mod", "v"); wait(lambda: st()["rows"]); time.sleep(0.5)
+    ipc("clipboard"); wait(lambda: st()["rows"]); time.sleep(0.5)
     ok(st()["popup"] == "clipboard")
     key("esc")
 
@@ -1640,12 +1472,12 @@ def _():
 
 @case("CPU halqasini bosish monitor ochadi")
 def _():
-    ipc("dashboardTab", "1")
+    ipc("dashboardTab", "0")
     wait(lambda: st()["popup"] == "dashboard" and st()["dashTab"] == 1)
     time.sleep(0.5)
-    click(703, 124)
+    click(650, 130)
     w = wait(lambda: next(x for x in windows() if x["app_id"] == "niri-desk-tool"), 6)
-    wait(lambda: sh("pgrep -x btop").returncode == 0, 4)
+    wait(lambda: sh("pgrep -u $(id -u) -x btop").returncode == 0, 4)
     # btop kamida 80 ustun talab qiladi: kitty katagi taxminan 9.6 piksel.
     ok(w["layout"]["window_size"][0] >= 800, w["layout"])
     sh("pkill -x btop")
@@ -1684,11 +1516,12 @@ def sess_y():
     return 52 + st()["controlHeight"] - 16 - 19
 
 
-def toggle_x(i):
-    # Panel 400 kenglikda, o'ng chetdan 14. Oltita tugma 7 oraliq bilan.
+def toggle_xy(i):
+    # 400 kenglikdagi panel, ichi 368. 0 va 1: tarmoq tugmalari, 2-4: tez tugmalar.
     left = 1280 - 14 - 400 + 16
-    w = (368 - 35) / 6
-    return int(left + i * (w + 7) + w / 2)
+    if i < 2:
+        return left + 120 + i * 188, 98
+    return int(left + 58 + (i - 2) * 125), 166
 
 
 @case("Holat tugmasini bosish ochadi")
@@ -1712,7 +1545,7 @@ def _():
 @case("Kofe tugmasi ishlaydi va xabar chiqaradi")
 def _():
     open_control()
-    click(toggle_x(3), 91)
+    click(*toggle_xy(2))
     wait(lambda: st()["caffeine"])
     toast("Caffeine on")
 
@@ -1720,16 +1553,16 @@ def _():
 @case("Tungi rejim wlsunset'ni boshqaradi")
 def _():
     open_control()
-    click(toggle_x(4), 91)
-    wait(lambda: sh("pgrep -x wlsunset").returncode == 0, 4)
-    click(toggle_x(4), 91)
-    wait(lambda: sh("pgrep -x wlsunset").returncode != 0, 4)
+    click(*toggle_xy(3))
+    wait(lambda: sh("pgrep -u $(id -u) -x wlsunset").returncode == 0, 4)
+    click(*toggle_xy(3))
+    wait(lambda: sh("pgrep -u $(id -u) -x wlsunset").returncode != 0, 4)
 
 
 @case("'Bezovta qilmang' xabarlarni to'xtatadi")
 def _():
     open_control()
-    click(toggle_x(5), 91)
+    click(*toggle_xy(4))
     wait(lambda: st()["dnd"])
     key("esc")
     sh(["notify-send", "Jim xabar"])
@@ -1738,28 +1571,34 @@ def _():
     ok("Jim xabar" in st()["history"])
 
 
-@case("VPN buyrug'i yo'q bo'lsa qalqon tugmasi ishlamaydi")
-def _():
-    open_control()
-    click(toggle_x(2), 91)
-    time.sleep(0.4)
-    ok(st()["popup"] == "control" and st()["error"] == "")
-
-
-@case("VPN buyrug'i berilsa qalqon ishga tushiradi")
-def _():
-    settings(vpn__up="touch /tmp/nd-vpn.flag", vpn__down="true")
-    open_control()
-    click(toggle_x(2), 91)
-    wait(lambda: os.path.exists("/tmp/nd-vpn.flag"), 4)
-
-
 @case("Chiqish tugmasi birinchi bosishda bajarilmaydi")
 def _():
     open_control()
     click(1065, sess_y())
     toast("Confirm", 3)
-    ok(sh("pgrep -x niri").returncode == 0)
+    ok(sh("pgrep -u $(id -u) -x niri").returncode == 0)
+
+
+@case("Wi-Fi tugmasi tarmoqlar ro'yxatini ochadi, Esc orqaga qaytaradi")
+def _():
+    key("mod", "c")
+    wait(lambda: st()["popup"] == "control", 3)
+    time.sleep(0.4)
+    click(*toggle_xy(0))
+    wait(lambda: st()["controlPage"] == "wifi", 3)
+    key("esc")
+    wait(lambda: st()["controlPage"] == "" and st()["popup"] == "control", 3)
+
+
+@case("Bluetooth tugmasi qurilmalar ro'yxatini ochadi, panel yopilsa qayta tiklanadi")
+def _():
+    key("mod", "c")
+    wait(lambda: st()["popup"] == "control", 3)
+    time.sleep(0.4)
+    click(*toggle_xy(1))
+    wait(lambda: st()["controlPage"] == "bluetooth", 3)
+    ipc("close")
+    wait(lambda: st()["popup"] == "" and st()["controlPage"] == "", 3)
 
 
 @case("Ochiq panelda Mod+Q oynani yopmaydi, panel saqlanadi")
@@ -1845,7 +1684,7 @@ def _():
 def _():
     setvol(0.2)
     open_control()
-    click(1280 - 14 - 400 + 16 + 31 + 200, 139)
+    click(1066, 221)
     wait(lambda: abs(vol() - 0.2) > 0.1, 3)
 
 
@@ -1853,7 +1692,7 @@ def _():
 def _():
     setvol(0.2)
     open_control()
-    drag(1280 - 14 - 400 + 16 + 40, 139, 1270, 139)
+    drag(890, 221, 1248, 221)
     wait(lambda: vol() >= 0.99, 3)
     setvol(0.5)
 
@@ -2013,7 +1852,7 @@ def _():
 def _():
     tray_on(); time.sleep(0.4)
     a = shot("t5")
-    click(1067, 27, "0xC1")
+    click(1028, 27, "0xC1")
     time.sleep(1.0)
     b = shot("t6")
     key("esc")
@@ -2023,7 +1862,7 @@ def _():
 @case("Menyu Esc bilan yopiladi")
 def _():
     tray_on(); time.sleep(0.4)
-    click(1067, 27, "0xC1")
+    click(1028, 27, "0xC1")
     wait(lambda: st()["popup"] == "tray", 3)
     key("esc")
     wait(lambda: st()["popup"] == "", 3)
@@ -2037,7 +1876,7 @@ def dumps():
 def _():
     n = dumps()
     tray_on(); time.sleep(0.4)
-    click(1067, 27, "0xC1")
+    click(1028, 27, "0xC1")
     wait(lambda: st()["popup"] == "tray", 3)
     key("esc"); time.sleep(0.3)
     sh("pkill -x nm-applet")
@@ -2050,7 +1889,7 @@ def _():
 def _():
     n = dumps()
     tray_on(); time.sleep(0.4)
-    click(1067, 27, "0xC1")
+    click(1028, 27, "0xC1")
     wait(lambda: st()["popup"] == "tray", 3)
     sh("pkill -x nm-applet")
     wait(lambda: st()["popup"] == "", 4)
@@ -2061,7 +1900,7 @@ def _():
 @case("Chap tugma shell'ni buzmaydi")
 def _():
     tray_on(); time.sleep(0.4)
-    click(1067, 27)
+    click(1028, 27)
     time.sleep(0.6)
     key("esc")
     ok(st()["trayCount"] >= 1)
@@ -2070,7 +1909,7 @@ def _():
 @case("O'rta tugma shell'ni buzmaydi")
 def _():
     tray_on(); time.sleep(0.4)
-    click(1067, 27, "0xC2")
+    click(1028, 27, "0xC2")
     time.sleep(0.5)
     ok(st()["trayCount"] >= 1)
 
@@ -2281,7 +2120,7 @@ def nvideos():
 
 def rec_start():
     key("mod", "shift", "r")
-    wait(lambda: sh("pgrep -x slurp").returncode == 0, 3, "soha tanlash ochilmadi")
+    wait(lambda: sh("pgrep -u $(id -u) -x slurp").returncode == 0, 3, "soha tanlash ochilmadi")
     time.sleep(0.2)
     drag(100, 100, 500, 400)
     wait(lambda: st()["recording"], 4)
@@ -2295,7 +2134,7 @@ def rec_stop():
 @case("Soha tanlansa yozish boshlanadi")
 def _():
     rec_start()
-    ok(sh("pgrep -x wf-recorder").returncode == 0)
+    ok(sh("pgrep -u $(id -u) -x wf-recorder").returncode == 0)
     rec_stop()
 
 
@@ -2320,12 +2159,12 @@ def _():
 @case("Esc bilan bekor qilinsa yozish boshlanmaydi")
 def _():
     key("mod", "shift", "r")
-    wait(lambda: sh("pgrep -x slurp").returncode == 0, 3)
+    wait(lambda: sh("pgrep -u $(id -u) -x slurp").returncode == 0, 3)
     time.sleep(0.2)
     key("esc")
     time.sleep(0.6)
     ok(not st()["recording"])
-    ok(sh("pgrep -x wf-recorder").returncode != 0)
+    ok(sh("pgrep -u $(id -u) -x wf-recorder").returncode != 0)
 
 
 @case("Yozish paytida orolda qizil vaqt ko'rinadi")
@@ -2351,9 +2190,9 @@ def _():
     rec_start()
     sh("pkill -x qs"); time.sleep(1.2)
     wait(lambda: st() is not None, 10)
-    ok(sh("pgrep -x wf-recorder").returncode == 0)
+    ok(sh("pgrep -u $(id -u) -x wf-recorder").returncode == 0)
     key("mod", "shift", "r")
-    wait(lambda: sh("pgrep -x wf-recorder").returncode != 0, 5)
+    wait(lambda: sh("pgrep -u $(id -u) -x wf-recorder").returncode != 0, 5)
 
 
 @case("wf-recorder o'zi to'xtasa keyingi bosish yangisini boshlaydi")
@@ -2362,7 +2201,7 @@ def _():
     sh("pkill -9 -x wf-recorder")
     time.sleep(0.4)
     key("mod", "shift", "r")
-    wait(lambda: sh("pgrep -x slurp").returncode == 0, 3)
+    wait(lambda: sh("pgrep -u $(id -u) -x slurp").returncode == 0, 3)
     key("esc")
     ipc("recording", "false")
 
@@ -2400,7 +2239,7 @@ def term_text(text):
 
 def ocr_region():
     key("mod", "p")
-    wait(lambda: sh("pgrep -x slurp").returncode == 0, 3)
+    wait(lambda: sh("pgrep -u $(id -u) -x slurp").returncode == 0, 3)
     time.sleep(0.2)
 
 
@@ -2505,12 +2344,12 @@ feature("lock", "Bloklash va kofe rejimi")
 def unlock():
     typ(PW)
     key("enter")
-    wait(lambda: sh("pgrep -x hyprlock").returncode != 0, 6, "ochilmadi")
+    wait(lambda: sh("pgrep -u $(id -u) -x hyprlock").returncode != 0, 6, "ochilmadi")
     time.sleep(0.5)
 
 
 def locked():
-    return sh("pgrep -x hyprlock").returncode == 0
+    return sh("pgrep -u $(id -u) -x hyprlock").returncode == 0
 
 
 def need_pw():
@@ -2531,7 +2370,7 @@ def _():
 def _():
     need_pw()
     key("mod", "x"); wait(locked, 4); time.sleep(0.8)
-    sid = sh("loginctl list-sessions --no-legend").stdout.split()[0]
+    sid = sh("loginctl list-sessions --no-legend | awk -v u=$(id -un) '$3==u && $4==\"seat0\"{print $1}'").stdout.strip()
     ok("LockedHint=yes" in sh(f"loginctl show-session {sid} -p LockedHint").stdout)
     unlock()
 
@@ -2555,12 +2394,12 @@ def _():
     unlock()
 
 
-@case("Bloklanganda Mod+Space ishlamaydi")
+@case("Bloklanganda Mod+A ishlamaydi")
 def _():
     need_pw()
     key("mod", "x"); wait(locked, 4); time.sleep(0.8)
-    key("mod", "space"); time.sleep(0.6)
-    ok(st()["popup"] == "", st()["popup"])
+    key("mod", "a"); time.sleep(0.6)
+    ok(st()["popup"] == "" and not rofi_open(), st()["popup"])
     unlock()
 
 
@@ -2579,7 +2418,7 @@ def _():
     need_pw()
     key("mod", "x"); wait(locked, 4); time.sleep(0.5)
     key("mod", "x"); time.sleep(1)
-    ok(len(sh("pgrep -x hyprlock").stdout.split()) == 1)
+    ok(len(sh("pgrep -u $(id -u) -x hyprlock").stdout.split()) == 1)
     unlock()
 
 
@@ -2589,7 +2428,7 @@ def _():
     key("mod", "x"); wait(locked, 4); time.sleep(0.8)
     sh("pkill -x qs"); time.sleep(1)
     ok(locked())
-    wait(lambda: sh("pgrep -x qs").returncode == 0, 6, "shell qaytmadi")
+    wait(lambda: sh("pgrep -u $(id -u) -x qs").returncode == 0, 6, "shell qaytmadi")
     ok(locked())
     unlock()
     wait(lambda: "niri-desk-top" in layers(), 10)
@@ -2610,7 +2449,7 @@ def _():
     need_pw()
     settings(idle__lock=3, idle__screenOff=0, idle__suspend=0)
     open_control()
-    click(toggle_x(3), 91)
+    click(*toggle_xy(2))
     wait(lambda: st()["caffeine"], 3)
     key("esc")
     time.sleep(7)
@@ -2946,14 +2785,6 @@ def _():
     ok(shot("pc2", "400,0 480x44") != a)
 
 
-@case("Bo'sh ish stoli soati o'chiriladi")
-def _():
-    wait(lambda: "niri-desk-clock" in layers(), 3)
-    settings(panel__quietClock=False)
-    wait(lambda: "niri-desk-clock" not in layers(), 3)
-
-
-# ---------------------------------------------------------------------------------------
 feature("set-keys", "Sozlamalar: klavishlar va klaviatura")
 
 
@@ -2966,16 +2797,16 @@ def _():
     settings(binds__launcher="Mod+Y")
     time.sleep(0.4)
     key("mod", "y")
-    wait(lambda: st()["popup"] == "launcher", 3)
+    wait(rofi_open, 3)
 
 
 @case("Eski klavish endi ishlamaydi")
 def _():
     settings(binds__launcher="Mod+Y")
     time.sleep(0.4)
-    key("mod", "space")
+    key("mod", "a")
     time.sleep(0.6)
-    ok(st()["popup"] == "")
+    ok(not rofi_open())
 
 
 @case("Klavishni bo'sh qoldirish uni o'chiradi")
@@ -3001,8 +2832,8 @@ def _():
     settings(binds__launcher="Mod+H")
     wait(lambda: "system shortcut" in st()["error"], 5, st()["error"])
     ok(binds_text() == before)
-    key("mod", "space")
-    wait(lambda: st()["popup"] == "launcher", 3)
+    key("mod", "a")
+    wait(rofi_open, 3)
 
 
 @case("Mavjud bo'lmagan tugma nomi rad etiladi")
@@ -3145,10 +2976,10 @@ def _():
     settings(windows__gaps=33)
     open_sw(); time.sleep(0.4)
     ox, oy = sw_origin()
-    click(ox + 95, oy + 434)
+    click(ox + 95, oy + 472)
     time.sleep(0.5)
     ok(json.loads(SET.read_text())["windows"]["gaps"] == 33)
-    click(ox + 95, oy + 434)
+    click(ox + 95, oy + 472)
     wait(lambda: "windows" not in json.loads(SET.read_text()), 4)
 
 
@@ -3191,7 +3022,7 @@ def _():
 @case("Tanlov tugmasi qiymatni o'zgartiradi")
 def _():
     ox, oy = page(3)
-    click(ox + 820, row_y(oy, 0))
+    click(ox + 820, row_y(oy, 1))
     wait(lambda: saved().get("panel", {}).get("position") == "bottom", 3, saved().get("panel"))
     wait(lambda: st()["bottom"], 3)
 
@@ -3219,7 +3050,7 @@ def _():
 @case("Klavishni maydondan o'zgartirish ishlaydi")
 def _():
     ox, oy = page(5)
-    click(ox + 800, row_y(oy, 1))
+    click(ox + 800, row_y(oy, 2))
     for _n in range(12):
         key("backspace")
     typ("Mod+Y")
@@ -3228,7 +3059,7 @@ def _():
     key("esc")
     time.sleep(0.4)
     key("mod", "y")
-    wait(lambda: st()["popup"] == "launcher", 3)
+    wait(rofi_open, 3)
 
 
 @case("Yangi qoida tugmasi qoida qo'shadi")
@@ -3246,6 +3077,9 @@ def _():
     ox, oy = page(2)
     click(ox + 250, oy + 190)
     wait(lambda: saved()["windows"]["rules"][0].get("floating") is True, 3, saved()["windows"]["rules"])
+    # settings.json yozilgach niri qoidani config'dan bir oz keyin oladi: shuni kutamiz.
+    wait(lambda: "qoidali" in (GEN / "settings.kdl").read_text() and "open-floating true" in (GEN / "settings.kdl").read_text(), 4, "qoida yozilmadi")
+    time.sleep(0.6)
     key("mod", "comma"); wait(lambda: sw() is None, 3)
     ok(floats("x", "qoidali"))
 
@@ -3278,7 +3112,7 @@ feature("session", "Barqarorlik")
 
 @case("Bo'sh turganda shell protsessorni band qilmaydi")
 def _():
-    p = sh("pgrep -x qs").stdout.split()[0]
+    p = sh("pgrep -u $(id -u) -x qs").stdout.split()[0]
     t = lambda: sum(int(x) for x in Path(f"/proc/{p}/stat").read_text().split()[13:15])
     a = t(); time.sleep(5); b = t()
     ok(b - a < 25, b - a)
@@ -3286,14 +3120,14 @@ def _():
 
 @case("Qayta yuklanganda bitta nusxa ishlaydi")
 def _():
-    ok(len(sh("pgrep -x qs").stdout.split()) == 1)
+    ok(len(sh("pgrep -u $(id -u) -x qs").stdout.split()) == 1)
 
 
 @case("Shell o'ldirilsa nazoratchi o'zi qaytaradi")
 def _():
     sh("pkill -9 -x qs"); time.sleep(0.5)
     wait(lambda: "niri-desk-top" in layers(), 10)
-    ok(len(sh("pgrep -x qs").stdout.split()) == 1)
+    ok(len(sh("pgrep -u $(id -u) -x qs").stdout.split()) == 1)
 
 
 @case("niri config xatosi shell'ga xabar qiladi")
@@ -3318,7 +3152,7 @@ def _():
 
 @case("Xotira tez o'smaydi")
 def _():
-    p = sh("pgrep -x qs").stdout.split()[0]
+    p = sh("pgrep -u $(id -u) -x qs").stdout.split()[0]
     rss = lambda: int(re.search(r"VmRSS:\s+(\d+)", Path(f"/proc/{p}/status").read_text()).group(1))
     a = rss()
     for _n in range(15):
@@ -3365,7 +3199,6 @@ def _():
 # Yangi funksiyalar
 LBIN = HOME / ".local/bin"
 PROFILES = HOME / ".config/niri-desk/profiles.json"
-SNIPPETS = HOME / ".config/niri-desk/snippets.json"
 AI_URL = "http://127.0.0.1:8765"
 FAKE = None
 
@@ -3404,7 +3237,7 @@ def fake_log():
 
 
 def ai_say(text, done=True):
-    dash(3)
+    dash(2)
     typ(text)
     key("enter")
     if done:
@@ -3416,9 +3249,9 @@ def write_json(path, data):
     time.sleep(0.6)
 
 
-feature("dash", "Dashboard: 4 ta vkladka")
+feature("dash", "Dashboard: 3 ta vkladka")
 
-for _i, _name in enumerate(["Today", "Status", "Lab", "AI"]):
+for _i, _name in enumerate(["Today", "Music", "AI"]):
     @case(f"{_i + 1}-vkladka ({_name}) ochiladi")
     def _(i=_i):
         dash(i)
@@ -3435,9 +3268,9 @@ def _():
 @case("Vkladka nomini bosish uni tanlaydi")
 def _():
     dash(0)
-    click(702, 27)
+    click(770, 27)
     wait(lambda: st()["dashTab"] == 2, 2, "almashmadi")
-    click(577, 27)
+    click(640, 27)
     wait(lambda: st()["dashTab"] == 1, 2, "almashmadi")
 
 
@@ -3454,16 +3287,14 @@ def _():
 def _():
     dash(1)
     key("tab")
-    wait(lambda: st()["dashTab"] == 2, 2, f"Tab ishlamadi: {layers()} {focused()}")
-    key("tab")
-    wait(lambda: st()["dashTab"] == 3, 2, "AI ga o'tmadi")
+    wait(lambda: st()["dashTab"] == 2, 2, f"AI ga o'tmadi: {layers()} {focused()}")
     key("tab")
     wait(lambda: st()["dashTab"] == 0, 2, "AI ichida Tab ushlanib qoldi")
 
 
 @case("Esc har vkladkada yopadi")
 def _():
-    for i in range(4):
+    for i in range(3):
         dash(i)
         key("esc")
         wait(lambda: st()["popup"] == "", 2, f"{i}-vkladka yopilmadi")
@@ -3542,7 +3373,7 @@ def _():
     ai_ready()
     ai_say("sekin", done=False)
     wait(lambda: st()["aiBusy"], 3, "boshlanmadi")
-    click(996, 525)
+    click(1086, 525)
     wait(lambda: not st()["aiBusy"], 4, "to'xtamadi")
 
 
@@ -3569,7 +3400,7 @@ def _():
 def _():
     ai_ready()
     ai_say("salom")
-    click(996, 525)
+    click(1086, 525)
     wait(lambda: st()["aiMessages"] == [], 3, "tozalanmadi")
     time.sleep(0.4)
     ok(json.loads(run("niri-desk-ai", "history").stdout) == [])
@@ -3666,7 +3497,7 @@ def _():
     wait(lambda: st()["aiBusy"], 3)
     wait(CLOG.exists, 4)
     pid = cc_log()[-1]["pid"]
-    click(996, 525)
+    click(1086, 525)
     wait(lambda: not st()["aiBusy"], 4, "to'xtamadi")
     wait(lambda: not Path(f"/proc/{pid}").exists(), 4, "jarayon qoldi")
 
@@ -3676,7 +3507,7 @@ def _():
     cc_ready()
     ai_say("salom")
     ok(AISESSION.exists())
-    click(996, 525)
+    click(1086, 525)
     wait(lambda: st()["aiMessages"] == [], 3)
     wait(lambda: not AISESSION.exists(), 3, "qoldi")
 
@@ -3697,214 +3528,6 @@ def _():
     settings(ai__claudePath="/yoq/claude")
     time.sleep(0.2)
     ok(json.loads(run("niri-desk-ai", "status").stdout)["backend"] == "api")
-
-
-feature("lab2", "Lab vkladkasi: nishon va qaydlar")
-
-
-def notes_path(t):
-    return HOME / "Pentest" / t / "notes.md"
-
-
-@case("Qayd yozilsa nishon papkasiga saqlanadi")
-def _():
-    settings(lab__target="10.0.0.7")
-    sh(["rm", "-rf", str(HOME / "Pentest")])
-    dash(2)
-    click(840, 200)
-    typ("parol admin")
-    wait(lambda: notes_path("10.0.0.7").exists() and "parol admin" in notes_path("10.0.0.7").read_text(), 4, "saqlanmadi")
-
-
-@case("Qayd fayli faqat egasiga ochiq")
-def _():
-    settings(lab__target="10.0.0.7")
-    sh(["rm", "-rf", str(HOME / "Pentest")])
-    dash(2)
-    click(840, 200)
-    typ("x")
-    wait(notes_path("10.0.0.7").exists, 4)
-    ok(oct(notes_path("10.0.0.7").stat().st_mode)[-3:] == "600")
-
-
-@case("Esc bosilsa oxirgi yozuv ham saqlanadi")
-def _():
-    settings(lab__target="10.0.0.8")
-    sh(["rm", "-rf", str(HOME / "Pentest")])
-    dash(2)
-    click(840, 200)
-    typ("oxirgi")
-    key("esc")
-    wait(lambda: notes_path("10.0.0.8").exists() and "oxirgi" in notes_path("10.0.0.8").read_text(), 3, "yo'qoldi")
-
-
-@case("Qayta ochilganda qayd joyida turadi")
-def _():
-    settings(lab__target="10.0.0.9")
-    notes_path("10.0.0.9").parent.mkdir(parents=True, exist_ok=True)
-    notes_path("10.0.0.9").write_text("eski")
-    dash(2)
-    time.sleep(0.4)
-    click(840, 200)
-    typ("+")
-    key("esc")
-    wait(lambda: "+" in notes_path("10.0.0.9").read_text(), 3, "saqlanmadi")
-    ok("eski" in notes_path("10.0.0.9").read_text(), "eski qayd yo'qoldi")
-
-
-@case("Nishon almashganda qaydlar aralashmaydi")
-def _():
-    sh(["rm", "-rf", str(HOME / "Pentest")])
-    settings(lab__target="10.0.0.1")
-    dash(2)
-    click(840, 200)
-    typ("birinchi")
-    time.sleep(1.2)
-    settings(lab__target="10.0.0.2")
-    time.sleep(0.8)
-    ok("birinchi" in notes_path("10.0.0.1").read_text())
-    ok(not notes_path("10.0.0.2").exists() or "birinchi" not in notes_path("10.0.0.2").read_text())
-
-
-@case("Yo'ldan chiqadigan nishon qaydni yozdirmaydi")
-def _():
-    settings(lab__target="../evil")
-    dash(2)
-    click(840, 200)
-    typ("x")
-    time.sleep(1.2)
-    ok(not (HOME / "evil").exists() and not (HOME / "notes.md").exists())
-
-
-@case("Nishonsiz qayd maydoni faqat o'qish uchun")
-def _():
-    settings(lab__target="")
-    dash(2)
-    click(840, 200)
-    typ("x")
-    time.sleep(1.2)
-    ok(not (HOME / "Pentest/notes.md").exists())
-
-
-@case("Nishonni kiritish maydonidan o'zgartirish mumkin")
-def _():
-    settings(lab__target="")
-    dash(2)
-    click(390, 73)
-    typ("10.9.8.7")
-    key("enter")
-    wait(lambda: st()["target"] == "10.9.8.7", 3, "o'zgarmadi")
-
-
-@case("Nusxa tugmasi nishonni clipboard'ga qo'yadi")
-def _():
-    settings(lab__target="10.1.1.1")
-    dash(2)
-    click(545, 73)
-    wait(lambda: clip_text() == "10.1.1.1", 3, "nusxalanmadi")
-
-
-@case("Barcha terminal uchun nishon fayli yangilanadi")
-def _():
-    settings(lab__target="10.2.2.2")
-    wait(lambda: (STATE / "target").read_text().strip() == "10.2.2.2", 4, "yangilanmadi")
-    r = sh(["bash", "-c", f'source {HOME}/.config/niri-desk/shell.bash; eval "$PROMPT_COMMAND"; echo $TARGET'])
-    ok(r.stdout.strip() == "10.2.2.2", r.stdout)
-
-
-feature("pomo", "Pomodoro")
-
-
-@case("Boshlash ish bosqichini va to'g'ri vaqtni qo'yadi")
-def _():
-    dash(0)
-    click(287, 298)
-    wait(lambda: st()["pomodoro"] == "work", 2, "boshlanmadi")
-    ok(st()["pomodoroLeft"] > 1490)
-
-
-@case("Sozlamadagi daqiqa ishlatiladi")
-def _():
-    settings(pomodoro__work=10)
-    dash(0)
-    click(287, 298)
-    wait(lambda: st()["pomodoro"] == "work", 2)
-    ok(590 < st()["pomodoroLeft"] <= 600)
-
-
-@case("Vaqt kamayib boradi")
-def _():
-    ipc("pomodoro", "100")
-    a = st()["pomodoroLeft"]
-    time.sleep(2.2)
-    ok(st()["pomodoroLeft"] < a)
-
-
-@case("To'xtatilganda vaqt turadi")
-def _():
-    ipc("pomodoro", "100")
-    dash(0)
-    click(287, 298)
-    wait(lambda: st()["pomodoroPaused"], 2, "to'xtamadi")
-    a = st()["pomodoroLeft"]
-    time.sleep(2.2)
-    ok(st()["pomodoroLeft"] == a)
-
-
-@case("Davom etish vaqtni yana yuradi")
-def _():
-    ipc("pomodoro", "100")
-    dash(0)
-    click(287, 298)
-    wait(lambda: st()["pomodoroPaused"], 2)
-    click(287, 298)
-    wait(lambda: not st()["pomodoroPaused"], 2)
-    a = st()["pomodoroLeft"]
-    time.sleep(2.2)
-    ok(st()["pomodoroLeft"] < a)
-
-
-@case("Ish tugasa dam olishga o'tadi va xabar beradi")
-def _():
-    ipc("pomodoro", "2")
-    wait(lambda: st()["pomodoro"] == "rest", 5, "o'tmadi")
-    ok(st()["toast"] == "Time for a break")
-
-
-@case("Dam olish tugasa ishga qaytadi")
-def _():
-    settings(pomodoro__rest=0.05)
-    ipc("pomodoro", "1")
-    wait(lambda: st()["pomodoro"] == "rest", 4)
-    wait(lambda: st()["pomodoro"] == "work", 7, "qaytmadi")
-
-
-@case("Bekor qilish hammasini tozalaydi")
-def _():
-    ipc("pomodoro", "100")
-    dash(0)
-    click(335, 298)
-    wait(lambda: st()["pomodoro"] == "idle", 2, "bekor bo'lmadi")
-    ok(st()["pomodoroLeft"] == 0)
-
-
-@case("Panel yopilsa ham taymer davom etadi")
-def _():
-    ipc("pomodoro", "100")
-    dash(0)
-    key("esc")
-    a = st()["pomodoroLeft"]
-    time.sleep(2.2)
-    ok(st()["pomodoro"] == "work" and st()["pomodoroLeft"] < a)
-
-
-@case("Noto'g'ri qiymatda standart vaqt olinadi")
-def _():
-    settings(pomodoro__work=-3)
-    dash(0)
-    click(287, 298)
-    wait(lambda: st()["pomodoro"] == "work", 2)
-    ok(st()["pomodoroLeft"] > 1490)
 
 
 feature("profile", "Ish profillari")
@@ -3962,10 +3585,10 @@ def _():
 
 @case("Launcher @ bilan profillarni ko'rsatadi")
 def _():
-    write_json(PROFILES, [{"name": "Pentest"}, {"name": "Kod"}])
+    write_json(PROFILES, [{"name": "Ish"}, {"name": "Kod"}])
     lq("@")
     ok(len(row("Work profiles")) == 2, st()["rows"])
-    ipc("launcherQuery", "@pen")
+    ipc("launcherQuery", "@is")
     time.sleep(0.4)
     ok(len(row("Work profiles")) == 1)
 
@@ -3976,14 +3599,6 @@ def _():
     lq("@T")
     key("enter")
     wait(lambda: wsof("prof-a") == 1, 6, "ochilmadi")
-
-
-@case("VPN yoqilgan profil VPN buyrug'ini bajaradi")
-def _():
-    settings(vpn__up="touch /tmp/nd-vpn.flag")
-    write_json(PROFILES, [{"name": "T", "vpn": True, "windows": []}])
-    run("niri-desk-profile", "T")
-    wait(lambda: Path("/tmp/nd-vpn.flag").exists(), 3, "bajarilmadi")
 
 
 @case("Fayl o'zgarsa ro'yxat qayta o'qiladi")
@@ -4155,261 +3770,6 @@ def _():
     wait(lambda: len(names()) >= 1, 4)
     key("enter")
     wait(lambda: st()["popup"] == "", 3, "yopilmadi")
-
-
-feature("snip", "Snippetlar")
-
-
-@case("; hammasini ko'rsatadi")
-def _():
-    lq(";")
-    ok(len(row("Snippets")) >= 5, st()["rows"])
-
-
-@case("Nom bo'yicha filtrlaydi")
-def _():
-    lq(";rev")
-    ok(len(row("Snippets")) == 1 and "rev-bash" in row("Snippets")[0])
-
-
-@case("{target} joriy nishon bilan to'ldiriladi")
-def _():
-    settings(lab__target="10.5.5.5")
-    lq(";nmap-quick")
-    ok("10.5.5.5" in row("Snippets")[0], row("Snippets"))
-
-
-@case("{lport} sozlamadan olinadi")
-def _():
-    settings(lab__lport=9001)
-    lq(";listener")
-    ok("9001" in row("Snippets")[0])
-
-
-@case("{lhost} VPN yo'q bo'lsa sozlamadan olinadi")
-def _():
-    settings(lab__lhost="10.6.6.6")
-    lq(";rev")
-    ok("10.6.6.6" in row("Snippets")[0])
-
-
-@case("Oddiy snippet Enter bilan nusxalanadi")
-def _():
-    settings(lab__lhost="10.6.6.6")
-    lq(";rev")
-    key("enter")
-    wait(lambda: "10.6.6.6" in clip_text(), 3, "nusxalanmadi")
-
-
-@case("run snippet terminalda ishlaydi")
-def _():
-    write_json(SNIPPETS, [{"name": "x", "text": "touch /tmp/nd-snip.flag", "run": True}])
-    lq(";x")
-    key("enter")
-    wait(lambda: Path("/tmp/nd-snip.flag").exists(), 4, "ishlamadi")
-
-
-@case("Nishon bo'sh bo'lsa run snippet bajarilmaydi, nusxalanadi")
-def _():
-    settings(lab__target="")
-    write_json(SNIPPETS, [{"name": "x", "text": "touch /tmp/nd-empty.flag {target}", "run": True}])
-    lq(";x")
-    key("enter")
-    time.sleep(0.8)
-    ok(not Path("/tmp/nd-empty.flag").exists())
-    ok("{target}" in clip_text())
-
-
-@case("Xavfli nishon buyruqqa kirmaydi")
-def _():
-    settings(lab__target="1;touch /tmp/nd-inj.flag")
-    write_json(SNIPPETS, [{"name": "x", "text": "echo {target}", "run": True}])
-    lq(";x")
-    key("enter")
-    time.sleep(0.8)
-    ok(not Path("/tmp/nd-inj.flag").exists())
-
-
-@case("Buzuq fayl eski ro'yxatni saqlab xabar beradi")
-def _():
-    n = st()["snippets"]
-    SNIPPETS.write_text("[{")
-    wait(lambda: st()["toast"] == "Could not read a file", 3, "aytilmadi")
-    ok(st()["snippets"] == n)
-
-
-feature("evidence", "Skrinshot va video nishon papkasiga")
-
-
-def edir(t="10.3.3.3"):
-    return HOME / "Pentest" / t
-
-
-def on(t="10.3.3.3"):
-    settings(lab__target=t, lab__evidence=True)
-    wait(lambda: (STATE / "evidence-dir").read_text().strip() != "", 4, "yoqilmadi")
-
-
-@case("Yoqilganda papka yaratiladi")
-def _():
-    sh(["rm", "-rf", str(HOME / "Pentest")])
-    on()
-    ok((edir() / "shots").is_dir())
-
-
-@case("Skrinshot nishon papkasiga tushadi")
-def _():
-    sh(["rm", "-rf", str(HOME / "Pentest")])
-    on()
-    time.sleep(1)
-    niri("screenshot-screen")
-    wait(lambda: list((edir() / "shots").glob("*.png")), 4, "tushmadi")
-
-
-@case("Fayl nomida sana va vaqt bor")
-def _():
-    sh(["rm", "-rf", str(HOME / "Pentest")])
-    on()
-    time.sleep(1)
-    niri("screenshot-screen")
-    f = wait(lambda: list((edir() / "shots").glob("*.png")), 4)[0]
-    ok(re.fullmatch(r"\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d\.png", f.name), f.name)
-
-
-@case("O'chiq bo'lsa odatiy papka ishlatiladi")
-def _():
-    settings(lab__target="10.3.3.3", lab__evidence=False)
-    ok("Pentest" not in (GEN / "settings.kdl").read_text())
-
-
-@case("Nishon almashsa yo'l ham almashadi")
-def _():
-    on("10.3.3.4")
-    wait(lambda: "10.3.3.4" in (GEN / "settings.kdl").read_text(), 3, "almashmadi")
-
-
-@case("Nishonsiz yig'ilmaydi")
-def _():
-    settings(lab__target="", lab__evidence=True)
-    ok("Pentest" not in (GEN / "settings.kdl").read_text())
-
-
-@case("Xavfli nishon ishlatilmaydi")
-def _():
-    settings(lab__target="../../x", lab__evidence=True)
-    ok("Pentest" not in (GEN / "settings.kdl").read_text())
-    ok(not (HOME.parent / "x").exists())
-
-
-@case("IPv6 nishon papka nomida ishlaydi")
-def _():
-    on("fe80::1")
-    ok((HOME / "Pentest/fe80__1/shots").is_dir())
-
-
-@case("Boshqa papka tanlash mumkin")
-def _():
-    settings(lab__target="10.3.3.3", lab__evidence=True, lab__dir="~/Boshqa")
-    wait(lambda: (HOME / "Boshqa/10.3.3.3/shots").is_dir(), 3, "yaratilmadi")
-    sh(["rm", "-rf", str(HOME / "Boshqa")])
-
-
-@case("Video yozuvi ham shu papkaga yo'naltiriladi")
-def _():
-    on()
-    ok(str(edir()) in (STATE / "evidence-dir").read_text())
-    ok("evidence" in (LBIN / "niri-desk-record").read_text())
-
-
-feature("hosts", "HTB/THM: /etc/hosts")
-
-
-def hosts_clean():
-    sh("sudo sed -i '/nd-test/d' /etc/hosts")
-
-
-@case("Nom qo'shiladi")
-def _():
-    hosts_clean()
-    settings(lab__target="10.7.7.7")
-    ok(run("niri-desk-hosts", "nd-test.htb").returncode == 0)
-    ok("10.7.7.7\tnd-test.htb" in Path("/etc/hosts").read_text())
-    hosts_clean()
-
-
-@case("Takror qo'shilmaydi")
-def _():
-    hosts_clean()
-    settings(lab__target="10.7.7.7")
-    run("niri-desk-hosts", "nd-test.htb")
-    run("niri-desk-hosts", "nd-test.htb")
-    ok(Path("/etc/hosts").read_text().count("nd-test.htb") == 1)
-    hosts_clean()
-
-
-@case("IP qo'lda berilishi mumkin")
-def _():
-    hosts_clean()
-    run("niri-desk-hosts", "nd-test2.htb", "10.8.8.8")
-    ok("10.8.8.8\tnd-test2.htb" in Path("/etc/hosts").read_text())
-    hosts_clean()
-
-
-for _n, _bad in enumerate(["a b", "x;touch /tmp/nd-h", "-rf", "$(id)"]):
-    @case(f"Noto'g'ri nom rad etiladi ({_bad})")
-    def _(bad=_bad):
-        before = Path("/etc/hosts").read_text()
-        ok(run("niri-desk-hosts", bad, "10.0.0.1").returncode == 2)
-        ok(Path("/etc/hosts").read_text() == before)
-
-
-@case("Noto'g'ri IP rad etiladi")
-def _():
-    ok(run("niri-desk-hosts", "nd-test.htb", "abc;id").returncode == 2)
-
-
-@case("Nishon bo'sh bo'lsa rad etiladi")
-def _():
-    settings(lab__target="")
-    ok(run("niri-desk-hosts", "nd-test.htb").returncode == 2)
-
-
-@case("Launcher hosts buyrug'ini ko'rsatadi")
-def _():
-    settings(lab__target="10.7.7.7")
-    lq("hosts box.htb")
-    ok(any("box.htb" in r for r in row("Pentest")), st()["rows"])
-
-
-feature("encode2", "Yangi kodlashlar")
-
-for _q, _label, _value in [
-    ("sha256 abc", "SHA-256", "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"),
-    ("html <b>", "HTML encoded", "&lt;b&gt;"),
-    ("htmld &lt;b&gt;", "HTML decoded", "<b>"),
-    ("jwt eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiYWRtaW4ifQ.x", "JWT", "admin"),
-    ("hashid 5f4dcc3b5aa765d61d8327deb882cf99", "Xesh", "MD5"),
-    ("hashid da39a3ee5e6b4b0d3255bfef95601890afd80709", "Xesh", "SHA-1"),
-    ("hashid $2y$10$abcdefghij", "Xesh", "bcrypt"),
-    ("hashid $6$salt$hash", "Xesh", "SHA-512"),
-]:
-    @case(f"{_q[:28]}")
-    def _(q=_q, value=_value):
-        lq(q)
-        ok(any(value in r for r in st()["rows"]), st()["rows"])
-
-
-@case("Buzuq JWT ochilmaydi, xato bermaydi")
-def _():
-    lq("jwt abc")
-    ok(any("Could not decode" in r for r in st()["rows"]), st()["rows"])
-
-
-@case("Natija Enter bilan nusxalanadi")
-def _():
-    lq("sha256 abc")
-    key("enter")
-    wait(lambda: clip_text().startswith("ba7816bf"), 3, "nusxalanmadi")
 
 
 feature("layoutfix", "Noto'g'ri klaviatura tuzatish")
@@ -4702,7 +4062,7 @@ def _():
     settings(nightlight__auto=False)
     ipc("reset")
     time.sleep(0.5)
-    ok(sh("pgrep -x wlsunset").returncode != 0)
+    ok(sh("pgrep -u $(id -u) -x wlsunset").returncode != 0)
 
 
 @case("Tungi harorat jadvalda ham qo'llanadi")
@@ -4825,6 +4185,1474 @@ def _():
 
 
 
+ROFI_SEARCH = str(HOME / ".local/bin/niri-desk-rofi-search")
+ROFI_BIN = str(HOME / ".local/bin/niri-desk-rofi")
+# Rofi ichidagi joylar, 1280x800 ekranda.
+TILE = (352, 233)
+TAB_APPS, TAB_SEARCH, TAB_WINDOW = (386, 624), (640, 624), (894, 624)
+
+
+def rofi_script(*args, retv="2", info=None):
+    env = dict(os.environ, ROFI_RETV=retv)
+    if info:
+        env["ROFI_INFO"] = json.dumps(info)
+    r = subprocess.run([ROFI_SEARCH, *args], capture_output=True, text=True, env=env, timeout=15)
+    ok(r.returncode == 0, r.stderr[-300:])
+    lines = [l for l in r.stdout.split("\n") if l]
+    return [l.split("\0")[0] for l in lines if not l.startswith("\0")], [l for l in lines if l.startswith("\0message")]
+
+
+def rofi_show(tabs=0):
+    """Mod+A, then Tab to reach another tab: 1 is search, 2 is windows."""
+    key("mod", "a")
+    wait(rofi_open, 3, "rofi ochilmadi")
+    time.sleep(0.6)
+    for _ in range(tabs):
+        key("tab")
+        time.sleep(0.25)
+
+
+def closed():
+    wait(lambda: not rofi_open(), 4, "rofi yopilmadi")
+
+
+feature("rofi-apps", "Mod+A: dasturlar menyusi")
+
+
+@case("Dasturni nomi bilan topib Enter bosadi: dastur ochiladi")
+def _():
+    rofi_show()
+    typ("kitty")
+    key("enter")
+    closed()
+    wait(windows, 6, "dastur ochilmadi")
+
+
+@case("Dastur oynasi ustida ochib, Esc bilan fikridan qaytadi: fokus o'sha oynada qoladi")
+def _():
+    w = term()
+    rofi_show()
+    typ("fire")
+    key("esc")
+    closed()
+    wait(lambda: focused() and focused()["id"] == w, 3, "fokus qaytmadi")
+
+
+@case("Tugmani ikki marta bosadi: menyu yopiladi, ikkinchi nusxa qolmaydi")
+def _():
+    rofi_show()
+    key("mod", "a")
+    closed()
+    ok(len(sh("pgrep -u $(id -u) -x rofi").stdout.split()) == 0)
+
+
+@case("Tugmani ketma-ket tez bosadi: menyular to'planib qolmaydi")
+def _():
+    for _ in range(5):
+        key("mod", "a")
+    time.sleep(1.0)
+    ok(len(sh("pgrep -u $(id -u) -x rofi").stdout.split()) <= 1)
+
+
+@case("Mavjud bo'lmagan nomni yozib Esc bosadi: hech narsa ochilmaydi")
+def _():
+    rofi_show()
+    typ("bundaydasturyoqzzz")
+    time.sleep(0.3)
+    key("esc")
+    closed()
+    ok(not windows())
+
+
+@case("To'rtburchak dasturni sichqoncha bilan bosadi: dastur ochiladi")
+def _():
+    rofi_show()
+    typ("kitty")
+    time.sleep(0.4)
+    click(*TILE)
+    closed()
+    wait(windows, 6, "dastur ochilmadi")
+
+
+@case("Mod+Space ham xuddi shu menyuni ochadi")
+def _():
+    key("mod", "space")
+    wait(rofi_open, 3)
+    ok("drun" in sh("ps -o args= -C rofi").stdout)
+
+
+feature("rofi-search", "Mod+A: Поиск bo'limi")
+
+
+@case("Tab bilan bo'limlarni aylanib, yana dasturlarga qaytadi")
+def _():
+    rofi_show()
+    a = shot("rt0", "250,52 780x600")
+    key("tab"); time.sleep(0.5)
+    b = shot("rt1", "250,52 780x600")
+    key("tab"); time.sleep(0.5)
+    key("tab"); time.sleep(0.5)
+    c = shot("rt2", "250,52 780x600")
+    ok(a != b and a == c, "bo'limlar almashmadi")
+
+
+@case("Bo'lim nomini sichqoncha bilan bosadi")
+def _():
+    rofi_show()
+    a = shot("rm0", "250,52 780x600")
+    click(*TAB_SEARCH); time.sleep(0.5)
+    b = shot("rm1", "250,52 780x600")
+    ok(a != b, "bo'lim almashmadi")
+    ok(rofi_open())
+
+
+@case("Tizim monitori to'rtburchagini bosadi: btop ochiladi")
+def _():
+    rofi_show(1)
+    typ("monitor")
+    time.sleep(0.4)
+    click(352, 233)
+    closed()
+    wait(lambda: sh("pgrep -u $(id -u) -x btop").returncode == 0, 5, "btop ochilmadi")
+
+
+@case("Olib tashlangan amallar endi menyuda yo'q: Sozlamalar, Lock, Reboot")
+def _():
+    rows = "\n".join(rofi_script(retv="0")[0])
+    for name in ("Settings", "Lock screen", "Reboot", "Shut down", "Record screen"):
+        ok(name not in rows, name)
+
+
+@case("Yozilgan amal ustida Esc: hech narsa bajarilmaydi")
+def _():
+    rofi_show(1)
+    typ("monitor")
+    key("esc")
+    closed()
+    time.sleep(0.8)
+    ok(sh("pgrep -u $(id -u) -x btop").returncode != 0)
+
+
+@case("Profil nomini @ bilan topadi va ochadi")
+def _():
+    write_json(PROFILES, [{"name": "Ish", "windows": [{"workspace": 1, "cmd": "foot --app-id prof-rofi sleep 900", "match": "^prof-rofi$"}]}])
+    time.sleep(0.5)
+    rofi_show(1)
+    typ("@ish")
+    time.sleep(0.4)
+    key("enter")
+    closed()
+    wait(lambda: any(w["app_id"] == "prof-rofi" for w in windows()), 6, "profil ochilmadi")
+
+
+feature("rofi-calc", "Rofi: kalkulyator")
+
+
+@case("2+2*3 yozib Enter: natija chiqadi, yana Enter: clipboard'ga tushadi")
+def _():
+    rofi_show(1)
+    typ("2+2*3")
+    key("enter")
+    time.sleep(0.8)
+    ok(rofi_open(), "natija ko'rsatilmay yopildi")
+    key("enter")
+    closed()
+    wait(lambda: clip_text() == "8", 3, f"clipboard: {clip_text()!r}")
+
+
+@case("2+2 natijasi bitta belgi: baribir matn sifatida joylashadi")
+def _():
+    rofi_show(1)
+    typ("2+2")
+    key("enter")
+    time.sleep(0.8)
+    key("enter")
+    closed()
+    wait(lambda: clip_text() == "4", 3, f"clipboard: {clip_text()!r}")
+    ok("text/plain" in sh("wl-paste -l").stdout)
+
+
+@case("Vergul bilan kasr yozadi: 0,1+0,2 aniq 0.3 chiqadi")
+def _():
+    rofi_show(1)
+    typ("0,1+0,2")
+    key("enter")
+    time.sleep(0.8)
+    key("enter")
+    closed()
+    wait(lambda: clip_text() == "0.3", 3, f"clipboard: {clip_text()!r}")
+
+
+@case("Nolga bo'ladi: menyu buzilmaydi, xato ko'rsatiladi")
+def _():
+    rofi_show(1)
+    typ("=1/0")
+    key("enter")
+    time.sleep(0.8)
+    ok(rofi_open(), "menyu yopilib ketdi")
+    ok(rofi_script("=1/0")[1])
+    typ("=2+3")
+    key("enter")
+    time.sleep(0.8)
+    ok(rofi_open())
+    wait(lambda: clip_text() == "5", 3, f"clipboard: {clip_text()!r}")
+
+
+@case("Yopilmagan qavs yozadi: dastur yiqilmaydi")
+def _():
+    rofi_show(1)
+    typ("=(2+3")
+    key("enter")
+    time.sleep(0.8)
+    ok(rofi_open())
+
+
+@case("Juda katta son yozadi: =9^9^9 yiqitmaydi")
+def _():
+    ok(rofi_script("=9^9^9")[1])
+
+
+feature("rofi-cmd", "Rofi: buyruq, internet va fayl")
+
+
+@case(">buyruq yozadi: terminalda bajariladi")
+def _():
+    sh("rm -f /tmp/nd-cmd.flag")
+    rofi_show(1)
+    typ(">touch /tmp/nd-cmd.flag")
+    key("enter")
+    closed()
+    wait(lambda: os.path.exists("/tmp/nd-cmd.flag"), 6, "bajarilmadi")
+    wait(windows, 4, "terminal ochilmadi")
+
+
+@case("Buyruqda qo'shtirnoq va bo'sh joy bor: to'g'ri bajariladi")
+def _():
+    sh("rm -f /tmp/nd-q.flag")
+    rofi_show(1)
+    typ('>echo "a b" > /tmp/nd-q.flag')
+    key("enter")
+    closed()
+    wait(lambda: Path("/tmp/nd-q.flag").exists() and Path("/tmp/nd-q.flag").read_text().strip() == "a b", 6, "noto'g'ri bajarildi")
+
+
+@case("Faqat > yozadi: hech narsa bajarilmaydi, menyu ochiq qoladi")
+def _():
+    rofi_show(1)
+    typ(">")
+    key("enter")
+    time.sleep(0.8)
+    ok(rofi_open() and not windows())
+
+
+@case("Faylni /nom bilan topadi: ro'yxat chiqadi")
+def _():
+    f = HOME / "nd-rofi-hujjat.txt"
+    f.write_text("x")
+    try:
+        rows = rofi_script("/nd-rofi-hujjat")[0]
+        ok(rows == ["nd-rofi-hujjat.txt"], rows)
+    finally:
+        f.unlink()
+
+
+@case("Topilmaydigan fayl va bitta harf: tushunarli xabar")
+def _():
+    ok(rofi_script("/bundayfaylyoqzzz")[1])
+    ok(rofi_script("/a")[1])
+
+
+@case("Noto'g'ri tilda yozadi: ruscha rejimda kitty terib Enter, kitty topiladi va ochiladi")
+def _():
+    rofi_show(1)
+    niri("switch-layout", "1")
+    time.sleep(0.3)
+    typ("kitty")
+    key("enter")
+    time.sleep(0.9)
+    ok(rofi_open(), "natija ko'rsatilmay yopildi")
+    key("enter")
+    closed()
+    wait(windows, 6, "kitty ochilmadi")
+
+
+feature("rofi-clip", "Mod+V: clipboard tarixi")
+
+
+def clip_put(text):
+    p = subprocess.Popen(["wl-copy"], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True)
+    p.communicate(text)
+    time.sleep(0.5)
+
+
+@case("Oldingi nusxani tanlab Enter: joylashtirishga tayyor bo'ladi")
+def _():
+    clip_put("birinchi-nd")
+    clip_put("ikkinchi-nd")
+    key("mod", "v")
+    wait(rofi_open, 3)
+    time.sleep(0.6)
+    typ("birinchi")
+    time.sleep(0.3)
+    key("enter")
+    closed()
+    wait(lambda: clip_text() == "birinchi-nd", 3, f"clipboard: {clip_text()!r}")
+
+
+@case("Ko'p qatorli matn tanlanadi: qatorlari buzilmaydi")
+def _():
+    clip_put("qator-nd-1\nqator-nd-2")
+    clip_put("boshqa-nd")
+    key("mod", "v")
+    wait(rofi_open, 3)
+    time.sleep(0.6)
+    typ("qator-nd")
+    time.sleep(0.3)
+    key("enter")
+    closed()
+    wait(lambda: clip_text() == "qator-nd-1\nqator-nd-2", 3, f"clipboard: {clip_text()!r}")
+
+
+@case("Esc bosadi: clipboard o'zgarmaydi")
+def _():
+    clip_put("saqlansin-nd")
+    key("mod", "v")
+    wait(rofi_open, 3)
+    time.sleep(0.5)
+    key("esc")
+    closed()
+    ok(clip_text() == "saqlansin-nd")
+
+
+@case("Tarixda yo'q so'zni yozib Enter: hech narsa o'zgarmaydi")
+def _():
+    clip_put("joyida-nd")
+    key("mod", "v")
+    wait(rofi_open, 3)
+    time.sleep(0.5)
+    typ("bundaymatnyoqzzz")
+    key("enter")
+    time.sleep(0.5)
+    sh("pkill -x rofi")
+    ok(clip_text() == "joyida-nd")
+
+
+@case("Qayta Mod+V: yopiladi")
+def _():
+    key("mod", "v")
+    wait(rofi_open, 3)
+    time.sleep(0.5)
+    key("mod", "v")
+    closed()
+
+
+feature("rofi-win", "Rofi: ochiq oynalar")
+
+
+@case("Boshqa oynani tanlaydi: fokus o'sha oynaga o'tadi")
+def _():
+    a = term("nd-birinchi")
+    term("nd-ikkinchi")
+    rofi_show(2)
+    typ("birinchi")
+    time.sleep(0.4)
+    key("enter")
+    closed()
+    wait(lambda: focused() and focused()["id"] == a, 4, "fokus o'tmadi")
+
+
+@case("Boshqa workspace'dagi oynani tanlaydi: u yerga o'tadi")
+def _():
+    a = term("nd-uzoq")
+    niri("focus-workspace", 2)
+    time.sleep(0.3)
+    term("nd-yaqin")
+    rofi_show(2)
+    typ("uzoq")
+    time.sleep(0.4)
+    key("enter")
+    closed()
+    wait(lambda: focused() and focused()["id"] == a, 4, "fokus o'tmadi")
+
+
+@case("Oyna yo'q paytda ochadi: yiqilmaydi")
+def _():
+    rofi_show(2)
+    time.sleep(0.4)
+    ok(rofi_open())
+    key("esc")
+    closed()
+
+
+@case("Ochiq oynalar ko'p: menyu ishlaydi")
+def _():
+    for i in range(12):
+        niri("spawn", "--", "kitty", "--title", f"nd-{i}", "sh", "-c", "sleep 900")
+    wait(lambda: len(windows()) >= 12, 12)
+    rofi_show(2)
+    typ("nd-7")
+    time.sleep(0.4)
+    key("enter")
+    closed()
+    wait(lambda: focused() and focused()["title"] == "nd-7", 4)
+
+
+@case("Esc bosadi: fokus o'zgarmaydi")
+def _():
+    term("nd-a")
+    b = term("nd-b")
+    rofi_show(2)
+    key("esc")
+    closed()
+    wait(lambda: focused() and focused()["id"] == b, 3)
+
+
+feature("wifi-page", "Wi-Fi menyusi")
+
+WIFI_BACK, WIFI_SWITCH, WIFI_ROW = (898, 84), (1230, 84), (1000, 129)
+
+
+def wifi_open():
+    key("mod", "c")
+    wait(lambda: st()["popup"] == "control", 3)
+    time.sleep(0.4)
+    click(*toggle_xy(0))
+    wait(lambda: st()["controlPage"] == "wifi", 3)
+    time.sleep(0.5)
+
+
+def wifi_on():
+    return "enabled" in sh("nmcli radio wifi").stdout and "disabled" not in sh("nmcli radio wifi").stdout
+
+
+def need_wifi():
+    if "wifi" not in sh("nmcli -t -f TYPE device").stdout:
+        raise Skip("Wi-Fi adapter yo'q")
+
+
+@case("Wi-Fi tugmasini bosadi: tarmoqlar ro'yxati ochiladi va radio o'chmaydi")
+def _():
+    need_wifi()
+    was = wifi_on()
+    wifi_open()
+    ok(wifi_on() == was, "radio o'zgarib ketdi")
+
+
+@case("Orqaga strelkasini bosadi: asosiy panelga qaytadi")
+def _():
+    need_wifi()
+    wifi_open()
+    click(*WIFI_BACK)
+    wait(lambda: st()["controlPage"] == "" and st()["popup"] == "control", 3)
+
+
+@case("Esc bir marta orqaga, ikkinchi marta panelni yopadi")
+def _():
+    need_wifi()
+    wifi_open()
+    key("esc")
+    wait(lambda: st()["controlPage"] == "" and st()["popup"] == "control", 3)
+    key("esc")
+    wait(lambda: st()["popup"] == "", 3)
+
+
+@case("Wi-Fi'ni o'chirib yoqadi: radio haqiqatan o'zgaradi")
+def _():
+    need_wifi()
+    was = wifi_on()
+    wifi_open()
+    try:
+        click(*WIFI_SWITCH)
+        wait(lambda: wifi_on() != was, 5, "o'chmadi")
+        time.sleep(0.8)
+        click(*WIFI_SWITCH)
+        wait(lambda: wifi_on() == was, 5, "qaytmadi")
+    finally:
+        sh(f"nmcli radio wifi {'on' if was else 'off'}")
+
+
+@case("Parol maydoni: qisqa parol yuborilmaydi, parol holatga chiqmaydi, Esc bekor qiladi")
+def _():
+    need_wifi()
+    rows = [l for l in sh("nmcli -t -f SSID,SECURITY dev wifi list --rescan yes").stdout.splitlines() if l and not l.startswith(":")]
+    # Faqat parolli tarmoqlar bo'lsagina bosiladi: ochiq tarmoqqa tasodifan ulanmaslik uchun.
+    if not rows or any(l.rsplit(":", 1)[-1] == "" for l in rows) or sh("nmcli -t -f NAME,TYPE connection show").stdout.count("wireless"):
+        raise Skip("xavfsiz sharoit yo'q: ochiq yoki saqlangan tarmoq bor")
+    wifi_open()
+    time.sleep(2.5)
+    click(*WIFI_ROW)
+    time.sleep(0.6)
+    typ("qisqa")
+    key("enter")
+    time.sleep(0.5)
+    ok("qisqa" not in ipc("state").stdout, "parol holatda ko'rindi")
+    ok(not sh("nmcli -t -f NAME,TYPE connection show --active").stdout.count("wireless"), "ulanishga urindi")
+    key("esc")
+    time.sleep(0.4)
+    ok(st()["controlPage"] == "wifi", "Esc parolni emas, sahifani yopdi")
+    key("esc")
+    wait(lambda: st()["controlPage"] == "", 3)
+
+
+@case("Panelni yopib qayta ochadi: asosiy sahifadan boshlanadi")
+def _():
+    need_wifi()
+    wifi_open()
+    ipc("close")
+    wait(lambda: st()["popup"] == "", 3)
+    time.sleep(0.4)
+    key("mod", "c")
+    wait(lambda: st()["popup"] == "control" and st()["controlPage"] == "", 3)
+
+
+feature("bt-page", "Bluetooth menyusi")
+
+
+def bt_open():
+    key("mod", "c")
+    wait(lambda: st()["popup"] == "control", 3)
+    time.sleep(0.4)
+    click(*toggle_xy(1))
+    wait(lambda: st()["controlPage"] == "bluetooth", 3)
+    time.sleep(0.6)
+
+
+def bt_show(field):
+    return f"{field}: yes" in sh("bluetoothctl show").stdout
+
+
+def need_bt():
+    if "Controller" not in sh("bluetoothctl list").stdout:
+        raise Skip("Bluetooth adapter yo'q")
+
+
+@case("Bluetooth tugmasini bosadi: ro'yxat ochiladi va qidiruv boshlanadi")
+def _():
+    need_bt()
+    bt_open()
+    wait(lambda: bt_show("Discovering"), 6, "qidiruv boshlanmadi")
+
+
+@case("Panelni yopadi: qidiruv to'xtaydi, batareya bekor sarflanmaydi")
+def _():
+    need_bt()
+    bt_open()
+    wait(lambda: bt_show("Discovering"), 6)
+    ipc("close")
+    wait(lambda: not bt_show("Discovering"), 6, "qidiruv to'xtamadi")
+
+
+@case("Bluetooth'ni o'chirib yoqadi")
+def _():
+    need_bt()
+    was = bt_show("Powered")
+    bt_open()
+    try:
+        click(*WIFI_SWITCH)
+        wait(lambda: bt_show("Powered") != was, 6, "o'zgarmadi")
+        time.sleep(1.0)
+        click(*WIFI_SWITCH)
+        wait(lambda: bt_show("Powered") == was, 6, "qaytmadi")
+    finally:
+        sh(f"bluetoothctl power {'on' if was else 'off'}")
+
+
+@case("Orqaga strelkasi va Esc ishlaydi")
+def _():
+    need_bt()
+    bt_open()
+    click(*WIFI_BACK)
+    wait(lambda: st()["controlPage"] == "", 3)
+    click(*toggle_xy(1))
+    wait(lambda: st()["controlPage"] == "bluetooth", 3)
+    key("esc")
+    wait(lambda: st()["controlPage"] == "", 3)
+
+
+@case("Wi-Fi va Bluetooth sahifalari orasida tez almashadi: shell buzilmaydi")
+def _():
+    need_bt()
+    for name in ("wifi", "bluetooth", "wifi", "bluetooth", ""):
+        ipc("controlPage", name)
+        time.sleep(0.2)
+    ipc("close")
+    ok(st()["popup"] == "")
+
+
+feature("claude-widget", "Claude limiti vidjeti")
+
+USAGE = STATE / "claude-usage.json"
+HOOK = str(HOME / ".local/bin/niri-desk-claude-status")
+
+
+def usage_send(text):
+    return subprocess.run([HOOK], input=text, capture_output=True, text=True, timeout=5)
+
+
+def usage(five=None, week=None, in_five=7200, in_week=259200):
+    limits = {}
+    if five is not None:
+        limits["five_hour"] = {"used_percentage": five, "resets_at": int(time.time()) + in_five}
+    if week is not None:
+        limits["seven_day"] = {"used_percentage": week, "resets_at": int(time.time()) + in_week}
+    r = usage_send(json.dumps({"rate_limits": limits}))
+    ok(r.returncode == 0 and r.stdout == "", r.stderr + r.stdout)
+
+
+def usage_clear():
+    USAGE.unlink(missing_ok=True)
+    time.sleep(0.6)
+
+
+def claude_click():
+    # Vidjet til tugmasidan oldin turadi, joyi tray'ga bog'liq: chapdan o'ngga qidiriladi.
+    for x in range(900, 1200, 16):
+        click(x, 27)
+        time.sleep(0.15)
+        if st()["popup"] == "claude":
+            return x
+    raise AssertionError("vidjet topilmadi")
+
+
+@case("Birinchi marta: ma'lumot yo'q bo'lsa panel tushunarli xabar ko'rsatadi")
+def _():
+    usage_clear()
+    ok(st()["claudeHasData"] is False)
+    ipc("claude")
+    wait(lambda: st()["popup"] == "claude", 3)
+
+
+@case("Ishlatgani sari foiz o'sadi va panel o'zi yangilanadi")
+def _():
+    usage(10, 3)
+    wait(lambda: round(st()["claudeFive"]) == 10, 3, str(st().get("claudeFive")))
+    usage(55, 20)
+    wait(lambda: round(st()["claudeFive"]) == 55 and round(st()["claudeWeek"]) == 20, 3)
+    usage_clear()
+
+
+@case("Vidjetni sichqoncha bilan bosadi: panel ochiladi, yana bosadi: yopiladi")
+def _():
+    usage(37, 12)
+    x = claude_click()
+    click(x, 27)
+    wait(lambda: st()["popup"] == "", 3)
+    usage_clear()
+
+
+@case("Reset vaqti o'tib ketgan: eski foiz emas, 0% ko'rsatadi")
+def _():
+    usage(90, 50, in_five=-60)
+    time.sleep(0.5)
+    ipc("reset")
+    wait(lambda: st()["claudeFive"] == 0 and round(st()["claudeWeek"]) == 50, 35, str(st().get("claudeFive")))
+    usage_clear()
+
+
+@case("Limit tugagan: 100% da panel buzilmaydi")
+def _():
+    usage(100, 100)
+    wait(lambda: st()["claudeFive"] == 100, 3)
+    ipc("claude")
+    wait(lambda: st()["popup"] == "claude", 3)
+    usage_clear()
+
+
+@case("Claude Code limit bermagan yoki buzuq ma'lumot: eski fayl saqlanadi")
+def _():
+    usage(42, 7)
+    before = USAGE.read_text()
+    for bad in ("", "bu json emas", "{}", '{"rate_limits": null}', '{"rate_limits": {"five_hour": "x"}}'):
+        ok(usage_send(bad).returncode == 0, bad)
+    ok(USAGE.read_text() == before)
+    usage_clear()
+
+
+@case("Fayl buzilib qolgan: shell yiqilmaydi")
+def _():
+    USAGE.parent.mkdir(parents=True, exist_ok=True)
+    USAGE.write_text("{buzuq")
+    time.sleep(0.8)
+    ok(st()["claudeHasData"] is False)
+    usage_clear()
+
+
+feature("brightness", "Yorqinlik tugmalari")
+
+
+def bright():
+    return sh("brightnessctl --class=backlight -m").stdout.strip().split(",")
+
+
+def need_backlight(fn):
+    def wrapper():
+        if len(bright()) < 5:
+            raise Skip("backlight yo'q")
+        before = bright()[2]
+        try:
+            fn()
+        finally:
+            sh(f"brightnessctl --class=backlight -q set {before}")
+    return wrapper
+
+
+@case("Tugmani ko'p bosib pastga tushiradi: ekran qoraymaydi, 5% da to'xtaydi")
+@need_backlight
+def _():
+    sh("brightnessctl --class=backlight -q set 12%")
+    for _ in range(6):
+        key("brightdown")
+        time.sleep(0.15)
+    time.sleep(0.4)
+    b = bright()
+    ok(int(b[2]) >= int(b[4]) * 0.05 - 1, b)
+
+
+@case("Eng pastdan yuqoriga qaytaradi")
+@need_backlight
+def _():
+    sh("brightnessctl --class=backlight -q set 5%")
+    key("brightup")
+    time.sleep(0.5)
+    ok(int(bright()[3].rstrip("%")) >= 9, bright())
+
+
+@case("Eng yuqorida ko'p bosadi: 100% dan oshmaydi, xato chiqmaydi")
+@need_backlight
+def _():
+    sh("brightnessctl --class=backlight -q set 95%")
+    for _ in range(4):
+        key("brightup")
+        time.sleep(0.12)
+    time.sleep(0.4)
+    ok(bright()[3] == "100%", bright())
+
+
+@case("Tugma bosilganda holat xabari chiqadi")
+@need_backlight
+def _():
+    sh("brightnessctl --class=backlight -q set 50%")
+    key("brightdown")
+    wait(lambda: "45" in st()["toast"] or "Brightness" in st()["toast"], 3, st()["toast"])
+
+
+@case("Ekran bloklangan paytda ham ishlaydi")
+@need_backlight
+def _():
+    need_pw()
+    sh("brightnessctl --class=backlight -q set 50%")
+    key("mod", "x"); wait(locked, 4); time.sleep(0.8)
+    key("brightdown")
+    time.sleep(0.5)
+    ok(bright()[3] == "45%", bright())
+    unlock()
+
+
+feature("net-icon", "Paneldagi tarmoq belgisi")
+
+
+def pill():
+    return shot("nip", "1040,8 240x40")
+
+
+def wired():
+    return ":ethernet:connected" in sh("nmcli -t -f DEVICE,TYPE,STATE device").stdout
+
+
+@case("Kabel ulangan: Wi-Fi o'chirilsa ham belgi o'zgarmaydi")
+def _():
+    if not wired():
+        raise Skip("kabel ulanmagan")
+    need_wifi()
+    was = wifi_on()
+    a = pill()
+    try:
+        sh("nmcli radio wifi off")
+        time.sleep(1.5)
+        ok(pill() == a, "belgi o'zgarib ketdi")
+    finally:
+        sh(f"nmcli radio wifi {'on' if was else 'off'}")
+    time.sleep(1.0)
+
+
+@case("Sozlamada yashiriladi")
+def _():
+    a = pill()
+    settings(panel__wifi=False)
+    time.sleep(0.5)
+    ok(pill() != a)
+
+
+@case("Wi-Fi'ni tez-tez o'chirib yoqadi: panel yiqilmaydi")
+def _():
+    need_wifi()
+    was = wifi_on()
+    try:
+        for state in ("off", "on", "off", "on"):
+            sh(f"nmcli radio wifi {state}")
+            time.sleep(0.3)
+        ok(st() is not None)
+    finally:
+        sh(f"nmcli radio wifi {'on' if was else 'off'}")
+
+
+@case("Boshqaruv paneli Wi-Fi holatini to'g'ri ko'rsatadi")
+def _():
+    need_wifi()
+    was = wifi_on()
+    try:
+        key("mod", "c")
+        wait(lambda: st()["popup"] == "control", 3)
+        time.sleep(0.5)
+        a = shot("nic", "882,68 180x60")
+        sh(f"nmcli radio wifi {'off' if was else 'on'}")
+        time.sleep(1.2)
+        ok(shot("nid", "882,68 180x60") != a, "rangi o'zgarmadi")
+    finally:
+        sh(f"nmcli radio wifi {'on' if was else 'off'}")
+
+
+@case("Shell qayta ishga tushsa ham belgi qaytadi")
+def _():
+    a = pill()
+    sh("pkill -u $(id -u) -x qs")
+    wait(lambda: "niri-desk-top" in layers(), 12)
+    time.sleep(2.0)
+    ok(pill() == a, "belgi qaytmadi")
+
+
+feature("shots2", "Skrinshot: nom va papka")
+
+
+@case("Ctrl+Print'ni ketma-ket bosadi: hech biri ustiga yozilmaydi")
+def _():
+    n = nshots()
+    for _ in range(3):
+        key("ctrl", "print")
+        time.sleep(0.15)
+    wait(lambda: nshots() == n + 3, 6, f"{nshots() - n} ta fayl")
+
+
+@case("Skrinshot tizimning rasm papkasiga tushadi")
+def _():
+    n = nshots()
+    key("ctrl", "print")
+    wait(lambda: nshots() == n + 1, 4)
+    pictures = sh("xdg-user-dir PICTURES").stdout.strip()
+    ok(str(SHOTS).startswith(pictures), str(SHOTS))
+
+
+@case("Oyna ochiq: Alt+Print oynani oladi")
+def _():
+    term()
+    n = nshots()
+    key("alt", "print")
+    wait(lambda: nshots() == n + 1, 4)
+
+
+@case("Oyna yo'q paytda Alt+Print: shell buzilmaydi")
+def _():
+    n = nshots()
+    key("alt", "print")
+    time.sleep(1.0)
+    ok(st() is not None and nshots() in (n, n + 1))
+
+
+@case("Papka o'chirilgan: o'zi yaratiladi")
+def _():
+    tmp = SHOTS.with_name("Screenshots.nd2")
+    SHOTS.rename(tmp)
+    try:
+        key("ctrl", "print")
+        wait(lambda: SHOTS.exists() and any(SHOTS.glob("*.png")), 4, "yaratilmadi")
+    finally:
+        for f in SHOTS.iterdir() if SHOTS.exists() else []:
+            shutil.move(str(f), tmp)
+        if SHOTS.exists():
+            SHOTS.rmdir()
+        tmp.rename(SHOTS)
+
+
+feature("dash-ui", "Soat menyusi: real foydalanish")
+
+
+@case("Soatni bosib ochadi, tashqariga bosib yopadi")
+def _():
+    click(640, 16)
+    wait(lambda: st()["popup"] == "dashboard", 3)
+    time.sleep(0.7)
+    click(640, 650)
+    wait(lambda: st()["popup"] == "", 3)
+
+
+@case("Tablarni juda tez almashtiradi: oxirgisi to'g'ri qoladi")
+def _():
+    dash(0)
+    # AI bo'limida raqamlar yozuv bo'ladi, shuning uchun tez almashtirish qolgan ikkitasida.
+    for k in ("2", "1", "2", "1", "2", "1", "2"):
+        key(k)
+    wait(lambda: st()["dashTab"] == 1, 3)
+    time.sleep(0.7)
+    ok(st()["popup"] == "dashboard")
+
+
+@case("AI tabida yozadi, boshqa tabga o'tib qaytadi: matn yo'qolmaydi, klaviatura ishlaydi")
+def _():
+    dash(2)
+    time.sleep(0.6)
+    typ("salom")
+    click(640, 27)
+    wait(lambda: st()["dashTab"] == 1, 2)
+    time.sleep(0.6)
+    click(770, 27)
+    wait(lambda: st()["dashTab"] == 2, 2)
+    time.sleep(0.7)
+    key("backspace")
+    ok(st()["popup"] == "dashboard")
+
+
+@case("Panel ochilayotganda darhol yopadi: qotib qolmaydi")
+def _():
+    ipc("dashboard")
+    time.sleep(0.05)
+    ipc("close")
+    time.sleep(0.05)
+    ipc("dashboard")
+    time.sleep(0.05)
+    ipc("close")
+    wait(lambda: st()["popup"] == "", 2)
+    time.sleep(0.9)
+    ok("niri-desk-top" in layers())
+
+
+@case("Musiqa bo'limida Esc bosadi: panel yopiladi, keyin oxirgi bo'lim eslab qolinadi")
+def _():
+    dash(1)
+    key("esc")
+    wait(lambda: st()["popup"] == "", 3)
+    time.sleep(0.5)
+    ipc("dashboard")
+    wait(lambda: st()["popup"] == "dashboard" and st()["dashTab"] == 1, 3)
+
+
+feature("levels", "Ovoz va yorqinlik xabari orolda")
+
+
+def alternate(times=6):
+    for _ in range(times):
+        key("voldown")
+        key("brightdown")
+
+
+def need_levels():
+    if len(bright()) < 5:
+        raise Skip("backlight yo'q")
+
+
+@case("Ovoz xabari turganda yorqinlikni o'zgartiradi: xabar darhol almashadi, navbat to'planmaydi")
+def _():
+    need_levels()
+    before = bright()[2]
+    try:
+        key("voldown")
+        wait(lambda: "Volume" in st()["toast"] or "Muted" in st()["toast"], 3)
+        key("brightdown")
+        wait(lambda: "Brightness" in st()["toast"], 2, st()["toast"])
+        ok(st()["queue"] == 0, st()["queue"])
+    finally:
+        sh(f"brightnessctl --class=backlight -q set {before}")
+
+
+@case("Ovoz va yorqinlikni navbat bilan ko'p o'zgartiradi: xabar 3 soniyada yo'qoladi")
+def _():
+    need_levels()
+    before = bright()[2]
+    try:
+        alternate()
+        ok(st()["queue"] == 0, st()["queue"])
+        wait(lambda: st()["toast"] == "", 3.5, st()["toast"])
+    finally:
+        sh(f"brightnessctl --class=backlight -q set {before}")
+
+
+@case("Slayderni uzoq sudraydi: navbat to'planmaydi va xabar yo'qoladi")
+def _():
+    setvol(0.2)
+    for i in range(30):
+        sh(f"wpctl set-volume @DEFAULT_AUDIO_SINK@ {0.2 + i * 0.01:.2f}")
+    time.sleep(0.3)
+    ok(st()["queue"] == 0, st()["queue"])
+    wait(lambda: st()["toast"] == "", 3.5, st()["toast"])
+    setvol(0.5)
+
+
+@case("Oddiy xabar turganda ovozni o'zgartiradi: xabar yo'qolmaydi, keyin ovoz ko'rinadi")
+def _():
+    sh("notify-send nd-sarlavha nd-matn")
+    wait(lambda: st()["toast"] == "nd-sarlavha", 3)
+    for _ in range(4):
+        key("voldown")
+    time.sleep(0.3)
+    ok(st()["toast"] == "nd-sarlavha" and st()["queue"] == 1, (st()["toast"], st()["queue"]))
+    wait(lambda: "Volume" in st()["toast"] or "Muted" in st()["toast"], 8, st()["toast"])
+
+
+@case("Ikkita oddiy xabar yo'qolmaydi, ikkalasi navbat bilan chiqadi")
+def _():
+    sh("notify-send nd-bir")
+    wait(lambda: st()["toast"] == "nd-bir", 3)
+    sh("notify-send nd-ikki")
+    time.sleep(0.4)
+    key("voldown")
+    wait(lambda: st()["toast"] == "nd-ikki" or "Volume" in st()["toast"], 8)
+    wait(lambda: st()["toast"] == "nd-ikki", 8, st()["toast"])
+
+
+feature("glass", "Tepadagi panellar: shisha va fon rangi")
+
+PILL_AREA = "1040,12 200x30"
+
+
+@case("Fon rasmi almashsa panel rangi ham o'zgaradi")
+def _():
+    a = st()["accent"]
+    before = shot("gl1", PILL_AREA)
+    other = next(p for p in sorted(WDIR.glob("*.jpg")) if p.resolve() != (STATE / "wallpaper").resolve())
+    current = (STATE / "wallpaper").resolve()
+    sh([WP, "--colors", str(other)], timeout=20)
+    try:
+        wait(lambda: st()["accent"] != a, 5, "rang o'zgarmadi")
+        time.sleep(1.0)
+        ok(shot("gl2", PILL_AREA) != before, "panel o'zgarmadi")
+    finally:
+        sh([WP, "--colors", str(current)], timeout=20)
+
+
+@case("Panel orqasi ko'rinadi: oyna ochilsa panel ko'rinishi o'zgaradi")
+def _():
+    a = shot("gl3", "560,44 160x4")
+    b = shot("gl4", PILL_AREA)
+    term()
+    time.sleep(1.2)
+    ok(st()["popup"] == "" and a and b)
+
+
+@case("Panel bo'limidagi slayder shaffoflikni o'zgartiradi va saqlaydi")
+def _():
+    ox, oy = page(3)
+    a = shot("gl5", PILL_AREA)
+    click(ox + 690, row_y(oy, 0))
+    wait(lambda: saved().get("appearance", {}).get("panelOpacity") not in (None, 0.65), 3, "saqlanmadi")
+    time.sleep(0.6)
+    ok(shot("gl6", PILL_AREA) != a, "ko'rinish o'zgarmadi")
+
+
+@case("Panel pastga o'tkazilsa ham shisha buzilmaydi")
+def _():
+    settings(panel__position="bottom")
+    time.sleep(0.8)
+    ok("niri-desk-top" in layers() and st()["bottom"] is True)
+
+
+@case("Shisha ustida soat menyusi va xabar ochiladi")
+def _():
+    dash(0)
+    ipc("close")
+    wait(lambda: st()["popup"] == "", 3)
+    ipc("toast", "nd-shisha", "matn")
+    wait(lambda: st()["toast"] == "nd-shisha", 3)
+
+
+feature("widgets", "Ish stoli vidjetlari")
+
+WIDGETS_FILE = HOME / ".config/niri-desk/widgets.json"
+
+
+def widget_layout():
+    return json.loads(WIDGETS_FILE.read_text()) if WIDGETS_FILE.exists() else None
+
+
+def widgets_fresh():
+    WIDGETS_FILE.unlink(missing_ok=True)
+    sh("pkill -u $(id -u) -x qs")
+    wait(lambda: "niri-desk-top" in layers(), 12)
+    time.sleep(1.5)
+
+
+def widget_edit():
+    ipc("widgets")
+    wait(lambda: st()["widgetEdit"], 3)
+    time.sleep(0.5)
+
+
+def rect(wid):
+    return st()["widgetRects"][wid]
+
+
+@case("Birinchi ochilishda tayyor vidjetlar turadi")
+def _():
+    widgets_fresh()
+    ok("niri-desk-widgets" in layers())
+    ok({w["type"] for w in st()["widgets"]} >= {"clock", "calendar", "system", "music", "weather"})
+
+
+@case("Vidjetni sichqoncha bilan sudraydi: joyi o'zgaradi, faylga saqlanadi, to'rga yopishadi")
+def _():
+    widgets_fresh()
+    widget_edit()
+    r = rect("calendar")
+    sx, sy = r["x"] + r["w"] // 2, r["y"] + r["h"] // 2
+    drag(sx, sy, sx - 300, sy + 150)
+    time.sleep(0.8)
+    n = rect("calendar")
+    ok(abs(n["x"] - (r["x"] - 300)) <= 24 and abs(n["y"] - (r["y"] + 150)) <= 24, (r, n))
+    ok(n["x"] % 16 == 0 or n["y"] % 16 == 0, n)
+    saved_layout = next(w for w in widget_layout() if w["id"] == "calendar")
+    ok(saved_layout["fx"] < 0.98)
+
+
+@case("Shell qayta ishga tushsa joylashuv saqlanadi")
+def _():
+    widgets_fresh()
+    widget_edit()
+    r = rect("weather")
+    sx, sy = r["x"] + r["w"] // 2, r["y"] + r["h"] // 2
+    drag(sx, sy, sx + 200, sy + 200)
+    time.sleep(0.8)
+    a = rect("weather")
+    ipc("widgets")
+    sh("pkill -u $(id -u) -x qs")
+    wait(lambda: "niri-desk-top" in layers(), 12)
+    time.sleep(1.5)
+    b = rect("weather")
+    ok(abs(a["x"] - b["x"]) <= 2 and abs(a["y"] - b["y"]) <= 2, (a, b))
+
+
+@case("O'lcham tugmasi vidjetni kattalashtiradi va kichraytiradi")
+def _():
+    widgets_fresh()
+    widget_edit()
+    r = rect("weather")
+    click(r["x"] + r["w"] - 8 - 26 - 5 - 14, r["y"] + 8 + 13)
+    wait(lambda: rect("weather")["w"] > r["w"], 3, "kattalashmadi")
+    ok(next(w for w in widget_layout() if w["id"] == "weather")["size"] == "l")
+
+
+@case("Xoch tugmasi vidjetni olib tashlaydi, Reset qaytaradi")
+def _():
+    widgets_fresh()
+    widget_edit()
+    r = rect("weather")
+    click(r["x"] + r["w"] - 8 - 13, r["y"] + 8 + 13)
+    wait(lambda: all(w["id"] != "weather" for w in st()["widgets"]), 3, "olib tashlanmadi")
+    ok(all(w["id"] != "weather" for w in widget_layout()))
+
+
+@case("Esc tahrirlash rejimidan chiqaradi")
+def _():
+    widget_edit()
+    key("esc")
+    wait(lambda: not st()["widgetEdit"], 3)
+
+
+@case("Mod+Shift+W tahrirlashni ochadi va yopadi")
+def _():
+    key("mod", "shift", "w")
+    wait(lambda: st()["widgetEdit"], 3)
+    time.sleep(0.4)
+    key("mod", "shift", "w")
+    wait(lambda: not st()["widgetEdit"], 3)
+
+
+@case("Bo'sh joyga o'ng tugma: menyu chiqadi, birinchi qator tahrirlashni ochadi")
+def _():
+    click(640, 400, "0xC1")
+    time.sleep(0.5)
+    click(640 + 60, 400 + 26)
+    wait(lambda: st()["widgetEdit"], 3, "menyu ishlamadi")
+
+
+@case("Vidjet oynalar ustida ko'rinmaydi: oyna bosiladigan bo'lib qoladi")
+def _():
+    w = term()
+    click(640, 400)
+    time.sleep(0.4)
+    ok(focused() and focused()["id"] == w)
+
+
+@case("Buzuq vidjet fayli shell'ni yiqitmaydi, tayyor joylashuv ishlaydi")
+def _():
+    WIDGETS_FILE.write_text("{buzuq")
+    sh("pkill -u $(id -u) -x qs")
+    wait(lambda: "niri-desk-top" in layers(), 12)
+    time.sleep(1.5)
+    ok(len(st()["widgets"]) >= 3)
+    WIDGETS_FILE.unlink(missing_ok=True)
+
+
+@case("Sozlamada o'chirilsa vidjetlar yo'qoladi")
+def _():
+    settings(widgets__enabled=False)
+    wait(lambda: "niri-desk-widgets" not in layers(), 3)
+
+
+@case("Faqat birinchi ish stoli tanlansa: ikkinchisida yo'q, birinchisida qaytadi")
+def _():
+    settings(widgets__firstOnly=True)
+    term()
+    niri("focus-workspace", 2)
+    wait(lambda: "niri-desk-widgets" not in layers(), 3)
+    niri("focus-workspace", 1)
+    wait(lambda: "niri-desk-widgets" in layers(), 3)
+
+
+feature("widgets2", "Vidjetlar: qimirlamaslik, tejamkorlik, tushish joyi")
+
+
+@case("Ish stoli almashganda vidjet surilmaydi: sirpanish paytida ham joyida")
+def _():
+    settings(widgets__opacity=0.5)
+    r = rect("calendar")
+    area = f"{r['x']},{r['y'] + 40} {r['w']},60"
+    a = shot("wf1", area)
+    niri("focus-workspace", 2)
+    time.sleep(0.08)
+    b = shot("wf2", area)
+    time.sleep(0.8)
+    niri("focus-workspace", 1)
+    time.sleep(0.8)
+    ok(a == b, "sirpanish paytida vidjet qimirladi")
+
+
+@case("Keng oyna vidjetlarni butunlay yopsa: 30 soniyadan keyin to'xtaydi, yopilganda qaytadi")
+def _():
+    ok(st()["widgetsLive"] is True)
+    w = term()
+    niri("focus-window", "--id", w)
+    niri("fullscreen-window")
+    wait(lambda: st()["widgetsLive"] is False, 36, "to'xtamadi")
+    niri("close-window", "--id", w)
+    wait(lambda: st()["widgetsLive"] is True, 4, "qaytmadi")
+
+
+@case("Tortayotganda tushish joyi ko'rinadi, qo'yib yuborganda aynan shu yerga tushadi")
+def _():
+    widget_edit()
+    r = rect("calendar")
+    sx, sy = r["x"] + r["w"] // 2, r["y"] + r["h"] // 2
+    move(sx, sy)
+    sh(["ydotool", "click", "0x40"])
+    time.sleep(0.15)
+    move(sx - 205, sy + 103)
+    time.sleep(0.3)
+    held = rect("calendar")
+    sh(["ydotool", "click", "0x80"])
+    time.sleep(0.9)
+    final = rect("calendar")
+    ok(final["x"] % 16 == 0 and abs(final["x"] - held["x"]) <= 16, (held, final))
+    ok(final["y"] % 16 == 0 and abs(final["y"] - held["y"]) <= 16, (held, final))
+
+
+@case("Musiqa vidjeti ustiga borsa bosiladigan nusxa chiqadi, chiqsa yo'qoladi")
+def _():
+    widgets_fresh()
+    r = rect("music")
+    move(r["x"] + r["w"] // 2, r["y"] + r["h"] // 2)
+    wait(lambda: st()["widgetHover"] == "music", 3, "nusxa chiqmadi")
+    move(640, 300)
+    wait(lambda: st()["widgetHover"] == "", 3, "nusxa yo'qolmadi")
+
+
+@case("Eslatma yozadi: faylga saqlanadi va yuzida ham ko'rinadi")
+def _():
+    widgets_fresh()
+    widget_edit()
+    click(640, 700)
+    ipc("widgets")
+    wait(lambda: not st()["widgetEdit"], 3)
+    note = HOME / ".config/niri-desk/note.txt"
+    note.unlink(missing_ok=True)
+    layout = widget_layout() or []
+    WIDGETS_FILE.write_text(json.dumps([{"id": "notes", "type": "notes", "fx": 0.5, "fy": 0.4, "size": "m"}]))
+    sh("pkill -u $(id -u) -x qs")
+    wait(lambda: "niri-desk-top" in layers(), 12)
+    time.sleep(1.5)
+    r = rect("notes")
+    move(r["x"] + 100, r["y"] + 100)
+    time.sleep(0.5)
+    click(r["x"] + 100, r["y"] + 100)
+    time.sleep(0.5)
+    typ("salom nd")
+    wait(lambda: note.exists() and "salom nd" in note.read_text(), 4, "saqlanmadi")
+    move(640, 200)
+    note.unlink(missing_ok=True)
+    WIDGETS_FILE.unlink(missing_ok=True)
+
+
+feature("cc-tools", "Boshqaruv paneli: asboblar va sozlamalar tugmasi")
+
+TOOL_Y = 350
+
+
+def tool_x(i):
+    return int(882 + 368 / 6 * (i + 0.5))
+
+
+@case("Bugun bo'limidagi tishli g'ildirak sozlamalarni ochadi, panel yopiladi")
+def _():
+    dash(0)
+    time.sleep(0.6)
+    click(143, 470 - 16 - 4 - 19)
+    wait(lambda: st()["settings"] and st()["popup"] == "", 4, "sozlamalar ochilmadi")
+    ipc("reset")
+
+
+@case("Fokus tugmasi fokus rejimini yoqadi")
+def _():
+    open_control()
+    click(tool_x(5), TOOL_Y)
+    wait(lambda: st()["zen"], 4, "fokus yoqilmadi")
+
+
+@case("Fon tugmasi fon tanlash oynasini ochadi")
+def _():
+    open_control()
+    click(tool_x(4), TOOL_Y)
+    wait(lambda: st()["popup"] == "wallpapers", 4)
+
+
+@case("Rang tugmasi ekrandan rang tanlashni boshlaydi, panel yopiladi")
+def _():
+    open_control()
+    click(tool_x(2), TOOL_Y)
+    wait(lambda: st()["popup"] == "", 3)
+    time.sleep(0.8)
+    click(640, 400)
+    wait(lambda: "Color" in st()["toast"], 4, "rang olinmadi")
+    ok(re.fullmatch(r"#[0-9a-fA-F]{6}", clip_text().strip()), clip_text())
+
+
+@case("Doira bosilsa ro'yxat ochilmaydi, faqat Wi-Fi o'chadi")
+def _():
+    need_wifi()
+    was = wifi_on()
+    open_control()
+    try:
+        click(902, 98)
+        wait(lambda: wifi_on() != was, 5, "o'zgarmadi")
+        ok(st()["controlPage"] == "")
+    finally:
+        sh(f"nmcli radio wifi {'on' if was else 'off'}")
+
+
+feature("music", "Musiqa bo'limi va subtitr")
+
+
+def lyrics_running():
+    return sh("pgrep -u $(id -u) -f niri-desk-lyrics").returncode == 0
+
+
+@case("Musiqa yo'q paytda bo'lim ochiladi: recognition ishga tushmaydi")
+def _():
+    dash(1)
+    time.sleep(0.8)
+    ok(st()["lyricsWanted"] is False and not lyrics_running())
+
+
+@case("Bugun bo'limida CPU va harorat yangilanib turadi")
+def _():
+    dash(0)
+    time.sleep(4.5)
+    ok(st()["popup"] == "dashboard")
+
+
+@case("Bo'limni tez almashtiradi: subtitr jarayoni qolib ketmaydi")
+def _():
+    for t in (1, 0, 1, 2, 1, 0):
+        ipc("dashboardTab", str(t))
+        time.sleep(0.2)
+    ipc("close")
+    time.sleep(1.5)
+    ok(not lyrics_running())
+
+
+@case("Yozuv hook'i ovoz bo'lmasa ham yiqilmaydi: model o'rnatilmagan holat aytiladi")
+def _():
+    r = sh(["python3", "-I", str(HOME / ".local/bin/niri-desk-lyrics")], timeout=20)
+    ok(r.returncode == 0 and '"status"' in r.stdout, r.stdout[-200:] + r.stderr[-200:])
+
+
+@case("Panel orqa foni bor: rasmsiz holatda ham ochiladi")
+def _():
+    dash(1)
+    a = shot("mu1", "120,60 1040x300")
+    ok(a)
+    ok(st()["dashTab"] == 1)
+
+
+feature("sleep", "Uyqu: real suspend va uyg'onish")
+
+
+def real_suspend(seconds=25):
+    """Sets a wake alarm and suspends through logind, like closing the lid."""
+    sh(f"sudo -n rtcwake -m no -s {seconds}")
+    sh("sudo -n systemctl suspend -i")
+    # Uyg'ongach vaqt sakraydi: tizim yana ishlaguncha kutamiz.
+    time.sleep(seconds + 8)
+
+
+def need_suspend():
+    need_pw()
+    if sh("sudo -n -l rtcwake -m no -s 25").returncode:
+        raise Skip("uyg'otish budilnigiga ruxsat yo'q")
+
+
+@case("Uxlatib uyg'otadi: ekran bloklangan, parol ochadi, shell o'sha jarayon")
+def _():
+    need_suspend()
+    pid = sh("pgrep -u $(id -u) -x qs").stdout.split()[0]
+    real_suspend()
+    wait(locked, 10, "uyg'onganda bloklanmagan")
+    time.sleep(1.0)
+    unlock()
+    ok(sh("pgrep -u $(id -u) -x qs").stdout.split()[0] == pid, "shell qayta ishga tushgan")
+
+
+@case("Uyg'ongandan keyin monitor yoniq va panel javob beradi")
+def _():
+    need_suspend()
+    real_suspend()
+    wait(locked, 10)
+    time.sleep(1.0)
+    unlock()
+    out = next(iter(nj("outputs").values()))
+    ok(out["current_mode"] is not None and "niri-desk-top" in layers(), out)
+
+
+@case("Uyg'ongandan keyin tovush ishlaydi: ovoz tugmasi javob beradi")
+def _():
+    v = st()["volume"]
+    key("volup" if v < 90 else "voldown")
+    wait(lambda: st()["volume"] != v, 4, "ovoz javob bermadi")
+
+
+@case("Uyg'ongandan keyin yorqinlik tugmasi ishlaydi")
+def _():
+    if len(bright()) < 5:
+        raise Skip("backlight yo'q")
+    before = bright()[2]
+    sh("brightnessctl --class=backlight -q set 50%")
+    key("brightdown")
+    time.sleep(0.5)
+    ok(bright()[3] == "45%", bright())
+    sh(f"brightnessctl --class=backlight -q set {before}")
+
+
+@case("Uyg'ongandan keyin tarmoq qaytadi")
+def _():
+    wait(lambda: "connected" in sh("nmcli -t -f STATE general").stdout, 40, "tarmoq qaytmadi")
+
+
 feature("i18n", "Interfeys tili")
 
 CATALOG = HOME / ".config/niri-desk/i18n-ru.json"
@@ -4881,7 +5709,7 @@ def _():
 
 @case("AI xatosi tilga ergashadi")
 def _():
-    settings(appearance__language="ru", ai__baseUrl="http://127.0.0.1:1")
+    settings(appearance__language="ru", ai__backend="api", ai__baseUrl="http://127.0.0.1:1")
     r = sh(f"echo x | {LBIN}/niri-desk-ai send")
     ok("интернету" in r.stdout or "Ключ" in r.stdout, r.stdout)
 
@@ -4932,7 +5760,7 @@ def main():
     base.setdefault("appearance", {})["language"] = "en"
     base["idle"] = {"lock": 0, "screenOff": 0, "suspend": 0}
     GOOD = json.dumps(base, indent=2)
-    if sh("pgrep -x hyprlock").returncode == 0 and PW:
+    if sh("pgrep -u $(id -u) -x hyprlock").returncode == 0 and PW:
         typ(PW)
         key("enter")
         time.sleep(1)

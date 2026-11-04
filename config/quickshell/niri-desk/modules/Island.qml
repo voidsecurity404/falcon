@@ -14,8 +14,8 @@ Item {
     readonly property string mode: showDashboard ? "dashboard" : Toasts.current ? "toast" : "idle"
     readonly property bool showSeconds: Settings.get("panel.clockSeconds", false)
     readonly property bool showDate: Settings.get("panel.clockDate", false)
-    readonly property int targetWidth: mode === "dashboard" ? 860 : mode === "toast" ? 440 : (Ui.recording ? 232 : 186) + (Pomodoro.active ? 66 : 0) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0)
-    readonly property int targetHeight: mode === "dashboard" ? [380, 250, 380, 560][Ui.dashTab] : mode === "toast" ? 68 : 44
+    readonly property int targetWidth: mode === "dashboard" ? 1040 : mode === "toast" ? 440 : (Ui.recording ? 232 : 186) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0)
+    readonly property int targetHeight: mode === "dashboard" ? [470, 470, 560][Ui.dashTab] : mode === "toast" ? 68 : 44
 
     width: body.width
     height: body.height
@@ -35,7 +35,7 @@ Item {
         ShapePath {
             strokeWidth: 0
             strokeColor: "transparent"
-            fillColor: Theme.pill
+            fillColor: Theme.glassTop
 
             PathSvg {
                 path: "M0 0 L18 0 L18 18 A18 18 0 0 0 0 0 Z"
@@ -56,7 +56,7 @@ Item {
         ShapePath {
             strokeWidth: 0
             strokeColor: "transparent"
-            fillColor: Theme.pill
+            fillColor: Theme.glassTop
 
             PathSvg {
                 path: "M18 0 L0 0 L0 18 A18 18 0 0 1 18 0 Z"
@@ -69,25 +69,54 @@ Item {
 
         width: root.targetWidth
         height: root.targetHeight
-        color: Theme.pill
+        border.width: 1
+        border.color: root.mode === "dashboard" ? "transparent" : Theme.panelEdge
+        gradient: Gradient {
+            GradientStop {
+                position: 0
+                color: Theme.glassTop
+            }
+            GradientStop {
+                position: 1
+                color: Theme.panel
+            }
+        }
         topLeftRadius: Settings.bottom ? 18 : 0
         topRightRadius: Settings.bottom ? 18 : 0
         bottomLeftRadius: Settings.bottom ? 0 : 18
         bottomRightRadius: Settings.bottom ? 0 : 18
         clip: true
 
+        // Ochilishda avval kengayadi, keyin yumshoq sakrab pastga tushadi. Yopilish tez va sakrashsiz.
         Behavior on width {
             NumberAnimation {
-                duration: 420
-                easing.type: Easing.OutBack
-                easing.overshoot: 0.9
+                duration: root.mode === "dashboard" ? 460 : 340
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: root.mode === "dashboard" ? [0.2, 1.05, 0.3, 1, 1, 1] : [0.35, 0, 0.1, 1, 1, 1]
             }
         }
         Behavior on height {
             NumberAnimation {
-                duration: 420
-                easing.type: Easing.OutBack
-                easing.overshoot: 0.9
+                duration: root.mode === "dashboard" ? 600 : 320
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: root.mode === "dashboard" ? [0.24, 1.22, 0.36, 1, 1, 1] : [0.35, 0, 0.1, 1, 1, 1]
+            }
+        }
+
+        // Panel orqasida xiralashgan rasm: fon rasmi, musiqa bo'limida albom.
+        Loader {
+            anchors.fill: parent
+            active: root.mode === "dashboard" || opacity > 0
+            opacity: root.mode === "dashboard" ? 1 : 0
+            visible: opacity > 0
+            sourceComponent: Backdrop {
+                art: Ui.dashTab === 1 && Media.player ? Media.player.trackArtUrl : ""
+            }
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: root.mode === "dashboard" ? 300 : 120
+                }
             }
         }
 
@@ -124,11 +153,11 @@ Item {
 
             Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
-                visible: Ui.recording || (Lab.configured && Settings.get("panel.labDot", true))
+                visible: Ui.recording
                 width: 8
                 height: 8
                 radius: 4
-                color: Ui.recording ? Theme.error : Lab.allOpen ? Theme.good : Qt.alpha(Theme.text, 0.3)
+                color: Theme.error
 
                 SequentialAnimation on opacity {
                     running: Ui.recording
@@ -146,13 +175,6 @@ Item {
                         duration: 600
                     }
                 }
-            }
-            Label {
-                visible: Pomodoro.active
-                text: Pomodoro.label
-                color: Pomodoro.phase === "rest" ? Theme.good : Theme.accent
-                size: 15
-                font.weight: Font.Medium
             }
             Label {
                 visible: Ui.recording
@@ -242,7 +264,7 @@ Item {
         }
 
         Loader {
-            width: 860
+            width: 1040
             height: root.targetHeight
             active: root.mode === "dashboard" || opacity > 0
             opacity: root.mode === "dashboard" ? 1 : 0
@@ -251,7 +273,7 @@ Item {
 
             Behavior on opacity {
                 NumberAnimation {
-                    duration: 200
+                    duration: root.mode === "dashboard" ? 260 : 130
                 }
             }
         }

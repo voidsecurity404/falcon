@@ -11,11 +11,13 @@ Singleton {
     readonly property string home: Quickshell.env("HOME")
     readonly property string binDir: home + "/.local/bin/"
 
-    // "", launcher, clipboard, wallpapers, dashboard, control
+    // "", launcher, clipboard, wallpapers, dashboard, control, claude
     property string popup: ""
     property bool zen: false
     property bool settingsOpen: false
     property int dashTab: 0
+    // "", wifi, bluetooth, sound
+    property string controlPage: ""
     property var trayItem: null
     property var launcherRows: []
     property int launcherSelected: 0
@@ -25,12 +27,12 @@ Singleton {
     property bool recording: false
     property int recordSeconds: 0
 
-    readonly property bool topPanelOpen: popup === "dashboard" || popup === "control" || popup === "tray"
+    readonly property bool topPanelOpen: popup === "dashboard" || popup === "control" || popup === "tray" || popup === "claude"
 
     signal launcherInject(string text)
 
     function nextDashTab(step) {
-        dashTab = (dashTab + step + 4) % 4;
+        dashTab = (dashTab + step + 3) % 3;
     }
 
     function togglePopup(name) {

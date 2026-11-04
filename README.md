@@ -34,7 +34,8 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | Shortcut | Action |
 | --- | --- |
 | `Mod+Return` | Terminal |
-| `Mod+Space` | Search: apps, clipboard, actions |
+| `Mod+Space` | App menu (rofi): `Tab` switches to open windows |
+| `Mod+A` | App menu with tiles, `Tab` opens the search tab: actions, profiles and typed commands. Calculator results appear after `Enter` |
 | `Mod+V` | Clipboard history |
 | `Mod+D` | Dashboard |
 | `Mod+C` | Control center |
@@ -46,7 +47,6 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | `Mod+S` | Sticky window: visible on every workspace |
 | `Alt+Tab` | Recent windows with live previews |
 | `Mod+B` / `Mod+E` / `Mod+N` | Browser, files, notes: focus if open, otherwise launch |
-| `Mod+Shift+B` | Burp Suite: focus if open, otherwise launch |
 | `Mod+X` | Lock screen |
 | `Mod+H` / `Mod+L` | Previous or next column |
 | `Mod+J` / `Mod+K` | Next or previous workspace |
@@ -68,28 +68,21 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | --- | --- |
 | `kit` | Apps, open windows, clipboard and actions |
 | `2+2*3` or `=2^10` | Calculator, Enter copies the result |
-| `>nmap -sV 10.10.11.42` | Runs the command in a terminal |
+| `>htop` | Runs the command in a terminal |
 | `?sql injection` | Web search |
-| `b64 text`, `b64d`, `url`, `urld`, `hex`, `hexd`, `md5`, `sha256`, `html`, `htmld` | Encodes or decodes, Enter copies |
-| `jwt token` | Decodes JWT header and payload, does not verify the signature |
-| `hashid hash` | Guesses the hash type from its length and shape |
 | `/password` | Finds files in your home folder, hidden files excluded |
-| `;rev` | Snippet: fills in `{target}`, `{lhost}`, `{lport}` |
-| `@pentest` | Opens a work profile |
-| `target 10.10.11.42` | Sets the pentest target, available as `$TARGET` in terminals |
-| `hosts box.htb` | Adds the name with the target IP to `/etc/hosts`, the terminal asks for the password |
+| `@development` | Opens a work profile |
 
 Words typed on the wrong keyboard layout are found too: `лшеен` → `kitty`.
 
 ## Dashboard
 
-Click the clock. Four tabs, switched with `1`–`4` or `Tab`.
+Click the clock. Three tabs, switched with `1`–`3` or `Tab`.
 
 | Tab | Purpose |
 | --- | --- |
-| Today | Time, weather, focus timer, calendar |
-| Status | Music, CPU, RAM, disk, battery |
-| Lab | Target, ports, VPN, quick scan, evidence collection, notes for this target (`~/Pentest/<target>/notes.md`) |
+| Today | Time, weather, CPU load, memory, temperature, disk, battery, calendar, settings button |
+| Music | Player and live subtitles: the words are recognized from the sound on this computer, so the video needs no captions. Accuracy depends on the song, and sung words are harder than speech |
 | AI | Chat with Claude |
 
 ## AI chat
@@ -98,18 +91,28 @@ With a Claude subscription, the chat runs through Claude Code: install it and si
 
 To use an API key instead, choose it in Settings → AI → Connection and enter the key. It is written to `~/.config/niri-desk/secrets/anthropic-key`, readable only by you and excluded from backups, and the official `anthropic` SDK from `~/.local/share/niri-desk/venv` is used. API usage is billed separately. With Automatic, Claude Code is used when the `claude` command is found.
 
-The default model is `claude-opus-5-5`, and you can choose another in Settings. Messages and the current target IP are sent to Anthropic. The chat is stored in `~/.local/state/niri-desk/ai-history.json`.
+The default model is `claude-opus-5-5`, and you can choose another in Settings. Messages are sent to Anthropic. The chat is stored in `~/.local/state/niri-desk/ai-history.json`.
+
+## Desktop widgets
+
+Clock, analog clock, calendar, weather, system load, music, Claude limits and notes sit on the wallpaper. To move them, right click the desktop and choose Edit widgets, or press `Mod+Shift+W`. In edit mode drag a widget, it snaps to a grid; the button in its corner changes the size, the cross removes it, and the bar below adds widgets. Settings → Widgets turns them off, shows them on every workspace and changes their transparency. The layout is stored in `~/.config/niri-desk/widgets.json`.
+
+## Claude limits
+
+The ring next to the keyboard layout fills up as you use the 5-hour limit. Click it for the 5-hour and weekly usage and the time left until each resets. The numbers come from Claude Code's status line, so they update while Claude Code is running. Add this to `~/.claude/settings.json` once:
+
+```json
+"statusLine": { "type": "command", "command": "~/.local/bin/niri-desk-claude-status" }
+```
 
 ## Lists you edit as files
 
 `~/.config/niri-desk/profiles.json`: work profiles. `workspace` numbers set the order: niri keeps no empty workspaces, so if a number is skipped, windows are placed consecutively.
 
-`~/.config/niri-desk/snippets.json`: snippets. `"run": true` runs in a terminal, otherwise the text is copied. If the target or IP is empty, nothing runs and the text is only copied.
-
 ## Helper commands
 
 - `niri-desk-session save|restore`: restore windows. Saved every minute, restored at login. Arguments are never replayed, so a terminal opens empty.
-- `niri-desk-backup export [file]`, `import file`: save settings, profiles and snippets to one file.
+- `niri-desk-backup export [file]`, `import file`: save settings and profiles to one file.
 - `niri-desk-translate`: the text is sent to an online translation service (`translate-shell`).
 
 ## Configuration
@@ -124,8 +127,6 @@ Most things change from the `Mod+,` window and apply immediately: appearance, wi
 | Wallpapers | `~/Pictures/Wallpapers`, change it in Settings → Wallpaper folder |
 | Screenshots | `Screenshots` inside your pictures folder (`xdg-user-dir PICTURES`) |
 
-Set `vpn.up` and `vpn.down` in `settings.json` to enable the shield button in the control center, for example `nmcli con up htb` and `nmcli con down htb`.
-
 ## Layout
 
 ```
@@ -133,8 +134,8 @@ config/niri/        niri config, split by topic
 config/quickshell/  panel, island, dashboard, search, wallpaper picker
 config/matugen/     templates that take colors from the wallpaper
 config/hypr/        hyprlock and hypridle
-config/niri-desk/   defaults, Russian catalog, profiles, snippets
-bin/                wallpaper, focus, recording, OCR, lab and other scripts
+config/niri-desk/   defaults, Russian catalog, profiles
+bin/                wallpaper, focus, recording, OCR and other scripts
 wallpapers/         sample wallpapers
 fonts/              Geist and Geist Mono (SIL OFL 1.1)
 ```

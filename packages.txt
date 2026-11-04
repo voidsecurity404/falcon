@@ -18,6 +18,8 @@ awww
 matugen
 # Terminal
 kitty
+# Dastur menyusi
+rofi
 # Bloklash va bo'sh turish
 hyprlock
 hypridle
@@ -27,6 +29,7 @@ xdg-desktop-portal-gnome
 xdg-desktop-portal-gtk
 gnome-keyring
 nautilus
+gtk3
 # Clipboard, skrinshot, yozish, OCR
 wl-clipboard
 cliphist
@@ -62,7 +65,5 @@ firefox
 git
 sudo
 iproute2
-# Lab: quick scan va nmap snippetlari
-nmap
 libnotify
 dconf

@@ -21,7 +21,12 @@ Singleton {
     readonly property string sans: Settings.get("appearance.font", "Geist")
     readonly property string mono: Settings.get("appearance.monoFont", "Geist Mono")
     readonly property real fontScale: Settings.get("appearance.fontScale", 1)
-    readonly property color panel: Qt.alpha(pill, Settings.get("appearance.panelOpacity", 1))
+    // Panel shishasi: to'q va toza, rangni orqadagi fon rasmi beradi. Tepasi biroz yorug'roq.
+    readonly property real glassOpacity: Settings.get("appearance.panelOpacity", 0.65)
+    readonly property color glassBase: Qt.tint(pill, Qt.alpha(accent, 0.06))
+    readonly property color panel: Qt.alpha(glassBase, glassOpacity)
+    readonly property color glassTop: Qt.alpha(glassBase, Math.max(0.05, glassOpacity - 0.1))
+    readonly property color panelEdge: Qt.alpha(text, 0.09)
 
     readonly property int fontSmall: 12
     readonly property int fontBody: 14

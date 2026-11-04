@@ -48,11 +48,17 @@ targets=(
     .config/hypr/niri-desk-colors.conf
     .config/gtk-3.0/gtk.css
     .config/gtk-4.0/gtk.css
+    .config/rofi/niri-desk.rasi
+    .config/rofi/niri-desk-colors.rasi
+    .local/bin/niri-desk-claude-status
+    .local/bin/niri-desk-lyrics
+    .local/bin/niri-desk-rofi
+    .local/bin/niri-desk-rofi-search
+    .local/bin/niri-desk-shot
     .local/bin/niri-desk-wallpaper
     .local/bin/niri-desk-zen
     .local/bin/niri-desk-record
     .local/bin/niri-desk-ocr
-    .local/bin/niri-desk-lab
     .local/bin/niri-desk-apply
     .local/bin/niri-desk-tr
     .local/bin/niri_desk_tr.py
@@ -61,15 +67,12 @@ targets=(
     .local/bin/niri-desk-profile
     .local/bin/niri-desk-session
     .local/bin/niri-desk-translate
-    .local/bin/niri-desk-hosts
     .local/bin/niri-desk-backup
-    .config/fish/conf.d/niri-desk.fish
     .local/bin/niri-desk-shell
     .local/bin/niri-desk-set
     .local/bin/niri-desk-raise
     .local/bin/niri-desk-scratch
     .local/bin/niri-desk-color
-    .local/bin/niri-desk-target
     .config/niri-desk/tmux.conf
     .config/niri-desk/defaults.json
 )
@@ -197,20 +200,14 @@ do_it cp -a "$root/config/kitty/." "$HOME/.config/kitty/"
 do_it mkdir -p "$HOME/.config/fastfetch"
 do_it cp "$root/config/fastfetch/config.jsonc" "$HOME/.config/fastfetch/config.jsonc"
 do_it cp -a "$root/config/hypr/." "$HOME/.config/hypr/"
+do_it mkdir -p "$HOME/.config/rofi"
+do_it cp -a "$root/config/rofi/." "$HOME/.config/rofi/"
 do_it cp -a "$root/bin/." "$HOME/.local/bin/"
 
 # Foydalanuvchi sozlamalari va fon rasmlari ustidan yozilmaydi.
 do_it mkdir -p "$HOME/.config/niri-desk" "$HOME/Pictures/Wallpapers" "$HOME/.local/share/fonts/niri-desk"
-do_it cp "$root/config/niri-desk/tmux.conf" "$root/config/niri-desk/defaults.json" "$root/config/niri-desk/shell.bash" "$root/config/niri-desk/i18n-ru.json" "$HOME/.config/niri-desk/"
-for f in profiles.json snippets.json; do
-    [[ -e "$HOME/.config/niri-desk/$f" ]] || do_it cp "$root/config/niri-desk/$f" "$HOME/.config/niri-desk/$f"
-done
-do_it mkdir -p "$HOME/.config/fish/conf.d"
-do_it cp "$root/config/fish/conf.d/niri-desk.fish" "$HOME/.config/fish/conf.d/niri-desk.fish"
-line='[ -f "$HOME/.config/niri-desk/shell.bash" ] && . "$HOME/.config/niri-desk/shell.bash"'
-if ! grep -qF "niri-desk/shell.bash" "$HOME/.bashrc" 2>/dev/null; then
-    if ((dry)); then printf '  [dry-run] a line would be added to .bashrc\n'; else printf '\n%s\n' "$line" >>"$HOME/.bashrc"; fi
-fi
+do_it cp "$root/config/niri-desk/tmux.conf" "$root/config/niri-desk/defaults.json" "$root/config/niri-desk/i18n-ru.json" "$HOME/.config/niri-desk/"
+[[ -e "$HOME/.config/niri-desk/profiles.json" ]] || do_it cp "$root/config/niri-desk/profiles.json" "$HOME/.config/niri-desk/profiles.json"
 [[ -e "$HOME/.config/niri-desk/settings.json" ]] || do_it cp "$root/config/niri-desk/settings.json" "$HOME/.config/niri-desk/settings.json"
 do_it cp -n "$root"/wallpapers/* "$HOME/Pictures/Wallpapers/"
 do_it cp -a "$root"/fonts/. "$HOME/.local/share/fonts/niri-desk/"
@@ -280,6 +277,13 @@ if ((packages)); then
     say "Installing the anthropic SDK (only used with an API key)"
     soft python3 -m venv "$venv"
     do_it "$venv/bin/pip" install --quiet --upgrade "anthropic>=2.3,<3" || say "The SDK was not installed: the API key option will not work, everything else will"
+fi
+
+lyrics_venv="$HOME/.local/share/niri-desk/lyrics-venv"
+if ((packages)); then
+    say "Installing speech recognition for live subtitles (about 500 MB, runs on this computer)"
+    soft python3 -m venv "$lyrics_venv"
+    do_it "$lyrics_venv/bin/pip" install --quiet faster-whisper || say "Speech recognition was not installed: subtitles will not work, everything else will"
 fi
 
 if ! command -v claude >/dev/null && ((dry == 0)); then

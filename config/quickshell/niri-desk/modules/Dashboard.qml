@@ -3,11 +3,16 @@ import Quickshell
 import qs.components
 import qs.services
 
-// Soatni bosganda ochiladigan panel: to'rtta alohida vkladka.
+// Soatni bosganda ochiladigan panel: uchta sahifa yonma-yon turadi va suriladi.
 FocusScope {
     id: root
 
-    readonly property var tabs: [Tr.t("Today"), Tr.t("Status"), Tr.t("Lab"), Tr.t("AI")]
+    readonly property var tabs: [Tr.t("Today"), Tr.t("Music"), Tr.t("AI")]
+    readonly property int tabWidth: 130
+    readonly property int pageGap: 24
+    // AI sahifasi ko'ringanda yozish maydoni fokusni oladi: boshqa sahifalar orasida surilganda u ochilmasligi kerak.
+    property bool leavingAi: false
+    property int lastTab: Ui.dashTab
 
     function select(index) {
         Ui.dashTab = index;
@@ -17,7 +22,9 @@ FocusScope {
     Connections {
         target: Ui
         function onDashTabChanged() {
-            if (Ui.dashTab !== 3)
+            root.leavingAi = root.lastTab === 2;
+            root.lastTab = Ui.dashTab;
+            if (Ui.dashTab !== 2)
                 root.forceActiveFocus();
         }
     }
@@ -26,11 +33,11 @@ FocusScope {
     Keys.onEscapePressed: Ui.popup = ""
     Keys.onPressed: event => {
         const digit = event.key - Qt.Key_1;
-        if (digit >= 0 && digit <= 3) {
+        if (digit >= 0 && digit <= 2) {
             select(digit);
             event.accepted = true;
         } else if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
-            select((Ui.dashTab + (event.key === Qt.Key_Tab ? 1 : 3)) % 4);
+            select((Ui.dashTab + (event.key === Qt.Key_Tab ? 1 : 2)) % 3);
             event.accepted = true;
         }
     }
@@ -40,71 +47,123 @@ FocusScope {
         interval: 60
         running: true
         onTriggered: {
-            if (Ui.dashTab !== 3)
+            if (Ui.dashTab !== 2)
                 root.forceActiveFocus();
         }
     }
 
-    Row {
+    // Vkladkalar: faqat matn, tagidagi chiziq ular orasida sirpanadi.
+    Item {
         anchors.horizontalCenter: parent.horizontalCenter
-        y: 12
-        spacing: 4
+        y: 8
+        width: root.tabWidth * root.tabs.length
+        height: 38
 
-        Repeater {
-            model: root.tabs
+        Rectangle {
+            x: Ui.dashTab * root.tabWidth + (root.tabWidth - width) / 2
+            y: 33
+            width: 34
+            height: 3
+            radius: 2
+            color: Theme.accent
 
-            delegate: Rectangle {
-                id: tab
-
-                required property string modelData
-                required property int index
-
-                readonly property bool current: Ui.dashTab === index
-
-                width: 120
-                height: 32
-                radius: 10
-                color: current ? Qt.alpha(Theme.accent, 0.22) : tabArea.containsMouse ? Qt.alpha(Theme.text, 0.08) : "transparent"
-
-                Label {
-                    anchors.centerIn: parent
-                    text: tab.modelData
-                    color: tab.current ? Theme.accent : Theme.text
-                    font.weight: tab.current ? Font.DemiBold : Font.Normal
+            Behavior on x {
+                NumberAnimation {
+                    duration: 460
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: [0.3, 1.5, 0.4, 1, 1, 1]
                 }
-                MouseArea {
-                    id: tabArea
+            }
+        }
 
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.select(tab.index)
+        Row {
+            Repeater {
+                model: root.tabs
+
+                delegate: Item {
+                    id: tab
+
+                    required property string modelData
+                    required property int index
+
+                    readonly property bool current: Ui.dashTab === index
+
+                    width: root.tabWidth
+                    height: 38
+
+                    Label {
+                        anchors.centerIn: parent
+                        text: tab.modelData
+                        size: 14
+                        color: tab.current || tabArea.containsMouse ? Theme.text : Theme.muted
+                        font.weight: tab.current ? Font.DemiBold : Font.Normal
+                        scale: tabArea.pressed ? 0.95 : 1
+
+                        Behavior on color {
+                            ColorAnimation {
+                                duration: 180
+                            }
+                        }
+                        Behavior on scale {
+                            NumberAnimation {
+                                duration: 110
+                            }
+                        }
+                    }
+                    MouseArea {
+                        id: tabArea
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.select(tab.index)
+                    }
                 }
             }
         }
     }
 
     Item {
+        id: pager
+
         x: 24
         y: 58
         width: parent.width - 48
         height: parent.height - 58 - 16
+        clip: true
 
-        DashToday {
-            anchors.fill: parent
-            visible: Ui.dashTab === 0
-        }
-        DashStatus {
-            anchors.fill: parent
-            visible: Ui.dashTab === 1
-        }
-        DashLab {
-            anchors.fill: parent
-            visible: Ui.dashTab === 2
-        }
-        DashAi {
-            anchors.fill: parent
-            visible: Ui.dashTab === 3
+        Item {
+            x: -Ui.dashTab * (pager.width + root.pageGap)
+            width: pager.width
+            height: pager.height
+
+            Behavior on x {
+                NumberAnimation {
+                    id: slide
+
+                    duration: 480
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: [0.25, 1.08, 0.35, 1, 1, 1]
+                }
+            }
+
+            DashToday {
+                width: pager.width
+                height: pager.height
+                visible: Ui.dashTab === 0 || slide.running
+            }
+            DashMusic {
+                x: pager.width + root.pageGap
+                width: pager.width
+                height: pager.height
+                visible: Ui.dashTab === 1 || slide.running
+            }
+            DashAi {
+                x: 2 * (pager.width + root.pageGap)
+                width: pager.width
+                height: pager.height
+                visible: Ui.dashTab === 2 || (slide.running && root.leavingAi)
+            }
         }
     }
 }

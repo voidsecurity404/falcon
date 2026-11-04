@@ -33,7 +33,8 @@ Singleton {
         });
     }
 
-    // Tez takrorlanadigan holat (ovoz, yorqinlik): navbatga turmaydi, joriy xabarni almashtiradi.
+    // Tez takrorlanadigan holat (ovoz, yorqinlik): faqat eng oxirgi qiymat muhim.
+    // Boshqa daraja xabarini darhol almashtiradi. Oddiy xabar ochiq bo'lsa, navbatda har turdan bittasi turadi.
     function level(key, title, value, icon) {
         const item = {
             title: title,
@@ -45,13 +46,12 @@ Singleton {
             sticky: false,
             run: null
         };
-        if (!current || current.key === key) {
-            current = item;
-            timer.interval = 1600;
-            timer.restart();
-        } else {
-            queue = queue.concat([item]);
+        if (!current || current.key !== "") {
+            display(item);
+            return;
         }
+        const levels = queue.filter(q => q.key !== "" && q.key !== key).concat([item]);
+        queue = levels.concat(queue.filter(q => q.key === ""));
     }
 
     function enqueue(item) {
@@ -67,7 +67,7 @@ Singleton {
         if (item.sticky) {
             timer.stop();
         } else {
-            timer.interval = Settings.get("notifications.seconds", 3.6) * 1000;
+            timer.interval = item.key !== "" ? 1600 : Settings.get("notifications.seconds", 3.6) * 1000;
             timer.restart();
         }
     }

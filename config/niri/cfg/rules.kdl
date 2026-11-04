@@ -22,12 +22,6 @@ window-rule {
     block-out-from "screen-capture"
 }
 
-// Burp Suite oynasi keng ochilsin.
-window-rule {
-    match app-id=r#"^burp"#
-    default-column-width { proportion 0.66667; }
-}
-
 // Kichik yordamchi oynalar va dialoglar lentani buzmasin, suzib ochilsin.
 window-rule {
     match app-id=r#"^org\.gnome\.Calculator$"#
@@ -121,6 +115,24 @@ window-rule {
 layer-rule {
     match namespace="^awww-daemon"
     place-within-backdrop true
+}
+
+// Vidjetlar ham fon bilan birga turadi: ish stoli almashganda surilmaydi.
+layer-rule {
+    match namespace="^niri-desk-widgets-face$"
+    place-within-backdrop true
+}
+
+// Rofi menyusi panel kabi: yumaloq burchak, soya va orqa fon xiralashuvi.
+layer-rule {
+    match namespace="^rofi$"
+    geometry-corner-radius 16
+    shadow {
+        on
+    }
+    background-effect {
+        blur true
+    }
 }
 
 // Fon tanlash oynasi orqasi xiralashsin.

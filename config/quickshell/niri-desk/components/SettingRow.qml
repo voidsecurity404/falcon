@@ -7,9 +7,27 @@ Item {
 
     property var item: ({})
 
-    readonly property var value: Settings.get(item.key, item.fallback)
+    readonly property var value: item.key ? Settings.get(item.key, item.fallback) : undefined
 
     implicitHeight: 46
+
+    // Ustiga kelganda qator yengil ajralib turadi.
+    Rectangle {
+        anchors.fill: parent
+        anchors.leftMargin: -8
+        anchors.rightMargin: -8
+        radius: 11
+        color: Qt.alpha(Theme.text, hover.hovered ? 0.05 : 0)
+
+        Behavior on color {
+            ColorAnimation {
+                duration: 140
+            }
+        }
+    }
+    HoverHandler {
+        id: hover
+    }
 
     Column {
         anchors.verticalCenter: parent.verticalCenter
@@ -28,6 +46,40 @@ Item {
         }
     }
 
+    // Amal tugmasi
+    Rectangle {
+        visible: root.item.type === "action"
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        width: actionLabel.implicitWidth + 28
+        height: 32
+        radius: 10
+        color: actionArea.containsMouse ? Theme.accent : Qt.alpha(Theme.accent, 0.2)
+
+        Behavior on color {
+            ColorAnimation {
+                duration: 140
+            }
+        }
+
+        Label {
+            id: actionLabel
+
+            anchors.centerIn: parent
+            text: root.item.text || ""
+            size: 13
+            color: actionArea.containsMouse ? Theme.accentText : Theme.accent
+        }
+        MouseArea {
+            id: actionArea
+
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.item.run()
+        }
+    }
+
     // Tugma
     Rectangle {
         visible: root.item.type === "toggle"
@@ -38,21 +90,36 @@ Item {
         radius: 12
         color: root.value === true ? Theme.accent : Qt.alpha(Theme.text, 0.14)
 
+        Behavior on color {
+            ColorAnimation {
+                duration: 200
+            }
+        }
+
         Rectangle {
             x: root.value === true ? parent.width - width - 3 : 3
             anchors.verticalCenter: parent.verticalCenter
-            width: 18
+            width: switchArea.pressed ? 22 : 18
             height: 18
             radius: 9
             color: root.value === true ? Theme.accentText : Theme.text
 
             Behavior on x {
                 NumberAnimation {
+                    duration: 300
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: [0.3, 1.5, 0.4, 1, 1, 1]
+                }
+            }
+            Behavior on width {
+                NumberAnimation {
                     duration: 120
                 }
             }
         }
         MouseArea {
+            id: switchArea
+
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
             onClicked: Settings.set(root.item.key, root.value !== true)
@@ -107,7 +174,25 @@ Item {
 
                 width: nameLabel.implicitWidth + 14
                 height: 28
-                radius: 7
+                radius: selected ? 9 : 14
+                scale: optionArea.pressed ? 0.95 : 1
+
+                Behavior on radius {
+                    NumberAnimation {
+                        duration: 240
+                        easing.type: Easing.OutCubic
+                    }
+                }
+                Behavior on color {
+                    ColorAnimation {
+                        duration: 180
+                    }
+                }
+                Behavior on scale {
+                    NumberAnimation {
+                        duration: 110
+                    }
+                }
                 color: selected ? Qt.alpha(Theme.accent, 0.24) : Qt.alpha(Theme.text, optionArea.containsMouse ? 0.13 : 0.06)
 
                 Label {
@@ -139,8 +224,14 @@ Item {
         height: 32
         radius: 8
         color: Qt.alpha(Theme.text, 0.07)
-        border.width: input.activeFocus ? 1 : 0
-        border.color: Theme.accent
+        border.width: 1
+        border.color: input.activeFocus ? Theme.accent : "transparent"
+
+        Behavior on border.color {
+            ColorAnimation {
+                duration: 180
+            }
+        }
 
         TextInput {
             id: input

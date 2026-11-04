@@ -24,11 +24,6 @@ Singleton {
 
     readonly property real weatherLat: get("weather.lat", 41.31)
     readonly property real weatherLon: get("weather.lon", 69.28)
-    readonly property string labTarget: get("lab.target", "")
-    readonly property var labPorts: get("lab.ports", [])
-    readonly property string vpnInterface: get("lab.vpnInterface", "tun0")
-    readonly property string vpnUp: get("vpn.up", "")
-    readonly property string vpnDown: get("vpn.down", "")
     readonly property string wallpaperDir: String(get("wallpaperDir", "~/Pictures/Wallpapers")).replace(/^~/, home)
     readonly property bool bottom: get("panel.position", "top") === "bottom"
 
@@ -70,8 +65,8 @@ Singleton {
 
     function resetAll() {
         const copy = {};
-        // Shaxsiy ma'lumotlar saqlanadi: nishon, VPN va ob-havo joyi.
-        for (const key of ["lab", "vpn", "weather", "wallpaperDir"]) {
+        // Shaxsiy ma'lumotlar saqlanadi: ob-havo joyi va fon papkasi.
+        for (const key of ["weather", "wallpaperDir"]) {
             if (user[key] !== undefined)
                 copy[key] = user[key];
         }

@@ -105,10 +105,7 @@ def backend(ai):
 
 def system_prompt(s):
     ai = s.get("ai", {})
-    target = s.get("lab", {}).get("target", "")
     system = ai.get("system") or "You are an assistant on the user's computer. Answer briefly and clearly, in the language the user writes in."
-    if target:
-        system += f"\nThe user's current training lab target: {target}."
     return system
 
 

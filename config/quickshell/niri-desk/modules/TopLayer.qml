@@ -23,6 +23,25 @@ PanelWindow {
     WlrLayershell.namespace: "niri-desk-top"
     WlrLayershell.keyboardFocus: panelHere ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
+    // Faqat panellar orqasi xiralashadi, qolgan ekran toza qoladi.
+    BackgroundEffect.blurRegion: Region {
+        Region {
+            item: ribbon
+            radius: 11
+        }
+        Region {
+            item: status
+            radius: 11
+        }
+        Region {
+            item: island.body
+            bottomLeftRadius: Settings.bottom ? 0 : 18
+            bottomRightRadius: Settings.bottom ? 0 : 18
+            topLeftRadius: Settings.bottom ? 18 : 0
+            topRightRadius: Settings.bottom ? 18 : 0
+        }
+    }
+
     mask: Region {
         Region {
             item: catcher
@@ -53,9 +72,17 @@ PanelWindow {
     }
 
     FocusScope {
+        id: keyScope
+
         anchors.fill: parent
         focus: root.panelHere
-        Keys.onEscapePressed: Ui.popup = ""
+        // Esc steps back from a Wi-Fi or Bluetooth list before it closes the panel.
+        Keys.onEscapePressed: {
+            if (Ui.controlPage !== "")
+                Ui.controlPage = "";
+            else
+                Ui.popup = "";
+        }
     }
 
     Item {
@@ -100,6 +127,13 @@ PanelWindow {
             shown: root.panelHere && Ui.popup === "tray"
         }
 
+        ClaudePanel {
+            anchors.right: parent.right
+            anchors.rightMargin: 14
+            y: Settings.bottom ? parent.height - height - 52 : 52
+            shown: root.panelHere && Ui.popup === "claude"
+        }
+
         ControlCenter {
             id: control
 
@@ -107,6 +141,7 @@ PanelWindow {
             anchors.rightMargin: 14
             y: Settings.bottom ? parent.height - height - 52 : 52
             shown: root.panelHere && Ui.popup === "control"
+            onReleaseFocus: keyScope.forceActiveFocus()
         }
     }
 }

@@ -4,11 +4,10 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// Foydalanuvchi tahrirlaydigan ro'yxatlar: snippetlar va ish profillari.
+// Foydalanuvchi tahrirlaydigan ro'yxatlar: ish profillari.
 Singleton {
     id: root
 
-    property var snippets: []
     property var profiles: []
     property string error: ""
 
@@ -60,16 +59,6 @@ Singleton {
             error = file.path;
             Toasts.show(Tr.t("Could not read a file"), Tr.t("{file} is invalid").replace("{file}", file.path.split("/").pop()), "alert");
         }
-    }
-
-    FileView {
-        id: snippetFile
-
-        path: Settings.dir + "snippets.json"
-        watchChanges: true
-        printErrors: false
-        onFileChanged: reload()
-        onLoaded: root.parseList(snippetFile, v => root.snippets = v)
     }
 
     FileView {

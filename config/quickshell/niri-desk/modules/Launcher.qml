@@ -264,11 +264,6 @@ LazyLoader {
                     });
                     return out;
                 }
-                const encoded = Tools.encode(raw, Qt);
-                if (encoded) {
-                    out.push(copyRow(Tr.t("Encoding"), Tr.t(encoded.label), encoded.value));
-                    return out;
-                }
                 if (raw[0] === "/") {
                     const pattern = raw.slice(1).trim();
                     root.fileQuery = pattern;
@@ -292,33 +287,6 @@ LazyLoader {
                     }
                     return out;
                 }
-                if (raw[0] === ";") {
-                    const key = raw.slice(1).trim().toLowerCase();
-                    const fill = text => Tools.fillSnippet(text, {
-                        target: /^[A-Za-z0-9][A-Za-z0-9.:_-]*$/.test(Settings.labTarget) ? Settings.labTarget : "",
-                        lhost: Lab.vpnAddress || Settings.get("lab.lhost", ""),
-                        lport: String(Settings.get("lab.lport", 4444))
-                    });
-                    for (const snippet of Library.snippets.filter(s => String(s.name).toLowerCase().indexOf(key) >= 0).slice(0, 9)) {
-                        const body = fill(String(snippet.text));
-                        const unfilled = /\{(target|lhost|lport)\}/.test(body);
-                        const shouldRun = snippet.run === true && !unfilled;
-                        out.push({
-                            section: Tr.t("Snippets"),
-                            name: snippet.name + "  " + body,
-                            detail: unfilled ? Tr.t("No target or IP, will only be copied") : shouldRun ? Tr.t("Enter: run") : Tr.t("Enter: copy"),
-                            run: () => {
-                                if (shouldRun) {
-                                    Quickshell.execDetached(["kitty", "sh", "-c", body + '\necho; printf "' + Tr.t("Press Enter to close") + '"; read _']);
-                                } else {
-                                    Quickshell.clipboardText = body;
-                                    Toasts.show(Tr.t("Copied"), body, "check");
-                                }
-                            }
-                        });
-                    }
-                    return out;
-                }
                 if (raw[0] === "@") {
                     const key = raw.slice(1).trim().toLowerCase();
                     for (const profile of Library.profiles.filter(p => String(p.name).toLowerCase().indexOf(key) >= 0)) {
@@ -330,28 +298,6 @@ LazyLoader {
                             run: () => Ui.run("niri-desk-profile", name)
                         });
                     }
-                    return out;
-                }
-                const hostsMatch = /^hosts\s+([A-Za-z0-9.-]+)$/.exec(raw);
-                if (hostsMatch) {
-                    const hostName = hostsMatch[1];
-                    out.push({
-                        section: "Pentest",
-                        name: "/etc/hosts: " + Settings.labTarget + " " + hostName,
-                        detail: Tr.t("asks for a password in a terminal"),
-                        run: () => Quickshell.execDetached(["kitty", "sh", "-c", 'niri-desk-hosts "$1"; echo; printf "' + Tr.t("Press Enter to close") + '"; read _', "sh", hostName])
-                    });
-                    return out;
-                }
-                const target = /^target\s+([A-Za-z0-9.:_-]+)$/.exec(raw);
-                if (target) {
-                    const host = target[1];
-                    out.push({
-                        section: "Pentest",
-                        name: Tr.t("Target:") + " " + host,
-                        detail: Tr.t("saved to the dashboard"),
-                        run: () => Ui.run("niri-desk-target", host)
-                    });
                     return out;
                 }
             }
@@ -542,7 +488,7 @@ LazyLoader {
                         anchors.leftMargin: 24
                         verticalAlignment: Text.AlignVCenter
                         visible: input.text === ""
-                        text: root.clipboardOnly ? Tr.t("Search clipboard history…") : Tr.t("App, /file, ;snippet, @profile, =math, >command, ?web…")
+                        text: root.clipboardOnly ? Tr.t("Search clipboard history…") : Tr.t("App, /file, @profile, =math, >command, ?web…")
                         color: Qt.alpha(Theme.text, 0.36)
                         size: 24
                         font.weight: Font.Light

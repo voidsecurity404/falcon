@@ -1,0 +1,74 @@
+pragma Singleton
+
+import QtQuick
+import Quickshell
+import Quickshell.Io
+
+// Claude subscription limits, saved by niri-desk-claude-status while Claude Code runs.
+Singleton {
+    id: root
+
+    property var data: ({})
+    property real now: Date.now() / 1000
+
+    readonly property bool hasData: !!data.five_hour || !!data.seven_day
+    readonly property real updated: data.updated || 0
+    // A window past its reset time has started again, whatever the last saved value says.
+    readonly property real fiveHour: used(data.five_hour)
+    readonly property real weekly: used(data.seven_day)
+    readonly property string fiveHourReset: resetText(data.five_hour)
+    readonly property string weeklyReset: resetText(data.seven_day)
+    readonly property string updatedText: {
+        if (!updated)
+            return "";
+        const minutes = Math.floor((now - updated) / 60);
+        return minutes < 1 ? Tr.t("Updated just now") : Tr.t("Updated {time} ago").replace("{time}", span(minutes * 60));
+    }
+
+    function used(window) {
+        if (!window)
+            return 0;
+        return window.resets && window.resets <= now ? 0 : Math.max(0, Math.min(100, Number(window.used) || 0));
+    }
+
+    function span(seconds) {
+        const total = Math.max(0, Math.round(seconds / 60));
+        const days = Math.floor(total / 1440);
+        const hours = Math.floor(total % 1440 / 60);
+        const minutes = total % 60;
+        if (days > 0)
+            return Tr.t("{d} d {h} h").replace("{d}", days).replace("{h}", hours);
+        if (hours > 0)
+            return Tr.t("{h} h {m} min").replace("{h}", hours).replace("{m}", minutes);
+        return Tr.t("{m} min").replace("{m}", Math.max(1, minutes));
+    }
+
+    function resetText(window) {
+        if (!window || !window.resets)
+            return "";
+        if (window.resets <= now)
+            return Tr.t("Limit has reset");
+        return Tr.t("Resets in {time}").replace("{time}", span(window.resets - now));
+    }
+
+    FileView {
+        path: Quickshell.env("HOME") + "/.local/state/niri-desk/claude-usage.json"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            try {
+                root.data = JSON.parse(text());
+            } catch (e) {
+                root.data = {};
+            }
+        }
+    }
+
+    Timer {
+        interval: 30000
+        running: true
+        repeat: true
+        onTriggered: root.now = Date.now() / 1000
+    }
+}

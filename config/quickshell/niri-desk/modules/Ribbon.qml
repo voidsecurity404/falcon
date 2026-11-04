@@ -14,7 +14,47 @@ Rectangle {
     implicitWidth: row.implicitWidth + 8
     height: 34
     radius: 11
-    color: Theme.panel
+    gradient: Gradient {
+        GradientStop {
+            position: 0
+            color: Theme.glassTop
+        }
+        GradientStop {
+            position: 1
+            color: Theme.panel
+        }
+    }
+    border.width: 1
+    border.color: Theme.panelEdge
+
+    // Joriy raqam tagidagi rangli belgi: raqamlar orasida sirpanadi, rangi fon rasmidan.
+    Rectangle {
+        readonly property var chip: {
+            const count = chips.count;
+            for (let i = 0; i < count; i++) {
+                const item = chips.itemAt(i);
+                if (item && item.active)
+                    return item;
+            }
+            return null;
+        }
+
+        visible: !!chip
+        x: chip ? row.x + chip.x + 1 : 0
+        y: 5
+        width: 24
+        height: 24
+        radius: 8
+        color: Theme.accent
+
+        Behavior on x {
+            NumberAnimation {
+                duration: 340
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: [0.3, 1.4, 0.4, 1, 1, 1]
+            }
+        }
+    }
 
     Row {
         id: row
@@ -23,6 +63,8 @@ Rectangle {
         spacing: 0
 
         Repeater {
+            id: chips
+
             model: Niri.workspacesOn(root.output)
 
             delegate: Item {
@@ -43,7 +85,7 @@ Rectangle {
                     font.family: Theme.mono
                     size: 14
                     font.weight: chip.active ? Font.Bold : Font.Normal
-                    color: chip.active ? Theme.accent : chip.modelData.is_urgent ? Theme.error : chip.occupied || chipArea.containsMouse ? Theme.text : Qt.alpha(Theme.text, 0.35)
+                    color: chip.active ? Theme.accentText : chip.modelData.is_urgent ? Theme.error : chip.occupied || chipArea.containsMouse ? Theme.text : Qt.alpha(Theme.text, 0.35)
 
                     Behavior on color {
                         ColorAnimation {

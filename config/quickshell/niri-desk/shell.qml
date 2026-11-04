@@ -18,7 +18,11 @@ ShellRoot {
                 ExclusiveZone {
                     screen: perScreen.modelData
                 }
-                QuietClock {
+                WidgetFace {
+                    screen: perScreen.modelData
+                    outputName: perScreen.modelData.name
+                }
+                DesktopWidgets {
                     screen: perScreen.modelData
                     outputName: perScreen.modelData.name
                 }
@@ -79,21 +83,25 @@ ShellRoot {
                 lang: Tr.language,
                 sample: Tr.t("Settings"),
                 dashTab: Ui.dashTab,
-                pomodoro: Pomodoro.phase,
-                pomodoroLeft: Pomodoro.remaining,
-                pomodoroPaused: Pomodoro.paused,
                 aiBusy: Ai.busy,
                 aiMessages: Ai.messages.map(m => m.role + ":" + m.text),
-                snippets: Library.snippets.length,
                 profiles: Library.profiles.length,
                 rows: Ui.launcherRows,
                 selected: Ui.launcherSelected,
                 pickerSelected: Ui.pickerSelected,
                 pickerFiles: Ui.pickerFiles,
                 controlHeight: Ui.controlHeight,
-                target: Settings.labTarget,
-                labOpen: Lab.ports.filter(p => p.open).map(p => p.port),
-                vpn: Lab.vpnAddress,
+                controlPage: Ui.controlPage,
+                widgetEdit: Widgets.editMode,
+                widgetsLive: Widgets.shownNow,
+                widgetHover: Widgets.hoverId,
+                widgets: Widgets.items,
+                widgetRects: Widgets.rects,
+                lyricsStatus: Lyrics.status,
+                lyricsWanted: Lyrics.wanted,
+                claudeHasData: ClaudeUsage.hasData,
+                claudeFive: ClaudeUsage.fiveHour,
+                claudeWeek: ClaudeUsage.weekly,
                 volume: Audio.percent,
                 muted: Audio.muted,
                 error: Settings.lastError,
@@ -115,22 +123,28 @@ ShellRoot {
             Sticky.ids = [];
             Night.enabled = Settings.get("nightlight.auto", false);
             Ui.dashTab = 0;
-            Pomodoro.reset();
+            Widgets.editMode = false;
             Ai.clear();
+        }
+        function controlPage(name: string): void {
+            Ui.popup = "control";
+            Ui.controlPage = name;
         }
         function dashboardTab(index: int): void {
             Ui.dashTab = index;
             Ui.popup = "dashboard";
-        }
-        function pomodoro(seconds: int): void {
-            Pomodoro.start();
-            Pomodoro.remaining = seconds;
         }
         function launcherQuery(text: string): void {
             Ui.launcherInject(text);
         }
         function close(): void {
             Ui.popup = "";
+        }
+        function widgets(): void {
+            Widgets.editMode = !Widgets.editMode;
+        }
+        function claude(): void {
+            Ui.togglePopup("claude");
         }
         function sticky(): void {
             Sticky.toggle();
@@ -148,7 +162,7 @@ ShellRoot {
 
     Component.onCompleted: {
         Toasts.start();
-        Library.snippets;
+        Library.profiles;
         Schedule.check();
         Sticky.ids;
     }

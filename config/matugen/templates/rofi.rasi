@@ -1,0 +1,10 @@
+* {
+    nd-accent: {{colors.primary.default.hex}};
+    nd-accent-soft: {{colors.primary.default.hex}}26;
+    nd-pill: {{colors.surface_container_lowest.default.hex}}f2;
+    nd-field: {{colors.on_surface.default.hex}}0d;
+    nd-text: {{colors.on_surface.default.hex}};
+    nd-muted: {{colors.on_surface_variant.default.hex}};
+    nd-outline: {{colors.outline_variant.default.hex}}80;
+    nd-error: {{colors.error.default.hex}};
+}
