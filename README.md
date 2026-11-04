@@ -84,6 +84,8 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 
 - `niri-desk-session save|restore`: restore windows. Saved every minute, restored at login. Arguments are never replayed, so a terminal opens empty.
 - `niri-desk-backup export [file]`, `import file`: save settings to one file.
+- `niri-desk-doctor`: checks programs, running services, config and permissions, and says what to fix.
+- `niri-desk-sync [--check] [--pull]`: copies changed files from the repo to the live desktop, leaving generated files and user data alone.
 - `niri-desk-translate`: the text is sent to an online translation service (`translate-shell`).
 
 ## Configuration
