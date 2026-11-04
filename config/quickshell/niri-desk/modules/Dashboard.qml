@@ -43,7 +43,14 @@ FocusScope {
     }
 
     // Qatlam fokusi panel ochilgach o'rnatiladi: shundan keyin olamiz.
+    onVisibleChanged: {
+        if (visible)
+            focusLater.restart();
+    }
+
     Timer {
+        id: focusLater
+
         interval: 60
         running: true
         onTriggered: {

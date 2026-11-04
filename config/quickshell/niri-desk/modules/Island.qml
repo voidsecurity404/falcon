@@ -116,7 +116,7 @@ Item {
         // Panel orqasida xiralashgan rasm: fon rasmi, musiqa bo'limida albom.
         Loader {
             anchors.fill: parent
-            active: root.mode === "dashboard" || opacity > 0
+            asynchronous: true
             opacity: root.mode === "dashboard" ? 1 : 0
             visible: opacity > 0
             sourceComponent: Backdrop {
@@ -279,7 +279,8 @@ Item {
         Loader {
             width: 1160
             height: root.targetHeight
-            active: root.mode === "dashboard" || opacity > 0
+            // Stays loaded after the first start: opening the panel creates nothing.
+            asynchronous: true
             opacity: root.mode === "dashboard" ? 1 : 0
             visible: opacity > 0
             sourceComponent: Dashboard {}

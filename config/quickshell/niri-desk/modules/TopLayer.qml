@@ -34,7 +34,7 @@ PanelWindow {
             radius: 11
         }
         Region {
-            item: island.body
+            item: island.showDashboard ? null : island.body
             bottomLeftRadius: Settings.bottom ? 0 : island.body.animatedRadius
             bottomRightRadius: Settings.bottom ? 0 : island.body.animatedRadius
             topLeftRadius: Settings.bottom ? island.body.animatedRadius : 0
