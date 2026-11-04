@@ -286,6 +286,7 @@
  "Sleep after": "Спящий режим через",
  "Sound output": "Вывод звука",
  "Microphone": "Микрофон",
+ "{key} must be a single line": "{key} должно быть одной строкой",
  "Lock screen style": "Экран блокировки",
  "Could not check the password": "Не удалось проверить пароль",
  "Checking…": "Проверка…",

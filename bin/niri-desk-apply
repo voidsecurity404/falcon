@@ -69,6 +69,14 @@ def number(section, key, low, high):
     return value
 
 
+def one_line(section, key):
+    # A line break here would become a line of its own in the terminal config.
+    value = str(section[key])
+    if any(ord(c) < 32 for c in value):
+        raise Bad(tr("{key} must be a single line", key=key))
+    return value
+
+
 def choice(section, key, options):
     value = section[key]
     if value not in options:
@@ -339,7 +347,7 @@ def kitty_conf(s):
     padding = int(number(t, "padding", 0, 60))
     return "\n".join([
         "# Generated file: change it in the Settings window.",
-        f"font_family {a['monoFont']}",
+        f"font_family {one_line(a, 'monoFont')}",
         f"font_size {number(a, 'terminalFontSize', 6, 40)}",
         f"background_opacity {number(a, 'terminalOpacity', 0.1, 1)}",
         f"cursor_shape {choice(t, 'cursorShape', ['block', 'beam', 'underline'])}",
