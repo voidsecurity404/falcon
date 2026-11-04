@@ -95,14 +95,6 @@ PanelWindow {
 
     readonly property var commands: [
         {
-            id: "random",
-            icon: "sparkle",
-            name: Tr.t("Random wallpaper"),
-            detail: Tr.t("Pick one for me"),
-            keywords: "random случайные обои",
-            run: () => root.randomWallpaper()
-        },
-        {
             id: "scheme",
             icon: "palette",
             name: Tr.t("Color style"),
@@ -219,15 +211,6 @@ PanelWindow {
                 }
             }
         ];
-    }
-
-    function randomWallpaper() {
-        const all = Wallpapers.imageFiles.filter(path => path !== Wallpapers.currentImage);
-        if (all.length === 0)
-            return;
-        const path = all[Math.floor(Math.random() * all.length)];
-        Wallpapers.chosen(path, false);
-        Ui.run("niri-desk-wallpaper", path);
     }
 
     function runSession(item) {
