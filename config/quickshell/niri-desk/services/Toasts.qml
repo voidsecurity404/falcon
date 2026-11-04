@@ -12,6 +12,7 @@ Singleton {
     property var current: null
     property var queue: []
     property bool doNotDisturb: false
+    readonly property int maxWaiting: 3
 
     // Oxirgi xabarlar: {id, title, sub, app, time}
     property var history: []
@@ -100,10 +101,20 @@ Singleton {
 
     function enqueue(item) {
         if (current) {
-            queue = queue.concat([item]);
+            queue = trimmed(queue.concat([item]));
             return;
         }
         display(item);
+    }
+
+    // A burst of notifications must not fill the island for minutes. The oldest waiting ones are
+    // dropped from the screen and stay in the history. Urgent ones and the shell's own messages stay.
+    function trimmed(items) {
+        const waiting = items.filter(q => q.notification && !q.sticky);
+        const extra = waiting.slice(0, Math.max(0, waiting.length - maxWaiting));
+        for (const item of extra)
+            item.notification.dismiss();
+        return items.filter(q => !extra.includes(q));
     }
 
     function display(item) {
