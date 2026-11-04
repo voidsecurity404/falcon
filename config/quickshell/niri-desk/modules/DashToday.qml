@@ -42,12 +42,10 @@ Item {
     }
 
     ParticleClock {
-        width: parent.width
-        height: 330
-        centerY: 164
-        pointerHere: pointer.containsMouse
-        pointerX: pointer.mouseX
-        pointerY: pointer.mouseY
+        anchors.fill: parent
+        centerY: 188
+        pointerX: pointer.containsMouse ? pointer.mouseX : -999
+        pointerY: pointer.containsMouse ? pointer.mouseY : -999
     }
 
     MouseArea {
