@@ -1,6 +1,6 @@
-// Tor oynaga ham sig'adigan ixcham salomlashuv.
+// Salomlashuv: chapda Berserk (Guts) ASCII rasmi, o'ngda tizim ma'lumoti.
 {
-  "logo": { "type": "none" },
+  "logo": { "type": "file-raw", "source": "~/.config/fastfetch/berserk.txt", "width": 62, "height": 35, "padding": { "right": 2 } },
   "display": { "separator": "  ", "key": { "width": 8 }, "color": { "keys": "blue" } },
   "modules": [
     { "type": "os", "key": "os", "format": "{name}" },
