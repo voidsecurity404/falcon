@@ -15,7 +15,7 @@ Singleton {
     property string popup: ""
     property bool zen: false
     // How wide the frame around the desktop is now. Focus mode takes it away.
-    readonly property int frameTarget: Settings.framed && !zen ? 8 : 0
+    readonly property int frameTarget: Settings.framed && !zen ? 12 : 0
     property real frameSize: frameTarget
 
     Behavior on frameSize {

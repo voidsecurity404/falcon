@@ -18,9 +18,9 @@ PanelWindow {
     readonly property int edgeSign: Settings.bottom ? 1 : -1
     readonly property var leaveCurve: [0.4, 0, 0.9, 0.3, 1, 1]
     readonly property var arriveCurve: [0.25, 1.25, 0.35, 1, 1, 1]
-    // In a frame the side panels hang from it, clear of its round corners. Otherwise they float.
+    // In a frame the side panels fill its corners. Otherwise they float.
     readonly property real edgeGap: Settings.framed ? Ui.frameSize : 10
-    readonly property real sideGap: Settings.framed ? Ui.frameSize + 56 : 14
+    readonly property real sideGap: Settings.framed ? Ui.frameSize : 14
     readonly property real popupGap: 52 + Ui.frameSize
     property real ribbonOut: barShown ? 0 : 1
     property real statusOut: barShown ? 0 : 1
@@ -73,7 +73,10 @@ PanelWindow {
 
             Region {
                 item: frameHole
-                radius: frameHole.radius
+                topLeftRadius: frameHole.topRadius
+                topRightRadius: frameHole.topRadius
+                bottomLeftRadius: frameHole.bottomRadius
+                bottomRightRadius: frameHole.bottomRadius
                 intersection: Intersection.Subtract
             }
         }
@@ -86,15 +89,14 @@ PanelWindow {
         }
         CurveRegion {
             size: Settings.framed && root.ribbonOut < 1 ? 14 : 0
-            x: ribbon.x - 14
+            x: ribbon.x + ribbon.width
             y: ribbon.y + (Settings.bottom ? ribbon.height - 14 : 0)
-            flipX: true
             flipY: Settings.bottom
         }
         CurveRegion {
             size: Settings.framed && root.ribbonOut < 1 ? 14 : 0
-            x: ribbon.x + ribbon.width
-            y: ribbon.y + (Settings.bottom ? ribbon.height - 14 : 0)
+            x: ribbon.x
+            y: Settings.bottom ? ribbon.y - 14 : ribbon.y + ribbon.height
             flipY: Settings.bottom
         }
         Region {
@@ -113,8 +115,9 @@ PanelWindow {
         }
         CurveRegion {
             size: Settings.framed && root.statusOut < 1 ? 14 : 0
-            x: status.x + status.width
-            y: status.y + (Settings.bottom ? status.height - 14 : 0)
+            x: status.x + status.width - 14
+            y: Settings.bottom ? status.y - 14 : status.y + status.height
+            flipX: true
             flipY: Settings.bottom
         }
         Region {
@@ -183,6 +186,7 @@ PanelWindow {
     }
 
     // The frame: one rectangle whose border is the strip. Its outer round corners lie off the screen.
+    // The two corners behind the side panels are square, so the glass does not lie there twice.
     Rectangle {
         readonly property int beyond: 40
 
@@ -195,7 +199,10 @@ PanelWindow {
         color: "transparent"
         border.width: Ui.frameSize + beyond
         border.color: Theme.glassTop
-        radius: frameHole.radius + border.width
+        topLeftRadius: frameHole.topRadius + border.width
+        topRightRadius: frameHole.topRadius + border.width
+        bottomLeftRadius: frameHole.bottomRadius + border.width
+        bottomRightRadius: frameHole.bottomRadius + border.width
     }
     Item {
         id: frameArea
@@ -205,7 +212,8 @@ PanelWindow {
     Item {
         id: frameHole
 
-        readonly property int radius: 20
+        readonly property int topRadius: Settings.bottom ? 20 : 0
+        readonly property int bottomRadius: Settings.bottom ? 0 : 20
 
         x: Ui.frameSize
         y: Ui.frameSize

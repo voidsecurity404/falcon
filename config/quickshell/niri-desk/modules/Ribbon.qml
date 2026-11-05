@@ -11,14 +11,14 @@ Rectangle {
     readonly property string output: screenInfo ? screenInfo.name : ""
 
     visible: Settings.get("panel.ribbon", true)
-    implicitWidth: row.implicitWidth + 8
+    implicitWidth: row.implicitWidth + (Settings.framed ? 18 : 8)
     height: Settings.framed ? 36 : 34
-    // In a frame the corners on the frame's side join it and the other two stay round.
-    readonly property int freeRadius: Settings.framed ? 14 : 11
-    topLeftRadius: Settings.framed && !Settings.bottom ? 0 : freeRadius
-    topRightRadius: Settings.framed && !Settings.bottom ? 0 : freeRadius
-    bottomLeftRadius: Settings.framed && Settings.bottom ? 0 : freeRadius
-    bottomRightRadius: Settings.framed && Settings.bottom ? 0 : freeRadius
+    // In a frame the panel fills its corner, so only the corner facing the desktop stays round.
+    readonly property int floatRadius: Settings.framed ? 0 : 11
+    topLeftRadius: floatRadius
+    bottomLeftRadius: floatRadius
+    topRightRadius: Settings.framed ? (Settings.bottom ? 14 : 0) : 11
+    bottomRightRadius: Settings.framed ? (Settings.bottom ? 0 : 14) : 11
     gradient: Gradient {
         GradientStop {
             position: 0
@@ -26,7 +26,8 @@ Rectangle {
         }
         GradientStop {
             position: 1
-            color: Theme.panel
+            // In a frame it has the strip's color, so nothing shows where they meet.
+            color: Settings.framed ? Theme.glassTop : Theme.panel
         }
     }
     // In a frame a border would draw a line where the panel meets it.
@@ -36,17 +37,16 @@ Rectangle {
     EdgeCurve {
         visible: Settings.framed
         size: 14
-        x: -size
+        x: root.width
         y: Settings.bottom ? root.height - size : 0
-        flipX: true
         flipY: Settings.bottom
         color: Theme.glassTop
     }
     EdgeCurve {
         visible: Settings.framed
         size: 14
-        x: root.width
-        y: Settings.bottom ? root.height - size : 0
+        x: 0
+        y: Settings.bottom ? -size : root.height
         flipY: Settings.bottom
         color: Theme.glassTop
     }

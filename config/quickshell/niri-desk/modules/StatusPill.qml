@@ -8,14 +8,14 @@ import qs.services
 Rectangle {
     id: root
 
-    implicitWidth: row.implicitWidth + 12
+    implicitWidth: row.implicitWidth + (Settings.framed ? 22 : 12)
     height: Settings.framed ? 36 : 34
-    // In a frame the corners on the frame's side join it and the other two stay round.
-    readonly property int freeRadius: Settings.framed ? 14 : 11
-    topLeftRadius: Settings.framed && !Settings.bottom ? 0 : freeRadius
-    topRightRadius: Settings.framed && !Settings.bottom ? 0 : freeRadius
-    bottomLeftRadius: Settings.framed && Settings.bottom ? 0 : freeRadius
-    bottomRightRadius: Settings.framed && Settings.bottom ? 0 : freeRadius
+    // In a frame the panel fills its corner, so only the corner facing the desktop stays round.
+    readonly property int floatRadius: Settings.framed ? 0 : 11
+    topRightRadius: floatRadius
+    bottomRightRadius: floatRadius
+    topLeftRadius: Settings.framed ? (Settings.bottom ? 14 : 0) : 11
+    bottomLeftRadius: Settings.framed ? (Settings.bottom ? 0 : 14) : 11
     gradient: Gradient {
         GradientStop {
             position: 0
@@ -23,7 +23,8 @@ Rectangle {
         }
         GradientStop {
             position: 1
-            color: Theme.panel
+            // In a frame it has the strip's color, so nothing shows where they meet.
+            color: Settings.framed ? Theme.glassTop : Theme.panel
         }
     }
     // In a frame a border would draw a line where the panel meets it.
@@ -42,8 +43,9 @@ Rectangle {
     EdgeCurve {
         visible: Settings.framed
         size: 14
-        x: root.width
-        y: Settings.bottom ? root.height - size : 0
+        x: root.width - size
+        y: Settings.bottom ? -size : root.height
+        flipX: true
         flipY: Settings.bottom
         color: Theme.glassTop
     }
