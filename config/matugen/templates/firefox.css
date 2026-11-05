@@ -62,6 +62,10 @@ findbar {
 @keyframes falcon-bar {
   to { opacity: 1; }
 }
+@keyframes falcon-cut {
+  from { clip-path: inset(0 0 0 0); }
+  to { clip-path: inset(1000000px 0 0 0); }
+}
 
 /* Every site is glass. With their backgrounds gone, dark text would be lost, so all text turns light. */
 @-moz-document url-prefix("http"), url-prefix("file:") {
@@ -98,11 +102,11 @@ findbar {
     backdrop-filter: blur(24px) !important;
   }
   /* A bar at the top shows nothing until the page scrolls under it, then its glass fades in. */
-  body > header, [role="banner"], #masthead-container, .AppHeader, .Header {
+  body > header:not(ytd-app *), [role="banner"]:not(ytd-app *), .AppHeader, .Header {
     position: relative;
     isolation: isolate;
   }
-  body > header::before, [role="banner"]::before, #masthead-container::before, .AppHeader::before, .Header::before {
+  body > header:not(ytd-app *)::before, [role="banner"]:not(ytd-app *)::before, .AppHeader::before, .Header::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -115,8 +119,15 @@ findbar {
     animation-timeline: scroll(root);
     animation-range: 0 48px;
   }
-  ytd-masthead, ytd-masthead #background, #masthead-container #background {
+  /* YouTube's bar has no glass at all: the page is cut off exactly at its lower edge while it scrolls. */
+  ytd-masthead, ytd-masthead #background, #masthead-container, #masthead-container #background {
     background: transparent !important;
+    backdrop-filter: none !important;
+  }
+  ytd-page-manager {
+    animation: falcon-cut linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0px 1000000px;
   }
   /* YouTube: the glow around a video is a canvas across the whole page, and it hides the glass. */
   #cinematics, #cinematics-container {
