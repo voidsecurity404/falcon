@@ -9,6 +9,7 @@
     { "type": "uptime", "key": "uptime" },
     { "type": "packages", "key": "packages", "format": "{all}" },
     { "type": "shell", "key": "shell", "format": "{pretty-name}" },
+    { "type": "custom", "key": "desktop", "format": "Falcon" },
     { "type": "wm", "key": "wm", "format": "{pretty-name}" },
     { "type": "terminal", "key": "terminal", "format": "{pretty-name}" },
     { "type": "display", "key": "display", "format": "{width}x{height} {refresh-rate} Hz" },

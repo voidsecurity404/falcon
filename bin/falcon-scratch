@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Scratchpad terminal: bir tugmada ochiladi va yopiladi. Sessiya tmux ichida yashaydi,
+# shuning uchun yopilganda ishlayotgan buyruqlar to'xtamaydi.
+set -euo pipefail
+
+app=falcon-scratch
+window="$(niri msg --json windows | jq -c --arg a "$app" '[.[] | select(.app_id == $a)] | first // empty')"
+
+if [[ -n "$window" ]]; then
+    id="$(jq -r .id <<<"$window")"
+    if [[ "$(jq -r .is_focused <<<"$window")" == true ]]; then
+        exec niri msg action close-window --id "$id"
+    fi
+    exec niri msg action focus-window --id "$id"
+fi
+exec kitty --class "$app" tmux -L falcon -f "$HOME/.config/falcon/tmux.conf" new-session -A -s scratch

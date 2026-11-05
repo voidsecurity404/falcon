@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""Fetch Claude subscription limits for the panel, using Claude Code's sign-in. Prints nothing."""
+import json
+import os
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime
+from pathlib import Path
+
+CREDENTIALS = Path.home() / ".claude/.credentials.json"
+STATE = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "falcon"
+URL = "https://api.anthropic.com/api/oauth/usage"
+
+
+def window(data):
+    if not isinstance(data, dict) or data.get("utilization") is None:
+        return None
+    resets = data.get("resets_at")
+    return {
+        "used": data["utilization"],
+        "resets": int(datetime.fromisoformat(resets).timestamp()) if resets else 0,
+    }
+
+
+def main():
+    token = json.loads(CREDENTIALS.read_text())["claudeAiOauth"]["accessToken"]
+    request = urllib.request.Request(URL, headers={
+        "Authorization": "Bearer " + token,
+        "anthropic-beta": "oauth-2025-04-20",
+        "User-Agent": "falcon",
+    })
+    with urllib.request.urlopen(request, timeout=8) as response:
+        usage = json.load(response)
+    out = {"updated": int(time.time())}
+    for name in ("five_hour", "seven_day"):
+        value = window(usage.get(name))
+        if value:
+            out[name] = value
+    if len(out) == 1:
+        return 1
+    STATE.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=STATE, prefix=".claude-usage")
+    with os.fdopen(fd, "w") as file:
+        json.dump(out, file)
+    os.replace(tmp, STATE / "claude-usage.json")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError):
+        sys.exit(1)

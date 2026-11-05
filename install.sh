@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# niri-desk installer. Works from a tty on a no-desktop CachyOS or Arch install.
+# Falcon installer. Works from a tty on a no-desktop CachyOS or Arch install.
 #
 #   ./install.sh                    packages, drivers, services, login screen and configs
 #   ./install.sh --dry-run          shows what would happen, changes nothing
@@ -11,7 +11,7 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-state="$HOME/.local/state/niri-desk"
+state="$HOME/.local/state/falcon"
 manifest="$state/backup-manifest"
 saved_kdl="$state/user.kdl"
 stamp="$(date +%Y%m%d-%H%M%S)"
@@ -32,60 +32,61 @@ for arg in "$@"; do
 done
 
 say() { printf '\033[1m»\033[0m %s\n' "$*"; }
+((uninstall)) || say "Falcon"
 do_it() { if ((dry)); then printf '  [dry-run] %s\n' "$*"; else "$@"; fi; }
 
 # Bu fayl va papkalar shu loyihaga tegishli: mavjudi avval zaxiraga olinadi.
 targets=(
     .config/niri
-    .config/quickshell/niri-desk
+    .config/quickshell/falcon
     .config/matugen
     .config/fastfetch/config.jsonc
     .config/fastfetch/brand.txt
     .config/kitty/kitty.conf
-    .config/kitty/niri-desk-colors.conf
-    .config/kitty/niri-desk-user.conf
+    .config/kitty/falcon-colors.conf
+    .config/kitty/falcon-user.conf
     .config/hypr/hyprlock.conf
     .config/hypr/hypridle.conf
-    .config/hypr/niri-desk-colors.conf
+    .config/hypr/falcon-colors.conf
     .config/gtk-3.0/gtk.css
     .config/gtk-4.0/gtk.css
     .config/qt6ct
-    .local/bin/niri-desk-claude-status
-    .local/bin/niri-desk-claude-usage
-    .local/bin/niri-desk-spectrum
-    .local/bin/niri-desk-shot
-    .local/bin/niri-desk-wallpaper
-    .local/bin/niri-desk-widgets-place
-    .local/bin/niri-desk-zen
-    .local/bin/niri-desk-record
-    .local/bin/niri-desk-ocr
-    .local/bin/niri-desk-apply
-    .local/bin/niri-desk-tr
-    .local/bin/niri_desk_tr.py
-    .config/hypr/niri-desk-lang.conf
-    .local/bin/niri-desk-session
-    .local/bin/niri-desk-region
-    .local/bin/niri-desk-region-windows
-    .local/bin/niri-desk-lens
-    .local/bin/niri-desk-image-translate
-    .local/bin/niri-desk-backup
-    .local/bin/niri-desk-shell
-    .local/bin/niri-desk-set
-    .local/bin/niri-desk-raise
-    .local/bin/niri-desk-firefox
-    .local/bin/niri-desk-login
-    .local/bin/niri-desk-sddm-colors
-    .local/bin/niri-desk-sync
-    .local/bin/niri-desk-doctor
-    .local/bin/niri-desk-scratch
-    .local/bin/niri-desk-color
-    .local/bin/niri-desk-charge
-    .local/bin/niri-desk-updates
-    .local/bin/niri-desk-privacy
-    .local/bin/niri-desk-monitors
-    .config/niri-desk/tmux.conf
-    .config/niri-desk/emoji.json
-    .config/niri-desk/defaults.json
+    .local/bin/falcon-claude-status
+    .local/bin/falcon-claude-usage
+    .local/bin/falcon-spectrum
+    .local/bin/falcon-shot
+    .local/bin/falcon-wallpaper
+    .local/bin/falcon-widgets-place
+    .local/bin/falcon-zen
+    .local/bin/falcon-record
+    .local/bin/falcon-ocr
+    .local/bin/falcon-apply
+    .local/bin/falcon-tr
+    .local/bin/falcon_tr.py
+    .config/hypr/falcon-lang.conf
+    .local/bin/falcon-session
+    .local/bin/falcon-region
+    .local/bin/falcon-region-windows
+    .local/bin/falcon-lens
+    .local/bin/falcon-image-translate
+    .local/bin/falcon-backup
+    .local/bin/falcon-shell
+    .local/bin/falcon-set
+    .local/bin/falcon-raise
+    .local/bin/falcon-firefox
+    .local/bin/falcon-login
+    .local/bin/falcon-sddm-colors
+    .local/bin/falcon-sync
+    .local/bin/falcon-doctor
+    .local/bin/falcon-scratch
+    .local/bin/falcon-color
+    .local/bin/falcon-charge
+    .local/bin/falcon-updates
+    .local/bin/falcon-privacy
+    .local/bin/falcon-monitors
+    .config/falcon/tmux.conf
+    .config/falcon/emoji.json
+    .config/falcon/defaults.json
 )
 
 if ((uninstall)); then
@@ -106,9 +107,9 @@ if ((uninstall)); then
         do_it mkdir -p "$(dirname "$HOME/$t")"
         do_it cp -a "$from/$t" "$HOME/$t"
     done < <(tail -n +2 "$manifest")
-    do_it rm -rf "$HOME/.local/share/fonts/niri-desk"
-    do_it rm -rf "$HOME/.local/share/niri-desk"
-    if ((dry == 0)) && [[ -f "$HOME/.bashrc" ]]; then sed -i '/niri-desk\/shell\.bash/d' "$HOME/.bashrc"; fi
+    do_it rm -rf "$HOME/.local/share/fonts/falcon"
+    do_it rm -rf "$HOME/.local/share/falcon"
+    if ((dry == 0)) && [[ -f "$HOME/.bashrc" ]]; then sed -i '/falcon\/shell\.bash/d' "$HOME/.bashrc"; fi
     if [[ -e "$state/login-manager" ]] && ((dry == 0)); then
         sudo systemctl disable sddm.service || true
         sudo systemctl set-default "$(cat "$state/login-manager")" || true
@@ -123,7 +124,7 @@ fi
 . /etc/os-release
 if [[ "${ID:-}" == omarchy ]] && ((force == 0)); then
     cat >&2 <<'MSG'
-This system is Omarchy. niri-desk conflicts with its hypr, kitty and GTK settings.
+This system is Omarchy. falcon conflicts with its hypr, kitty and GTK settings.
 The installation stopped and nothing was changed. Try it in a virtual machine.
 MSG
     exit 1
@@ -182,7 +183,7 @@ for t in "${targets[@]}"; do
         saved+=("$t")
     fi
 done
-# Birinchi zaxira saqlanadi: --uninstall tizimni niri-desk'dan oldingi holatga qaytarishi kerak.
+# Birinchi zaxira saqlanadi: --uninstall tizimni falcon'dan oldingi holatga qaytarishi kerak.
 if ((dry == 0)) && [[ ! -f "$manifest" ]]; then
     { echo "$backup"; printf '%s\n' "${saved[@]}"; } >"$manifest"
 fi
@@ -195,14 +196,14 @@ if [[ -f "$HOME/.config/niri/cfg/user.kdl" ]]; then
 elif [[ -f "$saved_kdl" ]]; then
     user_kdl="$(cat "$saved_kdl")"
 fi
-do_it rm -rf "$HOME/.config/niri" "$HOME/.config/quickshell/niri-desk" "$HOME/.config/matugen"
+do_it rm -rf "$HOME/.config/niri" "$HOME/.config/quickshell/falcon" "$HOME/.config/matugen"
 do_it mkdir -p "$HOME/.config/quickshell" "$HOME/.config/kitty" "$HOME/.config/hypr" "$HOME/.config/gtk-3.0" "$HOME/.config/gtk-4.0" "$HOME/.local/bin"
 do_it cp -a "$root/config/niri" "$HOME/.config/niri"
 if ((dry == 0)) && [[ -n "$user_kdl" ]]; then
     printf '%s\n' "$user_kdl" >"$HOME/.config/niri/cfg/user.kdl"
     rm -f "$saved_kdl"
 fi
-do_it cp -a "$root/config/quickshell/niri-desk" "$HOME/.config/quickshell/niri-desk"
+do_it cp -a "$root/config/quickshell/falcon" "$HOME/.config/quickshell/falcon"
 do_it cp -a "$root/config/matugen" "$HOME/.config/matugen"
 do_it cp -a "$root/config/kitty/." "$HOME/.config/kitty/"
 do_it mkdir -p "$HOME/.config/fastfetch"
@@ -212,23 +213,23 @@ do_it cp -a "$root/config/hypr/." "$HOME/.config/hypr/"
 do_it cp -a "$root/bin/." "$HOME/.local/bin/"
 
 # Foydalanuvchi sozlamalari va fon rasmlari ustidan yozilmaydi.
-do_it mkdir -p "$HOME/.config/niri-desk" "$HOME/Pictures/Wallpapers" "$HOME/Pictures/Wallpapers/Live" "$HOME/.local/share/fonts/niri-desk"
-do_it cp "$root/config/niri-desk/tmux.conf" "$root/config/niri-desk/defaults.json" "$root/config/niri-desk/i18n-ru.json" "$root/config/niri-desk/emoji.json" "$HOME/.config/niri-desk/"
-[[ -e "$HOME/.config/niri-desk/settings.json" ]] || do_it cp "$root/config/niri-desk/settings.json" "$HOME/.config/niri-desk/settings.json"
+do_it mkdir -p "$HOME/.config/falcon" "$HOME/Pictures/Wallpapers" "$HOME/Pictures/Wallpapers/Live" "$HOME/.local/share/fonts/falcon"
+do_it cp "$root/config/falcon/tmux.conf" "$root/config/falcon/defaults.json" "$root/config/falcon/i18n-ru.json" "$root/config/falcon/emoji.json" "$HOME/.config/falcon/"
+[[ -e "$HOME/.config/falcon/settings.json" ]] || do_it cp "$root/config/falcon/settings.json" "$HOME/.config/falcon/settings.json"
 do_it cp -n "$root"/wallpapers/* "$HOME/Pictures/Wallpapers/"
-do_it cp -a "$root"/fonts/. "$HOME/.local/share/fonts/niri-desk/"
-if command -v fc-cache >/dev/null; then do_it fc-cache -f "$HOME/.local/share/fonts/niri-desk"; fi
+do_it cp -a "$root"/fonts/. "$HOME/.local/share/fonts/falcon/"
+if command -v fc-cache >/dev/null; then do_it fc-cache -f "$HOME/.local/share/fonts/falcon"; fi
 
 # Niri, kitty va hypridle sozlamalari settings.json dan yoziladi.
 if command -v niri >/dev/null && command -v python3 >/dev/null; then
-    do_it "$HOME/.local/bin/niri-desk-apply"
+    do_it "$HOME/.local/bin/falcon-apply"
 fi
 if command -v matugen >/dev/null; then
     # Avval tanlangan fon bo'lsa, ranglar o'shandan olinadi.
     image="$(readlink -f "$state/wallpaper" 2>/dev/null || true)"
     [[ -f "$image" ]] || image="$HOME/Pictures/Wallpapers/moviy-tun.jpg"
     say "Taking colors from the wallpaper: $(basename "$image")"
-    do_it "$HOME/.local/bin/niri-desk-wallpaper" --colors "$image"
+    do_it "$HOME/.local/bin/falcon-wallpaper" --colors "$image"
 fi
 if command -v dconf >/dev/null; then
     soft dconf write /org/gnome/desktop/interface/color-scheme "'prefer-dark'"
@@ -262,14 +263,14 @@ if ((packages && login)); then
             mkdir -p "$state"
             systemctl get-default >"$state/login-manager"
         fi
-        do_it env NIRI_DESK_REPO="$root" "$HOME/.local/bin/niri-desk-login"
+        do_it env FALCON_REPO="$root" "$HOME/.local/bin/falcon-login"
     fi
 fi
 
 # Only asks for sudo on a laptop whose battery has a charge limit.
 if ((packages)) && compgen -G "/sys/class/power_supply/BAT*/charge_control_end_threshold" >/dev/null; then
     say "Setting up the battery charge limit"
-    do_it "$HOME/.local/bin/niri-desk-charge" setup
+    do_it "$HOME/.local/bin/falcon-charge" setup
 fi
 
 if command -v niri >/dev/null; then

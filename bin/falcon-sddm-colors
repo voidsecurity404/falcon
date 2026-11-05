@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+"""Puts the wallpaper colors into the login screen theme. It needs no root: falcon-login gives
+this user the theme's settings file. Without that file it does nothing.
+
+The login background is a light picture, so the colors always come from the light scheme.
+"""
+import re
+from pathlib import Path
+
+THEME = Path("/var/lib/falcon-sddm/theme.conf")
+COLORS = Path.home() / ".local/state/falcon/sddm-colors.conf"
+
+if THEME.exists() and COLORS.exists():
+    text = THEME.read_text()
+    for line in COLORS.read_text().splitlines():
+        key, _, value = line.partition("=")
+        if re.fullmatch(r"\w+", key) and re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+            text = re.sub(rf'^{key}=.*$', f'{key}="{value}"', text, flags=re.M)
+    THEME.write_text(text)

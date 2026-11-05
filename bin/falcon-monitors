@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+"""Keeps each display's settings with that display, whichever port it is plugged into.
+
+  falcon-monitors connect    run when displays change. Prints what changed, as JSON
+  falcon-monitors remember   run when settings change: stores them for the connected displays
+
+niri matches settings by port, so a second monitor on the same port would get the first one's scale
+and place. "monitorMemory" in settings.json holds "profiles" per display and "owners" per port.
+"""
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "falcon"
+SETTINGS = CONFIG / "settings.json"
+SEEN = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "falcon-outputs.json"
+
+
+def outputs():
+    fake = os.environ.get("FALCON_OUTPUTS")
+    if fake:
+        return json.loads(Path(fake).read_text())
+    done = subprocess.run(["niri", "msg", "-j", "outputs"], capture_output=True, text=True, check=False)
+    return json.loads(done.stdout) if done.returncode == 0 else None
+
+
+def identity(output):
+    return " ".join(str(output.get(k) or "Unknown") for k in ("make", "model", "serial"))
+
+
+def title(output):
+    return " ".join(str(output.get(k)) for k in ("make", "model") if output.get(k)) or output.get("name", "?")
+
+
+def read_settings():
+    try:
+        return json.loads(SETTINGS.read_text() or "{}")
+    except FileNotFoundError:
+        return {}
+
+
+def write_settings(before, data):
+    if before == data:
+        return
+    tmp = SETTINGS.with_name(SETTINGS.name + ".monitors.tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    os.replace(tmp, SETTINGS)
+
+
+def memory_of(data):
+    memory = data.setdefault("monitorMemory", {})
+    memory.setdefault("profiles", {})
+    memory.setdefault("owners", {})
+    return memory
+
+
+def keep_one_on(data, connected):
+    """A display left off with nothing else on means a black screen and no way to see the settings."""
+    monitors = data.get("monitors") or {}
+    names = list(connected)
+    if not names or not all((monitors.get(n) or {}).get("off") for n in names):
+        return False
+    for name in names:
+        monitors[name].pop("off", None)
+    return True
+
+
+def store(memory, monitors, connected):
+    for name, output in connected.items():
+        who = identity(output)
+        if memory["owners"].get(name) != who:
+            continue
+        if monitors.get(name):
+            profile = json.loads(json.dumps(monitors[name]))
+            # Forced on while alone. "Off when docked" still holds for the next time a display is plugged in.
+            if len(connected) == 1 and (memory["profiles"].get(who) or {}).get("off"):
+                profile["off"] = True
+            memory["profiles"][who] = profile
+        else:
+            memory["profiles"].pop(who, None)
+
+
+def connect():
+    connected = outputs()
+    if connected is None:
+        print(json.dumps({"ok": False}))
+        return 0
+    before = read_settings()
+    data = json.loads(json.dumps(before))
+    memory = memory_of(data)
+    monitors = data.setdefault("monitors", {})
+    restored = []
+    for name, output in connected.items():
+        who = identity(output)
+        owner = memory["owners"].get(name)
+        profile = memory["profiles"].get(who)
+        if profile is not None:
+            if monitors.get(name) != profile:
+                monitors[name] = json.loads(json.dumps(profile))
+            restored.append(who)
+        elif owner is None or owner == who:
+            # Settings made before this memory existed belong to whoever is on the port now.
+            if monitors.get(name):
+                memory["profiles"][who] = json.loads(json.dumps(monitors[name]))
+        else:
+            # Another display's settings would be wrong for this one.
+            monitors.pop(name, None)
+        memory["owners"][name] = who
+    forced_on = keep_one_on(data, connected)
+    store(memory, monitors, connected)
+    write_settings(before, data)
+
+    try:
+        seen = json.loads(SEEN.read_text())
+    except (OSError, ValueError):
+        seen = None
+    now = {name: {"who": identity(o), "title": title(o)} for name, o in connected.items()}
+    SEEN.write_text(json.dumps(now))
+    report = {"ok": True, "added": [], "removed": [], "forcedOn": forced_on, "left": next(iter(connected), "")}
+    # The first run of a session has nothing to compare with, and nothing was plugged in.
+    if seen is not None:
+        for name, item in now.items():
+            if name not in seen or seen[name]["who"] != item["who"]:
+                report["added"].append({"name": name, "title": item["title"], "known": item["who"] in restored})
+        report["removed"] = [item["title"] for name, item in seen.items() if name not in now]
+    print(json.dumps(report, ensure_ascii=False))
+    return 0
+
+
+def remember():
+    connected = outputs()
+    if connected is None:
+        return 0
+    before = read_settings()
+    data = json.loads(json.dumps(before))
+    memory = memory_of(data)
+    forced_on = keep_one_on(data, connected)
+    store(memory, data.get("monitors") or {}, connected)
+    if before.get("monitorMemory") is None and not memory["profiles"] and not memory["owners"]:
+        data.pop("monitorMemory")
+    write_settings(before, data)
+    print(json.dumps({"ok": True, "added": [], "removed": [], "forcedOn": forced_on, "left": ""}))
+    return 0
+
+
+command = sys.argv[1:]
+if command == ["connect"]:
+    sys.exit(connect())
+if command == ["remember"]:
+    sys.exit(remember())
+print(__doc__.strip(), file=sys.stderr)
+sys.exit(2)

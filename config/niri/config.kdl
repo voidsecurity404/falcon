@@ -1,4 +1,4 @@
-// niri-desk: asosiy fayl. Har bir mavzu alohida turadi.
+// falcon: asosiy fayl. Har bir mavzu alohida turadi.
 // Tartib muhim: keyingi include avvalgisini ustidan yozadi.
 include "cfg/layout.kdl"
 include "cfg/rules.kdl"

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Sets up the SDDM login screen with the pixel_sakura theme. Asks for sudo. Safe to run again.
+# It takes effect at the next boot. Way back, from a tty: sudo systemctl disable sddm
+set -euo pipefail
+
+theme=/usr/share/sddm/themes/sddm-astronaut-theme
+commit=abb3163
+shared=/var/lib/falcon-sddm
+repo="${FALCON_REPO:-$HOME/Downloads/falcon}"
+[[ -f "$repo/config/sddm/pixel_sakura.conf" ]] || { echo "Repo not found: $repo. Set FALCON_REPO." >&2; exit 1; }
+
+if [[ ! -e "$theme/Main.qml" ]]; then
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    git clone -q https://github.com/Keyitdev/sddm-astronaut-theme.git "$tmp/theme"
+    git -C "$tmp/theme" -c advice.detachedHead=false checkout -q "$commit"
+    rm -rf "$tmp/theme/.git"
+    sudo mkdir -p /usr/share/sddm/themes /usr/share/fonts/sddm-astronaut
+    sudo cp -a "$tmp/theme" "$theme"
+    sudo cp -a "$tmp/theme/Fonts/." /usr/share/fonts/sddm-astronaut/
+fi
+sudo sed -i 's|^ConfigFile=.*|ConfigFile=Themes/pixel_sakura.conf|' "$theme/metadata.desktop"
+
+# The theme settings live in a file of this user, so a new wallpaper can change them without sudo.
+sudo install -d -m 755 -o "$USER" "$shared"
+[[ -e "$shared/theme.conf" ]] || install -m 644 "$repo/config/sddm/pixel_sakura.conf" "$shared/theme.conf"
+sudo ln -sfn "$shared/theme.conf" "$theme/Themes/pixel_sakura.conf"
+
+sudo install -D -m 644 "$repo/config/sddm/10-astronaut.conf" /etc/sddm.conf.d/10-astronaut.conf
+sudo install -D -m 644 "$repo/config/sddm/falcon.desktop" /usr/share/wayland-sessions/falcon.desktop
+if systemctl is-enabled -q greetd.service 2>/dev/null; then
+    sudo systemctl disable greetd.service
+fi
+sudo systemctl enable sddm.service
+sudo systemctl set-default graphical.target >/dev/null
+[[ ! -x "$HOME/.local/bin/falcon-sddm-colors" ]] || "$HOME/.local/bin/falcon-sddm-colors"
+echo "The login screen is ready for the next boot."

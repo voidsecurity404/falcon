@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Runs what was chosen on the area selected in the shell's RegionSelector.
+# Usage: falcon-region copy|edit|search|ocr|translate|record IMAGE X Y W H GEOMETRY
+#        falcon-region save FILE
+# IMAGE is the frozen picture of the output, X Y W H are its pixels, GEOMETRY is in screen coordinates.
+set -euo pipefail
+
+_t() { "$HOME/.local/bin/falcon-tr" "$1"; }
+tell() { qs -c falcon ipc call desk toast "$@" >/dev/null 2>&1 || true; }
+
+# The folder and the name come from niri's own setting, so all screenshots stay together.
+save_path() {
+    local settings format
+    settings="${XDG_CONFIG_HOME:-$HOME/.config}/niri/generated/settings.kdl"
+    format="$(sed -n 's/^screenshot-path "\(.*\)"$/\1/p' "$settings" 2>/dev/null | head -n 1)"
+    [[ -n "$format" ]] || format="$HOME/Pictures/Screenshots/%Y-%m-%d_%H-%M-%S.png"
+    date +"${format%.png}-%3N.png"
+}
+
+if [[ "$1" == save ]]; then
+    path="$(save_path)"
+    mkdir -p "$(dirname "$path")"
+    cp "$2" "$path"
+    tell "$(_t "Picture saved")" "$path"
+    exit 0
+fi
+
+action="$1" image="$2" x="$3" y="$4" w="$5" h="$6" geometry="$7"
+
+dir="$(dirname "$image")"
+cleanup() { rm -rf "$dir"; }
+
+if [[ "$action" == record ]]; then
+    cleanup
+    exec "$HOME/.local/bin/falcon-record" "$geometry"
+fi
+
+crop="$(mktemp --tmpdir="${XDG_RUNTIME_DIR:-/tmp}" falcon-crop.XXXXXX.png)"
+trap 'rm -f "$crop"; cleanup' EXIT
+magick "$image" -crop "${w}x${h}+${x}+${y}" +repage "$crop"
+cleanup
+
+case "$action" in
+copy)
+    path="$(save_path)"
+    mkdir -p "$(dirname "$path")"
+    cp "$crop" "$path"
+    wl-copy --type image/png <"$crop"
+    qs -c falcon ipc call desk screenshotTaken "$path" >/dev/null 2>&1 || true
+    ;;
+edit)
+    path="$(save_path)"
+    mkdir -p "$(dirname "$path")"
+    satty --filename "$crop" --output-filename "$path" --copy-command wl-copy --early-exit
+    ;;
+search)
+    "$HOME/.local/bin/falcon-lens" "$crop"
+    ;;
+ocr)
+    "$HOME/.local/bin/falcon-ocr" "$crop"
+    ;;
+translate)
+    # The window keeps its own copy, because this script ends at once.
+    trap - EXIT
+    qs -c falcon ipc call desk translateImage "$crop" "$w" "$h" >/dev/null
+    ;;
+*)
+    echo "Unknown action: $action" >&2
+    exit 2
+    ;;
+esac

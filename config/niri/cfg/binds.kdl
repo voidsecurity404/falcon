@@ -7,10 +7,10 @@ binds {
 
 
     // Oynalar
-    Alt+Tab { spawn "qs" "-c" "niri-desk" "ipc" "call" "desk" "switcher" "1" "false"; }
-    Alt+Shift+Tab { spawn "qs" "-c" "niri-desk" "ipc" "call" "desk" "switcher" "-1" "false"; }
-    Alt+Grave { spawn "qs" "-c" "niri-desk" "ipc" "call" "desk" "switcher" "1" "true"; }
-    Alt+Shift+Grave { spawn "qs" "-c" "niri-desk" "ipc" "call" "desk" "switcher" "-1" "true"; }
+    Alt+Tab { spawn "qs" "-c" "falcon" "ipc" "call" "desk" "switcher" "1" "false"; }
+    Alt+Shift+Tab { spawn "qs" "-c" "falcon" "ipc" "call" "desk" "switcher" "-1" "false"; }
+    Alt+Grave { spawn "qs" "-c" "falcon" "ipc" "call" "desk" "switcher" "1" "true"; }
+    Alt+Shift+Grave { spawn "qs" "-c" "falcon" "ipc" "call" "desk" "switcher" "-1" "true"; }
     Mod+H { focus-column-left; }
     Mod+L { focus-column-right; }
     Mod+Left { focus-column-left; }
@@ -86,9 +86,9 @@ binds {
     Mod+Shift+Ctrl+L { move-column-to-monitor-right; }
 
     // Skrinshot, yozish, matn olish
-    Print repeat=false { spawn "qs" "-c" "niri-desk" "ipc" "call" "desk" "region" "copy"; }
-    Ctrl+Print repeat=false { spawn "~/.local/bin/niri-desk-shot" "screen"; }
-    Alt+Print repeat=false { spawn "~/.local/bin/niri-desk-shot" "window"; }
+    Print repeat=false { spawn "qs" "-c" "falcon" "ipc" "call" "desk" "region" "copy"; }
+    Ctrl+Print repeat=false { spawn "~/.local/bin/falcon-shot" "screen"; }
+    Alt+Print repeat=false { spawn "~/.local/bin/falcon-shot" "window"; }
 
     // Ovoz va yorqinlik: holat tepadagi orolda chiqadi
     XF86AudioRaiseVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.05+ -l 1.0"; }
@@ -98,8 +98,8 @@ binds {
     XF86AudioPlay allow-when-locked=true { spawn "playerctl" "play-pause"; }
     XF86AudioPrev allow-when-locked=true { spawn "playerctl" "previous"; }
     XF86AudioNext allow-when-locked=true { spawn "playerctl" "next"; }
-    XF86MonBrightnessUp allow-when-locked=true { spawn "qs" "-c" "niri-desk" "ipc" "call" "desk" "brightness" "+5%"; }
-    XF86MonBrightnessDown allow-when-locked=true { spawn "qs" "-c" "niri-desk" "ipc" "call" "desk" "brightness" "5%-"; }
+    XF86MonBrightnessUp allow-when-locked=true { spawn "qs" "-c" "falcon" "ipc" "call" "desk" "brightness" "+5%"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn "qs" "-c" "falcon" "ipc" "call" "desk" "brightness" "5%-"; }
 
     // Tizim
     Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }

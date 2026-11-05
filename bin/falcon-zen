@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Fokus rejimi: panel yashiriladi, oynalar orasidagi oraliq va burchaklar yo'qoladi.
+# The shell watches generated/zen.kdl and reads the "// zen" line. niri would notice the file only
+# about half a second later, so each step asks it to reload at once. niri cannot animate corners,
+# so they change in small steps while its own spring animates the size of the window.
+set -euo pipefail
+
+config="${XDG_CONFIG_HOME:-$HOME/.config}/niri"
+file="$config/generated/zen.kdl"
+
+# A second press waits for the animation to end.
+exec 9>"${XDG_RUNTIME_DIR:-/tmp}/falcon-zen.lock"
+flock 9
+
+radius="$(sed -n 's/^ *geometry-corner-radius \([0-9]*\).*/\1/p' "$config/generated/settings.kdl" | head -n 1)"
+radius="${radius:-0}"
+
+put() {
+    printf '%s' "$1" >"$file"
+    niri msg action load-config-file >/dev/null 2>&1 || true
+}
+
+corners() {
+    printf 'window-rule {\n    geometry-corner-radius %s\n}\n' "$(($1 * radius / 100))"
+}
+
+if grep -q '^// zen' "$file" 2>/dev/null; then
+    # Gaps and panel space come back first, then the corners round off.
+    put "$(corners 0)"$'\n'
+    niri msg action set-column-width "+0%" >/dev/null 2>&1 || true
+    for share in 20 45 70 90; do
+        sleep 0.04
+        put "$(corners "$share")"$'\n'
+    done
+    sleep 0.04
+    put ""
+else
+    gaps=$'// zen\nlayout {\n    gaps 0\n}\n'
+    put "$gaps$(corners 75)"$'\n'
+    # Keeps the view from leaving a slit where the gap was.
+    niri msg action set-column-width "+0%" >/dev/null 2>&1 || true
+    for share in 50 30 10; do
+        sleep 0.04
+        put "$gaps$(corners "$share")"$'\n'
+    done
+    sleep 0.04
+    put $'// zen\nlayout {\n    gaps 0\n    focus-ring {\n        width 1\n    }\n    shadow {\n        off\n    }\n}\nwindow-rule {\n    geometry-corner-radius 0\n}\n'
+fi

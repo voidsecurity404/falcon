@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+"""Copies changed files from the repo to the live desktop. Generated files and user data stay as they are.
+
+  falcon-sync           copy what changed
+  falcon-sync --check   only list differences, exit 1 if there are any
+  falcon-sync --pull    run git pull first
+
+The repo is FALCON_REPO, or ~/Downloads/falcon.
+"""
+import filecmp
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+from falcon_tr import tr
+
+HOME = Path.home()
+REPO = Path(os.environ.get("FALCON_REPO", HOME / "Downloads/falcon"))
+# Whole folders, where a file missing from the repo is removed from the live copy too.
+TREES = [("config/quickshell/falcon", ".config/quickshell/falcon"), ("config/matugen", ".config/matugen")]
+FILES = [
+    ("config/niri/config.kdl", ".config/niri/config.kdl"),
+    ("config/niri/cfg/layout.kdl", ".config/niri/cfg/layout.kdl"),
+    ("config/niri/cfg/rules.kdl", ".config/niri/cfg/rules.kdl"),
+    ("config/niri/cfg/startup.kdl", ".config/niri/cfg/startup.kdl"),
+    ("config/niri/cfg/binds.kdl", ".config/niri/cfg/binds.kdl"),
+    ("config/kitty/kitty.conf", ".config/kitty/kitty.conf"),
+    ("config/hypr/hyprlock.conf", ".config/hypr/hyprlock.conf"),
+    ("config/fastfetch/config.jsonc", ".config/fastfetch/config.jsonc"),
+    ("config/fastfetch/brand.txt", ".config/fastfetch/brand.txt"),
+    ("config/falcon/defaults.json", ".config/falcon/defaults.json"),
+    ("config/falcon/i18n-ru.json", ".config/falcon/i18n-ru.json"),
+    ("config/falcon/emoji.json", ".config/falcon/emoji.json"),
+    ("config/falcon/tmux.conf", ".config/falcon/tmux.conf"),
+]
+# These are read when the shell starts.
+RESTART = {".config/falcon/defaults.json", ".config/falcon/i18n-ru.json"}
+
+
+def plan():
+    copy, remove = [], []
+    pairs = list(FILES)
+    for source, target in TREES:
+        root = REPO / source
+        names = {p.relative_to(root) for p in root.rglob("*") if p.is_file() and "__pycache__" not in p.parts}
+        pairs += [(f"{source}/{n}", f"{target}/{n}") for n in sorted(names)]
+        live = HOME / target
+        if live.exists():
+            remove += [p for p in sorted(live.rglob("*")) if p.is_file() and p.relative_to(live) not in names]
+    pairs += [(f"bin/{p.name}", f".local/bin/{p.name}") for p in sorted((REPO / "bin").iterdir()) if p.is_file()]
+    known = {p.name for p in (REPO / "bin").iterdir()}
+    remove += [p for p in sorted((HOME / ".local/bin").glob("niri[-_]desk*")) if p.is_file() and p.name not in known]
+    for source, target in pairs:
+        if not (REPO / source).exists():
+            continue
+        live = HOME / target
+        if not live.exists() or not filecmp.cmp(REPO / source, live, shallow=False):
+            copy.append((source, target))
+    return copy, remove
+
+
+def main(args):
+    if not (REPO / "install.sh").exists():
+        print(tr("The repo was not found: {path}. Set FALCON_REPO.", path=REPO), file=sys.stderr)
+        return 2
+    if "--pull" in args and subprocess.run(["git", "-C", str(REPO), "pull", "--ff-only"]).returncode != 0:
+        return 2
+    copy, remove = plan()
+    for source, target in copy:
+        print(f"{source} -> ~/{target}")
+    for path in remove:
+        print(tr("remove: {path}", path=path))
+    if "--check" in args:
+        return 1 if copy or remove else 0
+    for source, target in copy:
+        live = HOME / target
+        live.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(REPO / source, live)
+    for path in remove:
+        path.unlink()
+    if not copy and not remove:
+        print(tr("Everything is up to date"))
+    if RESTART & {t for _, t in copy}:
+        subprocess.run(["pkill", "-x", "qs"], check=False)
+    return 0
+
+
+sys.exit(main(sys.argv[1:]))

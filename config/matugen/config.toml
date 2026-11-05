@@ -4,7 +4,7 @@ fallback_color = "#8fc7ee"
 
 [templates.shell]
 input_path = "~/.config/matugen/templates/colors.json"
-output_path = "~/.local/state/niri-desk/colors.json"
+output_path = "~/.local/state/falcon/colors.json"
 
 [templates.niri]
 input_path = "~/.config/matugen/templates/niri.kdl"
@@ -12,12 +12,12 @@ output_path = "~/.config/niri/generated/colors.kdl"
 
 [templates.kitty]
 input_path = "~/.config/matugen/templates/kitty.conf"
-output_path = "~/.config/kitty/niri-desk-colors.conf"
+output_path = "~/.config/kitty/falcon-colors.conf"
 post_hook = "pkill -USR1 -x kitty || true"
 
 [templates.hyprlock]
 input_path = "~/.config/matugen/templates/hyprlock.conf"
-output_path = "~/.config/hypr/niri-desk-colors.conf"
+output_path = "~/.config/hypr/falcon-colors.conf"
 
 [templates.gtk3]
 input_path = "~/.config/matugen/templates/gtk.css"
@@ -29,14 +29,14 @@ output_path = "~/.config/gtk-4.0/gtk.css"
 
 [templates.qt6ct]
 input_path = "~/.config/matugen/templates/qt6ct.conf"
-output_path = "~/.config/qt6ct/colors/niri-desk.conf"
+output_path = "~/.config/qt6ct/colors/falcon.conf"
 
 [templates.firefox]
 input_path = "~/.config/matugen/templates/firefox.css"
-output_path = "~/.local/state/niri-desk/firefox-userChrome.css"
-post_hook = "~/.local/bin/niri-desk-firefox"
+output_path = "~/.local/state/falcon/firefox-userChrome.css"
+post_hook = "~/.local/bin/falcon-firefox"
 
 [templates.sddm]
 input_path = "~/.config/matugen/templates/sddm.conf"
-output_path = "~/.local/state/niri-desk/sddm-colors.conf"
-post_hook = "~/.local/bin/niri-desk-sddm-colors"
+output_path = "~/.local/state/falcon/sddm-colors.conf"
+post_hook = "~/.local/bin/falcon-sddm-colors"

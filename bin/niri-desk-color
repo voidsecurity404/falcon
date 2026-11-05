@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-# Ekrandan rang tanlaydi va hex qiymatini clipboard'ga oladi.
-set -euo pipefail
-
-hex="$(niri msg pick-color | sed -n 's/^Hex: *//p')"
-[[ -n "$hex" ]] || exit 0
-printf '%s' "$hex" | wl-copy
-qs -c niri-desk ipc call desk toast "$("$HOME/.local/bin/niri-desk-tr" "Color copied")" "$hex" >/dev/null 2>&1 || true

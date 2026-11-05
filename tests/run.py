@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""niri-desk uchun avtomatik test: har funksiya bo'yicha ssenariylar.
+"""falcon uchun avtomatik test: har funksiya bo'yicha ssenariylar.
 
 Faqat sinov mashinasida ishga tushiring: oynalarni yopadi, sozlamalarni o'zgartiradi.
 Haqiqiy klavish va sichqoncha ydotool orqali yuboriladi.
 
   tests/run.py [--only ID,ID] [--list]
-Natija: /tmp/niri-desk-report.json
+Natija: /tmp/falcon-report.json
 """
 import json, os, re, shutil, subprocess, sys, tempfile, time, traceback
 from pathlib import Path
 
 HOME = Path.home()
-SET = HOME / ".config/niri-desk/settings.json"
+SET = HOME / ".config/falcon/settings.json"
 GEN = HOME / ".config/niri/generated"
-STATE = HOME / ".local/state/niri-desk"
+STATE = HOME / ".local/state/falcon"
 FAILDIR = Path("/tmp/nd-fail")
 LIB = {}
-PW = os.environ.get("NIRI_DESK_TEST_PW", "")
+PW = os.environ.get("FALCON_TEST_PW", "")
 FEATURES, CUR = [], None
 KEYC = {**{c: k for c, k in zip("qwertyuiop", range(16, 26))}, **{c: k for c, k in zip("asdfghjkl", range(30, 39))}, **{c: k for c, k in zip("zxcvbnm", range(44, 51))},
         **{str(i): i + 1 for i in range(1, 10)}, "0": 11, "enter": 28, "esc": 1, "space": 57, "tab": 15, "grave": 41, "comma": 51, "minus": 12, "equal": 13,
@@ -77,7 +77,7 @@ def win(i):
 
 
 def ipc(*a):
-    return sh(["qs", "-c", "niri-desk", "ipc", "call", "desk", *a], timeout=8)
+    return sh(["qs", "-c", "falcon", "ipc", "call", "desk", *a], timeout=8)
 
 
 def st():
@@ -197,7 +197,7 @@ def reset():
         typ(PW)
         key("enter")
         wait(lambda: sh("pgrep -u $(id -u) -x hyprlock").returncode != 0, 6, "ekran ochilmadi")
-    wait(lambda: "niri-desk-top" in layers(), 12, "panel qaytmadi")
+    wait(lambda: "falcon-top" in layers(), 12, "panel qaytmadi")
     ipc("reset")
     sh("rm -f /tmp/nd-*.flag")
     for path, text in LIB.items():
@@ -385,7 +385,7 @@ def _():
 @case("Scratchpad va Sozlamalar suzib ochiladi")
 def _():
     ipc("settings")
-    w = wait(lambda: next(x for x in windows() if x["title"] == "niri-desk settings"))
+    w = wait(lambda: next(x for x in windows() if x["title"] == "falcon settings"))
     ok(w["is_floating"])
     ok(w["layout"]["window_size"][0] == 1000, w["layout"])
 
@@ -751,11 +751,11 @@ feature("scratch", "Scratchpad terminal")
 
 
 def scratch():
-    return next((w for w in windows() if w["app_id"] == "niri-desk-scratch"), None)
+    return next((w for w in windows() if w["app_id"] == "falcon-scratch"), None)
 
 
 def tmuxc(*a):
-    return sh(["tmux", "-L", "niri-desk", *a])
+    return sh(["tmux", "-L", "falcon", *a])
 
 
 @case("Mod+` ochadi, suzib turadi va fokus oladi")
@@ -798,7 +798,7 @@ def _():
     wait(lambda: focused()["id"] == a)
     key("mod", "grave")
     wait(lambda: focused()["id"] == s["id"])
-    ok(len([w for w in windows() if w["app_id"] == "niri-desk-scratch"]) == 1)
+    ok(len([w for w in windows() if w["app_id"] == "falcon-scratch"]) == 1)
 
 
 @case("Mod+Q bilan yopilsa ham sessiya tirik")
@@ -828,7 +828,7 @@ def _():
         key("mod", "grave")
         time.sleep(0.25)
     time.sleep(1.5)
-    ok(len([w for w in windows() if w["app_id"] == "niri-desk-scratch"]) <= 1)
+    ok(len([w for w in windows() if w["app_id"] == "falcon-scratch"]) <= 1)
 
 
 @case("Shell'dan exit qilinganda oyna yopiladi va keyingisi yangi")
@@ -850,7 +850,7 @@ def _():
 # ---------------------------------------------------------------------------------------
 feature("raise", "Dastur oynasiga tez o'tish")
 
-RAISE = str(HOME / ".local/bin/niri-desk-raise")
+RAISE = str(HOME / ".local/bin/falcon-raise")
 
 
 def do_raise(pattern, cls="rtest"):
@@ -1079,7 +1079,7 @@ def _():
 # ---------------------------------------------------------------------------------------
 feature("wallpaper", "Fon rasmi va ranglar")
 
-WP = str(HOME / ".local/bin/niri-desk-wallpaper")
+WP = str(HOME / ".local/bin/falcon-wallpaper")
 WDIR = HOME / "Pictures/Wallpapers"
 
 
@@ -1189,10 +1189,10 @@ def _():
     picker()
     ok(st()["pickerTab"] == 1, st()["pickerTab"])
     images = st()["pickerFiles"]
-    sh(["qs", "-c", "niri-desk", "ipc", "call", "desk", "wallpapersTab", "0"])
+    sh(["qs", "-c", "falcon", "ipc", "call", "desk", "wallpapersTab", "0"])
     wait(lambda: st()["pickerTab"] == 0, 2)
     ok(st()["pickerFiles"] == len([f for f in (WDIR / "Live").glob("*") if f.is_file()]) if (WDIR / "Live").exists() else st()["pickerFiles"] == 0)
-    sh(["qs", "-c", "niri-desk", "ipc", "call", "desk", "wallpapersTab", "1"])
+    sh(["qs", "-c", "falcon", "ipc", "call", "desk", "wallpapersTab", "1"])
     wait(lambda: st()["pickerTab"] == 1, 2)
     ok(st()["pickerFiles"] == images, st()["pickerFiles"])
     key("esc")
@@ -1200,10 +1200,10 @@ def _():
 
 @case("Vidjet qatlami qayta ochilgach joyida qoladi")
 def _():
-    sh(["qs", "-c", "niri-desk", "ipc", "call", "desk", "widgetsRestack"])
+    sh(["qs", "-c", "falcon", "ipc", "call", "desk", "widgetsRestack"])
     time.sleep(0.5)
     layers = json.loads(sh(["niri", "msg", "-j", "layers"]).stdout)
-    ok(any(l["namespace"] == "niri-desk-widgets-face" for l in layers))
+    ok(any(l["namespace"] == "falcon-widgets-face" for l in layers))
 
 
 @case("Papka bo'sh bo'lsa xabar chiqadi")
@@ -1222,7 +1222,7 @@ feature("dashboard", "Dashboard")
 
 
 def is_top_exclusive():
-    return any(l["namespace"] == "niri-desk-top" and l["keyboard_interactivity"] == "Exclusive" for l in nj("layers"))
+    return any(l["namespace"] == "falcon-top" and l["keyboard_interactivity"] == "Exclusive" for l in nj("layers"))
 
 
 @case("Mod+D ochadi va klaviaturani oladi")
@@ -1286,7 +1286,7 @@ def _():
     wait(lambda: st()["popup"] == "dashboard" and st()["dashTab"] == 1)
     time.sleep(0.5)
     click(650, 130)
-    w = wait(lambda: next(x for x in windows() if x["app_id"] == "niri-desk-tool"), 6)
+    w = wait(lambda: next(x for x in windows() if x["app_id"] == "falcon-tool"), 6)
     wait(lambda: sh("pgrep -u $(id -u) -x btop").returncode == 0, 4)
     # btop kamida 80 ustun talab qiladi: kitty katagi taxminan 9.6 piksel.
     ok(w["layout"]["window_size"][0] >= 800, w["layout"])
@@ -2235,7 +2235,7 @@ def _():
     wait(lambda: sh("pgrep -u $(id -u) -x qs").returncode == 0, 6, "shell qaytmadi")
     ok(locked())
     unlock()
-    wait(lambda: "niri-desk-top" in layers(), 10)
+    wait(lambda: "falcon-top" in layers(), 10)
 
 
 @case("Bo'sh turganda avtomatik bloklanadi")
@@ -2276,7 +2276,7 @@ def gen():
 def _():
     settings(windows__edgeMargin=20, windows__blurStrength=5, windows__overviewZoom=0.6, appearance__cursorHideAfter=5, terminal__cursorShape="beam", terminal__scrollback=9000)
     wait(lambda: "left 20" in gen() and "passes 5" in gen() and "zoom 0.6" in gen() and "hide-after-inactive-ms 5000" in gen(), 6)
-    kitty = (HOME / ".config/kitty/niri-desk-user.conf").read_text()
+    kitty = (HOME / ".config/kitty/falcon-user.conf").read_text()
     ok("cursor_shape beam" in kitty and "scrollback_lines 9000" in kitty, kitty)
 
 
@@ -2337,7 +2337,7 @@ def _():
 @case("Terminal shaffofligi kitty fayliga yoziladi")
 def _():
     settings(appearance__terminalOpacity=0.5)
-    wait(lambda: "background_opacity 0.5" in (HOME / ".config/kitty/niri-desk-user.conf").read_text(), 4)
+    wait(lambda: "background_opacity 0.5" in (HOME / ".config/kitty/falcon-user.conf").read_text(), 4)
 
 
 @case("Chegaradan tashqari matn o'lchami panelni qulatmaydi")
@@ -2635,7 +2635,7 @@ feature("set-ui", "Sozlamalar oynasi")
 
 
 def sw():
-    return next((w for w in windows() if w["title"] == "niri-desk settings"), None)
+    return next((w for w in windows() if w["title"] == "falcon settings"), None)
 
 
 def open_sw():
@@ -2673,7 +2673,7 @@ def _():
 @case("Ikkinchi nusxa ochilmaydi")
 def _():
     open_sw()
-    ok(len([w for w in windows() if w["title"] == "niri-desk settings"]) == 1)
+    ok(len([w for w in windows() if w["title"] == "falcon settings"]) == 1)
 
 
 @case("Tugma bosilganda settings.json o'zgaradi")
@@ -2857,7 +2857,7 @@ def _():
 @case("Shell o'ldirilsa nazoratchi o'zi qaytaradi")
 def _():
     sh("pkill -9 -x qs"); time.sleep(0.5)
-    wait(lambda: "niri-desk-top" in layers(), 10)
+    wait(lambda: "falcon-top" in layers(), 10)
     ok(len(sh("pgrep -u $(id -u) -x qs").stdout.split()) == 1)
 
 
@@ -2896,14 +2896,14 @@ def _():
 def _():
     niri("power-off-monitors"); time.sleep(0.8)
     niri("power-on-monitors"); time.sleep(0.8)
-    ok("niri-desk-top" in layers())
+    ok("falcon-top" in layers())
 
 
 @case("Masshtab o'zgarsa panel ishlaydi")
 def _():
     o = next(iter(nj("outputs")))
     sh(["niri", "msg", "output", o, "scale", "1.25"]); time.sleep(1)
-    ok("niri-desk-top" in layers())
+    ok("falcon-top" in layers())
     ok(st() is not None)
     sh(["niri", "msg", "output", o, "scale", "1"]); time.sleep(0.8)
 
@@ -2914,12 +2914,12 @@ def _():
     sh(["niri", "msg", "output", o, "off"])
     time.sleep(1.0)
     sh(["niri", "msg", "output", o, "on"])
-    wait(lambda: "niri-desk-top" in layers(), 6)
+    wait(lambda: "falcon-top" in layers(), 6)
 
 
 @case("Uzoq ishlashdan keyin ham jurnalda xato ko'p emas")
 def _():
-    r = sh("timeout 4 qs -c niri-desk log </dev/null", timeout=8)
+    r = sh("timeout 4 qs -c falcon log </dev/null", timeout=8)
     text = re.sub(r"\x1b\[[0-9;]*m", "", r.stdout + r.stderr)
     bad = [l for l in text.splitlines() if " ERROR" in l and "pipewire" not in l]
     ok(len(bad) < 3, bad[:3])
@@ -3015,32 +3015,32 @@ SESSION = STATE / "session.json"
 @case("Saqlash ochiq oynalarni workspace bilan yozadi")
 def _():
     foot("a", "foot")
-    run("niri-desk-session", "save")
+    run("falcon-session", "save")
     items = json.loads(SESSION.read_text())
     ok(len(items) == 1 and items[0]["exe"] == "foot", items)
 
 
 @case("Xizmat oynalari saqlanmaydi")
 def _():
-    term("t", cls="niri-desk-tool")
-    run("niri-desk-session", "save")
+    term("t", cls="falcon-tool")
+    run("falcon-session", "save")
     ok(json.loads(SESSION.read_text()) == [])
 
 
 @case("Tiklash dasturni ochadi")
 def _():
     write_json(SESSION, [{"app": "foot", "exe": "foot", "workspace": 1, "share": 0}])
-    run("niri-desk-session", "restore", "--force")
+    run("falcon-session", "restore", "--force")
     wait(lambda: windows(), 6, "ochilmadi")
 
 
 @case("Argumentlar qayta bajarilmaydi")
 def _():
     w = foot("a", "foot")
-    run("niri-desk-session", "save")
+    run("falcon-session", "save")
     niri("close-window", "--id", w)
     wait(lambda: not windows(), 3)
-    run("niri-desk-session", "restore", "--force")
+    run("falcon-session", "restore", "--force")
     w2 = wait(windows, 6)[0]
     args = Path(f"/proc/{w2['pid']}/cmdline").read_bytes()
     ok(b"sleep" not in args, args)
@@ -3050,7 +3050,7 @@ def _():
 def _():
     write_json(SESSION, [{"app": "foot", "exe": "foot", "workspace": 1}])
     term("t")
-    run("niri-desk-session", "restore", "--force")
+    run("falcon-session", "restore", "--force")
     ok(len(windows()) == 1)
 
 
@@ -3058,7 +3058,7 @@ def _():
 def _():
     write_json(SESSION, [{"app": "foot", "exe": "foot", "workspace": 1}])
     settings(session__restore=False)
-    run("niri-desk-session", "restore")
+    run("falcon-session", "restore")
     time.sleep(0.8)
     ok(windows() == [])
 
@@ -3066,13 +3066,13 @@ def _():
 @case("Buzuq fayl xato bermaydi")
 def _():
     SESSION.write_text("{")
-    ok(run("niri-desk-session", "restore", "--force").returncode == 0)
+    ok(run("falcon-session", "restore", "--force").returncode == 0)
 
 
 @case("O'rnatilmagan dastur o'tkazib yuboriladi")
 def _():
     write_json(SESSION, [{"exe": "yoq-dastur", "workspace": 1}, {"exe": "foot", "workspace": 1}])
-    r = run("niri-desk-session", "restore", "--force")
+    r = run("falcon-session", "restore", "--force")
     ok(r.returncode == 0, r.stderr)
     ok(len(windows()) == 1, f"{windows()} {SESSION.read_text()[:120]}")
 
@@ -3082,7 +3082,7 @@ def _():
     write_json(SESSION, [{"exe": "/tmp/nd-x", "workspace": 1}])
     Path("/tmp/nd-x").write_text("#!/bin/sh\ntouch /tmp/nd-ran.flag\n")
     Path("/tmp/nd-x").chmod(0o755)
-    run("niri-desk-session", "restore", "--force")
+    run("falcon-session", "restore", "--force")
     time.sleep(0.5)
     ok(not Path("/tmp/nd-ran.flag").exists())
 
@@ -3090,7 +3090,7 @@ def _():
 @case("Workspace to'g'ri tiklanadi")
 def _():
     write_json(SESSION, [{"exe": "foot", "workspace": 1}, {"exe": "kitty", "workspace": 2}])
-    run("niri-desk-session", "restore", "--force")
+    run("falcon-session", "restore", "--force")
     ok(wsof("foot") == 1 and wsof("kitty") == 2, windows())
 
 
@@ -3100,7 +3100,7 @@ def _():
         {"app": "foot", "exe": "foot", "workspace": 1, "column": 1, "row": 1, "width": 500, "height": 0},
         {"app": "kitty", "exe": "kitty", "workspace": 1, "floating": True, "width": 420, "height": 310, "x": 200, "y": 120},
     ])
-    run("niri-desk-session", "restore", "--force")
+    run("falcon-session", "restore", "--force")
     found = {w["app_id"]: w["layout"] for w in wait(lambda: len(windows()) == 2 and windows(), 8)}
     ok(found["foot"]["tile_size"][0] == 500, found)
     ok(found["kitty"]["tile_size"] == [420, 310] and found["kitty"]["tile_pos_in_workspace_view"] == [200, 120], found)
@@ -3208,7 +3208,7 @@ feature("color-pick", "Ekrandan rang olish")
 
 @case("Rang olish hex nusxalaydi")
 def _():
-    run("niri-desk-color")
+    run("falcon-color")
     time.sleep(0.8)
     click(400, 400)
     wait(lambda: re.fullmatch(r"#[0-9a-fA-F]{6}", clip_text()), 5, clip_text())
@@ -3231,7 +3231,7 @@ def shim(trans_ok=True):
 def translate_cli(picture, *args):
     out = "/tmp/nd-translated.png"
     Path(out).unlink(missing_ok=True)
-    run = sh(f"PATH={SHIM}:$PATH {LBIN}/niri-desk-image-translate {picture} {out} " + " ".join(args), timeout=30)
+    run = sh(f"PATH={SHIM}:$PATH {LBIN}/falcon-image-translate {picture} {out} " + " ".join(args), timeout=30)
     stages = [json.loads(line) for line in run.stdout.splitlines()]
     return stages, Path(out)
 
@@ -3306,7 +3306,7 @@ def _():
     copy_pic = Path("/tmp/nd-translate-copy.png")
     shutil.copy(TRANSLATE_PIC, copy_pic)
     ipc("translateImage", str(copy_pic), "600", "120")
-    w = wait(lambda: next(w for w in windows() if w["title"] == "niri-desk translate"), 6)
+    w = wait(lambda: next(w for w in windows() if w["title"] == "falcon translate"), 6)
     ok(w["is_floating"], w)
     niri("close-window", "--id", w["id"])
     wait(lambda: not copy_pic.exists(), 4)
@@ -3353,7 +3353,7 @@ def _():
 def _():
     take()
     time.sleep(0.6)
-    ok(not (Path(os.environ["XDG_RUNTIME_DIR"]) / "niri-desk-region").exists())
+    ok(not (Path(os.environ["XDG_RUNTIME_DIR"]) / "falcon-region").exists())
 
 
 feature("monitors", "Monitor profillari")
@@ -3426,7 +3426,7 @@ def _():
 
 @case("Sozlamalarda Monitorlar sahifasi bor")
 def _():
-    ok('Tr.t("Monitors")' in (HOME / ".config/quickshell/niri-desk/modules/SettingsWindow.qml").read_text())
+    ok('Tr.t("Monitors")' in (HOME / ".config/quickshell/falcon/modules/SettingsWindow.qml").read_text())
 
 
 feature("sched", "Kechki rejim jadvali")
@@ -3463,7 +3463,7 @@ def _():
 def _():
     settings(schedule__mode=True, schedule__lightFrom="abc", schedule__darkFrom="99")
     time.sleep(1)
-    ok("niri-desk-top" in layers())
+    ok("falcon-top" in layers())
 
 
 @case("Rang rejimga qarab o'zgaradi")
@@ -3504,7 +3504,7 @@ def _():
 
 @case("Sozlamalarda vaqt maydonlari bor")
 def _():
-    text = (HOME / ".config/quickshell/niri-desk/modules/SettingsWindow.qml").read_text()
+    text = (HOME / ".config/quickshell/falcon/modules/SettingsWindow.qml").read_text()
     ok("schedule.lightFrom" in text and "nightlight.from" in text)
 
 
@@ -3515,7 +3515,7 @@ BK = Path("/tmp/nd-backup.tar.gz")
 
 def export():
     BK.unlink(missing_ok=True)
-    ok(run("niri-desk-backup", "export", str(BK)).returncode == 0)
+    ok(run("falcon-backup", "export", str(BK)).returncode == 0)
 
 
 def members(path=BK):
@@ -3532,7 +3532,7 @@ def _():
 
 @case("Yo'l berilmasa uy papkasiga yozadi")
 def _():
-    p = Path(run("niri-desk-backup", "export").stdout.strip())
+    p = Path(run("falcon-backup", "export").stdout.strip())
     ok(p.parent == HOME and p.exists())
     p.unlink()
 
@@ -3540,7 +3540,7 @@ def _():
 @case("Sozlama bor")
 def _():
     export()
-    ok("niri-desk/settings.json" in members())
+    ok("falcon/settings.json" in members())
 
 
 @case("Import sozlamani qaytaradi")
@@ -3549,7 +3549,7 @@ def _():
     export()
     SET.write_text(GOOD)
     time.sleep(0.8)
-    ok(run("niri-desk-backup", "import", str(BK)).returncode == 0)
+    ok(run("falcon-backup", "import", str(BK)).returncode == 0)
     ok(json.loads(SET.read_text())["windows"]["gaps"] == 7)
 
 
@@ -3559,7 +3559,7 @@ def _():
     export()
     SET.write_text(GOOD)
     time.sleep(0.8)
-    run("niri-desk-backup", "import", str(BK))
+    run("falcon-backup", "import", str(BK))
     ok("gaps 7" in (GEN / "settings.kdl").read_text())
 
 
@@ -3578,27 +3578,27 @@ def evil(names):
 @case("Tashqi yo'lli arxiv rad etiladi")
 def _():
     p = evil(["../../nd-pwn"])
-    ok(run("niri-desk-backup", "import", str(p)).returncode == 1)
+    ok(run("falcon-backup", "import", str(p)).returncode == 1)
     ok(not (HOME.parent / "nd-pwn").exists())
 
 
 @case("Boshqa konfig faylini almashtira olmaydi")
 def _():
     p = evil(["hypr/hyprlock.conf"])
-    ok(run("niri-desk-backup", "import", str(p)).returncode == 1)
+    ok(run("falcon-backup", "import", str(p)).returncode == 1)
 
 
 @case("Buzuq fayl sozlamani buzmaydi")
 def _():
     Path("/tmp/nd-bad.tar.gz").write_text("emas")
     before = SET.read_text()
-    ok(run("niri-desk-backup", "import", "/tmp/nd-bad.tar.gz").returncode == 1)
+    ok(run("falcon-backup", "import", "/tmp/nd-bad.tar.gz").returncode == 1)
     ok(SET.read_text() == before)
 
 
 @case("Yo'q fayl xato qaytaradi")
 def _():
-    ok(run("niri-desk-backup", "import", "/tmp/nd-yoq.tar.gz").returncode == 1)
+    ok(run("falcon-backup", "import", "/tmp/nd-yoq.tar.gz").returncode == 1)
 
 
 
@@ -3777,7 +3777,7 @@ def _():
 feature("claude-widget", "Claude limiti vidjeti")
 
 USAGE = STATE / "claude-usage.json"
-HOOK = str(HOME / ".local/bin/niri-desk-claude-status")
+HOOK = str(HOME / ".local/bin/falcon-claude-status")
 
 
 def usage_send(text):
@@ -4011,7 +4011,7 @@ def _():
 def _():
     a = pill()
     sh("pkill -u $(id -u) -x qs")
-    wait(lambda: "niri-desk-top" in layers(), 12)
+    wait(lambda: "falcon-top" in layers(), 12)
     time.sleep(2.0)
     ok(pill() == a, "belgi qaytmadi")
 
@@ -4101,7 +4101,7 @@ def _():
     ipc("close")
     wait(lambda: st()["popup"] == "", 2)
     time.sleep(0.9)
-    ok("niri-desk-top" in layers())
+    ok("falcon-top" in layers())
 
 
 @case("Musiqa bo'limida Esc bosadi: panel yopiladi, keyin oxirgi bo'lim eslab qolinadi")
@@ -4230,7 +4230,7 @@ def _():
 def _():
     settings(panel__position="bottom")
     time.sleep(0.8)
-    ok("niri-desk-top" in layers() and st()["bottom"] is True)
+    ok("falcon-top" in layers() and st()["bottom"] is True)
 
 
 @case("Shisha ustida soat menyusi va xabar ochiladi")
@@ -4244,7 +4244,7 @@ def _():
 
 feature("widgets", "Ish stoli vidjetlari")
 
-WIDGETS_FILE = HOME / ".config/niri-desk/widgets.json"
+WIDGETS_FILE = HOME / ".config/falcon/widgets.json"
 
 
 def widget_layout():
@@ -4254,7 +4254,7 @@ def widget_layout():
 def widgets_fresh():
     WIDGETS_FILE.unlink(missing_ok=True)
     sh("pkill -u $(id -u) -x qs")
-    wait(lambda: "niri-desk-top" in layers(), 12)
+    wait(lambda: "falcon-top" in layers(), 12)
     time.sleep(1.5)
 
 
@@ -4271,7 +4271,7 @@ def rect(wid):
 @case("Birinchi ochilishda tayyor vidjetlar turadi")
 def _():
     widgets_fresh()
-    ok("niri-desk-widgets" in layers())
+    ok("falcon-widgets" in layers())
     ok({w["type"] for w in st()["widgets"]} >= {"clock", "calendar", "system", "music", "weather"})
 
 
@@ -4301,7 +4301,7 @@ def _():
     a = rect("weather")
     ipc("widgets")
     sh("pkill -u $(id -u) -x qs")
-    wait(lambda: "niri-desk-top" in layers(), 12)
+    wait(lambda: "falcon-top" in layers(), 12)
     time.sleep(1.5)
     b = rect("weather")
     ok(abs(a["x"] - b["x"]) <= 2 and abs(a["y"] - b["y"]) <= 2, (a, b))
@@ -4363,7 +4363,7 @@ def _():
 def _():
     WIDGETS_FILE.write_text("{buzuq")
     sh("pkill -u $(id -u) -x qs")
-    wait(lambda: "niri-desk-top" in layers(), 12)
+    wait(lambda: "falcon-top" in layers(), 12)
     time.sleep(1.5)
     ok(len(st()["widgets"]) >= 3)
     WIDGETS_FILE.unlink(missing_ok=True)
@@ -4372,7 +4372,7 @@ def _():
 @case("Sozlamada o'chirilsa vidjetlar yo'qoladi")
 def _():
     settings(widgets__enabled=False)
-    wait(lambda: "niri-desk-widgets" not in layers(), 3)
+    wait(lambda: "falcon-widgets" not in layers(), 3)
 
 
 @case("Faqat birinchi ish stoli tanlansa: ikkinchisida yo'q, birinchisida qaytadi")
@@ -4380,9 +4380,9 @@ def _():
     settings(widgets__firstOnly=True)
     term()
     niri("focus-workspace", 2)
-    wait(lambda: "niri-desk-widgets" not in layers(), 3)
+    wait(lambda: "falcon-widgets" not in layers(), 3)
     niri("focus-workspace", 1)
-    wait(lambda: "niri-desk-widgets" in layers(), 3)
+    wait(lambda: "falcon-widgets" in layers(), 3)
 
 
 feature("widgets2", "Vidjetlar: qimirlamaslik, tejamkorlik, tushish joyi")
@@ -4449,12 +4449,12 @@ def _():
     click(640, 700)
     ipc("widgets")
     wait(lambda: not st()["widgetEdit"], 3)
-    note = HOME / ".config/niri-desk/note.txt"
+    note = HOME / ".config/falcon/note.txt"
     note.unlink(missing_ok=True)
     layout = widget_layout() or []
     WIDGETS_FILE.write_text(json.dumps([{"id": "notes", "type": "notes", "fx": 0.5, "fy": 0.4, "size": "m"}]))
     sh("pkill -u $(id -u) -x qs")
-    wait(lambda: "niri-desk-top" in layers(), 12)
+    wait(lambda: "falcon-top" in layers(), 12)
     time.sleep(1.5)
     r = rect("notes")
     move(r["x"] + 100, r["y"] + 100)
@@ -4528,7 +4528,7 @@ feature("music", "Musiqa bo'limi")
 
 
 def spectrum_running():
-    return sh("pgrep -u $(id -u) -f niri-desk-spectrum").returncode == 0
+    return sh("pgrep -u $(id -u) -f falcon-spectrum").returncode == 0
 
 
 @case("Musiqa yo'q paytda bo'lim ochiladi: ovoz tinglanmaydi")
@@ -4599,7 +4599,7 @@ def _():
     time.sleep(1.0)
     unlock()
     out = next(iter(nj("outputs").values()))
-    ok(out["current_mode"] is not None and "niri-desk-top" in layers(), out)
+    ok(out["current_mode"] is not None and "falcon-top" in layers(), out)
 
 
 @case("Uyg'ongandan keyin tovush ishlaydi: ovoz tugmasi javob beradi")
@@ -4649,8 +4649,8 @@ def _():
 
 feature("i18n", "Interfeys tili")
 
-CATALOG = HOME / ".config/niri-desk/i18n-ru.json"
-QS = HOME / ".config/quickshell/niri-desk"
+CATALOG = HOME / ".config/falcon/i18n-ru.json"
+QS = HOME / ".config/quickshell/falcon"
 
 
 @case("Inglizcha tanlansa matn inglizcha")
@@ -4674,7 +4674,7 @@ def _():
 @case("Bloklash ekrani matni tilga ergashadi")
 def _():
     settings(appearance__language="ru")
-    path = HOME / ".config/hypr/niri-desk-lang.conf"
+    path = HOME / ".config/hypr/falcon-lang.conf"
     wait(lambda: "Пароль" in path.read_text(), 4, "tarjima bo'lmadi")
     settings(appearance__language="en")
     wait(lambda: "Password" in path.read_text(), 4, "qaytmadi")
@@ -4692,7 +4692,7 @@ def _():
     used = set()
     for f in QS.rglob("*.qml"):
         used |= set(re.findall(r'Tr\.t\("([^"]+)"\)', f.read_text()))
-    for f in LBIN.glob("niri-desk-*"):
+    for f in LBIN.glob("falcon-*"):
         text = f.read_text(errors="ignore")
         used |= set(re.findall(r'\btr\(\s*"([^"]+)"', text))
         used |= set(re.findall(r'_t "([^"]+)"', text))
@@ -4704,7 +4704,7 @@ def _():
 def _():
     uz = re.compile(r"\b(yoq|o'chiq|Tozalash|Nusxalandi|Sozlamalar|bo'l|qiling|noto'g'ri|topilmadi)\b")
     bad = []
-    for f in list(QS.rglob("*.qml")) + list(LBIN.glob("niri-desk-*")):
+    for f in list(QS.rglob("*.qml")) + list(LBIN.glob("falcon-*")):
         for i, line in enumerate(f.read_text(errors="ignore").splitlines(), 1):
             code = line.strip()
             if code.startswith(("//", "#")):
@@ -4738,7 +4738,7 @@ def main():
         time.sleep(1)
     SET.write_text(GOOD)
     time.sleep(1.5)
-    report = json.loads(Path("/tmp/niri-desk-report.json").read_text()) if only and Path("/tmp/niri-desk-report.json").exists() else {}
+    report = json.loads(Path("/tmp/falcon-report.json").read_text()) if only and Path("/tmp/falcon-report.json").exists() else {}
     for f in FEATURES:
         if only and f["id"] not in only:
             continue
@@ -4760,7 +4760,7 @@ def main():
             results.append({"n": n, "desc": desc, "status": status, "note": note})
             print(f"{status} {f['id']}#{n} {desc}" + (f"  <- {note}" if note else ""), flush=True)
         report[f["id"]] = {"title": f["title"], "cases": results}
-        Path("/tmp/niri-desk-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1))
+        Path("/tmp/falcon-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1))
     try:
         reset()
     except Exception:

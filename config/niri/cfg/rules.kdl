@@ -7,8 +7,8 @@ window-rule {
 // Terminal shaffof, orqasida xiralashgan fon rasmi ko'rinadi.
 window-rule {
     match app-id="^kitty$"
-    match app-id="^niri-desk-scratch$"
-    match app-id="^niri-desk-tool$"
+    match app-id="^falcon-scratch$"
+    match app-id="^falcon-tool$"
     background-effect {
         blur true
     }
@@ -42,7 +42,7 @@ window-rule {
 
 // Tarjima natijasi suzib ochiladi.
 window-rule {
-    match title="^niri-desk translate$"
+    match title="^falcon translate$"
     open-floating true
     default-column-width { fixed 640; }
     default-window-height { fixed 420; }
@@ -75,7 +75,7 @@ window-rule {
 
 // Sozlamalar oynasi
 window-rule {
-    match title="^niri-desk settings$"
+    match title="^falcon settings$"
     open-floating true
     default-column-width { fixed 1000; }
     default-window-height { fixed 720; }
@@ -83,13 +83,13 @@ window-rule {
 
 // The window with a translated picture sets its own size to fit the picture.
 window-rule {
-    match title="^niri-desk translate$"
+    match title="^falcon translate$"
     open-floating true
 }
 
 // Scratchpad terminal tepada suzib turadi.
 window-rule {
-    match app-id="^niri-desk-scratch$"
+    match app-id="^falcon-scratch$"
     open-floating true
     default-column-width { proportion 0.6; }
     default-window-height { proportion 0.55; }
@@ -98,7 +98,7 @@ window-rule {
 
 // btop va nmtui kabi dasturlarga kamida 80 ustun kerak: keng ochiladi.
 window-rule {
-    match app-id="^niri-desk-tool$"
+    match app-id="^falcon-tool$"
     default-column-width { proportion 0.8; }
 }
 
@@ -131,16 +131,16 @@ layer-rule {
 
 // Vidjetlar ham fon bilan birga turadi: ish stoli almashganda surilmaydi.
 layer-rule {
-    match namespace="^niri-desk-widgets-face$"
+    match namespace="^falcon-widgets-face$"
     place-within-backdrop true
 }
 
 // Menyu va panellar shisha: orqasidagi oyna ko'rinadi, faqat fon rasmi emas.
 layer-rule {
-    match namespace="^niri-desk-menu$"
-    match namespace="^niri-desk-power$"
-    match namespace="^niri-desk-top$"
-    match namespace="^niri-desk-dock$"
+    match namespace="^falcon-menu$"
+    match namespace="^falcon-power$"
+    match namespace="^falcon-top$"
+    match namespace="^falcon-dock$"
     background-effect {
         xray false
     }

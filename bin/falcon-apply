@@ -1,0 +1,461 @@
+#!/usr/bin/env python3
+"""settings.json dan niri, kitty va hypridle sozlamalarini yozadi.
+
+Avval hammasi vaqtinchalik nusxada `niri validate` dan o'tadi. Xato bo'lsa, ishlab turgan
+config'ga tegilmaydi va sabab stderr'ga yoziladi.
+
+  falcon-apply               sozlamalarni qo'llash
+  falcon-apply --colors RASM ranglarni rasmdan olish
+  falcon-apply --check       faqat tekshirish
+"""
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+from falcon_tr import tr
+
+HOME = Path.home()
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
+STATE = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local/state")) / "falcon"
+NIRI = CONFIG / "niri"
+SCRIPTS = "~/.local/bin/"
+QS = ["qs", "-c", "falcon", "ipc", "call", "desk"]
+
+
+class Bad(Exception):
+    pass
+
+
+def merge(base, over):
+    out = dict(base)
+    for key, value in over.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+def load():
+    defaults = json.loads((CONFIG / "falcon/defaults.json").read_text())
+    path = CONFIG / "falcon/settings.json"
+    if not path.exists():
+        return defaults
+    try:
+        user = json.loads(path.read_text() or "{}")
+    except ValueError as err:
+        raise Bad(tr("settings.json could not be read: {err}", err=err))
+    if not isinstance(user, dict):
+        raise Bad(tr("settings.json must be an object"))
+    return merge(defaults, user)
+
+
+def q(value):
+    return json.dumps(str(value), ensure_ascii=False)
+
+
+def number(section, key, low, high):
+    value = section[key]
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise Bad(tr("{key} must be a number: {value}", key=key, value=repr(value)))
+    if not low <= value <= high:
+        raise Bad(tr("{key} must be between {low} and {high}: {value}", key=key, low=low, high=high, value=value))
+    return value
+
+
+def one_line(section, key):
+    # A line break here would become a line of its own in the terminal config.
+    value = str(section[key])
+    if any(ord(c) < 32 for c in value):
+        raise Bad(tr("{key} must be a single line", key=key))
+    return value
+
+
+def choice(section, key, options):
+    value = section[key]
+    if value not in options:
+        raise Bad(tr("{key} is invalid: {value}. Allowed: {options}", key=key, value=repr(value), options=", ".join(options)))
+    return value
+
+
+def is_vm():
+    # VirtualBox va VMware'ning 3D drayverida shaffof oynalar buziladi.
+    res = subprocess.run(["systemd-detect-virt", "--vm"], capture_output=True, text=True)
+    return res.returncode == 0 and res.stdout.strip() in ("oracle", "vmware")
+
+
+def settings_kdl(s):
+    w, k, p, a = s["windows"], s["keyboard"], s["pointer"], s["appearance"]
+    out = ["// Generated file: change it in the Settings window or settings.json.", "input {", "    keyboard {", "        xkb {"]
+    out += [f"            layout {q(k['layouts'])}", f"            options {q(k['options'])}", "        }"]
+    out += [f"        repeat-delay {int(number(k, 'repeatDelay', 100, 2000))}", f"        repeat-rate {int(number(k, 'repeatRate', 1, 100))}"]
+    out += [f"        track-layout {q('window' if k['perWindow'] else 'global')}"]
+    if k["numlock"]:
+        out.append("        numlock")
+    out += ["    }", "    touchpad {"]
+    if p["tap"]:
+        out.append("        tap")
+    if p["naturalScroll"]:
+        out.append("        natural-scroll")
+    if p["disableWhileTyping"]:
+        out.append("        dwt")
+    out.append(f"        click-method {q(choice(p, 'clickMethod', ['button-areas', 'clickfinger']))}")
+    out += [f"        accel-speed {float(number(p, 'touchpadSpeed', -1, 1))}", f"        scroll-factor {float(number(p, 'scrollFactor', 0.1, 5))}", "    }", "    mouse {"]
+    if p["mouseNaturalScroll"]:
+        out.append("        natural-scroll")
+    out += [f"        accel-profile {q('flat' if p['mouseFlat'] else 'adaptive')}", f"        accel-speed {float(number(p, 'mouseSpeed', -1, 1))}", "    }"]
+    if w["focusFollowsMouse"]:
+        out.append('    focus-follows-mouse max-scroll-amount="0%"')
+    if w["warpMouse"]:
+        out.append("    warp-mouse-to-focus")
+    if w["autoBackForth"]:
+        out.append("    workspace-auto-back-and-forth")
+    out += ["}", "", "cursor {", f"    xcursor-theme {q(a['cursorTheme'])}", f"    xcursor-size {int(number(a, 'cursorSize', 8, 96))}"]
+    if a["cursorHideTyping"]:
+        out.append("    hide-when-typing")
+    hide_after = number(a, "cursorHideAfter", 0, 600)
+    if hide_after:
+        out.append(f"    hide-after-inactive-ms {int(hide_after * 1000)}")
+    out += ["}", ""]
+
+    out += ["layout {", f"    gaps {number(w, 'gaps', 0, 64)}"]
+    out.append(f"    center-focused-column {q(choice(w, 'centerFocused', ['never', 'on-overflow', 'always']))}")
+    if w["centerSingle"]:
+        out.append("    always-center-single-column")
+    if w["tabbedByDefault"]:
+        out.append('    default-column-display "tabbed"')
+    out.append(f"    default-column-width {{ proportion {float(number(w, 'defaultWidth', 0.1, 1))}; }}")
+    margin = number(w, "edgeMargin", 0, 200)
+    out += ["    struts {", f"        left {margin}", f"        right {margin}", f"        top {margin}", f"        bottom {margin}", "    }"]
+    ring = number(w, "focusRing", 0, 16)
+    out += ["    focus-ring {", "        off" if ring == 0 else f"        width {ring}", "    }"]
+    out += ["    shadow {", "        on" if w["shadow"] else "        off", f"        softness {number(w, 'shadowSoftness', 0, 100)}", "    }", "}", ""]
+    if w["blur"]:
+        out += ["blur {", f"    passes {int(number(w, 'blurStrength', 1, 6))}", "}", ""]
+    else:
+        out += ["blur {", "    off", "}", ""]
+    out += ["overview {", f"    zoom {float(number(w, 'overviewZoom', 0.2, 0.75))}", "}", ""]
+    if not w["animations"]:
+        out += ["animations {", "    off", "}", ""]
+    else:
+        out += ["animations {", f"    slowdown {round(1 / number(w, 'animationSpeed', 0.1, 5), 3)}", "}", ""]
+
+    out += ["window-rule {", f"    geometry-corner-radius {number(w, 'radius', 0, 48)}", "}", ""]
+    inactive = number(w, "inactiveOpacity", 0.2, 1)
+    if inactive < 1:
+        out += ["window-rule {", "    match is-active=false", f"    opacity {inactive}", "}", ""]
+
+    out += monitors_kdl(s)
+    out += [f'screenshot-path {q(str(pictures_dir() / "Screenshots") + "/%Y-%m-%d_%H-%M-%S.png")}', ""]
+
+    if is_vm():
+        out += ["environment {", '    LIBGL_ALWAYS_SOFTWARE "1"', "}", ""]
+
+    if not isinstance(w["rules"], list):
+        raise Bad(tr("windows.rules must be a list"))
+    for rule in w["rules"]:
+        out += app_rule(rule)
+    return "\n".join(out) + "\n"
+
+
+def pictures_dir():
+    # Masalan rus tizimida ~/Изображения. xdg-user-dir sozlanmagan papka uchun $HOME qaytaradi.
+    try:
+        path = subprocess.run(["xdg-user-dir", "PICTURES"], capture_output=True, text=True).stdout.strip()
+    except OSError:
+        path = ""
+    return Path(path) if path and Path(path) != HOME else HOME / "Pictures"
+
+
+def monitors_kdl(s):
+    out = []
+    monitors = s.get("monitors", {})
+    if not isinstance(monitors, dict):
+        raise Bad(tr("monitors must be an object"))
+    for name, m in monitors.items():
+        if not isinstance(m, dict) or not m:
+            continue
+        out.append(f"output {q(name)} {{")
+        if m.get("off"):
+            out.append("    off")
+        if m.get("scale"):
+            out.append(f"    scale {float(number(m, 'scale', 0.5, 4))}")
+        if m.get("transform") not in (None, "normal"):
+            out.append(f"    transform {q(choice(m, 'transform', ['90', '180', '270', 'flipped']))}")
+        if m.get("x") is not None or m.get("y") is not None:
+            place = {"x": m.get("x", 0), "y": m.get("y", 0)}
+            out.append(f"    position x={int(number(place, 'x', -32768, 32767))} y={int(number(place, 'y', -32768, 32767))}")
+        out += ["}", ""]
+    return out
+
+
+def regex_kdl(value):
+    # Oddiy matn uchun xom satr: teskari chiziqlarni ikkilantirish shart emas.
+    fence = "#"
+    while f'"{fence}' in value:
+        fence += "#"
+    return f'r{fence}"{value}"{fence}'
+
+
+def app_rule(rule):
+    if not isinstance(rule, dict):
+        raise Bad(tr("A window rule must be an object"))
+    match = []
+    for field, name in (("app", "app-id"), ("title", "title")):
+        value = rule.get(field, "")
+        if value:
+            try:
+                re.compile(value)
+            except re.error as err:
+                raise Bad(tr("Invalid regex in a rule ({value}): {err}", value=value, err=err))
+            match.append(f"{name}={regex_kdl(value)}")
+    if not match:
+        return []
+    out = ["window-rule {", "    match " + " ".join(match)]
+    if rule.get("floating"):
+        out.append("    open-floating true")
+    if rule.get("tiled"):
+        out.append("    open-floating false")
+    if rule.get("maximized"):
+        out.append("    open-maximized true")
+    if rule.get("fullscreen"):
+        out.append("    open-fullscreen true")
+    if rule.get("noFocus"):
+        out.append("    open-focused false")
+    if rule.get("width"):
+        out.append(f"    default-column-width {{ proportion {float(number(rule, 'width', 0.1, 1))}; }}")
+    if rule.get("opacity") not in (None, 1, 1.0):
+        out.append(f"    opacity {float(number(rule, 'opacity', 0.2, 1))}")
+    if rule.get("hideFromCapture"):
+        out.append('    block-out-from "screen-capture"')
+    return out + ["}", ""]
+
+
+# Klavishi Sozlamalardan o'zgaradigan amallar: nomi, sarlavhasi va niri buyrug'i.
+def desk(*args):
+    return " ".join(q(x) for x in QS + list(args))
+
+
+ACTIONS = {
+    "terminal": ("Terminal", 'spawn "kitty"', True),
+    "apps": ("Apps", "spawn " + desk("menu"), False),
+    "clipboard": ("Clipboard history", "spawn " + desk("clipboard"), False),
+    "dashboard": ("Dashboard", "spawn " + desk("dashboard"), False),
+    "control": ("Control center", "spawn " + desk("control"), False),
+    "wallpapers": ("Wallpaper and color", "spawn " + desk("wallpapers"), False),
+    "settings": ("Settings", "spawn " + desk("settings"), False),
+    "zen": ("Focus mode", f'spawn "{SCRIPTS}falcon-zen"', False),
+    "lock": ("Lock screen", 'spawn "loginctl" "lock-session"', False),
+    "overview": ("Overview", "toggle-overview", False),
+    "scratch": ("Scratchpad terminal", f'spawn "{SCRIPTS}falcon-scratch"', False),
+    "sticky": ("Sticky window", "spawn " + desk("sticky"), False),
+    "browser": ("Browser", f'spawn-sh "exec {SCRIPTS}falcon-raise \'firefox|chrom|brave|zen|helium\' gtk-launch \\"$(xdg-settings get default-web-browser)\\""', False),
+    "files": ("Files", f'spawn "{SCRIPTS}falcon-raise" "nautilus" "nautilus"', False),
+    "notes": ("Notes", f'spawn "{SCRIPTS}falcon-raise" "obsidian" "obsidian"', False),
+    "close": ("Close window", "close-window", False),
+    "widthCycle": ("Column width", "switch-preset-column-width", True),
+    "maximize": ("Maximize column", "maximize-column", True),
+    "fullscreen": ("Fullscreen", "fullscreen-window", False),
+    "screenshot": ("Screenshot", "spawn " + desk("region", "copy"), False),
+    "record": ("Record screen", f'spawn "{SCRIPTS}falcon-record"', False),
+    "ocr": ("Copy text from screen", "spawn " + desk("region", "ocr"), False),
+    "translate": ("Translate from screen", "spawn " + desk("region", "translate"), False),
+    "widgets": ("Edit widgets", "spawn " + desk("widgets"), False),
+}
+
+
+def fixed_keys():
+    text = (NIRI / "cfg/binds.kdl").read_text()
+    return {m.lower() for m in re.findall(r"^\s*([A-Za-z0-9_+]+)\s[^\n]*\{", text, re.M) if m != "binds"}
+
+
+def binds_kdl(s):
+    seen = {}
+    fixed = fixed_keys()
+    out = ["// Generated file: change it in Settings → Shortcuts.", "binds {"]
+    for action, combo in s["binds"].items():
+        if action not in ACTIONS:
+            raise Bad(tr("Unknown action: {action}", action=action))
+        combo = (combo or "").strip()
+        if not combo:
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9_+]+", combo):
+            raise Bad(tr("Invalid shortcut: {combo}", combo=combo))
+        norm = combo.lower()
+        if norm in seen:
+            raise Bad(tr("{combo} is assigned to two actions: {first} and {second}", combo=combo, first=seen[norm], second=action))
+        if norm in fixed:
+            raise Bad(tr("{combo} is taken by a system shortcut", combo=combo))
+        seen[norm] = action
+        title, cmd, repeat = ACTIONS[action]
+        rep = "" if repeat else " repeat=false"
+        out.append(f"    {combo} hotkey-overlay-title={q(tr(title))}{rep} {{ {cmd}; }}")
+    return "\n".join(out + ["}"]) + "\n"
+
+
+def idle_conf(s):
+    i = s["idle"]
+    shell_lock = choice(s["session"], "lockScreen", ["hyprlock", "shell"]) == "shell"
+    # If the shell does not answer, the session still gets locked by hyprlock.
+    hyprlock = "pgrep -u $(id -u) -x hyprlock || hyprlock"
+    lock = f"qs -c falcon ipc call desk lock || {hyprlock}" if shell_lock else hyprlock
+    out = [
+        "# Generated file: change it in the Settings window.",
+        "general {",
+        f"    lock_cmd = {lock}",
+        "    before_sleep_cmd = loginctl lock-session",
+        "    after_sleep_cmd = niri msg action power-on-monitors",
+        "}",
+    ]
+    battery = i.get("battery", {})
+    actions = {
+        "lock": ("loginctl lock-session", None),
+        "screenOff": ("niri msg action power-off-monitors", "niri msg action power-on-monitors"),
+        "suspend": ("systemctl suspend", None),
+    }
+    active = False
+    for key, (run, resume) in actions.items():
+        on_ac = int(number(i, key, 0, 86400))
+        on_battery = int(number(battery, key, 0, 86400))
+        # Equal times need no check of the power source. Otherwise each listener acts only on its own source.
+        if on_ac == on_battery:
+            pairs = [(on_ac, run)]
+        else:
+            pairs = [(on_ac, f"systemd-ac-power && {run}"), (on_battery, f"systemd-ac-power || {run}")]
+        for timeout, command in pairs:
+            if not timeout:
+                continue
+            active = True
+            out += ["", "listener {", f"    timeout = {timeout}", f"    on-timeout = {command}"]
+            if resume:
+                out.append(f"    on-resume = {resume}")
+            out.append("}")
+    if not active:
+        # Kuzatuvchi bo'lmasa hypridle to'xtaydi va qo'lda bloklash ham ishlamay qoladi.
+        out += ["", "listener {", "    timeout = 31536000", "    on-timeout = true", "}"]
+    return "\n".join(out) + "\n"
+
+
+def kitty_conf(s):
+    a, t = s["appearance"], s["terminal"]
+    padding = int(number(t, "padding", 0, 60))
+    return "\n".join([
+        "# Generated file: change it in the Settings window.",
+        f"font_family {one_line(a, 'monoFont')}",
+        f"font_size {number(a, 'terminalFontSize', 6, 40)}",
+        f"background_opacity {number(a, 'terminalOpacity', 0.1, 1)}",
+        f"cursor_shape {choice(t, 'cursorShape', ['block', 'beam', 'underline'])}",
+        f"cursor_blink_interval {-1 if t['cursorBlink'] else 0}",
+        f"window_padding_width {padding} {padding + 2}",
+        f"adjust_line_height {int(number(t, 'lineHeight', 80, 200))}%",
+        f"scrollback_lines {int(number(t, 'scrollback', 0, 200000))}",
+    ]) + "\n"
+
+
+def qt6ct_conf():
+    return "\n".join([
+        "; Generated file: falcon-apply writes it.",
+        "[Appearance]",
+        f"color_scheme_path={CONFIG}/qt6ct/colors/falcon.conf",
+        "custom_palette=true",
+        "icon_theme=Adwaita",
+        "standard_dialogs=default",
+        "style=Fusion",
+    ]) + "\n"
+
+
+def write_if_changed(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() and path.read_text() == text:
+        return False
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
+    return True
+
+
+def run_quiet(*cmd):
+    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+
+def validate(settings_text, binds_text):
+    with tempfile.TemporaryDirectory(prefix="falcon-") as tmp:
+        copy = Path(tmp) / "niri"
+        shutil.copytree(NIRI, copy)
+        (copy / "generated").mkdir(exist_ok=True)
+        (copy / "generated/settings.kdl").write_text(settings_text)
+        (copy / "generated/binds.kdl").write_text(binds_text)
+        res = subprocess.run(["niri", "validate", "-c", str(copy / "config.kdl")], capture_output=True, text=True)
+        if res.returncode != 0:
+            text = re.sub(r"\x1b\[[0-9;]*m", "", res.stderr + res.stdout)
+            reason = [l.strip() for l in text.splitlines() if l.strip() and "DEBUG" not in l]
+            raise Bad(tr("niri rejected the config: {reason}", reason=" ".join(reason[-3:])[:300]))
+
+
+def colors(s, image=None):
+    a = s["appearance"]
+    mode = choice(a, "mode", ["dark", "light"])
+    accent = a["accent"].strip()
+    args = ["--mode", mode, "--type", a["scheme"], "--quiet"]
+    if accent:
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", accent):
+            raise Bad(tr("A color must look like #rrggbb: {value}", value=accent))
+        cmd = ["matugen", "color", "hex", accent] + args
+    else:
+        if image is None:
+            link = STATE / "wallpaper"
+            if not link.exists():
+                return
+            image = str(link.resolve())
+        cmd = ["matugen", "image", image, "--source-color-index", "0"] + args
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if res.returncode != 0:
+        text = re.sub(r"\x1b\[[0-9;]*m", "", res.stderr).strip().splitlines()
+        raise Bad(tr("Colors could not be written: {reason}", reason=text[0][:120] if text else "matugen"))
+    (STATE / "theme-key").write_text(theme_key(s))
+    run_quiet("dconf", "write", "/org/gnome/desktop/interface/color-scheme", "'prefer-light'" if mode == "light" else "'prefer-dark'")
+
+
+def theme_key(s):
+    a = s["appearance"]
+    return f"{a['mode']}|{a['scheme']}|{a['accent']}"
+
+
+def main(argv):
+    s = load()
+    STATE.mkdir(parents=True, exist_ok=True)
+    if len(argv) >= 2 and argv[0] == "--colors":
+        colors(s, argv[1])
+        return
+    settings_text, binds_text = settings_kdl(s), binds_kdl(s)
+    validate(settings_text, binds_text)
+    idle_text, kitty_text = idle_conf(s), kitty_conf(s)
+    choice(s["appearance"], "mode", ["dark", "light"])
+    if argv[:1] == ["--check"]:
+        return
+    write_if_changed(NIRI / "generated/settings.kdl", settings_text)
+    # Bloklash ekrani matnlari interfeys tilida.
+    write_if_changed(CONFIG / "hypr/falcon-lang.conf", f"$pw_placeholder = {tr('Password')}\n$pw_fail = {tr('Wrong password')}\n")
+    write_if_changed(NIRI / "generated/binds.kdl", binds_text)
+    if write_if_changed(CONFIG / "hypr/hypridle.conf", idle_text) and os.environ.get("NIRI_SOCKET"):
+        run_quiet("pkill", "-x", "hypridle")
+        subprocess.Popen(["hypridle"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    if write_if_changed(CONFIG / "kitty/falcon-user.conf", kitty_text):
+        run_quiet("pkill", "-USR1", "-x", "kitty")
+    write_if_changed(CONFIG / "qt6ct/qt6ct.conf", qt6ct_conf())
+    key = STATE / "theme-key"
+    if not key.exists() or not (CONFIG / "qt6ct/colors/falcon.conf").exists() or key.read_text() != theme_key(s):
+        colors(s)
+
+
+try:
+    main(sys.argv[1:])
+except Bad as err:
+    print(err, file=sys.stderr)
+    sys.exit(1)

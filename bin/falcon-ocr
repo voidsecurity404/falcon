@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Copies the text of a picture to the clipboard. Usage: falcon-ocr IMAGE
+set -euo pipefail
+
+_t() { "$HOME/.local/bin/falcon-tr" "$1"; }
+tell() { qs -c falcon ipc call desk toast "$@" >/dev/null 2>&1 || true; }
+
+langs="$(tesseract --list-langs 2>/dev/null | tail -n +2 | grep -v '^osd$' | paste -sd+ -)" || langs=""
+text="$(tesseract "$1" - -l "${langs:-eng}" 2>/dev/null | sed -e '/^[[:space:]]*$/d')" || text=""
+
+if [[ -z "$text" ]]; then
+    tell "$(_t "No text found")" "$(_t "Try selecting another area")"
+    exit 0
+fi
+printf '%s' "$text" | wl-copy
+tell "$(_t "Text copied")" "$(head -n 1 <<<"$text")"

@@ -1,8 +1,0 @@
-#!/usr/bin/env python3
-"""Shell skriptlari uchun: niri-desk-tr "Matn" yoki niri-desk-tr --lang"""
-import sys
-
-sys.dont_write_bytecode = True
-from niri_desk_tr import language, tr
-
-print(language() if sys.argv[1:] == ["--lang"] else tr(sys.argv[1]))
