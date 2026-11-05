@@ -82,6 +82,11 @@ play() {
     qs -c niri-desk ipc call desk widgetsRestack >/dev/null 2>&1 || true
 }
 
+# Vidjetlar yangi rasmning tinch joylariga ko'chadi.
+arrange() {
+    qs -c niri-desk ipc call desk widgetsArrange "$1" >/dev/null 2>&1 || true
+}
+
 toast() {
     qs -c niri-desk ipc call desk toast "$("$HOME/.local/bin/niri-desk-tr" "$1")" "$2" >/dev/null 2>&1 || true
 }
@@ -97,6 +102,7 @@ set_live() {
     # Kadr ochilmasa joriy fon va ranglar o'zgarishsiz qoladi.
     stop_live
     show "$image"
+    arrange "$image"
     colors "$image"
     ln -sfn "$image" "$link"
     ln -sfn "$video" "$live_link"
@@ -157,6 +163,7 @@ case "${1:-}" in
         else
             # Rasm ochilmasa joriy fon va ranglar o'zgarishsiz qoladi.
             show "$image"
+            arrange "$image"
             stop_live
             rm -f "$live_link"
             colors "$image"

@@ -70,7 +70,7 @@ Click the clock. Two tabs, switched with `1`, `2` or `Tab`.
 
 ## Desktop widgets
 
-Clock, analog clock, calendar, weather, system load, music, Claude limits and notes sit on the wallpaper. To move them, right click the desktop and choose Edit widgets, or press `Mod+Shift+W`. In edit mode drag a widget, it snaps to a grid; the button in its corner changes the size, the cross removes it, and the bar below adds widgets. Settings → Widgets turns them off, shows them on every workspace and changes their transparency. The layout is stored in `~/.config/niri-desk/widgets.json`.
+Clock, analog clock, calendar, weather, system load, music, Claude limits and notes sit on the wallpaper. To move them, right click the desktop and choose Edit widgets, or press `Mod+Shift+W`. In edit mode drag a widget, it snaps to a grid; the button in its corner changes the size, the cross removes it, and the bar below adds widgets. Settings → Widgets turns them off, shows them on every workspace and changes their transparency. Each time you change the wallpaper, the widgets move to its calm parts, away from what the picture shows, and keep their sizes, so a place you dragged a widget to lasts until the next wallpaper. The layout is stored in `~/.config/niri-desk/widgets.json`.
 
 ## Claude limits
 

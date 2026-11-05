@@ -55,6 +55,7 @@ targets=(
     .local/bin/niri-desk-spectrum
     .local/bin/niri-desk-shot
     .local/bin/niri-desk-wallpaper
+    .local/bin/niri-desk-widgets-place
     .local/bin/niri-desk-zen
     .local/bin/niri-desk-record
     .local/bin/niri-desk-ocr

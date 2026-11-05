@@ -240,6 +240,63 @@ Singleton {
         apply(defaults, true);
     }
 
+    // Moves the widgets to the calm parts of a new wallpaper. The newest request wins.
+    function arrange(image) {
+        if (!enabled || !loaded || editMode || items.length === 0)
+            return;
+        if (placer.running) {
+            pendingImage = image;
+            return;
+        }
+        const screen = Quickshell.screens.find(s => s.name === Niri.focusedOutput) || Quickshell.screens[0];
+        if (!screen)
+            return;
+        const top = Settings.bottom ? 16 : 56;
+        const bottom = Settings.bottom ? 56 : 16;
+        const spanX = screen.width - 32;
+        const spanY = screen.height - bottom - top;
+        const list = items.map(w => {
+            const i = info(w.type);
+            const width = i.w * factor(w.size);
+            const height = i.h * factor(w.size);
+            return {
+                id: w.id,
+                w: width,
+                h: height,
+                x: 16 + w.fx * Math.max(0, spanX - width),
+                y: top + w.fy * Math.max(0, spanY - height),
+                bare: !i.plate
+            };
+        });
+        placer.sizes = list;
+        placer.spanX = spanX;
+        placer.spanY = spanY;
+        placer.top = top;
+        placer.command = [Ui.binDir + "niri-desk-widgets-place", image, String(screen.width), String(screen.height), String(top), String(bottom), JSON.stringify(list)];
+        placer.running = true;
+    }
+
+    function takePlaces(text) {
+        let places = null;
+        try {
+            places = JSON.parse(text);
+        } catch (e) {
+            return;
+        }
+        if (Object.keys(places).length === 0)
+            return;
+        apply(items.map(w => {
+            const place = places[w.id];
+            const size = placer.sizes.find(s => s.id === w.id);
+            if (!place || !size)
+                return w;
+            return Object.assign({}, w, {
+                fx: Math.max(0, Math.min(1, (place.x - 16) / Math.max(1, placer.spanX - size.w))),
+                fy: Math.max(0, Math.min(1, (place.y - placer.top) / Math.max(1, placer.spanY - size.h)))
+            });
+        }), true);
+    }
+
     function setRect(id, x, y, w, h) {
         const next = Object.assign({}, rects);
         next[id] = {
@@ -286,6 +343,27 @@ Singleton {
     }
 
     property string lastActive: ""
+    property string pendingImage: ""
+
+    Process {
+        id: placer
+
+        property var sizes: []
+        property real spanX: 0
+        property real spanY: 0
+        property int top: 0
+
+        stdout: StdioCollector {
+            onStreamFinished: root.takePlaces(text)
+        }
+        onExited: {
+            if (root.pendingImage === "")
+                return;
+            const image = root.pendingImage;
+            root.pendingImage = "";
+            root.arrange(image);
+        }
+    }
 
     FileView {
         id: file

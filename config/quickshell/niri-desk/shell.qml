@@ -163,6 +163,9 @@ ShellRoot {
         function widgets(): void {
             Widgets.editMode = !Widgets.editMode;
         }
+        function widgetsArrange(image: string): void {
+            Widgets.arrange(image);
+        }
         function widgetsRestack(): void {
             Widgets.restack();
         }
