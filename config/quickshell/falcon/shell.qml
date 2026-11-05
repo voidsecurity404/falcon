@@ -176,6 +176,7 @@ ShellRoot {
             Toasts.doNotDisturb = false;
             Caffeine.enabled = false;
             Sticky.ids = [];
+            Sticky.tiled = [];
             Countdown.stop();
             Night.setEnabled(Settings.get("nightlight.auto", false));
             Ui.dashTab = 0;
