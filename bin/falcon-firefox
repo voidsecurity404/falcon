@@ -11,16 +11,11 @@ PREFS = (
     # Lets the window and pages that paint no background of their own show what is behind them.
     'user_pref("widget.transparent-windows", true);\n',
     'user_pref("browser.tabs.allow_transparent_browser", true);\n',
+    # Sites that have a dark look use it, so the parts of them left alone stay readable on the glass.
+    'user_pref("layout.css.prefers-color-scheme.content-override", 0);\n',
 )
-# The new tab page has no content of its own to read, so it shows the glass too. Sites keep their colors,
-# and a page with no styling at all gets the white it was written for, or its black text would sit on the glass.
-CONTENT = """@-moz-document url-prefix("about:newtab"), url-prefix("about:home"), url-prefix("about:privatebrowsing") {
-  :root, body { --newtab-background-color: transparent !important; --newtab-background-color-secondary: transparent !important; background: transparent !important; }
-}
-@-moz-document url-prefix("http"), url-prefix("file:") {
-  html:not(:has(style, link[rel~="stylesheet"], [style], [bgcolor])) { background: white; }
-}
-"""
+# Splits the generated file: what comes after this line goes to userContent.css.
+SPLIT = "/* userContent */\n"
 HOME = Path.home()
 SOURCE = HOME / ".local/state/falcon/firefox-userChrome.css"
 # Opens the previous windows and tabs, so a restored Firefox window has what it had.
@@ -34,7 +29,8 @@ for root in (HOME / ".config/mozilla/firefox", HOME / ".mozilla/firefox"):
             user.write_text(text + RESUME)
 
 if SOURCE.exists():
-    css = MARK + SOURCE.read_text()
+    chrome_css, _, content_css = SOURCE.read_text().partition(SPLIT)
+    css = MARK + chrome_css
     for root in (HOME / ".config/mozilla/firefox", HOME / ".mozilla/firefox"):
         for prefs in root.glob("*/prefs.js"):
             profile = prefs.parent
@@ -45,7 +41,7 @@ if SOURCE.exists():
             target.write_text(css)
             content = profile / "chrome/userContent.css"
             if not content.exists() or content.read_text().startswith(MARK):
-                content.write_text(MARK + CONTENT)
+                content.write_text(MARK + content_css)
             user = profile / "user.js"
             text = user.read_text() if user.exists() else ""
             missing = "".join(pref for pref in PREFS if pref not in text)
