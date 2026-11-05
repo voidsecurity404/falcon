@@ -3,19 +3,58 @@ import Quickshell.Widgets
 import qs.components
 import qs.services
 
+// Forms: wide, tall (cover on top), compact (small cover and one button).
 Item {
     id: root
 
+    property string form: "wide"
     readonly property var player: Media.player
+    readonly property bool tall: form === "tall"
+    readonly property bool compact: form === "compact"
+
+    component ControlButton: Rectangle {
+        id: control
+
+        property string icon: ""
+        property bool main: false
+        signal pressed
+
+        width: main ? 38 : 32
+        height: width
+        radius: width / 2
+        color: main ? Theme.accent : Qt.alpha(Theme.text, controlArea.containsMouse ? 0.14 : 0.06)
+        scale: controlArea.pressed ? 0.9 : 1
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: 110
+            }
+        }
+
+        Icon {
+            anchors.centerIn: parent
+            name: control.icon
+            size: control.main ? 16 : 14
+            color: control.main ? Theme.accentText : Theme.text
+        }
+        MouseArea {
+            id: controlArea
+
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: control.pressed()
+        }
+    }
 
     ClippingRectangle {
         id: art
 
-        x: 16
-        anchors.verticalCenter: parent.verticalCenter
-        width: 118
-        height: 118
-        radius: 14
+        x: root.compact ? 12 : 16
+        y: root.tall ? 16 : (parent.height - height) / 2
+        width: root.tall ? parent.width - 32 : root.compact ? 60 : 118
+        height: width
+        radius: root.compact ? 10 : 14
         color: Qt.alpha(Theme.text, 0.08)
 
         Icon {
@@ -28,16 +67,14 @@ Item {
             anchors.fill: parent
             source: root.player ? root.player.trackArtUrl : ""
             fillMode: Image.PreserveAspectCrop
-            sourceSize.width: 240
-            sourceSize.height: 240
+            sourceSize.width: 400
+            sourceSize.height: 400
         }
     }
     Column {
-        anchors.left: art.right
-        anchors.leftMargin: 14
-        anchors.right: parent.right
-        anchors.rightMargin: 16
-        anchors.verticalCenter: parent.verticalCenter
+        x: root.tall ? 16 : art.x + art.width + (root.compact ? 12 : 14)
+        y: root.tall ? art.y + art.height + 14 : (parent.height - height) / 2
+        width: root.tall ? parent.width - 32 : parent.width - x - (root.compact && root.player ? 62 : 16)
         spacing: 8
 
         Column {
@@ -61,7 +98,7 @@ Item {
             width: parent.width
             height: 4
             radius: 2
-            visible: !!root.player
+            visible: !!root.player && !root.compact
             color: Qt.alpha(Theme.text, 0.14)
 
             Rectangle {
@@ -72,62 +109,35 @@ Item {
             }
         }
         Row {
+            anchors.horizontalCenter: root.tall ? parent.horizontalCenter : undefined
             spacing: 10
-            visible: !!root.player
+            visible: !!root.player && !root.compact
 
-            Repeater {
-                model: [
-                    {
-                        icon: "previous",
-                        main: false,
-                        run: () => root.player.previous()
-                    },
-                    {
-                        icon: root.player && root.player.isPlaying ? "pause" : "play",
-                        main: true,
-                        run: () => root.player.togglePlaying()
-                    },
-                    {
-                        icon: "next",
-                        main: false,
-                        run: () => root.player.next()
-                    }
-                ]
-
-                delegate: Rectangle {
-                    id: control
-
-                    required property var modelData
-
-                    width: modelData.main ? 38 : 32
-                    height: width
-                    anchors.verticalCenter: parent.verticalCenter
-                    radius: width / 2
-                    color: modelData.main ? Theme.accent : Qt.alpha(Theme.text, controlArea.containsMouse ? 0.14 : 0.06)
-                    scale: controlArea.pressed ? 0.9 : 1
-
-                    Behavior on scale {
-                        NumberAnimation {
-                            duration: 110
-                        }
-                    }
-
-                    Icon {
-                        anchors.centerIn: parent
-                        name: control.modelData.icon
-                        size: control.modelData.main ? 16 : 14
-                        color: control.modelData.main ? Theme.accentText : Theme.text
-                    }
-                    MouseArea {
-                        id: controlArea
-
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: control.modelData.run()
-                    }
-                }
+            ControlButton {
+                anchors.verticalCenter: parent.verticalCenter
+                icon: "previous"
+                onPressed: root.player.previous()
+            }
+            ControlButton {
+                anchors.verticalCenter: parent.verticalCenter
+                main: true
+                icon: root.player && root.player.isPlaying ? "pause" : "play"
+                onPressed: root.player.togglePlaying()
+            }
+            ControlButton {
+                anchors.verticalCenter: parent.verticalCenter
+                icon: "next"
+                onPressed: root.player.next()
             }
         }
+    }
+    ControlButton {
+        anchors.right: parent.right
+        anchors.rightMargin: 14
+        anchors.verticalCenter: parent.verticalCenter
+        visible: !!root.player && root.compact
+        main: true
+        icon: root.player && root.player.isPlaying ? "pause" : "play"
+        onPressed: root.player.togglePlaying()
     }
 }

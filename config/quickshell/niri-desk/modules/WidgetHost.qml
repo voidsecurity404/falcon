@@ -20,6 +20,12 @@ Item {
     readonly property var entry: Widgets.get(widgetId)
     readonly property var info: entry ? Widgets.info(entry.type) : null
     readonly property real factor: entry ? Widgets.factor(entry.size) : 1
+    readonly property var form: Widgets.formOf(entry)
+    // The size being moved to. The frame grows to it while x and y already aim at the final place.
+    readonly property real targetWidth: form ? form.w * factor : 0
+    readonly property real targetHeight: form ? form.h * factor : 0
+    // What the content is laid out for. It changes while the content is faded out.
+    property var shownForm: form
     readonly property bool dragging: !isFace && mover.drag.active
     readonly property int gridStep: 16
     readonly property bool interactive: !!info && info.interactive === true
@@ -33,19 +39,19 @@ Item {
     }
 
     readonly property real minX: side
-    readonly property real maxX: side + Math.max(0, areaWidth - width)
+    readonly property real maxX: side + Math.max(0, areaWidth - targetWidth)
     readonly property real minY: topInset
-    readonly property real maxY: Math.max(topInset, areaHeight - height)
+    readonly property real maxY: Math.max(topInset, areaHeight - targetHeight)
 
     function placeX() {
-        return entry ? side + entry.fx * Math.max(0, areaWidth - width) : side;
+        return entry ? side + entry.fx * Math.max(0, areaWidth - targetWidth) : side;
     }
     function placeY() {
-        return entry ? topInset + entry.fy * Math.max(0, areaHeight - topInset - height) : topInset;
+        return entry ? topInset + entry.fy * Math.max(0, areaHeight - topInset - targetHeight) : topInset;
     }
 
-    width: info ? info.w * factor : 0
-    height: info ? info.h * factor : 0
+    width: targetWidth
+    height: targetHeight
     visible: !!entry
     z: dragging ? 10 : 1
 
@@ -72,6 +78,48 @@ Item {
             Widgets.setRect(widgetId, x, y, width, height);
     }
 
+    onFormChanged: {
+        if (form && shownForm && form.name !== shownForm.name)
+            reshape.restart();
+        else
+            shownForm = form;
+    }
+
+    // Tarkib o'chib turganda yangi shaklga o'tadi, shunda eski tuzilish cho'zilib ko'rinmaydi.
+    SequentialAnimation {
+        id: reshape
+
+        NumberAnimation {
+            target: face
+            property: "reshapeOpacity"
+            to: 0
+            duration: 110
+        }
+        ScriptAction {
+            script: host.shownForm = host.form
+        }
+        NumberAnimation {
+            target: face
+            property: "reshapeOpacity"
+            to: 1
+            duration: 200
+        }
+    }
+
+    Behavior on width {
+        NumberAnimation {
+            duration: 300
+            easing.type: Easing.BezierSpline
+            easing.bezierCurve: [0.25, 1.15, 0.35, 1, 1, 1]
+        }
+    }
+    Behavior on height {
+        NumberAnimation {
+            duration: 300
+            easing.type: Easing.BezierSpline
+            easing.bezierCurve: [0.25, 1.15, 0.35, 1, 1, 1]
+        }
+    }
     Behavior on x {
         enabled: !host.dragging
 
@@ -147,14 +195,20 @@ Item {
         Loader {
             id: face
 
-            width: host.info ? host.info.w : 0
-            height: host.info ? host.info.h : 0
+            property real reshapeOpacity: 1
+
+            width: host.shownForm ? host.shownForm.w : 0
+            height: host.shownForm ? host.shownForm.h : 0
             scale: host.factor
             transformOrigin: Item.TopLeft
             active: host.hasContent
             source: host.entry ? Qt.resolvedUrl("widgets/" + host.entry.type + ".qml") : ""
             enabled: !Widgets.editMode && !host.isFace
-            opacity: status === Loader.Ready ? 1 : 0
+            opacity: status === Loader.Ready ? reshapeOpacity : 0
+            onLoaded: {
+                if ("form" in item)
+                    item.form = Qt.binding(() => host.shownForm ? host.shownForm.name : "");
+            }
 
             Behavior on opacity {
                 NumberAnimation {
@@ -193,8 +247,8 @@ Item {
                 return;
             const x = host.snap(host.x, host.minX, host.maxX);
             const y = host.snap(host.y, host.minY, host.maxY);
-            const spanX = Math.max(1, host.areaWidth - host.width);
-            const spanY = Math.max(1, host.areaHeight - host.topInset - host.height);
+            const spanX = Math.max(1, host.areaWidth - host.targetWidth);
+            const spanY = Math.max(1, host.areaHeight - host.topInset - host.targetHeight);
             Widgets.move(host.widgetId, (x - host.side) / spanX, (y - host.topInset) / spanY);
         }
     }

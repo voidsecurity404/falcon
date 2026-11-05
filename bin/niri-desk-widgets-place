@@ -3,8 +3,9 @@
 
 niri-desk-widgets-place IMAGE WIDTH HEIGHT TOP BOTTOM WIDGETS
 
-WIDGETS is JSON: [{"id", "w", "h", "x", "y", "bare"}], sizes and current places in screen pixels,
-bare when the widget has no glass plate. Prints {"id": {"x", "y"}}.
+WIDGETS is JSON: [{"id", "form", "forms": [{"name", "w", "h"}], "x", "y", "bare"}], the current form and
+place and the sizes of every form in screen pixels, bare when the widget has no glass plate.
+Prints {"id": {"x", "y", "form"}}.
 TOP and BOTTOM are the strips of the screen kept free for the panel.
 """
 import json
@@ -20,6 +21,7 @@ MARGIN = 32  # distance from the free area's edge
 GAP = 16
 TRIES = 6000
 UNTIDY = 0.35  # how much a jagged layout costs next to covering the picture
+FULL = 0.25
 MIN_MOVE = 160  # the mean distance widgets must travel, so every new wallpaper gives a new layout
 
 
@@ -100,7 +102,9 @@ class Scene:
             each.append(value)
             area += size
             total += value * size
-        return total / area + max(each) * 0.35 + (1 - alignment(placed)) * UNTIDY
+        # Small forms always find a calm spot, so a fuller form earns something back.
+        fullness = area / sum(max(f["w"] * f["h"] for f in w["forms"]) for w, _, _ in placed)
+        return total / area + max(each) * 0.35 + (1 - alignment(placed)) * UNTIDY - fullness * FULL
 
 
 def alignment(placed):
@@ -158,9 +162,15 @@ def cluster(scene, group, side, align):
     return a + [(w, x + shift, y) for w, x, y in b]
 
 
+def dressed(widget):
+    """The widget in one of its forms."""
+    form = random.choice(widget["forms"])
+    return {**widget, "form": form["name"], "w": form["w"], "h": form["h"], "was": widget["form"]}
+
+
 def candidate(scene, widgets):
     """One random tidy composition: a column, a row, a cluster, or a pair of them on opposite sides."""
-    group = widgets[:]
+    group = [dressed(w) for w in widgets]
     random.shuffle(group)
     kind = random.choice(("column", "row", "cluster", "columns", "rows", "corner"))
     side = random.randint(0, 1)
@@ -214,6 +224,10 @@ def fits(scene, placed):
     return True
 
 
+def reshaped(placed):
+    return sum(w["form"] != w["was"] for w, _, _ in placed)
+
+
 def moved(placed):
     return sum(np.hypot(x - w["x"], y - w["y"]) for w, x, y in placed) / len(placed)
 
@@ -222,6 +236,9 @@ def place(path, width, height, top, bottom, widgets):
     rgb = picture(path, width, height)
     scene = Scene(busy_map(rgb), rgb.mean(axis=2), width, top, height - bottom)
     random.seed(path)
+    # Every new wallpaper also gives at least half of the widgets that can change another form.
+    changeable = sum(len(w["forms"]) > 1 for w in widgets)
+    need = (changeable + 1) // 2
     best = None
     best_cost = float("inf")
     fallback = None
@@ -234,12 +251,12 @@ def place(path, width, height, top, bottom, widgets):
         cost = scene.cost(placed)
         if cost < fallback_cost:
             fallback, fallback_cost = placed, cost
-        if cost < best_cost and moved(placed) >= MIN_MOVE:
+        if cost < best_cost and moved(placed) >= MIN_MOVE and reshaped(placed) >= need:
             best, best_cost = placed, cost
     chosen = best or fallback
     if not chosen:
         return {}
-    return {w["id"]: {"x": x, "y": y} for w, x, y in chosen}
+    return {w["id"]: {"x": x, "y": y, "form": w["form"]} for w, x, y in chosen}
 
 
 def main():

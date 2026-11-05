@@ -6,6 +6,7 @@ import Quickshell.Io
 
 // Desktop widgets: which ones, where and how large. Stored in ~/.config/niri-desk/widgets.json.
 // Places are fractions of the free screen area, so a layout survives another resolution.
+// Each widget type has one or more forms: its content arranged for another shape. The first is the usual one.
 Singleton {
     id: root
 
@@ -14,48 +15,42 @@ Singleton {
             type: "clock",
             title: Tr.t("Clock"),
             icon: "clock",
-            w: 560,
-            h: 190,
+            forms: [{ name: "wide", w: 560, h: 190 }, { name: "tall", w: 270, h: 340 }, { name: "compact", w: 290, h: 124 }],
             plate: false
         },
         {
             type: "analog",
             title: Tr.t("Analog clock"),
             icon: "clock",
-            w: 190,
-            h: 190,
+            forms: [{ name: "round", w: 190, h: 190 }],
             plate: true
         },
         {
             type: "calendar",
             title: Tr.t("Calendar"),
             icon: "calendar",
-            w: 258,
-            h: 268,
+            forms: [{ name: "month", w: 258, h: 268 }, { name: "week", w: 400, h: 112 }],
             plate: true
         },
         {
             type: "weather",
             title: Tr.t("Weather"),
             icon: "sun",
-            w: 240,
-            h: 130,
+            forms: [{ name: "wide", w: 240, h: 130 }, { name: "tall", w: 170, h: 190 }, { name: "compact", w: 210, h: 84 }],
             plate: true
         },
         {
             type: "system",
             title: Tr.t("System"),
             icon: "system",
-            w: 380,
-            h: 250,
+            forms: [{ name: "wide", w: 380, h: 250 }, { name: "tall", w: 210, h: 340 }, { name: "compact", w: 380, h: 96 }],
             plate: true
         },
         {
             type: "music",
             title: Tr.t("Music"),
             icon: "music",
-            w: 400,
-            h: 150,
+            forms: [{ name: "wide", w: 400, h: 150 }, { name: "tall", w: 230, h: 350 }, { name: "compact", w: 310, h: 84 }],
             plate: true,
             interactive: true
         },
@@ -63,16 +58,14 @@ Singleton {
             type: "claude",
             title: Tr.t("Claude limits"),
             icon: "sparkle",
-            w: 290,
-            h: 158,
+            forms: [{ name: "wide", w: 290, h: 158 }, { name: "compact", w: 290, h: 92 }],
             plate: true
         },
         {
             type: "notes",
             title: Tr.t("Notes"),
             icon: "note",
-            w: 290,
-            h: 230,
+            forms: [{ name: "wide", w: 290, h: 230 }, { name: "tall", w: 230, h: 350 }, { name: "short", w: 420, h: 150 }],
             plate: true,
             interactive: true
         }
@@ -165,6 +158,14 @@ Singleton {
         return items.find(w => w.id === id) || null;
     }
 
+    // The form a widget has now, with its size before scaling.
+    function formOf(w) {
+        const i = w ? info(w.type) : null;
+        if (!i)
+            return null;
+        return i.forms.find(f => f.name === w.form) || i.forms[0];
+    }
+
     function factor(size) {
         return sizes[size] || 1;
     }
@@ -183,7 +184,8 @@ Singleton {
                 type: w.type,
                 fx: Math.max(0, Math.min(1, Number(w.fx) || 0)),
                 fy: Math.max(0, Math.min(1, Number(w.fy) || 0)),
-                size: sizes[w.size] ? w.size : "m"
+                size: sizes[w.size] ? w.size : "m",
+                form: typeof w.form === "string" ? w.form : ""
             });
         }
         return out;
@@ -257,14 +259,18 @@ Singleton {
         const spanY = screen.height - bottom - top;
         const list = items.map(w => {
             const i = info(w.type);
-            const width = i.w * factor(w.size);
-            const height = i.h * factor(w.size);
+            const scale = factor(w.size);
+            const form = formOf(w);
             return {
                 id: w.id,
-                w: width,
-                h: height,
-                x: 16 + w.fx * Math.max(0, spanX - width),
-                y: top + w.fy * Math.max(0, spanY - height),
+                form: form.name,
+                forms: i.forms.map(f => ({
+                    name: f.name,
+                    w: f.w * scale,
+                    h: f.h * scale
+                })),
+                x: 16 + w.fx * Math.max(0, spanX - form.w * scale),
+                y: top + w.fy * Math.max(0, spanY - form.h * scale),
                 bare: !i.plate
             };
         });
@@ -287,10 +293,12 @@ Singleton {
             return;
         apply(items.map(w => {
             const place = places[w.id];
-            const size = placer.sizes.find(s => s.id === w.id);
-            if (!place || !size)
+            const sent = placer.sizes.find(s => s.id === w.id);
+            const size = sent ? sent.forms.find(f => f.name === place?.form) : null;
+            if (!size)
                 return w;
             return Object.assign({}, w, {
+                form: size.name,
                 fx: Math.max(0, Math.min(1, (place.x - 16) / Math.max(1, placer.spanX - size.w))),
                 fy: Math.max(0, Math.min(1, (place.y - placer.top) / Math.max(1, placer.spanY - size.h)))
             });

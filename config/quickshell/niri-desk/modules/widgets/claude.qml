@@ -2,14 +2,20 @@ import QtQuick
 import qs.components
 import qs.services
 
+// Forms: wide, compact (only the two meters).
 Item {
+    id: root
+
+    property string form: "wide"
+
     Column {
         x: 18
-        y: 14
+        y: root.form === "compact" ? (parent.height - height) / 2 : 14
         width: parent.width - 36
         spacing: 10
 
         Label {
+            visible: root.form !== "compact"
             text: Tr.t("Claude limits")
             color: Theme.muted
             size: 12
@@ -73,7 +79,7 @@ Item {
                     }
                 }
                 Label {
-                    visible: meter.modelData.reset !== ""
+                    visible: root.form !== "compact" && meter.modelData.reset !== ""
                     text: meter.modelData.reset
                     color: Theme.muted
                     size: 10
