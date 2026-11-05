@@ -1864,12 +1864,12 @@ def nshots():
 
 def take():
     key("mod", "shift", "s")
-    time.sleep(0.9)
-    key("enter")
+    wait(lambda: st()["region"] == "select", 3)
+    drag(100, 100, 400, 300)
     time.sleep(0.7)
 
 
-@case("Mod+Shift+S va Enter fayl saqlaydi")
+@case("Mod+Shift+S va sohani belgilash fayl saqlaydi")
 def _():
     n = nshots()
     take()
@@ -1893,9 +1893,10 @@ def _():
 def _():
     n = nshots()
     key("mod", "shift", "s")
-    time.sleep(0.8)
+    wait(lambda: st()["region"] == "select", 3)
     key("esc")
     time.sleep(0.6)
+    ok(st()["region"] == "")
     ok(nshots() == n)
     ok(st()["toast"] == "")
 
@@ -1930,8 +1931,8 @@ def _():
 def _():
     n = nshots()
     key("print")
-    time.sleep(0.9)
-    key("enter")
+    wait(lambda: st()["region"] == "select", 3)
+    drag(100, 100, 400, 300)
     wait(lambda: nshots() == n + 1, 4)
 
 
@@ -1970,7 +1971,7 @@ def nvideos():
 
 def rec_start():
     key("mod", "shift", "r")
-    wait(lambda: sh("pgrep -u $(id -u) -x slurp").returncode == 0, 3, "soha tanlash ochilmadi")
+    wait(lambda: st()["region"] == "select", 3, "soha tanlash ochilmadi")
     time.sleep(0.2)
     drag(100, 100, 500, 400)
     wait(lambda: st()["recording"], 4)
@@ -2009,7 +2010,7 @@ def _():
 @case("Esc bilan bekor qilinsa yozish boshlanmaydi")
 def _():
     key("mod", "shift", "r")
-    wait(lambda: sh("pgrep -u $(id -u) -x slurp").returncode == 0, 3)
+    wait(lambda: st()["region"] == "select", 3)
     time.sleep(0.2)
     key("esc")
     time.sleep(0.6)
@@ -2042,7 +2043,7 @@ def _():
     sh("pkill -9 -x wf-recorder")
     time.sleep(0.4)
     key("mod", "shift", "r")
-    wait(lambda: sh("pgrep -u $(id -u) -x slurp").returncode == 0, 3)
+    wait(lambda: st()["region"] == "select", 3)
     key("esc")
     ipc("recording", "false")
 
@@ -2080,7 +2081,7 @@ def term_text(text):
 
 def ocr_region():
     key("mod", "p")
-    wait(lambda: sh("pgrep -u $(id -u) -x slurp").returncode == 0, 3)
+    wait(lambda: st()["region"] == "select", 3)
     time.sleep(0.2)
 
 
@@ -3213,106 +3214,146 @@ def _():
     wait(lambda: re.fullmatch(r"#[0-9a-fA-F]{6}", clip_text()), 5, clip_text())
 
 
-feature("translate", "Ekrandan tarjima")
+feature("translate", "Rasmdagi yozuvlarni tarjima qilish")
 
 SHIM = Path("/tmp/nd-shim")
+TRANSLATE_PIC = Path("/tmp/nd-translate.png")
 
 
-def shim(text="Hello", trans_ok=True, slurp_ok=True):
+def shim(trans_ok=True):
     SHIM.mkdir(exist_ok=True)
     Path("/tmp/nd-trans.args").unlink(missing_ok=True)
-    tools = {
-        "slurp": "echo '0,0 10x10'" if slurp_ok else "exit 1",
-        "grim": "echo png",
-        "tesseract": f'case "$1" in --list-langs) printf "List\\neng\\nosd\\n";; *) cat >/dev/null; echo "$*" > /tmp/nd-tess.args; printf %s "{text}";; esac',
-        "trans": 'echo "$*" > /tmp/nd-trans.args; echo Salom' if trans_ok else "exit 1",
-    }
-    for name, body in tools.items():
-        p = SHIM / name
-        p.write_text(f"#!/bin/sh\n{body}\n")
-        p.chmod(0o755)
+    body = 'echo "$*" > /tmp/nd-trans.args; echo Salom' if trans_ok else "exit 1"
+    (SHIM / "trans").write_text(f"#!/bin/sh\n{body}\n")
+    (SHIM / "trans").chmod(0o755)
 
 
-def tr():
-    return sh(f"PATH={SHIM}:$PATH {LBIN}/niri-desk-translate", timeout=8)
+def translate_cli(picture, *args):
+    out = "/tmp/nd-translated.png"
+    Path(out).unlink(missing_ok=True)
+    run = sh(f"PATH={SHIM}:$PATH {LBIN}/niri-desk-image-translate {picture} {out} " + " ".join(args), timeout=30)
+    stages = [json.loads(line) for line in run.stdout.splitlines()]
+    return stages, Path(out)
 
 
-def tr_bg():
-    # Haqiqiy klavish kabi niri orqali: oyna niri muhitida ochiladi.
-    niri("spawn", "--", "sh", "-c", f"PATH={SHIM}:$PATH exec {LBIN}/niri-desk-translate")
+def text_picture(words="HELLO WORLD"):
+    sh(f"magick -size 600x120 xc:white -pointsize 40 -fill black -annotate +30+70 '{words}' {TRANSLATE_PIC}")
 
 
-@case("Natija oynada ochiladi")
+@case("Yozuvli rasm tarjima qilinadi")
 def _():
     shim()
-    tr_bg()
-    w = wait(windows, 12, sh("pgrep -a kitty; pgrep -af translate; ls -la /tmp/nd-trans.args").stdout)[0]
-    ok(w["title"] == "niri-desk translate", w)
+    text_picture()
+    stages, out = translate_cli(TRANSLATE_PIC)
+    ok(stages[-1]["stage"] == "done", stages)
+    ok(stages[-1]["text"] == "Salom", stages)
+    ok(out.exists())
 
 
-@case("Oyna suzib turadi")
+@case("Natija rasm hajmi asl rasmniki bilan bir xil")
 def _():
     shim()
-    tr_bg()
-    ok(wait(windows, 12)[0]["is_floating"])
+    text_picture()
+    _, out = translate_cli(TRANSLATE_PIC)
+    ok(sh(f"magick identify -format '%wx%h' {out}").stdout == "600x120")
 
 
-@case("Natija clipboard'ga tushadi")
+@case("Yozuvsiz rasm uchun 'empty' deydi")
 def _():
     shim()
-    tr_bg()
-    wait(lambda: clip_text() == "Salom", 5, "nusxalanmadi")
-    wait(windows, 12, "ochilmadi")
+    sh(f"magick -size 300x120 xc:'#335577' {TRANSLATE_PIC}")
+    stages, out = translate_cli(TRANSLATE_PIC)
+    ok(stages[-1]["stage"] == "empty", stages)
+    ok(not out.exists())
 
 
-@case("Tanlov bekor qilinsa hech narsa bo'lmaydi")
-def _():
-    shim(slurp_ok=False)
-    ok(tr().returncode == 0)
-    ok(windows() == [])
-
-
-@case("Matn bo'lmasa xabar beradi")
-def _():
-    shim(text="")
-    tr()
-    wait(lambda: st()["toast"] == "No text found", 3, "aytilmadi")
-
-
-@case("Internet bo'lmasa asl matn nusxalanadi")
+@case("Internet bo'lmasa xato deydi")
 def _():
     shim(trans_ok=False)
-    tr()
-    wait(lambda: st()["toast"] == "Translation failed", 3, "aytilmadi")
-    ok(clip_text() == "Hello")
+    text_picture()
+    stages, _ = translate_cli(TRANSLATE_PIC)
+    ok(stages[-1]["stage"] == "error", stages)
+
+
+@case("Til argumentdan olinadi")
+def _():
+    shim()
+    text_picture()
+    translate_cli(TRANSLATE_PIC, "--to", "uz")
+    ok(":uz" in Path("/tmp/nd-trans.args").read_text())
 
 
 @case("Til sozlamadan olinadi")
 def _():
     settings(translate__to="ru")
     shim()
-    tr_bg()
-    wait(lambda: Path("/tmp/nd-trans.args").exists() and ":ru" in Path("/tmp/nd-trans.args").read_text(), 5, "til o'tmadi")
+    text_picture()
+    translate_cli(TRANSLATE_PIC)
+    ok(":ru" in Path("/tmp/nd-trans.args").read_text())
 
 
-@case("Standart til o'zbekcha")
+@case("Mod+Alt+P tanlash ekranini ochadi, Esc yopadi")
 def _():
-    shim()
-    tr_bg()
-    wait(lambda: Path("/tmp/nd-trans.args").exists() and ":en" in Path("/tmp/nd-trans.args").read_text(), 5, "til o'tmadi")
+    key("mod", "alt", "p")
+    wait(lambda: st()["region"] == "select" and st()["regionAction"] == "translate", 3)
+    key("esc")
+    wait(lambda: st()["region"] == "", 3)
 
 
-@case("OCR xato qilsa jim to'xtamaydi, xabar beradi")
+@case("Oyna suzib ochiladi va yopilganda fayllar o'chadi")
 def _():
-    shim()
-    (SHIM / "tesseract").write_text('#!/bin/sh\ncase "$1" in --list-langs) echo List;; *) exit 3;; esac\n')
-    tr()
-    wait(lambda: st()["toast"] == "No text found", 3, "aytilmadi")
+    text_picture()
+    copy_pic = Path("/tmp/nd-translate-copy.png")
+    shutil.copy(TRANSLATE_PIC, copy_pic)
+    ipc("translateImage", str(copy_pic), "600", "120")
+    w = wait(lambda: next(w for w in windows() if w["title"] == "niri-desk translate"), 6)
+    ok(w["is_floating"], w)
+    niri("close-window", "--id", w["id"])
+    wait(lambda: not copy_pic.exists(), 4)
 
 
 @case("Klavish sozlangan")
 def _():
-    ok("niri-desk-translate" in (GEN / "binds.kdl").read_text())
+    ok('"region" "translate"' in (GEN / "binds.kdl").read_text())
+
+
+feature("region", "Soha tanlash")
+
+
+@case("Bir xil amal ikkinchi marta bosilsa yopiladi")
+def _():
+    ipc("region", "copy")
+    wait(lambda: st()["region"] == "select", 3)
+    ipc("region", "copy")
+    wait(lambda: st()["region"] == "", 3)
+
+
+@case("Boshqa amal tanlash ekranini yopmaydi, amalni almashtiradi")
+def _():
+    ipc("region", "copy")
+    wait(lambda: st()["region"] == "select", 3)
+    ipc("region", "search")
+    ok(st()["regionAction"] == "search")
+    key("esc")
+    wait(lambda: st()["region"] == "", 3)
+
+
+@case("Oyna yo'q joyni bosish hech narsa qilmaydi")
+def _():
+    n = nshots()
+    ipc("region", "copy")
+    wait(lambda: st()["region"] == "select", 3)
+    click(600, 500)
+    time.sleep(0.5)
+    ok(st()["region"] == "select" and nshots() == n)
+    key("esc")
+
+
+@case("Rasm fayllari ish tugagach o'chadi")
+def _():
+    take()
+    time.sleep(0.6)
+    ok(not (Path(os.environ["XDG_RUNTIME_DIR"]) / "niri-desk-region").exists())
 
 
 feature("monitors", "Monitor profillari")

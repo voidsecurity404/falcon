@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+"""Prints where the windows of the active workspace are on a picture of an output, as JSON.
+
+niri reports the place of floating windows only. For tiled ones it gives sizes and order, not the
+scroll position, so the position that best fits the edges seen in the picture is searched for.
+Usage: niri-desk-region-windows IMAGE OUTPUT
+"""
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+import numpy as np
+from PIL import Image
+
+# Weaker edges than this, in levels of 255, are not taken as a window border.
+MIN_EDGE = 1.5
+
+
+def niri(what):
+    return json.loads(subprocess.run(["niri", "msg", "-j", what], capture_output=True, text=True, check=True).stdout)
+
+
+def gaps():
+    settings = Path.home() / ".config/niri/generated/settings.kdl"
+    try:
+        found = re.search(r"^\s*gaps\s+([\d.]+)", settings.read_text(), re.M)
+    except OSError:
+        found = None
+    return float(found.group(1)) if found else 16.0
+
+
+def edges(gray, axis):
+    """How strong a straight edge is at each position. The median ignores text, which is not on every line."""
+    lines = gray[:: 6, :] if axis == 1 else gray[:, :: 6]
+    steps = np.abs(np.diff(lines, axis=axis))
+    profile = np.median(steps, axis=1 - axis)
+    # A focus ring or a soft corner spreads an edge over a few pixels.
+    return np.convolve(profile, np.ones(3), "same")
+
+
+def best_offset(profile, parts, low, high):
+    """Finds the offset that puts the edges of parts, (start, size) pairs, on the strongest places."""
+    best, best_score = None, 0.0
+    last = len(profile) - 1
+    for offset in range(int(low), int(high) + 1):
+        score = 0.0
+        for start, size in parts:
+            for edge in (offset + start, offset + start + size):
+                if 0 <= edge <= last:
+                    score += profile[int(edge)]
+        if score > best_score:
+            best, best_score = offset, score
+    return best if best_score >= MIN_EDGE else None
+
+
+def tiled_rects(windows, gray, scale, gap):
+    height, width = gray.shape
+    columns = {}
+    for w in windows:
+        columns.setdefault(w["layout"]["pos_in_scrolling_layout"][0], []).append(w)
+
+    parts, x = [], 0.0
+    place = {}
+    for index in sorted(columns):
+        size = max(w["layout"]["tile_size"][0] for w in columns[index]) * scale
+        parts.append((x, size))
+        place[index] = (x, size)
+        x += size + gap
+    total = x - gap
+
+    # Keep the focused column on screen, niri always does.
+    low, high = (0, width - total) if total <= width else (width - total, 0)
+    focused = next((w for w in windows if w["is_focused"]), None)
+    if focused:
+        start, size = place[focused["layout"]["pos_in_scrolling_layout"][0]]
+        low, high = max(low, -start), min(high, width - start - size)
+    offset = best_offset(edges(gray, 1), parts, min(low, high), max(low, high))
+    if offset is None:
+        return []
+
+    rects = []
+    for index, column in columns.items():
+        start, size = place[index]
+        left, right = max(0, offset + start), min(width, offset + start + size)
+        if right - left < 40:
+            continue
+        column.sort(key=lambda w: w["layout"]["pos_in_scrolling_layout"][1])
+        heights = [w["layout"]["tile_size"][1] * scale for w in column]
+        stack, y = [], 0.0
+        for h in heights:
+            stack.append((y, h))
+            y += h + gap
+        room = height - (y - gap)
+        top = best_offset(edges(gray[:, int(left) : int(right)], 0), stack, 0, max(0, room)) if room > 0 else 0
+        if top is None:
+            continue
+        for w, (y, h) in zip(column, stack):
+            rects.append((w, offset + start, top + y, size, h))
+    return rects
+
+
+def main():
+    image, output = sys.argv[1], sys.argv[2]
+    workspace = next((w["id"] for w in niri("workspaces") if w["output"] == output and w["is_active"]), None)
+    logical = niri("outputs")[output]["logical"]
+    scale = logical["scale"]
+    windows = [w for w in niri("windows") if w["workspace_id"] == workspace]
+
+    found = []
+    for w in windows:
+        if w["is_floating"] and w["layout"].get("tile_pos_in_workspace_view"):
+            x, y = w["layout"]["tile_pos_in_workspace_view"]
+            found.append((w, x * scale, y * scale, w["layout"]["tile_size"][0] * scale, w["layout"]["tile_size"][1] * scale))
+    tiled = [w for w in windows if not w["is_floating"]]
+    if tiled:
+        gray = np.asarray(Image.open(image).convert("L"), dtype=np.int16)
+        found += tiled_rects(tiled, gray, scale, gaps() * scale)
+
+    result = []
+    for w, x, y, width, height in found:
+        left, top = max(0, x), max(0, y)
+        result.append({
+            "x": round(left / scale),
+            "y": round(top / scale),
+            "w": round(min(logical["width"] * scale, x + width) / scale - left / scale),
+            "h": round(min(logical["height"] * scale, y + height) / scale - top / scale),
+            "app": w["app_id"] or "",
+            "title": w["title"] or "",
+        })
+    print(json.dumps(result, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()

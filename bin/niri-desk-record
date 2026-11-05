@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Ekranni yozishni yoqadi yoki o'chiradi. Avval soha tanlanadi, Esc bekor qiladi.
+# Starts or stops recording. Without an area it stops, or asks the shell to let the user select one.
+# Usage: niri-desk-record ["X,Y WxH"]
 set -euo pipefail
 
 pidfile="${XDG_RUNTIME_DIR:-/tmp}/niri-desk-record.pid"
@@ -15,7 +16,10 @@ if [[ -f "$pidfile" ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
     exit 0
 fi
 
-region="$(slurp)" || exit 0
+region="${1:-}"
+if [[ -z "$region" ]]; then
+    exec qs -c niri-desk ipc call desk region record
+fi
 mkdir -p "$videos"
 file="$videos/$(date +%Y-%m-%d_%H-%M-%S).mp4"
 wf-recorder -g "$region" -f "$file" >/dev/null 2>&1 &

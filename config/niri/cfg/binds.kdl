@@ -86,7 +86,7 @@ binds {
     Mod+Shift+Ctrl+L { move-column-to-monitor-right; }
 
     // Skrinshot, yozish, matn olish
-    Print { screenshot; }
+    Print repeat=false { spawn "qs" "-c" "niri-desk" "ipc" "call" "desk" "region" "copy"; }
     Ctrl+Print repeat=false { spawn "~/.local/bin/niri-desk-shot" "screen"; }
     Alt+Print repeat=false { spawn "~/.local/bin/niri-desk-shot" "window"; }
 

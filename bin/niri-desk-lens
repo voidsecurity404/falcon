@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Searches a picture on Google and opens the results in the browser.
+# The picture goes only to Google. Usage: niri-desk-lens IMAGE
+set -euo pipefail
+
+_t() { "$HOME/.local/bin/niri-desk-tr" "$1"; }
+tell() { qs -c niri-desk ipc call desk toast "$@" >/dev/null 2>&1 || true; }
+
+tell "$(_t "Searching on Google")" "$(_t "Sending the picture")"
+lang="$("$HOME/.local/bin/niri-desk-tr" --lang)"
+url="$(curl -sS -m 30 -o /dev/null -w '%{redirect_url}' \
+    -A 'Mozilla/5.0 (X11; Linux x86_64; rv:135.0) Gecko/20100101 Firefox/135.0' \
+    -F "encoded_image=@$1;type=image/png" \
+    "https://lens.google.com/v3/upload?ep=ccm&st=$(date +%s%3N)&hl=$lang" 2>/dev/null)" || url=""
+
+if [[ "$url" != https://* ]]; then
+    tell "$(_t "Search failed")" "$(_t "Check the internet")"
+    exit 1
+fi
+xdg-open "$url" >/dev/null 2>&1
+# The browser only opens a tab and may be on another workspace, so it is brought forward.
+sleep 0.4
+"$HOME/.local/bin/niri-desk-raise" 'firefox|chrom|brave|zen|helium' true >/dev/null 2>&1 || true

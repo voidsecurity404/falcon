@@ -88,7 +88,9 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 - `niri-desk-sync [--check] [--pull]`: copies changed files from the repo to the live desktop, leaving generated files and user data alone.
 - `niri-desk-login`: sets up the SDDM login screen, it asks for sudo.
 - Lock screen: Settings → System chooses hyprlock or the shell's own lock screen. `qs -c niri-desk ipc call desk lockPreview` shows the shell's one without locking, Esc closes it.
-- `niri-desk-translate`: the text is sent to an online translation service (`translate-shell`).
+- Screen capture: `Mod+Shift+S` and `Print` freeze the screen and let you select an area or click a window. Left click copies and saves, right click opens the editor. The toolbar switches between screenshot, Google search, text, translation and recording. Esc closes it.
+- Google search: the selected picture is sent directly to Google Lens, and the results open in the browser.
+- Translation: `niri-desk-image-translate IMAGE OUT [--to LANG]` writes a copy of a picture with its text translated in place, and a window shows the result. The text goes to an online translation service (`translate-shell`).
 
 ## Configuration
 

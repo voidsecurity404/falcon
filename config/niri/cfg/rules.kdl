@@ -81,6 +81,12 @@ window-rule {
     default-window-height { fixed 720; }
 }
 
+// The window with a translated picture sets its own size to fit the picture.
+window-rule {
+    match title="^niri-desk translate$"
+    open-floating true
+}
+
 // Scratchpad terminal tepada suzib turadi.
 window-rule {
     match app-id="^niri-desk-scratch$"

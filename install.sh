@@ -64,7 +64,10 @@ targets=(
     .local/bin/niri_desk_tr.py
     .config/hypr/niri-desk-lang.conf
     .local/bin/niri-desk-session
-    .local/bin/niri-desk-translate
+    .local/bin/niri-desk-region
+    .local/bin/niri-desk-region-windows
+    .local/bin/niri-desk-lens
+    .local/bin/niri-desk-image-translate
     .local/bin/niri-desk-backup
     .local/bin/niri-desk-shell
     .local/bin/niri-desk-set

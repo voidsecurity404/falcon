@@ -16,7 +16,7 @@ from niri_desk_tr import tr
 HOME = Path.home()
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
 STATE = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local/state")) / "niri-desk"
-COMMANDS = ["niri", "qs", "awww", "matugen", "hyprlock", "hypridle", "kitty", "cliphist", "wl-copy", "grim", "slurp", "wf-recorder",
+COMMANDS = ["niri", "qs", "awww", "matugen", "hyprlock", "hypridle", "kitty", "cliphist", "wl-copy", "grim", "wf-recorder",
             "tesseract", "playerctl", "brightnessctl", "wlsunset", "fd", "mpvpaper", "ffmpeg", "qt6ct", "satty"]
 PROCESSES = ["qs", "awww-daemon", "hypridle"]
 problems = 0

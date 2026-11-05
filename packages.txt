@@ -7,6 +7,7 @@ qt6-declarative
 jq
 python
 python-numpy
+python-pillow
 translate-shell
 tmux
 power-profiles-daemon
@@ -36,7 +37,6 @@ qt6ct
 wl-clipboard
 cliphist
 grim
-slurp
 wf-recorder
 tesseract
 tesseract-data-eng

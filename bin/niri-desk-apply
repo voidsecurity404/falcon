@@ -262,10 +262,10 @@ ACTIONS = {
     "widthCycle": ("Column width", "switch-preset-column-width", True),
     "maximize": ("Maximize column", "maximize-column", True),
     "fullscreen": ("Fullscreen", "fullscreen-window", False),
-    "screenshot": ("Screenshot", "screenshot", False),
+    "screenshot": ("Screenshot", "spawn " + desk("region", "copy"), False),
     "record": ("Record screen", f'spawn "{SCRIPTS}niri-desk-record"', False),
-    "ocr": ("Copy text from screen", f'spawn "{SCRIPTS}niri-desk-ocr"', False),
-    "translate": ("Translate from screen", f'spawn "{SCRIPTS}niri-desk-translate"', False),
+    "ocr": ("Copy text from screen", "spawn " + desk("region", "ocr"), False),
+    "translate": ("Translate from screen", "spawn " + desk("region", "translate"), False),
     "widgets": ("Edit widgets", "spawn " + desk("widgets"), False),
 }
 

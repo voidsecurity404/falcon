@@ -32,6 +32,9 @@ ShellRoot {
                 Dock {
                     screen: perScreen.modelData
                 }
+                RegionSelector {
+                    screen: perScreen.modelData
+                }
             }
         }
     }
@@ -42,6 +45,7 @@ ShellRoot {
     PowerMenu {}
     WallpaperPicker {}
     SettingsWindow {}
+    TranslateWindow {}
     WindowSwitcher {}
 
     // niri bindlari shu funksiyalarni chaqiradi: qs -c niri-desk ipc call desk <nom>
@@ -56,6 +60,19 @@ ShellRoot {
         }
         function menu(): void {
             Ui.togglePopup("menu");
+        }
+        function region(action: string): void {
+            Ui.region(action);
+        }
+        // Selects an area without the mouse. With done false it only shows the selection.
+        function regionPick(x: real, y: real, w: real, h: real, done: bool): void {
+            Ui.regionPicked(x, y, w, h, done);
+        }
+        function screenshotTaken(path: string): void {
+            Niri.screenshotTaken(path);
+        }
+        function translateImage(path: string, width: int, height: int): void {
+            Ui.translateImage(path, width, height);
         }
         function power(): void {
             Ui.togglePopup("power");
@@ -86,6 +103,8 @@ ShellRoot {
         function state(): string {
             return JSON.stringify({
                 popup: Ui.popup,
+                region: Ui.regionPhase,
+                regionAction: Ui.regionAction,
                 zen: Ui.zen,
                 settings: Ui.settingsOpen,
                 recording: Ui.recording,
@@ -163,6 +182,8 @@ ShellRoot {
         }
         function close(): void {
             Ui.popup = "";
+            if (Ui.regionPhase !== "")
+                Ui.regionCancel();
         }
         function widgets(): void {
             Widgets.editMode = !Widgets.editMode;

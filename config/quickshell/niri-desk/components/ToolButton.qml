@@ -7,9 +7,11 @@ Column {
     property string icon: ""
     property string title: ""
 
+    property int columns: 4
+
     signal clicked
 
-    width: parent.width / 6
+    width: parent.width / columns
     spacing: 5
 
     Rectangle {

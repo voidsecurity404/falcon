@@ -45,6 +45,19 @@ Singleton {
 
     readonly property bool topPanelOpen: popup === "dashboard" || popup === "control" || popup === "tray" || popup === "claude"
 
+    // Choosing a part of the screen: "" closed, "wait" lets panels close first, "grab" pictures
+    // the screens, "select" shows them.
+    property string regionPhase: ""
+    property string regionAction: "copy"
+    property bool regionLasso: false
+    property int regionReady: 0
+    readonly property string regionDir: Quickshell.env("XDG_RUNTIME_DIR") + "/niri-desk-region"
+
+    // The picture being translated in its own window, "" when that window is closed.
+    property string translateSource: ""
+    property int translateWidth: 1
+    property int translateHeight: 1
+
     property string switcherPhase: ""
     property var switcherRows: []
     property int switcherSelected: 0
@@ -52,9 +65,78 @@ Singleton {
     signal launcherInject(string text)
     signal switcherStep(int step, bool sameApp)
     signal switcherEnd(bool confirm)
+    signal regionPicked(real x, real y, real w, real h, bool done)
 
     function togglePopup(name) {
         popup = popup === name ? "" : name;
+    }
+
+    // Opens the selector, or changes its action or closes it when it is already open.
+    function region(action) {
+        if (action === "record" && recording) {
+            run("niri-desk-record");
+            return;
+        }
+        if (regionPhase !== "") {
+            if (regionAction === action)
+                regionCancel();
+            else
+                regionAction = action;
+            return;
+        }
+        regionAction = action;
+        regionLasso = false;
+        regionReady = 0;
+        // A panel that is closing must not get into the picture.
+        const panel = popup !== "" || menuAlive || powerAlive || pickerAlive;
+        popup = "";
+        regionPhase = "wait";
+        regionDelay.interval = panel ? 300 : 1;
+        regionDelay.restart();
+    }
+
+    function regionGrabbed(ok) {
+        if (regionPhase !== "grab")
+            return;
+        if (!ok) {
+            regionCancel();
+            return;
+        }
+        regionReady += 1;
+        if (regionReady >= Quickshell.screens.length)
+            regionPhase = "select";
+    }
+
+    function regionCancel() {
+        regionDelay.stop();
+        regionPhase = "";
+        Quickshell.execDetached(["rm", "-rf", regionDir]);
+    }
+
+    // The chosen action works from the picture, so it is not removed here.
+    function regionFinished() {
+        regionPhase = "";
+    }
+
+    function translateImage(path, width, height) {
+        const before = translateSource;
+        translateSource = "";
+        if (before !== "")
+            removeTranslateFiles(before);
+        translateWidth = Math.max(1, width);
+        translateHeight = Math.max(1, height);
+        translateSource = path;
+    }
+
+    function translateClose() {
+        if (translateSource === "")
+            return;
+        removeTranslateFiles(translateSource);
+        translateSource = "";
+    }
+
+    function removeTranslateFiles(path) {
+        Quickshell.execDetached(["rm", "-f", path, path + ".translated.png"]);
     }
 
     function setRecording(on) {
@@ -68,6 +150,12 @@ Singleton {
 
     function pad(n) {
         return String(n).padStart(2, "0");
+    }
+
+    Timer {
+        id: regionDelay
+
+        onTriggered: root.regionPhase = "grab"
     }
 
     Timer {

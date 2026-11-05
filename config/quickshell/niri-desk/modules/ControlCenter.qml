@@ -289,28 +289,40 @@ Rectangle {
                 shown: root.shown
                 delay: 140
 
-                Row {
+                Grid {
                     width: parent.width
+                    columns: 4
+                    rowSpacing: 10
 
                     ToolButton {
-                        icon: "record"
-                        title: Tr.t("Record")
-                        onClicked: root.tool("niri-desk-record")
+                        icon: "screenshot"
+                        title: Tr.t("Screenshot")
+                        onClicked: Ui.region("copy")
+                    }
+                    ToolButton {
+                        icon: "google"
+                        title: Tr.t("Google")
+                        onClicked: Ui.region("search")
                     }
                     ToolButton {
                         icon: "ocr"
                         title: Tr.t("Text")
-                        onClicked: root.tool("niri-desk-ocr")
+                        onClicked: Ui.region("ocr")
+                    }
+                    ToolButton {
+                        icon: "translate"
+                        title: Tr.t("Translate")
+                        onClicked: Ui.region("translate")
+                    }
+                    ToolButton {
+                        icon: "record"
+                        title: Tr.t("Record")
+                        onClicked: Ui.region("record")
                     }
                     ToolButton {
                         icon: "color"
                         title: Tr.t("Color")
                         onClicked: root.tool("niri-desk-color")
-                    }
-                    ToolButton {
-                        icon: "translate"
-                        title: Tr.t("Translate")
-                        onClicked: root.tool("niri-desk-translate")
                     }
                     ToolButton {
                         icon: "wallpaper"
