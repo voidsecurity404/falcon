@@ -14,8 +14,6 @@ Singleton {
     readonly property string session: Quickshell.env("NIRI_SOCKET") || ""
     readonly property string configFile: Quickshell.env("HOME") + "/.config/niri/generated/sticky.kdl"
     property var ids: []
-    // Windows that were tiled before they became sticky, so turning it off puts them back.
-    property var tiled: []
     property bool checked: false
     property bool loaded: false
     // What sticky.kdl holds now: -1 not written by this shell yet, 0 animation on, 1 off.
@@ -25,15 +23,13 @@ Singleton {
 
     // The first value of ids also lands here, and it must not overwrite the saved list.
     onIdsChanged: save()
-    onTiledChanged: save()
     onActiveChanged: writeConfig()
 
     function save() {
         if (loaded)
             Saved.set("sticky", {
                 session: session,
-                ids: ids,
-                tiled: tiled
+                ids: ids
             });
     }
 
@@ -50,7 +46,6 @@ Singleton {
         const saved = Saved.get("sticky", null);
         if (saved && saved.session === session) {
             ids = saved.ids || [];
-            tiled = saved.tiled || [];
         }
         loaded = true;
         writeConfig();
@@ -62,15 +57,12 @@ Singleton {
             return;
         if (ids.indexOf(id) >= 0) {
             ids = ids.filter(x => x !== id);
-            if (tiled.indexOf(id) >= 0) {
-                tiled = tiled.filter(x => x !== id);
+            // Back into its place among the columns. A picture-in-picture window stays floating.
+            const w = Niri.windows[id];
+            if (!w || w.title !== "Picture-in-Picture")
                 Niri.action("move-window-to-tiling", "--id", String(id));
-            }
             Toasts.show(Tr.t("Sticky off"), Tr.t("The window stays on this workspace"), "check");
         } else {
-            const w = Niri.windows[id];
-            if (w && !w.is_floating)
-                tiled = tiled.concat([id]);
             add(id);
             Niri.action("move-window-to-floating", "--id", String(id));
             Toasts.show(Tr.t("Sticky on"), Tr.t("The window shows on all workspaces"), "check");
@@ -98,7 +90,6 @@ Singleton {
                 return;
             root.checked = true;
             root.ids = root.ids.filter(id => Niri.windows[id]);
-            root.tiled = root.tiled.filter(id => root.ids.indexOf(id) >= 0);
         }
         function onWorkspaceFocused(workspace) {
             root.follow(workspace);
@@ -109,7 +100,6 @@ Singleton {
         }
         function onWindowGone(id) {
             root.ids = root.ids.filter(x => x !== id);
-            root.tiled = root.tiled.filter(x => x !== id);
         }
     }
 }
