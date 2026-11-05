@@ -29,8 +29,8 @@ Singleton {
     readonly property real weatherLon: get("weather.lon", 69.28)
     readonly property string wallpaperDir: String(get("wallpaperDir", "~/Pictures/Wallpapers")).replace(/^~/, home)
     readonly property bool bottom: get("panel.position", "top") === "bottom"
-    // The bar parts sit in the corners and join the screen edge, or float away from it.
-    readonly property bool hug: get("panel.style", "hug") === "hug"
+    // The desktop sits inside a frame and the side panels hang from it, or they float without one.
+    readonly property bool framed: get("panel.style", "frame") !== "float"
 
     function merge(base, over) {
         const out = Object.assign({}, base);

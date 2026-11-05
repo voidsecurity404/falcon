@@ -25,18 +25,14 @@ Item {
     readonly property bool showDate: Settings.get("panel.clockDate", false)
     readonly property bool clock24: Settings.get("panel.clock24", true)
     readonly property int targetWidth: mode === "dashboard" ? 1160 : mode === "toast" ? 440 : (Ui.recording ? 232 : 186) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0) + (clock24 ? 0 : 26)
-    readonly property int cornerRadius: mode === "dashboard" ? 32 : mode === "toast" || Settings.hug ? 18 : 11
-    // Corners on the screen edge stay square while the island is joined to it.
-    readonly property real topRadius: Settings.hug && !Settings.bottom ? 0 : body.animatedRadius
-    readonly property real bottomRadius: Settings.hug && Settings.bottom ? 0 : body.animatedRadius
-    readonly property int targetHeight: mode === "dashboard" ? 580 : mode === "toast" ? 68 : Settings.hug ? 44 : 34
+    readonly property int cornerRadius: mode === "dashboard" ? 32 : 18
+    readonly property int targetHeight: mode === "dashboard" ? 580 : mode === "toast" ? 68 : 44
 
     width: body.width
     height: body.height
 
     // Ekran chetiga qo'shilib turadigan ichki egilgan burchaklar.
     EdgeCurve {
-        visible: Settings.hug
         x: -size
         y: body.y + (Settings.bottom ? body.height - size : 0)
         flipX: true
@@ -44,7 +40,6 @@ Item {
         color: Theme.glassTop
     }
     EdgeCurve {
-        visible: Settings.hug
         x: body.width
         y: body.y + (Settings.bottom ? body.height - size : 0)
         flipY: Settings.bottom
@@ -57,7 +52,8 @@ Item {
         y: (Settings.bottom ? 1 : -1) * root.slide * (body.height + 28)
         width: root.targetWidth
         height: root.targetHeight
-        border.width: 1
+        // In a frame a border would draw a line where the island meets it.
+        border.width: Settings.framed ? 0 : 1
         border.color: root.mode === "dashboard" ? "transparent" : Theme.panelEdge
         gradient: Gradient {
             GradientStop {
@@ -69,10 +65,10 @@ Item {
                 color: Theme.panel
             }
         }
-        topLeftRadius: root.topRadius
-        topRightRadius: root.topRadius
-        bottomLeftRadius: root.bottomRadius
-        bottomRightRadius: root.bottomRadius
+        topLeftRadius: Settings.bottom ? animatedRadius : 0
+        topRightRadius: Settings.bottom ? animatedRadius : 0
+        bottomLeftRadius: Settings.bottom ? 0 : animatedRadius
+        bottomRightRadius: Settings.bottom ? 0 : animatedRadius
         clip: true
 
         property real animatedRadius: root.cornerRadius
@@ -110,8 +106,7 @@ Item {
                 page: Ui.dashTab === 1 ? 1 : 0
                 art: Ui.dashTab === 1 ? Media.art : ""
                 playing: !!Media.player && Media.player.isPlaying
-                topRadius: root.topRadius
-                bottomRadius: root.bottomRadius
+                bottomRadius: body.animatedRadius
             }
 
             Behavior on opacity {

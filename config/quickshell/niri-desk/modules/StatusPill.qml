@@ -8,13 +8,14 @@ import qs.services
 Rectangle {
     id: root
 
-    implicitWidth: row.implicitWidth + (Settings.hug ? 26 : 12)
-    height: Settings.hug ? 45 : 34
-    // In the corner only the free corner stays round. The border on the screen edges lies off the screen.
-    topRightRadius: Settings.hug ? 0 : 11
-    bottomRightRadius: Settings.hug ? 0 : 11
-    topLeftRadius: Settings.hug ? (Settings.bottom ? 18 : 0) : 11
-    bottomLeftRadius: Settings.hug ? (Settings.bottom ? 0 : 18) : 11
+    implicitWidth: row.implicitWidth + 12
+    height: Settings.framed ? 36 : 34
+    // In a frame the corners on the frame's side join it and the other two stay round.
+    readonly property int freeRadius: Settings.framed ? 14 : 11
+    topLeftRadius: Settings.framed && !Settings.bottom ? 0 : freeRadius
+    topRightRadius: Settings.framed && !Settings.bottom ? 0 : freeRadius
+    bottomLeftRadius: Settings.framed && Settings.bottom ? 0 : freeRadius
+    bottomRightRadius: Settings.framed && Settings.bottom ? 0 : freeRadius
     gradient: Gradient {
         GradientStop {
             position: 0
@@ -25,24 +26,26 @@ Rectangle {
             color: Theme.panel
         }
     }
-    border.width: 1
+    // In a frame a border would draw a line where the panel meets it.
+    border.width: Settings.framed ? 0 : 1
     border.color: Theme.panelEdge
 
     EdgeCurve {
-        visible: Settings.hug
+        visible: Settings.framed
+        size: 14
         x: -size
-        y: Settings.bottom ? 44 - size : 1
+        y: Settings.bottom ? root.height - size : 0
         flipX: true
         flipY: Settings.bottom
-        color: Settings.bottom ? Theme.panel : Theme.glassTop
+        color: Theme.glassTop
     }
     EdgeCurve {
-        visible: Settings.hug
-        x: root.width - 1 - size
-        y: Settings.bottom ? -size : root.height
-        flipX: true
+        visible: Settings.framed
+        size: 14
+        x: root.width
+        y: Settings.bottom ? root.height - size : 0
         flipY: Settings.bottom
-        color: Settings.bottom ? Theme.glassTop : Theme.panel
+        color: Theme.glassTop
     }
 
     // Belgi radio yoqilganini emas, haqiqiy ulanishni ko'rsatadi. Sim ustun turadi.

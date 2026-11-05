@@ -15,8 +15,17 @@ ShellRoot {
 
                 required property ShellScreen modelData
 
-                ExclusiveZone {
-                    screen: perScreen.modelData
+                Variants {
+                    model: ["top", "bottom", "left", "right"]
+
+                    delegate: Component {
+                        ExclusiveZone {
+                            required property string modelData
+
+                            screen: perScreen.modelData
+                            edge: modelData
+                        }
+                    }
                 }
                 WidgetFace {
                     screen: perScreen.modelData
