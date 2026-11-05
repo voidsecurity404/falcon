@@ -234,6 +234,9 @@ Singleton {
             layoutIndex = e.KeyboardLayoutSwitched.idx;
         } else if (e.OverviewOpenedOrClosed) {
             overview = e.OverviewOpenedOrClosed.is_open;
+            // Panels would stay on top of the overview, whichever way it was opened.
+            if (overview)
+                Ui.popup = "";
         } else if (e.ScreenshotCaptured) {
             screenshotTaken(e.ScreenshotCaptured.path || "");
         } else if (e.ConfigLoaded && e.ConfigLoaded.failed) {
