@@ -68,6 +68,10 @@ PanelWindow {
     // Faqat panellar orqasi xiralashadi, qolgan ekran toza qoladi.
     BackgroundEffect.blurRegion: Region {
         Region {
+            item: control.visible ? control : null
+            radius: control.radius
+        }
+        Region {
             item: root.ribbonOut < 1 ? ribbon : null
             topLeftRadius: ribbon.topLeftRadius
             topRightRadius: ribbon.topRightRadius

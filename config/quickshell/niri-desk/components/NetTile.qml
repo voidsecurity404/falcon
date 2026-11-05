@@ -1,6 +1,7 @@
 import QtQuick
 import qs.services
 
+// A network card. The round button switches it, and the rest of the card opens its list.
 Rectangle {
     id: tile
 
@@ -13,26 +14,29 @@ Rectangle {
     signal open
     signal toggled
 
-    width: (parent.width - 8) / 2
-    height: 60
-    radius: on ? 18 : 22
-    color: Qt.alpha(on ? Theme.accent : Theme.text, tileArea.containsMouse ? 0.2 : on ? 0.14 : 0.07)
+    width: (parent.width - 10) / 2
+    height: 104
+    radius: 24
+    color: Qt.alpha(on ? Theme.accent : Theme.text, tileArea.containsMouse ? (on ? 0.26 : 0.12) : on ? 0.18 : 0.06)
+    border.width: 1
+    border.color: on ? Qt.alpha(Theme.accent, 0.3) : "transparent"
     scale: tileArea.pressed ? 0.97 : 1
 
-    Behavior on radius {
-        NumberAnimation {
-            duration: 260
-            easing.type: Easing.OutCubic
+    Behavior on color {
+        ColorAnimation {
+            duration: 180
         }
     }
-    Behavior on color {
+    Behavior on border.color {
         ColorAnimation {
             duration: 180
         }
     }
     Behavior on scale {
         NumberAnimation {
-            duration: 120
+            duration: 180
+            easing.type: Easing.OutBack
+            easing.overshoot: 2
         }
     }
 
@@ -44,23 +48,22 @@ Rectangle {
         cursorShape: Qt.PointingHandCursor
         onClicked: tile.open()
     }
-    // Doira yoqib-o'chiradi, qolgan joy ro'yxatni ochadi.
     Rectangle {
         id: orb
 
-        x: 10
-        anchors.verticalCenter: parent.verticalCenter
-        width: 40
-        height: 40
-        radius: tile.active ? 13 : 20
+        x: 12
+        y: 12
+        width: 42
+        height: 42
+        radius: tile.active ? 14 : 21
         color: tile.on ? Theme.accent : Qt.alpha(Theme.text, orbArea.containsMouse ? 0.18 : 0.1)
-        scale: orbArea.pressed ? 0.9 : 1
+        scale: orbArea.pressed ? 0.88 : orbArea.containsMouse ? 1.06 : 1
 
         Behavior on radius {
             NumberAnimation {
-                duration: 300
-                easing.type: Easing.BezierSpline
-                easing.bezierCurve: [0.3, 1.4, 0.4, 1, 1, 1]
+                duration: 340
+                easing.type: Easing.OutBack
+                easing.overshoot: 1.6
             }
         }
         Behavior on color {
@@ -70,14 +73,16 @@ Rectangle {
         }
         Behavior on scale {
             NumberAnimation {
-                duration: 120
+                duration: 220
+                easing.type: Easing.OutBack
+                easing.overshoot: 2.4
             }
         }
 
         Icon {
             anchors.centerIn: parent
             name: tile.icon
-            size: 18
+            size: 19
             color: tile.on ? Theme.accentText : Theme.text
         }
         MouseArea {
@@ -89,35 +94,41 @@ Rectangle {
             onClicked: tile.toggled()
         }
     }
+    Icon {
+        id: chevron
+
+        anchors.right: parent.right
+        anchors.rightMargin: tileArea.containsMouse ? 12 : 15
+        y: 26
+        name: "forward"
+        size: 14
+        color: Theme.muted
+
+        Behavior on anchors.rightMargin {
+            NumberAnimation {
+                duration: 220
+                easing.type: Easing.OutBack
+                easing.overshoot: 2
+            }
+        }
+    }
     Column {
-        anchors.left: orb.right
-        anchors.leftMargin: 10
-        anchors.right: chevron.left
-        anchors.rightMargin: 4
-        anchors.verticalCenter: parent.verticalCenter
+        x: 14
+        y: 62
+        width: parent.width - 28
         spacing: 1
 
         Label {
             width: parent.width
             text: tile.title
-            size: 13
-            font.weight: Font.Medium
+            size: 14
+            font.weight: Font.DemiBold
         }
         Label {
             width: parent.width
             text: tile.sub
-            size: 11
+            size: 12
             color: Theme.muted
         }
-    }
-    Icon {
-        id: chevron
-
-        anchors.right: parent.right
-        anchors.rightMargin: 10
-        anchors.verticalCenter: parent.verticalCenter
-        name: "forward"
-        size: 13
-        color: Theme.muted
     }
 }

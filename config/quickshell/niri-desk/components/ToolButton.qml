@@ -14,10 +14,10 @@ Column {
 
     Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
-        width: 40
-        height: 40
-        radius: toolArea.containsMouse ? 13 : 20
-        color: toolArea.containsMouse ? Qt.alpha(Theme.accent, 0.24) : Qt.alpha(Theme.text, 0.07)
+        width: 46
+        height: 46
+        radius: toolArea.containsMouse ? 23 : 16
+        color: toolArea.containsMouse ? Qt.alpha(Theme.accent, 0.24) : Qt.alpha(Theme.text, 0.06)
         scale: toolArea.pressed ? 0.9 : toolArea.containsMouse ? 1.06 : 1
 
         Behavior on radius {
@@ -42,7 +42,7 @@ Column {
         Icon {
             anchors.centerIn: parent
             name: tool.icon
-            size: 17
+            size: 19
             color: toolArea.containsMouse ? Theme.accent : Theme.text
         }
         MouseArea {
@@ -59,6 +59,6 @@ Column {
         horizontalAlignment: Text.AlignHCenter
         text: tool.title
         color: Theme.muted
-        size: 10
+        size: 11
     }
 }
