@@ -158,11 +158,12 @@ case "${1:-}" in
     *)
         image="$(readlink -f "$1")"
         [[ -f "$image" ]] || { echo "File not found: $1" >&2; exit 1; }
-        # Asked before anything below moves the links.
+        # The wallpaper already on: colors, widgets and everything else stay as they are.
+        # A live one is set again only if its player has died.
         if is_video "$image"; then
-            [[ "$(readlink -f "$live_link" 2>/dev/null || true)" == "$image" ]] && again=1
+            [[ "$(readlink -f "$live_link" 2>/dev/null || true)" == "$image" ]] && pgrep -x mpvpaper >/dev/null && exit 0
         else
-            [[ ! -e "$live_link" && "$(readlink -f "$link" 2>/dev/null || true)" == "$image" ]] && again=1
+            [[ ! -e "$live_link" && "$(readlink -f "$link" 2>/dev/null || true)" == "$image" ]] && exit 0
         fi
         if is_video "$image"; then
             set_live "$image"
@@ -175,10 +176,6 @@ case "${1:-}" in
             colors "$image"
             ln -sfn "$image" "$link"
         fi
-        if [[ -n "${again:-}" ]]; then
-            toast "You chose the wallpaper that is already set" "$(basename "${image%.*}")"
-        else
-            toast "Colors updated" "$(basename "${image%.*}")"
-        fi
+        toast "Colors updated" "$(basename "${image%.*}")"
         ;;
 esac

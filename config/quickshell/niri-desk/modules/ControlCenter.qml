@@ -21,8 +21,9 @@ Rectangle {
     onShownChanged: {
         revealAnimation.stop();
         revealAnimation.to = shown ? 1 : 0;
-        revealAnimation.duration = shown ? 460 : 200;
-        revealAnimation.easing.type = shown ? Easing.OutBack : Easing.InCubic;
+        revealAnimation.duration = shown ? 420 : 220;
+        // Starts gently and settles without passing its size. Closing only speeds up.
+        revealAnimation.easing.bezierCurve = shown ? [0.2, 0, 0, 1, 1, 1] : [0.3, 0, 0.8, 0.15, 1, 1];
         revealAnimation.start();
     }
     onHeightChanged: Ui.controlHeight = height
@@ -34,7 +35,8 @@ Rectangle {
         Ui.run(name);
     }
 
-    width: 320 + (panelWidth - 320) * reveal
+    // Grows less than twice the padding, so the contents are never cut at the sides.
+    width: panelWidth - 28 * (1 - reveal)
     height: shownHeight * reveal
     clip: true
     radius: 28
@@ -51,7 +53,7 @@ Rectangle {
             color: Qt.alpha(Theme.glassBase, Math.max(0.58, Theme.glassOpacity))
         }
     }
-    opacity: Math.min(1, reveal * 3)
+    opacity: Math.min(1, reveal * 2.5)
     visible: reveal > 0
 
     NumberAnimation {
@@ -59,7 +61,7 @@ Rectangle {
 
         target: root
         property: "reveal"
-        easing.overshoot: 0.7
+        easing.type: Easing.BezierSpline
         onFinished: {
             if (!root.shown)
                 Ui.controlPage = "";
@@ -83,7 +85,7 @@ Rectangle {
 
     // Keeps its size while the panel grows, so nothing inside reflows.
     Item {
-        x: root.width - width
+        x: (root.width - width) / 2
         y: Settings.bottom ? root.height - height : 0
         width: root.panelWidth
         height: root.pageHeight
@@ -155,7 +157,8 @@ Rectangle {
             // Tarmoq
             Reveal {
                 shown: root.shown
-                delay: 20
+                calm: true
+                delay: 70
 
                 Row {
                     id: toggles
@@ -202,7 +205,8 @@ Rectangle {
             // Tez tugmalar
             Reveal {
                 shown: root.shown
-                delay: 60
+                calm: true
+                delay: 110
 
                 Row {
                     width: parent.width
@@ -235,7 +239,8 @@ Rectangle {
             // Ovoz va yorqinlik
             Reveal {
                 shown: root.shown
-                delay: 100
+                calm: true
+                delay: 150
 
                 Rectangle {
                     width: parent.width
@@ -287,7 +292,8 @@ Rectangle {
             // Asboblar
             Reveal {
                 shown: root.shown
-                delay: 140
+                calm: true
+                delay: 190
 
                 Grid {
                     width: parent.width
@@ -340,7 +346,8 @@ Rectangle {
             // Quvvat rejimi: tanlov belgisi sirpanadi
             Reveal {
                 shown: root.shown
-                delay: 180
+                calm: true
+                delay: 230
 
                 Rectangle {
                     id: power
