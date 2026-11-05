@@ -344,6 +344,14 @@ LazyLoader {
                 ]
             },
             {
+                title: Tr.t("Sound"),
+                subtitle: Tr.t("Sound output and microphone"),
+                icon: "volume",
+                group: 3,
+                sound: true,
+                sections: []
+            },
+            {
                 title: Tr.t("Terminal"),
                 subtitle: Tr.t("Kitty look. Some changes apply to new windows"),
                 icon: "terminal",
@@ -871,6 +879,11 @@ LazyLoader {
 
                         RulesEditor {
                             visible: win.filter === "" && !!win.pages[win.page].rules
+                            width: cards.width
+                        }
+
+                        SoundDevices {
+                            visible: win.filter === "" && !!win.pages[win.page].sound
                             width: cards.width
                         }
                     }

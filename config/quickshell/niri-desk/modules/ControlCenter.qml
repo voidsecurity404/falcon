@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Bluetooth
 import Quickshell.Networking
-import Quickshell.Services.Pipewire
 import Quickshell.Services.UPower
 import qs.components
 import qs.services
@@ -34,8 +33,6 @@ Rectangle {
         Ui.popup = "";
         Ui.run(name);
     }
-
-    readonly property var sinks: Pipewire.nodes.values.filter(n => n.isSink && !n.isStream && n.audio)
 
     width: 320 + (panelWidth - 320) * reveal
     height: shownHeight * reveal
@@ -99,7 +96,7 @@ Rectangle {
             y: root.padding
             width: parent.width - root.padding * 2
             active: Ui.controlPage !== ""
-            source: Ui.controlPage === "wifi" ? "WifiPage.qml" : Ui.controlPage === "bluetooth" ? "BluetoothPage.qml" : Ui.controlPage === "sound" ? "SoundPage.qml" : ""
+            source: Ui.controlPage === "wifi" ? "WifiPage.qml" : Ui.controlPage === "bluetooth" ? "BluetoothPage.qml" : ""
             opacity: status === Loader.Ready ? 1 : 0
             transform: Translate {
                 x: pageLoader.status === Loader.Ready ? 0 : 28
@@ -258,9 +255,11 @@ Rectangle {
                             visible: Audio.available
                             icon: Audio.muted ? "mute" : "volume"
                             dimmed: Audio.muted
+                            iconButton: true
                             value: Audio.volume
                             text: Audio.percent + "%"
                             onMoved: value => Audio.setVolume(value)
+                            onIconClicked: Audio.toggleMute()
                         }
                         LevelRow {
                             width: parent.width
@@ -280,49 +279,6 @@ Rectangle {
                             value: Brightness.percent / 100
                             text: Brightness.percent + "%"
                             onMoved: value => Brightness.setPercent(value * 100)
-                        }
-                        // Ovoz chiqishi: bittadan ko'p qurilma bo'lsa ochiladi
-                        Rectangle {
-                            width: parent.width
-                            height: 34
-                            radius: 12
-                            visible: root.sinks.length > 1
-                            color: Qt.alpha(Theme.text, sinkArea.containsMouse ? 0.08 : 0)
-
-                            Behavior on color {
-                                ColorAnimation {
-                                    duration: 140
-                                }
-                            }
-
-                            Label {
-                                anchors.left: parent.left
-                                anchors.leftMargin: 10
-                                anchors.right: sinkArrow.left
-                                anchors.rightMargin: 8
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: Pipewire.defaultAudioSink ? (Pipewire.defaultAudioSink.description || Pipewire.defaultAudioSink.name) : Tr.t("Sound output")
-                                color: Theme.muted
-                                size: 12
-                            }
-                            Icon {
-                                id: sinkArrow
-
-                                anchors.right: parent.right
-                                anchors.rightMargin: 10
-                                anchors.verticalCenter: parent.verticalCenter
-                                name: "forward"
-                                size: 12
-                                color: Theme.muted
-                            }
-                            MouseArea {
-                                id: sinkArea
-
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: Ui.controlPage = "sound"
-                            }
                         }
                     }
                 }

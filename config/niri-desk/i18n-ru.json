@@ -287,6 +287,8 @@
  "Sleep": "Сон",
  "Sleep after": "Спящий режим через",
  "Sound output": "Вывод звука",
+ "Sound": "Звук",
+ "Sound output and microphone": "Вывод звука и микрофон",
  "Microphone": "Микрофон",
  "{key} must be a single line": "{key} должно быть одной строкой",
  "Lock screen style": "Экран блокировки",

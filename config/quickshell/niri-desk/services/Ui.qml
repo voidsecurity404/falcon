@@ -17,7 +17,7 @@ Singleton {
     property bool settingsOpen: false
     property int settingsPage: 0
     property int dashTab: 0
-    // "", wifi, bluetooth, sound
+    // "", wifi, bluetooth
     property string controlPage: ""
     property var trayItem: null
     property var launcherRows: []
