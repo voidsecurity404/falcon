@@ -7,7 +7,9 @@
 """
 import json
 import os
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 path = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "falcon/settings.json"
@@ -30,6 +32,28 @@ else:
         node[keys[-1]] = json.loads(args[1])
     except ValueError:
         node[keys[-1]] = args[1]
+text = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+
+def refused():
+    """A value the desktop cannot use must not reach the file: every later change would fail too."""
+    checker = Path(__file__).with_name("falcon-apply")
+    if not checker.exists():
+        return ""
+    with tempfile.TemporaryDirectory() as folder:
+        trial = Path(folder)
+        (trial / "falcon").mkdir()
+        (trial / "falcon/settings.json").write_text(text)
+        (trial / "falcon/defaults.json").symlink_to(path.with_name("defaults.json"))
+        (trial / "niri").symlink_to(path.parents[1] / "niri")
+        run = subprocess.run([str(checker), "--check"], env=dict(os.environ, XDG_CONFIG_HOME=folder), capture_output=True, text=True, check=False)
+    return run.stderr.strip() if run.returncode else ""
+
+
+problem = refused()
+if problem:
+    print(problem, file=sys.stderr)
+    sys.exit(1)
 tmp = path.with_name(path.name + ".tmp")
-tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+tmp.write_text(text)
 os.replace(tmp, path)

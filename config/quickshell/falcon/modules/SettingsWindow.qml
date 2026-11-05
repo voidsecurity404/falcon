@@ -14,7 +14,19 @@ LazyLoader {
         readonly property int page: Math.max(0, Math.min(pages.length - 1, Ui.settingsPage))
         property string filter: ""
 
-        onPageChanged: scroller.contentY = 0
+        onPageChanged: {
+            scroller.contentY = 0;
+            ensureTabVisible();
+        }
+
+        // The list of pages is taller than the window, and a page can be opened from outside it.
+        function ensureTabVisible() {
+            const top = page * tabHeight + (pages[page].group + 1) * groupHeight;
+            if (top < sideList.contentY)
+                sideList.contentY = Math.max(0, top - groupHeight);
+            else if (top + tabHeight > sideList.contentY + sideList.height)
+                sideList.contentY = top + tabHeight - sideList.height + 8;
+        }
 
         property var outputs: []
         readonly property var monitorSections: {
@@ -671,6 +683,9 @@ LazyLoader {
 
                 // Pages, in groups
                 Flickable {
+                    id: sideList
+
+                    Component.onCompleted: win.ensureTabVisible()
                     x: 14
                     y: 108
                     width: parent.width - 28
