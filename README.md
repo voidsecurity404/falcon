@@ -76,6 +76,8 @@ While music plays, sound waves move along the bottom of the desktop. They have a
 
 Widgets and waves show through see-through windows such as the terminal, softened by the window's blur.
 
+Firefox is glass too: its toolbar and new tab page show the blurred desktop, and websites keep their own colors. It takes effect after restarting Firefox.
+
 ## Claude limits
 
 The Claude icon sits next to the keyboard layout. Click it for the 5-hour and weekly usage and the time left until each resets. While the popup or the desktop widget is on screen, `falcon-claude-usage` fetches the numbers from Anthropic every 10 seconds using Claude Code's sign-in in `~/.claude/.credentials.json`, even when Claude Code is closed, and the popup counts down to the next fetch. This is an undocumented API, so it can stop working; the popup then shows how old the numbers are instead. Claude Code's status line also saves the limits while it runs. Add this to `~/.claude/settings.json` once:
