@@ -109,7 +109,7 @@
  "Fade": "Плавно",
  "Faithful": "Точный",
  "Files": "Файлы",
- "Floating": "Плавающее",
+ "Floating": "Парящая",
  "Focus": "Фокус",
  "Focus follows cursor": "Фокус следует за курсором",
  "Focus mode": "Режим фокуса",
@@ -452,5 +452,7 @@
  "A layout arranged by hand is remembered": "Ручное расположение запоминается",
  "Place and form": "Место и форма",
  "Place only": "Только место",
- "Stay as they are": "Не менять"
+ "Stay as they are": "Не менять",
+ "Panel shape": "Форма панели",
+ "In the corners": "В углах экрана"
 }

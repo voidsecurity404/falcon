@@ -10,6 +10,7 @@ Item {
     property int page: 0
     property string art: ""
     property bool playing: false
+    property real topRadius: 0
     property real bottomRadius: 18
     property int fullWidth: 1160
     property int fullHeight: 580
@@ -36,6 +37,8 @@ Item {
         id: mask
 
         anchors.fill: parent
+        topLeftRadius: root.topRadius
+        topRightRadius: root.topRadius
         bottomLeftRadius: root.bottomRadius
         bottomRightRadius: root.bottomRadius
         visible: false

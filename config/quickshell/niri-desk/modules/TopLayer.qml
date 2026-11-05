@@ -17,6 +17,9 @@ PanelWindow {
     readonly property int edgeSign: Settings.bottom ? 1 : -1
     readonly property var leaveCurve: [0.4, 0, 0.9, 0.3, 1, 1]
     readonly property var arriveCurve: [0.25, 1.25, 0.35, 1, 1, 1]
+    // Bar parts in the corners have their border just off the screen.
+    readonly property int edgeGap: Settings.hug ? -1 : 10
+    readonly property int sideGap: Settings.hug ? -1 : 14
     property real ribbonOut: barShown ? 0 : 1
     property real statusOut: barShown ? 0 : 1
     property real islandOut: islandShown ? 0 : 1
@@ -65,18 +68,24 @@ PanelWindow {
     BackgroundEffect.blurRegion: Region {
         Region {
             item: root.ribbonOut < 1 ? ribbon : null
-            radius: 11
+            topLeftRadius: ribbon.topLeftRadius
+            topRightRadius: ribbon.topRightRadius
+            bottomLeftRadius: ribbon.bottomLeftRadius
+            bottomRightRadius: ribbon.bottomRightRadius
         }
         Region {
             item: root.statusOut < 1 ? status : null
-            radius: 11
+            topLeftRadius: status.topLeftRadius
+            topRightRadius: status.topRightRadius
+            bottomLeftRadius: status.bottomLeftRadius
+            bottomRightRadius: status.bottomRightRadius
         }
         Region {
             item: root.islandOut === 1 ? null : island.body
-            bottomLeftRadius: Settings.bottom ? 0 : island.body.animatedRadius
-            bottomRightRadius: Settings.bottom ? 0 : island.body.animatedRadius
-            topLeftRadius: Settings.bottom ? island.body.animatedRadius : 0
-            topRightRadius: Settings.bottom ? island.body.animatedRadius : 0
+            bottomLeftRadius: island.bottomRadius
+            bottomRightRadius: island.bottomRadius
+            topLeftRadius: island.topRadius
+            topRightRadius: island.topRadius
         }
     }
 
@@ -126,8 +135,8 @@ PanelWindow {
     Ribbon {
         id: ribbon
 
-        x: 14
-        y: (Settings.bottom ? parent.height - height - 10 : 10) + root.edgeSign * root.ribbonOut * 64
+        x: root.sideGap
+        y: (Settings.bottom ? parent.height - height - root.edgeGap : root.edgeGap) + root.edgeSign * root.ribbonOut * 64
         opacity: Math.min(1, (1 - root.ribbonOut) * 3)
         visible: root.ribbonOut < 1
         screenInfo: root.screen
@@ -137,8 +146,8 @@ PanelWindow {
         id: status
 
         anchors.right: parent.right
-        anchors.rightMargin: 14
-        y: (Settings.bottom ? parent.height - height - 10 : 10) + root.edgeSign * root.statusOut * 64
+        anchors.rightMargin: root.sideGap
+        y: (Settings.bottom ? parent.height - height - root.edgeGap : root.edgeGap) + root.edgeSign * root.statusOut * 64
         opacity: Math.min(1, (1 - root.statusOut) * 3)
         visible: root.statusOut < 1
     }
@@ -147,7 +156,7 @@ PanelWindow {
         id: island
 
         anchors.horizontalCenter: parent.horizontalCenter
-        y: Settings.bottom ? parent.height - height : 0
+        y: Settings.hug ? (Settings.bottom ? parent.height - height : 0) : (Settings.bottom ? parent.height - height - 10 : 10)
         slide: root.islandOut
         visible: root.islandOut < 1
         showDashboard: root.panelHere && Ui.popup === "dashboard"

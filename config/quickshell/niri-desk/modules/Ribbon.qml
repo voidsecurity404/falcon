@@ -11,9 +11,13 @@ Rectangle {
     readonly property string output: screenInfo ? screenInfo.name : ""
 
     visible: Settings.get("panel.ribbon", true)
-    implicitWidth: row.implicitWidth + 8
-    height: 34
-    radius: 11
+    implicitWidth: row.implicitWidth + (Settings.hug ? 26 : 8)
+    height: Settings.hug ? 45 : 34
+    // In the corner only the free corner stays round. The border on the screen edges lies off the screen.
+    topLeftRadius: Settings.hug ? 0 : 11
+    bottomLeftRadius: Settings.hug ? 0 : 11
+    topRightRadius: Settings.hug ? (Settings.bottom ? 18 : 0) : 11
+    bottomRightRadius: Settings.hug ? (Settings.bottom ? 0 : 18) : 11
     gradient: Gradient {
         GradientStop {
             position: 0
@@ -26,6 +30,21 @@ Rectangle {
     }
     border.width: 1
     border.color: Theme.panelEdge
+
+    EdgeCurve {
+        visible: Settings.hug
+        x: root.width
+        y: Settings.bottom ? 44 - size : 1
+        flipY: Settings.bottom
+        color: Settings.bottom ? Theme.panel : Theme.glassTop
+    }
+    EdgeCurve {
+        visible: Settings.hug
+        x: 1
+        y: Settings.bottom ? -size : root.height
+        flipY: Settings.bottom
+        color: Settings.bottom ? Theme.glassTop : Theme.panel
+    }
 
     // Joriy raqam tagidagi rangli belgi: raqamlar orasida sirpanadi, rangi fon rasmidan.
     Rectangle {
@@ -41,7 +60,7 @@ Rectangle {
 
         visible: !!chip
         x: chip ? row.x + chip.x + 1 : 0
-        y: 5
+        y: (root.height - height) / 2
         width: 24
         height: 24
         radius: 8

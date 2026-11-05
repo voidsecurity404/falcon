@@ -92,6 +92,8 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 
 ## Configuration
 
+The panels at the edge of the screen can sit in the corners, joined to the edge, or float away from it: Settings → Panel → Panel shape.
+
 Most things change from the `Mod+,` window and apply immediately: appearance, wallpaper, panel, widgets, windows, per-app rules, monitors, keyboard, mouse and touchpad, shortcuts, terminal and system. Reset to defaults is on the System page. If a value from that window is rejected, it is reverted and the reason is shown. If you edit `settings.json` by hand, the file is left as is, and no setting applies until you fix the value named in the error. From the command line: `niri-desk-set windows.gaps 8`.
 
 | What | Where |

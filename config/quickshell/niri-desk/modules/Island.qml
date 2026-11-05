@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Shapes
 import Quickshell
 import Quickshell.Widgets
 import qs.components
@@ -26,60 +25,36 @@ Item {
     readonly property bool showDate: Settings.get("panel.clockDate", false)
     readonly property bool clock24: Settings.get("panel.clock24", true)
     readonly property int targetWidth: mode === "dashboard" ? 1160 : mode === "toast" ? 440 : (Ui.recording ? 232 : 186) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0) + (clock24 ? 0 : 26)
-    readonly property int cornerRadius: mode === "dashboard" ? 32 : 18
-    readonly property int targetHeight: mode === "dashboard" ? 580 : mode === "toast" ? 68 : 44
+    readonly property int cornerRadius: mode === "dashboard" ? 32 : mode === "toast" || Settings.hug ? 18 : 11
+    // Corners on the screen edge stay square while the island is joined to it.
+    readonly property real topRadius: Settings.hug && !Settings.bottom ? 0 : body.animatedRadius
+    readonly property real bottomRadius: Settings.hug && Settings.bottom ? 0 : body.animatedRadius
+    readonly property int targetHeight: mode === "dashboard" ? 580 : mode === "toast" ? 68 : Settings.hug ? 44 : 34
 
     width: body.width
     height: body.height
 
     // Ekran chetiga qo'shilib turadigan ichki egilgan burchaklar.
-    Shape {
-        x: -18
-        y: body.y + (Settings.bottom ? body.height - 18 : 0)
-        width: 18
-        height: 18
-        transform: Scale {
-            origin.y: 9
-            yScale: Settings.bottom ? -1 : 1
-        }
-        preferredRendererType: Shape.CurveRenderer
-
-        ShapePath {
-            strokeWidth: 0
-            strokeColor: "transparent"
-            fillColor: Theme.glassTop
-
-            PathSvg {
-                path: "M0 0 L18 0 L18 18 A18 18 0 0 0 0 0 Z"
-            }
-        }
+    EdgeCurve {
+        visible: Settings.hug
+        x: -size
+        y: body.y + (Settings.bottom ? body.height - size : 0)
+        flipX: true
+        flipY: Settings.bottom
+        color: Theme.glassTop
     }
-    Shape {
+    EdgeCurve {
+        visible: Settings.hug
         x: body.width
-        y: body.y + (Settings.bottom ? body.height - 18 : 0)
-        width: 18
-        height: 18
-        transform: Scale {
-            origin.y: 9
-            yScale: Settings.bottom ? -1 : 1
-        }
-        preferredRendererType: Shape.CurveRenderer
-
-        ShapePath {
-            strokeWidth: 0
-            strokeColor: "transparent"
-            fillColor: Theme.glassTop
-
-            PathSvg {
-                path: "M18 0 L0 0 L0 18 A18 18 0 0 1 18 0 Z"
-            }
-        }
+        y: body.y + (Settings.bottom ? body.height - size : 0)
+        flipY: Settings.bottom
+        color: Theme.glassTop
     }
 
     Rectangle {
         id: body
 
-        y: (Settings.bottom ? 1 : -1) * root.slide * (body.height + 18)
+        y: (Settings.bottom ? 1 : -1) * root.slide * (body.height + 28)
         width: root.targetWidth
         height: root.targetHeight
         border.width: 1
@@ -94,10 +69,10 @@ Item {
                 color: Theme.panel
             }
         }
-        topLeftRadius: Settings.bottom ? animatedRadius : 0
-        topRightRadius: Settings.bottom ? animatedRadius : 0
-        bottomLeftRadius: Settings.bottom ? 0 : animatedRadius
-        bottomRightRadius: Settings.bottom ? 0 : animatedRadius
+        topLeftRadius: root.topRadius
+        topRightRadius: root.topRadius
+        bottomLeftRadius: root.bottomRadius
+        bottomRightRadius: root.bottomRadius
         clip: true
 
         property real animatedRadius: root.cornerRadius
@@ -135,7 +110,8 @@ Item {
                 page: Ui.dashTab === 1 ? 1 : 0
                 art: Ui.dashTab === 1 ? Media.art : ""
                 playing: !!Media.player && Media.player.isPlaying
-                bottomRadius: body.animatedRadius
+                topRadius: root.topRadius
+                bottomRadius: root.bottomRadius
             }
 
             Behavior on opacity {

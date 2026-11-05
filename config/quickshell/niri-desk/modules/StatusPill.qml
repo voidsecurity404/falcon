@@ -8,9 +8,13 @@ import qs.services
 Rectangle {
     id: root
 
-    implicitWidth: row.implicitWidth + 12
-    height: 34
-    radius: 11
+    implicitWidth: row.implicitWidth + (Settings.hug ? 26 : 12)
+    height: Settings.hug ? 45 : 34
+    // In the corner only the free corner stays round. The border on the screen edges lies off the screen.
+    topRightRadius: Settings.hug ? 0 : 11
+    bottomRightRadius: Settings.hug ? 0 : 11
+    topLeftRadius: Settings.hug ? (Settings.bottom ? 18 : 0) : 11
+    bottomLeftRadius: Settings.hug ? (Settings.bottom ? 0 : 18) : 11
     gradient: Gradient {
         GradientStop {
             position: 0
@@ -23,6 +27,23 @@ Rectangle {
     }
     border.width: 1
     border.color: Theme.panelEdge
+
+    EdgeCurve {
+        visible: Settings.hug
+        x: -size
+        y: Settings.bottom ? 44 - size : 1
+        flipX: true
+        flipY: Settings.bottom
+        color: Settings.bottom ? Theme.panel : Theme.glassTop
+    }
+    EdgeCurve {
+        visible: Settings.hug
+        x: root.width - 1 - size
+        y: Settings.bottom ? -size : root.height
+        flipX: true
+        flipY: Settings.bottom
+        color: Settings.bottom ? Theme.glassTop : Theme.panel
+    }
 
     // Belgi radio yoqilganini emas, haqiqiy ulanishni ko'rsatadi. Sim ustun turadi.
     readonly property var netDevices: Networking.devices.values
