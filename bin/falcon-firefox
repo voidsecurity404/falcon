@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
 """Copies the glass look and wallpaper colors into every Firefox profile. Firefox reads them when it starts.
 
-Only touches chrome/userChrome.css and userContent.css of a profile when this script wrote them, or when they do not exist.
+Only touches chrome/userChrome.css of a profile when this script wrote it, or when it does not exist.
 """
 from pathlib import Path
 
 MARK = "/* falcon */\n"
 PREFS = (
     'user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);\n',
-    # Lets the window and pages that paint no background of their own show what is behind them.
+    # Lets the window show what is behind it.
     'user_pref("widget.transparent-windows", true);\n',
-    'user_pref("browser.tabs.allow_transparent_browser", true);\n',
-    # Sites that have a dark look use it, so the parts of them left alone stay readable on the glass.
+    # A page with no background of its own gets the usual one, or its dark text would land on the glass.
+    'user_pref("browser.tabs.allow_transparent_browser", false);\n',
+    # Sites that have a dark look use it.
     'user_pref("layout.css.prefers-color-scheme.content-override", 0);\n',
-    # A bar at the top of a site fades in with the scroll position.
+)
+# Lines of user.js from the earlier look, which restyled every site.
+STALE = (
+    'user_pref("browser.tabs.allow_transparent_browser", true);\n',
     'user_pref("layout.css.scroll-driven-animations.enabled", true);\n',
 )
-# Splits the generated file: what comes after this line goes to userContent.css.
-SPLIT = "/* userContent */\n"
 HOME = Path.home()
 SOURCE = HOME / ".local/state/falcon/firefox-userChrome.css"
 # Opens the previous windows and tabs, so a restored Firefox window has what it had.
@@ -31,8 +33,7 @@ for root in (HOME / ".config/mozilla/firefox", HOME / ".mozilla/firefox"):
             user.write_text(text + RESUME)
 
 if SOURCE.exists():
-    chrome_css, _, content_css = SOURCE.read_text().partition(SPLIT)
-    css = MARK + chrome_css
+    css = MARK + SOURCE.read_text()
     for root in (HOME / ".config/mozilla/firefox", HOME / ".mozilla/firefox"):
         for prefs in root.glob("*/prefs.js"):
             profile = prefs.parent
@@ -41,11 +42,13 @@ if SOURCE.exists():
                 continue
             target.parent.mkdir(exist_ok=True)
             target.write_text(css)
+            # Sites are left alone, so the sheet this script used to write for them goes.
             content = profile / "chrome/userContent.css"
-            if not content.exists() or content.read_text().startswith(MARK):
-                content.write_text(MARK + content_css)
+            if content.exists() and content.read_text().startswith(MARK):
+                content.unlink()
             user = profile / "user.js"
             text = user.read_text() if user.exists() else ""
+            for line in STALE:
+                text = text.replace(line, "")
             missing = "".join(pref for pref in PREFS if pref not in text)
-            if missing:
-                user.write_text(text + missing)
+            user.write_text(text + missing)

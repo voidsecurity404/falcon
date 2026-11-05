@@ -29,9 +29,23 @@ html, body, #main-window, #browser, #appcontent, #tabbrowser-tabbox, #tabbrowser
   background: transparent !important;
 }
 
-/* A tint under every page, so light text stays readable over a bright wallpaper. */
+/* A tint under every page, which is what shows through it. */
 #tabbrowser-tabpanels {
   background: color-mix(in srgb, {{colors.surface.default.hex}} 65%, transparent) !important;
+}
+
+/* Sites are drawn exactly as they are, and this only decides how much of each pixel shows.
+   By brightness: near black is mostly glass, near white a little, and everything between is solid,
+   so a dark or a light page is glass while its text, icons, buttons and pictures stay. */
+.browserStack > browser {
+  filter: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><filter id='g' color-interpolation-filters='sRGB' x='0' y='0' width='100%25' height='100%25'><feColorMatrix in='SourceGraphic' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .3333 .3333 .3334 0 0' result='l'/><feComponentTransfer in='l' result='a'><feFuncA type='table' tableValues='0.15 0.2 0.3 0.5 0.7 0.85 1 1 1 1 1 1 1 1 1 1 1 1 0.95 0.87 0.8'/></feComponentTransfer><feComposite in='SourceGraphic' in2='a' operator='in'/></filter></svg>#g") !important;
+}
+/* A video or game filling the screen has nothing behind it. */
+:root[inDOMFullscreen] .browserStack > browser {
+  filter: none !important;
+}
+:root[inDOMFullscreen] #tabbrowser-tabpanels {
+  background: #000 !important;
 }
 
 /* One sheet of glass under the tabs and the address bar, with no lines across it. */
@@ -52,92 +66,4 @@ html, body, #main-window, #browser, #appcontent, #tabbrowser-tabbox, #tabbrowser
 #urlbar[open] > .urlbar-background, #urlbar[open] > #urlbar-background,
 findbar {
   background: var(--falcon-solid) !important;
-}
-/* falcon-firefox writes the rest of this file to userContent.css. */
-/* userContent */
-@-moz-document url-prefix("about:newtab"), url-prefix("about:home"), url-prefix("about:privatebrowsing") {
-  :root, body { --newtab-background-color: transparent !important; --newtab-background-color-secondary: transparent !important; background: transparent !important; }
-}
-
-@keyframes falcon-bar {
-  to { opacity: 1; }
-}
-@keyframes falcon-cut {
-  from { clip-path: inset(0 0 0 0); }
-  to { clip-path: inset(1000000px 0 0 0); }
-}
-
-/* Every site is glass. With their backgrounds gone, dark text would be lost, so all text turns light. */
-@-moz-document url-prefix("http"), url-prefix("file:") {
-  *:not(img, video, canvas, svg, svg *, picture, source, iframe, embed, object) {
-    background-color: transparent !important;
-    border-color: color-mix(in srgb, {{colors.on_surface.default.hex}} 18%, transparent) !important;
-    color: {{colors.on_surface.default.hex}} !important;
-    -webkit-text-fill-color: currentColor !important;
-    box-shadow: none !important;
-    text-shadow: none !important;
-  }
-  a, a * {
-    color: {{colors.primary.default.hex}} !important;
-  }
-  /* Fields and labelled buttons keep a shape, since their own fill is gone. Icons need none. */
-  button:not(:has(> svg, > img, yt-icon, .yt-icon-shape, .ytIconWrapperHost, yt-img-shadow, #avatar-btn)), input:not([type="checkbox"], [type="radio"], [type="range"]), select, textarea {
-    background-color: color-mix(in srgb, {{colors.on_surface.default.hex}} 10%, transparent) !important;
-  }
-  /* These sit inside a shape that YouTube draws itself. */
-  ytd-masthead input, ytd-masthead button, ytd-masthead form, ytd-masthead [role="button"], ytd-masthead .ytSearchboxComponentInputBox * {
-    background-color: transparent !important;
-  }
-  ::selection {
-    background-color: {{colors.primary.default.hex}} !important;
-    color: {{colors.on_primary.default.hex}} !important;
-    -webkit-text-fill-color: {{colors.on_primary.default.hex}} !important;
-  }
-  /* What floats over the page would mix with the text under it, so it gets frosted glass of its own. */
-  dialog, [role="dialog"], [role="menu"], [role="listbox"], [role="tooltip"], [aria-modal="true"], [popover],
-  ytd-app:not([guide-persistent-and-visible]) tp-yt-app-drawer #contentContainer, ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-searchbox"],
-  tp-yt-iron-dropdown, tp-yt-paper-dialog, ytd-menu-popup-renderer, ytd-multi-page-menu-renderer, .ytp-popup, .ytp-settings-menu, ytd-searchbox + *, .sbsb_a, .ytSearchboxComponentSuggestionsContainer,
-  [class*="dropdown-content" i], [class*="dropdown-menu" i], [class*="popover" i], [class*="tooltip" i], [class*="modal" i], .Overlay, .SelectMenu-modal {
-    background-color: color-mix(in srgb, {{colors.surface.default.hex}} 78%, transparent) !important;
-    backdrop-filter: blur(24px) !important;
-  }
-  /* A bar at the top shows nothing until the page scrolls under it, then its glass fades in. */
-  body > header:not(ytd-app *), [role="banner"]:not(ytd-app *), .AppHeader, .Header {
-    position: relative;
-    isolation: isolate;
-  }
-  body > header:not(ytd-app *)::before, [role="banner"]:not(ytd-app *)::before, .AppHeader::before, .Header::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background: color-mix(in srgb, {{colors.surface.default.hex}} 88%, transparent) !important;
-    backdrop-filter: blur(24px);
-    opacity: 0;
-    animation: falcon-bar linear both;
-    animation-timeline: scroll(root);
-    animation-range: 0 48px;
-  }
-  /* YouTube's bar has no glass at all: the page is cut off exactly at its lower edge while it scrolls. */
-  ytd-masthead, ytd-masthead #background, #masthead-container, #masthead-container #background {
-    background: transparent !important;
-    backdrop-filter: none !important;
-  }
-  ytd-page-manager {
-    animation: falcon-cut linear both;
-    animation-timeline: scroll(root);
-    animation-range: 0px 1000000px;
-  }
-  /* YouTube: the glow around a video is a canvas across the whole page, and it hides the glass. */
-  #cinematics, #cinematics-container {
-    display: none !important;
-  }
-  /* Wikipedia: a dark name drawn as a picture, and white fades under its side menus. */
-  .mw-logo-wordmark, .mw-logo-tagline {
-    filter: invert(1);
-  }
-  .vector-sticky-pinned-container::after {
-    display: none !important;
-  }
 }
