@@ -16,6 +16,8 @@ Singleton {
     property real ramGb: 0
     property real ramTotalGb: 0
     property int disk: 0
+    property int diskFreeGb: 0
+    property int diskTotalGb: 0
     property int temperature: 0
     // CPU yuklamasi: oxirgi ikki daqiqa.
     property var history: []
@@ -111,12 +113,15 @@ Singleton {
     Process {
         id: df
 
-        command: ["df", "--output=pcent", "/"]
+        command: ["df", "-BG", "--output=pcent,avail,size", "/"]
         stdout: StdioCollector {
             onStreamFinished: {
-                const m = text.match(/(\d+)%/);
-                if (m)
+                const m = text.match(/(\d+)%\s+(\d+)G\s+(\d+)G/);
+                if (m) {
                     root.disk = Number(m[1]);
+                    root.diskFreeGb = Number(m[2]);
+                    root.diskTotalGb = Number(m[3]);
+                }
             }
         }
     }

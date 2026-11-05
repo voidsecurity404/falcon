@@ -214,6 +214,11 @@ ShellRoot {
         function widgets(): void {
             Widgets.editMode = !Widgets.editMode;
         }
+        function widgetsGallery(group: string): void {
+            Widgets.editMode = true;
+            Widgets.galleryGroup = group;
+            Widgets.galleryOpen = true;
+        }
         function widgetsArrange(image: string): void {
             Widgets.arrange(image);
         }

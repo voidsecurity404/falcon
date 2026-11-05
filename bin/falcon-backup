@@ -14,7 +14,7 @@ from pathlib import Path
 
 HOME = Path.home()
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
-ITEMS = ["falcon/settings.json", "falcon/widgets.json", "falcon/widget-layouts.json", "falcon/note.txt", "niri/cfg/user.kdl"]
+ITEMS = ["falcon/settings.json", "falcon/widgets.json", "falcon/widget-layouts.json", "falcon/note.txt", "falcon/todo.json", "niri/cfg/user.kdl"]
 
 
 def export(target):

@@ -53,7 +53,7 @@ Singleton {
     }
 
     // Only while the numbers are on screen.
-    readonly property bool checking: Ui.popup === "claude" || ((Widgets.shownNow || Widgets.editMode) && Widgets.hasType("claude"))
+    readonly property bool checking: Ui.popup === "claude" || ((Widgets.shownNow || Widgets.editMode) && Widgets.hasType("claudering")) || Widgets.galleryOpen
 
     // Seconds until the next fetch. Stays at 0 while a fetch runs.
     property int countdown: 0

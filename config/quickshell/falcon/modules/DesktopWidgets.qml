@@ -23,7 +23,6 @@ PanelWindow {
     })
     property bool menuOpen: false
     property point menuAt: Qt.point(0, 0)
-    property bool catalogOpen: false
 
     anchors {
         top: true
@@ -45,7 +44,13 @@ PanelWindow {
 
     // Tahrirda vidjet shishasi shu qatlamda, orqasi xiralashadi.
     BackgroundEffect.blurRegion: Region {
-        regions: Widgets.editMode ? blurs.instances : []
+        Region {
+            regions: Widgets.editMode ? blurs.instances : []
+        }
+        Region {
+            item: Widgets.editMode && Widgets.galleryOpen && root.focusedScreen ? gallery.panel : null
+            radius: 26
+        }
     }
     Variants {
         id: blurs
@@ -72,7 +77,6 @@ PanelWindow {
                 root.menuOpen = true;
             } else {
                 root.menuOpen = false;
-                root.catalogOpen = false;
             }
         }
     }
@@ -218,12 +222,20 @@ PanelWindow {
         anchors.fill: parent
         focus: Widgets.editMode
         Keys.onEscapePressed: {
-            if (root.catalogOpen)
-                root.catalogOpen = false;
+            if (Widgets.galleryOpen)
+                Widgets.galleryOpen = false;
             else
                 Widgets.editMode = false;
         }
         visible: Widgets.editMode && root.focusedScreen
+
+        // Under the bar, so the bar stays pressable.
+        WidgetGallery {
+            id: gallery
+
+            anchors.fill: parent
+            bottomSpace: bar.height + 26 + 14
+        }
 
         Rectangle {
             id: bar
@@ -249,7 +261,7 @@ PanelWindow {
                         {
                             label: Tr.t("Add widget"),
                             main: false,
-                            run: () => root.catalogOpen = !root.catalogOpen
+                            run: () => Widgets.galleryOpen = !Widgets.galleryOpen
                         },
                         {
                             label: Tr.t("Reset layout"),
@@ -295,94 +307,6 @@ PanelWindow {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: barButton.modelData.run()
-                        }
-                    }
-                }
-            }
-        }
-
-        // Vidjet qo'shish katalogi
-        Rectangle {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom: bar.top
-            anchors.bottomMargin: 10
-            width: catalogGrid.implicitWidth + 20
-            height: catalogGrid.implicitHeight + 20
-            radius: 18
-            color: Theme.pill
-            border.width: 1
-            border.color: Theme.panelEdge
-            opacity: root.catalogOpen ? 1 : 0
-            scale: root.catalogOpen ? 1 : 0.95
-            visible: opacity > 0
-            transformOrigin: Item.Bottom
-
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: 150
-                }
-            }
-            Behavior on scale {
-                NumberAnimation {
-                    duration: 240
-                    easing.type: Easing.BezierSpline
-                    easing.bezierCurve: [0.3, 1.3, 0.4, 1, 1, 1]
-                }
-            }
-
-            Grid {
-                id: catalogGrid
-
-                anchors.centerIn: parent
-                columns: 4
-                spacing: 8
-
-                Repeater {
-                    model: Widgets.catalog
-
-                    delegate: Rectangle {
-                        id: tile
-
-                        required property var modelData
-
-                        width: 120
-                        height: 86
-                        radius: 15
-                        color: Qt.alpha(tileArea.containsMouse ? Theme.accent : Theme.text, tileArea.containsMouse ? 0.2 : 0.06)
-                        scale: tileArea.pressed ? 0.95 : 1
-
-                        Behavior on scale {
-                            NumberAnimation {
-                                duration: 110
-                            }
-                        }
-
-                        Column {
-                            anchors.centerIn: parent
-                            spacing: 8
-
-                            Icon {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                name: tile.modelData.icon
-                                size: 22
-                                color: Theme.accent
-                            }
-                            Label {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: tile.modelData.title
-                                size: 12
-                            }
-                        }
-                        MouseArea {
-                            id: tileArea
-
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                Widgets.add(tile.modelData.type);
-                                root.catalogOpen = false;
-                            }
                         }
                     }
                 }

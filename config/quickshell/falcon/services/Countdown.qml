@@ -17,6 +17,8 @@ Singleton {
     // Seconds left while paused.
     property int pausedLeft: 0
     property int left: 0
+    // The whole length, for a meter.
+    property int total: 0
     property string label: ""
     // "", work, break
     property string phase: ""
@@ -64,6 +66,7 @@ Singleton {
         pausedLeft = 0;
         endAt = Date.now() + seconds * 1000;
         left = seconds;
+        total = seconds;
         save();
     }
 
@@ -83,6 +86,7 @@ Singleton {
         endAt = 0;
         pausedLeft = 0;
         left = 0;
+        total = 0;
         label = "";
         phase = "";
         round = 1;
@@ -105,6 +109,7 @@ Singleton {
             pausedLeft = Math.min(maxSeconds, pausedLeft + seconds);
         else if (active)
             endAt = Math.min(Date.now() + maxSeconds * 1000, endAt + seconds * 1000);
+        total += seconds;
         update();
         save();
     }
@@ -113,6 +118,7 @@ Singleton {
         Saved.set("timer", active ? {
             endAt: endAt,
             pausedLeft: pausedLeft,
+            total: total,
             label: label,
             phase: phase,
             round: round
@@ -172,6 +178,7 @@ Singleton {
             pausedLeft = s.pausedLeft || 0;
             endAt = s.endAt || 0;
             update();
+            total = s.total || left;
         }
     }
 

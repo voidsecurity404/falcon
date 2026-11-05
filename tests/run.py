@@ -4272,21 +4272,21 @@ def rect(wid):
 def _():
     widgets_fresh()
     ok("falcon-widgets" in layers())
-    ok({w["type"] for w in st()["widgets"]} >= {"clock", "calendar", "system", "music", "weather"})
+    ok({w["type"] for w in st()["widgets"]} >= {"stack", "month", "rings", "cover", "sky"})
 
 
 @case("Vidjetni sichqoncha bilan sudraydi: joyi o'zgaradi, faylga saqlanadi, to'rga yopishadi")
 def _():
     widgets_fresh()
     widget_edit()
-    r = rect("calendar")
+    r = rect("month")
     sx, sy = r["x"] + r["w"] // 2, r["y"] + r["h"] // 2
     drag(sx, sy, sx - 300, sy + 150)
     time.sleep(0.8)
-    n = rect("calendar")
+    n = rect("month")
     ok(abs(n["x"] - (r["x"] - 300)) <= 24 and abs(n["y"] - (r["y"] + 150)) <= 24, (r, n))
     ok(n["x"] % 16 == 0 or n["y"] % 16 == 0, n)
-    saved_layout = next(w for w in widget_layout() if w["id"] == "calendar")
+    saved_layout = next(w for w in widget_layout() if w["id"] == "month")
     ok(saved_layout["fx"] < 0.98)
 
 
@@ -4391,7 +4391,7 @@ feature("widgets2", "Vidjetlar: qimirlamaslik, tejamkorlik, tushish joyi")
 @case("Ish stoli almashganda vidjet surilmaydi: sirpanish paytida ham joyida")
 def _():
     settings(widgets__opacity=0.5)
-    r = rect("calendar")
+    r = rect("month")
     area = f"{r['x']},{r['y'] + 40} {r['w']},60"
     a = shot("wf1", area)
     niri("focus-workspace", 2)
@@ -4417,17 +4417,17 @@ def _():
 @case("Tortayotganda tushish joyi ko'rinadi, qo'yib yuborganda aynan shu yerga tushadi")
 def _():
     widget_edit()
-    r = rect("calendar")
+    r = rect("month")
     sx, sy = r["x"] + r["w"] // 2, r["y"] + r["h"] // 2
     move(sx, sy)
     sh(["ydotool", "click", "0x40"])
     time.sleep(0.15)
     move(sx - 205, sy + 103)
     time.sleep(0.3)
-    held = rect("calendar")
+    held = rect("month")
     sh(["ydotool", "click", "0x80"])
     time.sleep(0.9)
-    final = rect("calendar")
+    final = rect("month")
     ok(final["x"] % 16 == 0 and abs(final["x"] - held["x"]) <= 16, (held, final))
     ok(final["y"] % 16 == 0 and abs(final["y"] - held["y"]) <= 16, (held, final))
 
@@ -4435,9 +4435,9 @@ def _():
 @case("Musiqa vidjeti ustiga borsa bosiladigan nusxa chiqadi, chiqsa yo'qoladi")
 def _():
     widgets_fresh()
-    r = rect("music")
+    r = rect("cover")
     move(r["x"] + r["w"] // 2, r["y"] + r["h"] // 2)
-    wait(lambda: st()["widgetHover"] == "music", 3, "nusxa chiqmadi")
+    wait(lambda: st()["widgetHover"] == "cover", 3, "nusxa chiqmadi")
     move(640, 300)
     wait(lambda: st()["widgetHover"] == "", 3, "nusxa yo'qolmadi")
 
@@ -4452,11 +4452,11 @@ def _():
     note = HOME / ".config/falcon/note.txt"
     note.unlink(missing_ok=True)
     layout = widget_layout() or []
-    WIDGETS_FILE.write_text(json.dumps([{"id": "notes", "type": "notes", "fx": 0.5, "fy": 0.4, "size": "m"}]))
+    WIDGETS_FILE.write_text(json.dumps([{"id": "sticky", "type": "sticky", "fx": 0.5, "fy": 0.4, "size": "m"}]))
     sh("pkill -u $(id -u) -x qs")
     wait(lambda: "falcon-top" in layers(), 12)
     time.sleep(1.5)
-    r = rect("notes")
+    r = rect("sticky")
     move(r["x"] + 100, r["y"] + 100)
     time.sleep(0.5)
     click(r["x"] + 100, r["y"] + 100)

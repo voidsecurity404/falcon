@@ -29,7 +29,7 @@ Item {
     readonly property bool dragging: !isFace && mover.drag.active
     readonly property int gridStep: 16
     readonly property bool interactive: !!info && info.interactive === true
-    readonly property bool holding: !isFace && interactive && (hover.hovered || (entry && entry.type === "notes" && Widgets.noteFocused))
+    readonly property bool holding: !isFace && interactive && (hover.hovered || (!!face.item && face.item.typing === true))
     readonly property bool showCopy: !isFace && (Widgets.editMode || (holding && !Widgets.sliding))
     readonly property bool hasContent: isFace ? contentOn : (Widgets.editMode || interactive)
     readonly property real drawOpacity: isFace ? (Widgets.hoverId === widgetId ? 0 : 1) : (showCopy ? 1 : 0)
@@ -152,7 +152,7 @@ Item {
         y: host.snap(host.y, host.minY, host.maxY) - host.y
         width: host.width
         height: host.height
-        radius: plate.visible ? plate.radius : 18
+        radius: host.info && (host.info.plate || host.info.solid) ? 22 * host.factor : 18
         color: Qt.alpha(Theme.accent, 0.16)
         border.width: 2
         border.color: Theme.accent
@@ -163,6 +163,8 @@ Item {
     Item {
         anchors.fill: parent
         opacity: host.drawOpacity
+        // A copy nobody sees must not keep animating its content.
+        visible: opacity > 0
 
         Behavior on opacity {
             NumberAnimation {
@@ -171,24 +173,12 @@ Item {
         }
 
         // Yuzdagi shisha doim turadi, nusxa faqat tahrirda o'z shishasini chizadi.
-        Rectangle {
+        WidgetPlate {
             id: plate
 
             anchors.fill: parent
             visible: !!host.info && host.info.plate && (host.isFace || Widgets.editMode)
             radius: 22 * host.factor
-            border.width: 1
-            border.color: Theme.panelEdge
-            gradient: Gradient {
-                GradientStop {
-                    position: 0
-                    color: Qt.alpha(Theme.glassBase, Math.max(0.05, Widgets.glass - 0.08))
-                }
-                GradientStop {
-                    position: 1
-                    color: Qt.alpha(Theme.glassBase, Widgets.glass)
-                }
-            }
         }
 
         // Tarkib faqat ko'rinayotganda ishlaydi va sekin paydo bo'ladi. Ramka o'lchami o'zgarmaydi.
@@ -204,6 +194,10 @@ Item {
             active: host.hasContent
             source: host.entry ? Qt.resolvedUrl("widgets/" + host.entry.type + ".qml") : ""
             enabled: !Widgets.editMode && !host.isFace
+            // Reduced from its full size, because text scaled down by itself turns rough.
+            layer.enabled: host.factor < 1
+            layer.smooth: true
+            layer.mipmap: true
             opacity: status === Loader.Ready ? reshapeOpacity : 0
             onLoaded: {
                 if ("form" in item)
@@ -221,7 +215,7 @@ Item {
     // Tahrirlash: tortish va tugmalar
     Rectangle {
         anchors.fill: parent
-        radius: plate.visible ? plate.radius : 18
+        radius: host.info && (host.info.plate || host.info.solid) ? 22 * host.factor : 18
         color: "transparent"
         visible: !host.isFace && Widgets.editMode
         border.width: host.dragging ? 2 : 1

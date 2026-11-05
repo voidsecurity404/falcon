@@ -28,6 +28,15 @@ Singleton {
     readonly property color glassTop: Qt.alpha(glassBase, Math.max(0.05, glassOpacity - 0.1))
     readonly property color panelEdge: Qt.alpha(text, 0.09)
 
+    // Big digits on desktop widgets and the Today clock.
+    readonly property string display: "Unbounded"
+
+    // The accent turned around the color wheel, for meters that stand next to each other.
+    function hueShift(color, turn) {
+        const hue = color.hslHue < 0 ? 0.58 : color.hslHue;
+        return Qt.hsla((hue + turn) % 1, Math.max(0.55, color.hslSaturation), Math.max(0.62, color.hslLightness), 1);
+    }
+
     readonly property int fontSmall: 12
     readonly property int fontBody: 14
 
