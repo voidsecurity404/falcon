@@ -11,13 +11,6 @@ Item {
     property bool showDashboard: false
     // How far the island has left the screen edge, for focus mode. 0 is in place.
     property real slide: 0
-    // Sitting on the one-piece bar: the top of the body is the bar's glass, so the body draws only what
-    // grows out of the bar, and its joints start at the bar's lower edge.
-    property bool onBar: false
-    readonly property int barDepth: 44
-    readonly property int joinSize: onBar ? Math.min(18, Math.max(0, Math.round(body.height) - barDepth)) : 18
-    readonly property real joinY: body.y + (Settings.bottom ? body.height - joinSize - (onBar ? barDepth : 0) : (onBar ? barDepth : 0))
-    readonly property color joinColor: onBar && !Settings.bottom ? Theme.panel : Theme.glassTop
     // The last message stays here while the island closes, so its text and icon leave with it.
     property var shownToast: null
     readonly property var currentToast: Toasts.current
@@ -40,21 +33,17 @@ Item {
 
     // Ekran chetiga qo'shilib turadigan ichki egilgan burchaklar.
     EdgeCurve {
-        visible: size > 0
-        size: root.joinSize
         x: -size
-        y: root.joinY
+        y: body.y + (Settings.bottom ? body.height - size : 0)
         flipX: true
         flipY: Settings.bottom
-        color: root.joinColor
+        color: Theme.glassTop
     }
     EdgeCurve {
-        visible: size > 0
-        size: root.joinSize
         x: body.width
-        y: root.joinY
+        y: body.y + (Settings.bottom ? body.height - size : 0)
         flipY: Settings.bottom
-        color: root.joinColor
+        color: Theme.glassTop
     }
 
     Rectangle {
@@ -63,16 +52,16 @@ Item {
         y: (Settings.bottom ? 1 : -1) * root.slide * (body.height + 28)
         width: root.targetWidth
         height: root.targetHeight
-        border.width: root.onBar ? 0 : 1
+        border.width: 1
         border.color: root.mode === "dashboard" ? "transparent" : Theme.panelEdge
         gradient: Gradient {
             GradientStop {
                 position: 0
-                color: root.onBar ? "transparent" : Theme.glassTop
+                color: Theme.glassTop
             }
             GradientStop {
                 position: 1
-                color: root.onBar ? "transparent" : Theme.panel
+                color: Theme.panel
             }
         }
         topLeftRadius: Settings.bottom ? animatedRadius : 0
@@ -104,19 +93,6 @@ Item {
                 easing.type: Easing.BezierSpline
                 easing.bezierCurve: root.mode === "dashboard" ? [0.24, 1.22, 0.36, 1, 1, 1] : [0.35, 0, 0.1, 1, 1, 1]
             }
-        }
-
-        // What grows out of the bar's lower edge. The part over the bar is the bar's own glass.
-        Rectangle {
-            visible: root.onBar && height > 0
-            y: Settings.bottom ? 0 : root.barDepth
-            width: parent.width
-            height: Math.max(0, parent.height - root.barDepth)
-            color: root.joinColor
-            topLeftRadius: Settings.bottom ? body.animatedRadius : 0
-            topRightRadius: Settings.bottom ? body.animatedRadius : 0
-            bottomLeftRadius: Settings.bottom ? 0 : body.animatedRadius
-            bottomRightRadius: Settings.bottom ? 0 : body.animatedRadius
         }
 
         // Panel shishasi ustidagi sahna: har bo'limning rangi, musiqa bo'limida albom.

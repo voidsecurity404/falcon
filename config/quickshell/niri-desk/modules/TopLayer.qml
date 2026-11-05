@@ -21,8 +21,6 @@ PanelWindow {
     // Side panels in the corners have their border just off the screen. Otherwise they float.
     readonly property int edgeGap: Settings.hug ? -1 : 10
     readonly property int sideGap: Settings.hug ? -1 : 14
-    // The one-piece bar lies against the edge, so it must not overshoot, and it moves as one.
-    readonly property var barArriveCurve: Settings.bar ? [0.2, 0, 0, 1, 1, 1] : arriveCurve
     property real ribbonOut: barShown ? 0 : 1
     property real statusOut: barShown ? 0 : 1
     property real islandOut: islandShown ? 0 : 1
@@ -31,18 +29,18 @@ PanelWindow {
         NumberAnimation {
             duration: root.barShown ? 460 : 300
             easing.type: Easing.BezierSpline
-            easing.bezierCurve: root.barShown ? root.barArriveCurve : root.leaveCurve
+            easing.bezierCurve: root.barShown ? root.arriveCurve : root.leaveCurve
         }
     }
     Behavior on statusOut {
         SequentialAnimation {
             PauseAnimation {
-                duration: Settings.bar ? 0 : 50
+                duration: 50
             }
             NumberAnimation {
                 duration: root.barShown ? 460 : 300
                 easing.type: Easing.BezierSpline
-                easing.bezierCurve: root.barShown ? root.barArriveCurve : root.leaveCurve
+                easing.bezierCurve: root.barShown ? root.arriveCurve : root.leaveCurve
             }
         }
     }
@@ -70,43 +68,40 @@ PanelWindow {
     // Faqat panellar orqasi xiralashadi, qolgan ekran toza qoladi.
     BackgroundEffect.blurRegion: Region {
         Region {
-            item: Settings.bar && root.ribbonOut < 1 ? barGlass : null
-        }
-        Region {
-            item: !Settings.bar && root.ribbonOut < 1 ? ribbon : null
+            item: root.ribbonOut < 1 ? ribbon : null
             topLeftRadius: ribbon.topLeftRadius
             topRightRadius: ribbon.topRightRadius
             bottomLeftRadius: ribbon.bottomLeftRadius
             bottomRightRadius: ribbon.bottomRightRadius
         }
         CurveRegion {
-            size: Settings.hug && !Settings.bar && root.ribbonOut < 1 ? 18 : 0
+            size: Settings.hug && root.ribbonOut < 1 ? 18 : 0
             x: ribbon.x + ribbon.width
             y: Settings.bottom ? ribbon.y + 44 - 18 : ribbon.y + 1
             flipY: Settings.bottom
         }
         CurveRegion {
-            size: Settings.hug && !Settings.bar && root.ribbonOut < 1 ? 18 : 0
+            size: Settings.hug && root.ribbonOut < 1 ? 18 : 0
             x: ribbon.x + 1
             y: Settings.bottom ? ribbon.y - 18 : ribbon.y + ribbon.height
             flipY: Settings.bottom
         }
         Region {
-            item: !Settings.bar && root.statusOut < 1 ? status : null
+            item: root.statusOut < 1 ? status : null
             topLeftRadius: status.topLeftRadius
             topRightRadius: status.topRightRadius
             bottomLeftRadius: status.bottomLeftRadius
             bottomRightRadius: status.bottomRightRadius
         }
         CurveRegion {
-            size: Settings.hug && !Settings.bar && root.statusOut < 1 ? 18 : 0
+            size: Settings.hug && root.statusOut < 1 ? 18 : 0
             x: status.x - 18
             y: Settings.bottom ? status.y + 44 - 18 : status.y + 1
             flipX: true
             flipY: Settings.bottom
         }
         CurveRegion {
-            size: Settings.hug && !Settings.bar && root.statusOut < 1 ? 18 : 0
+            size: Settings.hug && root.statusOut < 1 ? 18 : 0
             x: status.x + status.width - 1 - 18
             y: Settings.bottom ? status.y - 18 : status.y + status.height
             flipX: true
@@ -120,16 +115,16 @@ PanelWindow {
             topRightRadius: Settings.bottom ? island.body.animatedRadius : 0
         }
         CurveRegion {
-            size: root.islandOut === 0 ? island.joinSize : 0
-            x: island.x - island.joinSize
-            y: island.y + island.joinY
+            size: root.islandOut === 0 ? 18 : 0
+            x: island.x - 18
+            y: island.y + (Settings.bottom ? island.height - 18 : 0)
             flipX: true
             flipY: Settings.bottom
         }
         CurveRegion {
-            size: root.islandOut === 0 ? island.joinSize : 0
+            size: root.islandOut === 0 ? 18 : 0
             x: island.x + island.width
-            y: island.y + island.joinY
+            y: island.y + (Settings.bottom ? island.height - 18 : 0)
             flipY: Settings.bottom
         }
     }
@@ -137,9 +132,6 @@ PanelWindow {
     mask: Region {
         Region {
             item: catcher
-        }
-        Region {
-            item: Settings.bar && root.barShown ? barGlass : null
         }
         Region {
             item: root.barShown ? ribbon : null
@@ -180,44 +172,6 @@ PanelWindow {
         }
     }
 
-    // The glass of the one-piece bar. Ribbon, Island and StatusPill only put their content on it.
-    Rectangle {
-        id: barGlass
-
-        // The line along the free edge opens where the island has grown out of the bar.
-        readonly property real gapStart: island.height > island.barDepth + 1 ? island.x - island.joinSize : width / 2
-
-        visible: Settings.bar && root.ribbonOut < 1
-        width: parent.width
-        height: 45
-        y: (Settings.bottom ? parent.height - height - root.edgeGap : root.edgeGap) + root.edgeSign * root.ribbonOut * 64
-        opacity: Math.min(1, (1 - root.ribbonOut) * 3)
-        gradient: Gradient {
-            GradientStop {
-                position: 0
-                color: Theme.glassTop
-            }
-            GradientStop {
-                position: 1
-                color: Theme.panel
-            }
-        }
-
-        Rectangle {
-            y: Settings.bottom ? 0 : parent.height - 1
-            width: parent.gapStart
-            height: 1
-            color: Theme.panelEdge
-        }
-        Rectangle {
-            x: parent.width - parent.gapStart
-            y: Settings.bottom ? 0 : parent.height - 1
-            width: parent.gapStart
-            height: 1
-            color: Theme.panelEdge
-        }
-    }
-
     Ribbon {
         id: ribbon
 
@@ -244,7 +198,6 @@ PanelWindow {
         anchors.horizontalCenter: parent.horizontalCenter
         y: Settings.bottom ? parent.height - height : 0
         slide: root.islandOut
-        onBar: Settings.bar && root.ribbonOut < 1
         visible: root.islandOut < 1
         showDashboard: root.panelHere && Ui.popup === "dashboard"
     }

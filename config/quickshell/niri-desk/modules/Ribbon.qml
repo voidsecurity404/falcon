@@ -16,30 +16,30 @@ Rectangle {
     // In the corner only the free corner stays round. The border on the screen edges lies off the screen.
     topLeftRadius: Settings.hug ? 0 : 11
     bottomLeftRadius: Settings.hug ? 0 : 11
-    topRightRadius: Settings.bar ? 0 : Settings.hug ? (Settings.bottom ? 18 : 0) : 11
-    bottomRightRadius: Settings.bar ? 0 : Settings.hug ? (Settings.bottom ? 0 : 18) : 11
+    topRightRadius: Settings.hug ? (Settings.bottom ? 18 : 0) : 11
+    bottomRightRadius: Settings.hug ? (Settings.bottom ? 0 : 18) : 11
     gradient: Gradient {
         GradientStop {
             position: 0
-            color: Settings.bar ? "transparent" : Theme.glassTop
+            color: Theme.glassTop
         }
         GradientStop {
             position: 1
-            color: Settings.bar ? "transparent" : Theme.panel
+            color: Theme.panel
         }
     }
-    border.width: Settings.bar ? 0 : 1
+    border.width: 1
     border.color: Theme.panelEdge
 
     EdgeCurve {
-        visible: Settings.hug && !Settings.bar
+        visible: Settings.hug
         x: root.width
         y: Settings.bottom ? 44 - size : 1
         flipY: Settings.bottom
         color: Settings.bottom ? Theme.panel : Theme.glassTop
     }
     EdgeCurve {
-        visible: Settings.hug && !Settings.bar
+        visible: Settings.hug
         x: 1
         y: Settings.bottom ? -size : root.height
         flipY: Settings.bottom
