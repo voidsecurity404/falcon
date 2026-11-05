@@ -96,9 +96,16 @@ window-rule {
 }
 window-rule {
     match app-id=r#"^org\.gnome\.NautilusPreviewer$"#
-    match app-id=r#"^org\.localsend\.localsend_app$"#
     match app-id=r#"^org\.kde\.kdeconnect\.app$"#
     open-floating true
+}
+
+// LocalSend alone opens as narrow as a phone.
+window-rule {
+    match app-id=r#"^org\.localsend\.localsend_app$"#
+    open-floating true
+    default-column-width { fixed 860; }
+    default-window-height { fixed 620; }
 }
 
 // Scratchpad terminal tepada suzib turadi.

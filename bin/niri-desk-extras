@@ -57,6 +57,8 @@ setup)
         done
     fi
     "$0" daemons
+    # The running shell learns what is there now.
+    qs -c niri-desk ipc call desk devicesRefresh >/dev/null 2>&1
     ;;
 daemons)
     if [[ "$(setting connect.kdeconnect true)" == true ]] && daemon="$(kdeconnect_daemon)" && ! pgrep -x kdeconnectd >/dev/null; then

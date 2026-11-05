@@ -15,6 +15,7 @@ Singleton {
     property var camera: ({})
     property var sidecar: ({})
     property var mirror: ({})
+    property string waitingShare: ""
 
     readonly property bool allInstalled: Object.keys(extras).length > 0 && extras.localsend && extras.kdeconnect && extras.scrcpy && extras.mirror && extras.restic && extras.wtype && extras.whisper && extras.wayvnc
 
@@ -31,8 +32,21 @@ Singleton {
         Quickshell.execDetached(["kitty", "--title", "niri-desk extras setup", "env", "PATH=" + Ui.binDir + ":" + Quickshell.env("PATH"), "sh", "-c", 'niri-desk-extras setup; printf "\\n%s " "$(niri-desk-tr "Press Enter to close.")"; read _']);
     }
 
-    // Sends to a connected phone, otherwise opens LocalSend with the file.
+    // Sends to a connected phone, otherwise opens LocalSend with the file. The list of phones is
+    // read only while the settings page is open, so it is read again here.
     function share(path) {
+        waitingShare = path;
+        if (extras.kdeconnect)
+            phonesRead.running = true;
+        else
+            finishShare();
+    }
+
+    function finishShare() {
+        const path = waitingShare;
+        waitingShare = "";
+        if (path === "")
+            return;
         if (phones.length > 0) {
             Quickshell.execDetached(["kdeconnect-cli", "--device", phones[0].id, "--share", path]);
             Toasts.show(Tr.t("Sent to the phone"), phones[0].name, "phone");
@@ -135,6 +149,7 @@ Singleton {
                         name: gap > 0 ? l.slice(gap + 1) : l
                     };
                 });
+                root.finishShare();
             }
         }
     }

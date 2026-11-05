@@ -254,6 +254,10 @@ ShellRoot {
         function backupChanged(): void {
             Backups.refresh();
         }
+        function devicesRefresh(): void {
+            Devices.refresh();
+            Backups.refresh();
+        }
         function backups(): void {
             Ui.backupsOpen = !Ui.backupsOpen;
         }
