@@ -4,15 +4,18 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// Busiest programs and the GPU clock. Runs only while the System tab of the dashboard is open.
+// All processes, busiest first, and the GPU clock. Runs only while the System tab of the dashboard is open.
 Singleton {
     id: root
 
     readonly property bool active: Ui.popup === "dashboard" && Ui.dashTab === 2
     readonly property string user: Quickshell.env("USER")
 
-    // {pid, user, cpu, mem, name}
-    property var rows: []
+    // Every process: pids in list order, byPid gives {pid, user, cpu, mem, name}.
+    property var pids: []
+    property var byPid: ({})
+    property real busiest: 0
+    property bool holdOrder: false
     property int gpuMhz: 0
     property string gpuPath: ""
 
@@ -23,17 +26,32 @@ Singleton {
     function read(content) {
         // top prints two reports with -n 2. Only the second measures the current load.
         const report = content.slice(content.lastIndexOf("PID USER"));
-        rows = report.split("\n").slice(1).map(line => {
+        const found = report.split("\n").slice(1).map(line => {
             const f = line.trim().split(/\s+/);
-            // Kernel threads have no memory of their own, and nothing can be done about them here.
-            return f.length < 12 || f[4] === "0" ? null : {
+            return f.length < 12 ? null : {
                 pid: Number(f[0]),
                 user: f[1],
                 cpu: Number(f[8]),
                 mem: Number(f[9]),
                 name: f.slice(11).join(" ")
             };
-        }).filter(r => r && r.name !== "top").slice(0, 7);
+        }).filter(r => r && r.name !== "top");
+        const map = {};
+        let most = 0;
+        for (const r of found) {
+            map[r.pid] = r;
+            most = Math.max(most, r.cpu);
+        }
+        // While the list is being read, programs stay in their places and new ones come last.
+        const fresh = found.map(r => r.pid);
+        if (holdOrder) {
+            const kept = pids.filter(pid => map[pid]);
+            pids = kept.concat(fresh.filter(pid => !kept.includes(pid)));
+        } else {
+            pids = fresh;
+        }
+        byPid = map;
+        busiest = most;
     }
 
     Process {

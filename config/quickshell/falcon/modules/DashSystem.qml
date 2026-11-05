@@ -1,18 +1,29 @@
 import QtQuick
+import Quickshell
 import qs.components
 import qs.services
 
-// System: dials on the left, the load over time and the busiest programs on the right.
-// A program of this user can be ended with two presses.
+// System: dials on the left, the load over time and every process on the right.
+// A process of this user can be ended with two presses.
 Item {
     id: root
 
     property int armed: -1
 
     readonly property bool live: visible && Ui.popup === "dashboard"
-    readonly property int rowCount: 7
-    // Bars compare programs with each other, so a calm computer still shows who is on top.
-    readonly property real barFull: Math.max(25, Processes.rows.length > 0 ? Processes.rows[0].cpu : 0)
+    // Bars compare processes with each other, so a calm computer still shows who is on top.
+    readonly property real barFull: Math.max(25, Processes.busiest)
+
+    onLiveChanged: {
+        if (!live)
+            processList.positionViewAtBeginning();
+    }
+
+    Binding {
+        target: Processes
+        property: "holdOrder"
+        value: listHover.hovered || !processList.atYBeginning
+    }
 
     function press(row) {
         if (armed !== row.pid) {
@@ -218,108 +229,143 @@ Item {
             }
         }
 
-        Column {
+        ListView {
+            id: processList
+
             anchors.top: head.bottom
             anchors.topMargin: 4
+            anchors.bottom: parent.bottom
             width: parent.width
+            clip: true
             spacing: 4
+            boundsBehavior: Flickable.StopAtBounds
+            reuseItems: true
 
-            // Fixed places instead of a model of the rows: the places stay, so bars glide to new values.
-            Repeater {
-                model: root.rowCount
+            HoverHandler {
+                id: listHover
+            }
 
-                delegate: Rectangle {
-                    id: row
+            // Plain ids: a process keeps its delegate, so its bar glides and the scroll position stays.
+            model: ScriptModel {
+                values: Processes.pids
+            }
 
-                    required property int index
-
-                    readonly property var info: Processes.rows[index] || null
-                    // Ending these would close the whole session.
-                    readonly property bool own: !!info && info.user === Processes.user && !["niri", "niri-session", "qs", "systemd", "dbus-broker", "dbus-broker-lau", "pipewire", "wireplumber"].includes(info.name)
-                    readonly property bool armed: !!info && root.armed === info.pid
-
-                    width: parent.width
-                    height: 32
-                    radius: 11
-                    visible: !!info
-                    color: armed ? Qt.alpha(Theme.error, 0.18) : rowHover.hovered ? Qt.alpha(Theme.text, 0.05) : "transparent"
-
-                    HoverHandler {
-                        id: rowHover
-                    }
-                    Rectangle {
-                        visible: !row.armed && !!row.info && row.info.cpu >= 0.1
-                        width: Math.max(22, row.width * (row.info ? row.info.cpu : 0) / root.barFull)
-                        height: parent.height
-                        radius: parent.radius
-                        color: Qt.alpha(Theme.accent, 0.24)
-
-                        Behavior on width {
-                            NumberAnimation {
-                                duration: 500
-                                easing.type: Easing.OutCubic
-                            }
-                        }
-                    }
-                    Label {
-                        x: 12
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - (row.armed ? 330 : 200)
-                        text: row.info ? row.info.name : ""
-                        color: row.own ? Theme.text : Theme.muted
-                        size: 13
-                        elide: Text.ElideRight
-                    }
-                    Label {
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.right: parent.right
-                        anchors.rightMargin: 32
-                        visible: row.armed
-                        text: Tr.t("Press once more to proceed")
-                        color: Theme.error
-                        size: 12
-                    }
-                    Label {
-                        anchors.verticalCenter: parent.verticalCenter
-                        x: parent.width - 182
-                        width: 78
-                        visible: !row.armed
-                        horizontalAlignment: Text.AlignRight
-                        text: row.info ? row.info.cpu.toFixed(1) + "%" : ""
-                        size: 13
-                    }
-                    Label {
-                        anchors.verticalCenter: parent.verticalCenter
-                        x: parent.width - 104
-                        width: 72
-                        visible: !row.armed
-                        horizontalAlignment: Text.AlignRight
-                        text: row.info ? row.info.mem.toFixed(1) + "%" : ""
-                        color: Theme.muted
-                        size: 13
-                    }
-                    Icon {
-                        visible: row.own && (rowHover.hovered || row.armed)
-                        anchors.right: parent.right
-                        anchors.rightMargin: 10
-                        anchors.verticalCenter: parent.verticalCenter
-                        name: "close"
-                        size: 13
-                        color: endArea.containsMouse || row.armed ? Theme.error : Theme.muted
-                    }
-                    MouseArea {
-                        id: endArea
-
-                        visible: row.own
-                        anchors.right: parent.right
-                        width: 32
-                        height: parent.height
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.press(row.info)
-                    }
+            move: Transition {
+                NumberAnimation {
+                    property: "y"
+                    duration: 260
+                    easing.type: Easing.OutCubic
                 }
             }
+            moveDisplaced: Transition {
+                NumberAnimation {
+                    property: "y"
+                    duration: 260
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            delegate: Rectangle {
+                id: row
+
+                required property int modelData
+
+                readonly property var info: Processes.byPid[modelData] || null
+                // Ending these would close the whole session.
+                readonly property bool own: !!info && info.user === Processes.user && !["niri", "niri-session", "qs", "systemd", "dbus-broker", "dbus-broker-lau", "pipewire", "wireplumber"].includes(info.name)
+                readonly property bool armed: !!info && root.armed === info.pid
+
+                width: ListView.view.width
+                height: 32
+                radius: 11
+                color: armed ? Qt.alpha(Theme.error, 0.18) : rowHover.hovered ? Qt.alpha(Theme.text, 0.05) : "transparent"
+
+                HoverHandler {
+                    id: rowHover
+                }
+                Rectangle {
+                    visible: !row.armed && !!row.info && row.info.cpu >= 0.1
+                    width: Math.max(22, row.width * (row.info ? row.info.cpu : 0) / root.barFull)
+                    height: parent.height
+                    radius: parent.radius
+                    color: Qt.alpha(Theme.accent, 0.24)
+
+                    Behavior on width {
+                        NumberAnimation {
+                            duration: 500
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                }
+                Label {
+                    x: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width - (row.armed ? 330 : 200)
+                    text: row.info ? row.info.name : ""
+                    color: row.own ? Theme.text : Theme.muted
+                    size: 13
+                    elide: Text.ElideRight
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.right: parent.right
+                    anchors.rightMargin: 32
+                    visible: row.armed
+                    text: Tr.t("Press once more to proceed")
+                    color: Theme.error
+                    size: 12
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: parent.width - 182
+                    width: 78
+                    visible: !row.armed
+                    horizontalAlignment: Text.AlignRight
+                    text: row.info ? row.info.cpu.toFixed(1) + "%" : ""
+                    size: 13
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: parent.width - 104
+                    width: 72
+                    visible: !row.armed
+                    horizontalAlignment: Text.AlignRight
+                    text: row.info ? row.info.mem.toFixed(1) + "%" : ""
+                    color: Theme.muted
+                    size: 13
+                }
+                Icon {
+                    visible: row.own && (rowHover.hovered || row.armed)
+                    anchors.right: parent.right
+                    anchors.rightMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "close"
+                    size: 13
+                    color: endArea.containsMouse || row.armed ? Theme.error : Theme.muted
+                }
+                MouseArea {
+                    id: endArea
+
+                    visible: row.own
+                    anchors.right: parent.right
+                    width: 32
+                    height: parent.height
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.press(row.info)
+                }
+            }
+        }
+
+        // Shows how far down the list is. The wheel does the scrolling.
+        Rectangle {
+            anchors.right: parent.right
+            y: processList.y + processList.visibleArea.yPosition * processList.height
+            width: 3
+            height: Math.max(24, processList.visibleArea.heightRatio * processList.height)
+            radius: 1.5
+            visible: processList.visibleArea.heightRatio < 1
+            color: Qt.alpha(Theme.text, 0.3)
         }
     }
 }
