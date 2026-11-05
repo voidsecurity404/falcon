@@ -9,7 +9,6 @@ window-rule {
     match app-id="^kitty$"
     match app-id="^falcon-scratch$"
     match app-id="^falcon-tool$"
-    match app-id="^firefox$"
     background-effect {
         blur true
     }

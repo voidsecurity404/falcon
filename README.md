@@ -76,7 +76,6 @@ While music plays, sound waves move along the bottom of the desktop. They have a
 
 Widgets and waves show through see-through windows such as the terminal, softened by the window's blur.
 
-Firefox is glass too: the toolbar, new tab page and every website show the blurred desktop. Website backgrounds are removed and their text turns light to stay readable, so sites lose their own colors, while pictures and video stay as they are. It takes effect after restarting Firefox.
 
 ## Claude limits
 

@@ -65,8 +65,6 @@ Singleton {
     function seeThrough(w) {
         if (w.app_id === "kitty" && Settings.get("appearance.terminalOpacity", 1) < 1)
             return true;
-        if (w.app_id === "firefox")
-            return true;
         return Settings.get("windows.rules", []).some(rule => {
             if (!rule.app || rule.opacity === undefined || rule.opacity >= 1)
                 return false;
