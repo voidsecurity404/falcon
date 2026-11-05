@@ -19,12 +19,6 @@ Item {
             processList.positionViewAtBeginning();
     }
 
-    Binding {
-        target: Processes
-        property: "holdOrder"
-        value: listHover.hovered || !processList.atYBeginning
-    }
-
     function press(row) {
         if (armed !== row.pid) {
             armed = row.pid;
@@ -239,30 +233,10 @@ Item {
             clip: true
             spacing: 4
             boundsBehavior: Flickable.StopAtBounds
-            reuseItems: true
-
-            HoverHandler {
-                id: listHover
-            }
 
             // Plain ids: a process keeps its delegate, so its bar glides and the scroll position stays.
             model: ScriptModel {
                 values: Processes.pids
-            }
-
-            move: Transition {
-                NumberAnimation {
-                    property: "y"
-                    duration: 260
-                    easing.type: Easing.OutCubic
-                }
-            }
-            moveDisplaced: Transition {
-                NumberAnimation {
-                    property: "y"
-                    duration: 260
-                    easing.type: Easing.OutCubic
-                }
             }
 
             delegate: Rectangle {

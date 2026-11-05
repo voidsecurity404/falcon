@@ -4,7 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// All processes, busiest first, and the GPU clock. Runs only while the System tab of the dashboard is open.
+// All processes, busiest first when the tab opens, and the GPU clock. Runs only while the System tab of the dashboard is open.
 Singleton {
     id: root
 
@@ -15,9 +15,14 @@ Singleton {
     property var pids: []
     property var byPid: ({})
     property real busiest: 0
-    property bool holdOrder: false
+    property bool sortNext: true
     property int gpuMhz: 0
     property string gpuPath: ""
+
+    onActiveChanged: {
+        if (active)
+            sortNext = true;
+    }
 
     function end(pid) {
         Quickshell.execDetached(["kill", String(pid)]);
@@ -42,15 +47,16 @@ Singleton {
             map[r.pid] = r;
             most = Math.max(most, r.cpu);
         }
-        // While the list is being read, programs stay in their places and new ones come last.
+        byPid = map;
+        // Sorted once per opening. After that everything stays in its place and new processes come last.
         const fresh = found.map(r => r.pid);
-        if (holdOrder) {
+        if (sortNext) {
+            sortNext = false;
+            pids = fresh;
+        } else {
             const kept = pids.filter(pid => map[pid]);
             pids = kept.concat(fresh.filter(pid => !kept.includes(pid)));
-        } else {
-            pids = fresh;
         }
-        byPid = map;
         busiest = most;
     }
 
