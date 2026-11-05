@@ -1,23 +1,38 @@
 #!/usr/bin/env bash
-# Searches a picture on Google and opens the results in the browser.
-# The picture goes only to Google. Usage: niri-desk-lens IMAGE
+# Searches a picture on Google and opens the results in the browser. Usage: niri-desk-lens IMAGE
+# The browser itself has to send the picture: Google ties it to the session that sent it, so results
+# of an upload made by any other program open empty. So a small local page posts it and goes away.
+# The picture goes only to Google.
 set -euo pipefail
 
-_t() { "$HOME/.local/bin/niri-desk-tr" "$1"; }
-tell() { qs -c niri-desk ipc call desk toast "$@" >/dev/null 2>&1 || true; }
+page="$(mktemp --tmpdir="${XDG_RUNTIME_DIR:-/tmp}" niri-desk-lens.XXXXXX.html)"
+{
+    cat <<HTML
+<!doctype html>
+<meta charset="utf-8">
+<title>Google</title>
+<form id="form" method="post" enctype="multipart/form-data" action="https://lens.google.com/v3/upload?ep=ccm&hl=$("$HOME/.local/bin/niri-desk-tr" --lang)&st=$(date +%s%3N)">
+<input type="file" name="encoded_image" id="file">
+</form>
+<script>
+HTML
+    # A JavaScript string cannot hold a line break, so these three parts make one line.
+    printf 'const bytes = Uint8Array.from(atob("'
+    base64 -w0 "$1"
+    printf '"), c => c.charCodeAt(0));\n'
+    cat <<'HTML'
+const list = new DataTransfer();
+list.items.add(new File([bytes], "image.png", { type: "image/png" }));
+document.getElementById("file").files = list.files;
+document.getElementById("form").submit();
+</script>
+HTML
+} >"$page"
 
-tell "$(_t "Searching on Google")" "$(_t "Sending the picture")"
-lang="$("$HOME/.local/bin/niri-desk-tr" --lang)"
-url="$(curl -sS -m 30 -o /dev/null -w '%{redirect_url}' \
-    -A 'Mozilla/5.0 (X11; Linux x86_64; rv:135.0) Gecko/20100101 Firefox/135.0' \
-    -F "encoded_image=@$1;type=image/png" \
-    "https://lens.google.com/v3/upload?ep=ccm&st=$(date +%s%3N)&hl=$lang" 2>/dev/null)" || url=""
-
-if [[ "$url" != https://* ]]; then
-    tell "$(_t "Search failed")" "$(_t "Check the internet")"
-    exit 1
-fi
-xdg-open "$url" >/dev/null 2>&1
+xdg-open "$page" >/dev/null 2>&1
 # The browser only opens a tab and may be on another workspace, so it is brought forward.
 sleep 0.4
 "$HOME/.local/bin/niri-desk-raise" 'firefox|chrom|brave|zen|helium' true >/dev/null 2>&1 || true
+# The page holds the picture, and a browser that is just starting needs time to read it.
+(sleep 30; rm -f "$page") >/dev/null 2>&1 &
+disown

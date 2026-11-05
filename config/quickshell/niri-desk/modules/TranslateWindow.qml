@@ -63,8 +63,11 @@ LazyLoader {
                     if (message.stage === "empty") {
                         Toasts.show(Tr.t("No text found"), Tr.t("Try selecting another area"), "alert");
                         win.close();
+                    } else if (message.stage === "same") {
+                        Toasts.show(Tr.t("Nothing to translate"), Tr.t("The text is already in this language. Change it in Settings → System"), "alert");
+                        win.close();
                     } else if (message.stage === "error") {
-                        Toasts.show(Tr.t("Translation failed"), Tr.t("Check the internet"), "alert");
+                        Toasts.show(Tr.t("Translation failed"), Tr.t("No internet, or the free service is limiting requests. Try again in a few minutes"), "alert");
                         win.close();
                     } else {
                         if (message.stage === "done") {
