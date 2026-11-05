@@ -31,6 +31,8 @@ Singleton {
     readonly property bool bottom: get("panel.position", "top") === "bottom"
     // The side panels hug the screen's corners, which are rounded, or float away from the edge.
     readonly property bool hug: get("panel.style", "hug") !== "float"
+    // One unbroken bar along the edge. It keeps the places of hug, and TopLayer draws the glass behind them.
+    readonly property bool bar: get("panel.style", "hug") === "bar"
 
     function merge(base, over) {
         const out = Object.assign({}, base);

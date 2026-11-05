@@ -13,7 +13,8 @@ PanelWindow {
     readonly property var workspace: Niri.activeWorkspaceOn(outputName)
     readonly property bool wanted: Widgets.enabled && Widgets.loaded && (!Widgets.firstOnly || (!!workspace && workspace.idx === 1))
     readonly property bool covered: Niri.coveredOn(outputName, width, height)
-    readonly property bool seen: wanted && !covered && !idle.isIdle
+    // Caffeine counts as active by itself: this monitor still reports idle with its inhibitor held.
+    readonly property bool seen: wanted && !covered && (Caffeine.enabled || !idle.isIdle)
     readonly property bool contentOn: seen || keepAlive.running
     readonly property int topInset: Settings.bottom ? 16 : 56
     readonly property int bottomInset: Settings.bottom ? 56 : 16
