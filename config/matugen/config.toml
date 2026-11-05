@@ -2,6 +2,15 @@
 version_check = false
 fallback_color = "#8fc7ee"
 
+# Terminal ANSI colors: fixed hues, harmonized toward the wallpaper.
+[config.custom_colors]
+term_red = { color = "#ff4d4d", blend = true }
+term_green = { color = "#33cc66", blend = true }
+term_yellow = { color = "#e6c200", blend = true }
+term_blue = { color = "#3d8bff", blend = true }
+term_magenta = { color = "#d65cd6", blend = true }
+term_cyan = { color = "#22bbcc", blend = true }
+
 [templates.shell]
 input_path = "~/.config/matugen/templates/colors.json"
 output_path = "~/.local/state/falcon/colors.json"
