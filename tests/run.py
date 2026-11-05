@@ -4566,12 +4566,12 @@ def _():
 @case("Tovush to'lqinlari sozlamasi vidjetlar joyini boshqaradi va musiqasiz ovoz tinglanmaydi")
 def _():
     on = st()["widgetsBottomInset"]
-    settings(widgets__musicWaves=False)
+    settings(waves__enabled=False)
     try:
         wait(lambda: st()["widgetsBottomInset"] < on, 3, "joy bo'shamadi")
         ok(st()["spectrumWanted"] is False and not spectrum_running())
     finally:
-        settings(widgets__musicWaves=True)
+        settings(waves__enabled=True)
     wait(lambda: st()["widgetsBottomInset"] == on, 3, "joy qaytmadi")
 
 

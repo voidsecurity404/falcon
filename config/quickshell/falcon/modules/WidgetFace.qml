@@ -14,13 +14,15 @@ PanelWindow {
 
     readonly property var workspace: Niri.activeWorkspaceOn(outputName)
     readonly property bool wanted: Widgets.enabled && Widgets.loaded && (!Widgets.firstOnly || (!!workspace && workspace.idx === 1))
-    readonly property bool covered: Niri.coveredOn(outputName, width, height)
+    // Only a window nothing shows through hides the desktop.
+    readonly property bool covered: Niri.desktopHiddenOn(outputName, width, height)
     // Caffeine counts as active by itself: this monitor still reports idle with its inhibitor held.
     readonly property bool seen: wanted && !covered && (Caffeine.enabled || !idle.isIdle)
     readonly property bool contentOn: seen || keepAlive.running
     // After this long without input the session is locked, so nothing here can be seen.
     readonly property int lockAfter: Settings.get(UPower.onBattery ? "idle.battery.lock" : "idle.lock", 300)
     readonly property bool wavesSeen: Widgets.wavesEnabled && !covered && !Niri.overview && (Caffeine.enabled || !lockIdle.isIdle)
+    readonly property bool behindGlass: !covered && Niri.coveredOn(outputName, width, height)
     readonly property int topInset: Widgets.topInset
     readonly property int bottomInset: Widgets.bottomInset
 
@@ -106,8 +108,15 @@ PanelWindow {
         anchors.right: parent.right
         height: Widgets.wavesHeight
         active: root.wavesSeen
-        topAlpha: 0.8
-        bottomAlpha: 0.08
+        style: Settings.get("waves.style", "bars")
+        color: Settings.get("waves.fromCover", false) && !!Media.player ? Media.artAccent : (Settings.get("waves.color", "") || Theme.accent)
+        // Blur behind a see-through window spreads the light thin, so it takes more of it.
+        topAlpha: root.behindGlass ? 1 : Settings.get("waves.opacity", 0.8)
+        bottomAlpha: root.behindGlass ? Settings.get("waves.opacity", 0.8) : topAlpha * 0.1
+        bars: ({ thick: 40, medium: 72, thin: 120 })[Settings.get("waves.thickness", "medium")] || 72
+        mirrored: Settings.get("waves.mirror", true)
+        gain: Settings.get("waves.gain", 1)
+        smoothing: Settings.get("waves.smoothing", 70)
         opacity: Niri.overview ? 0 : 1
         visible: Widgets.wavesEnabled && opacity > 0
 

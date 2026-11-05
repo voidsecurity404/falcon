@@ -72,7 +72,9 @@ Click the clock. Two tabs, switched with `1`, `2` or `Tab`.
 
 Clock, analog clock, calendar, weather, system load, music, Claude limits and notes sit on the wallpaper. To move them, right click the desktop and choose Edit widgets, or press `Mod+Shift+W`. In edit mode drag a widget, it snaps to a grid; the button in its corner changes the size, the cross removes it, and the bar below adds widgets. Settings → Widgets turns them off, shows them on every workspace and changes their transparency. Each time you change the wallpaper, the widgets move to its calm parts, away from what the picture shows, and change their form: wide, tall or compact, for example hours over minutes or the cover above the track. They keep their size setting. A layout you change by hand is remembered for that wallpaper and comes back with it. Settings → Widgets can limit this to the place only, or turn it off. The layout is stored in `~/.config/falcon/widgets.json`.
 
-While music plays, sound waves move along the bottom of the desktop, under your windows. They have a fixed place, and widgets stay above them. The sound is only measured on this computer. To turn them off, go to Settings → Widgets → Music.
+While music plays, sound waves move along the bottom of the desktop. They have a fixed place, and widgets stay above them. The sound is only measured on this computer. Settings → Widgets → Music turns them off and sets their style (bars, wave, line or dots), height, brightness, sensitivity, smoothness, thickness, direction and color.
+
+Widgets and waves show through see-through windows such as the terminal, softened by the window's blur.
 
 ## Claude limits
 

@@ -208,7 +208,16 @@ LazyLoader {
                     {
                         title: Tr.t("Music"),
                         items: [
-                            { key: "widgets.musicWaves", label: Tr.t("Sound waves on the desktop"), hint: Tr.t("Along the bottom of the screen while music plays"), type: "toggle" }
+                            { key: "waves.enabled", label: Tr.t("Sound waves on the desktop"), hint: Tr.t("Along the bottom of the screen while music plays"), type: "toggle" },
+                            { key: "waves.style", label: Tr.t("Style"), type: "choice", options: ["bars", "wave", "line", "dots"], names: [Tr.t("Bars"), Tr.t("Wave"), Tr.t("Line"), Tr.t("Dots")] },
+                            { key: "waves.height", label: Tr.t("Height"), hint: Tr.t("Widgets stay above it"), type: "slider", min: 60, max: 320, step: 10, unit: "px" },
+                            { key: "waves.opacity", label: Tr.t("Brightness"), type: "slider", min: 0.2, max: 1, step: 0.05, unit: "percent" },
+                            { key: "waves.gain", label: Tr.t("Sensitivity"), hint: Tr.t("Higher moves more at the same sound"), type: "slider", min: 0.5, max: 2, step: 0.1, unit: "percent" },
+                            { key: "waves.smoothing", label: Tr.t("Smoothness"), hint: Tr.t("Lower follows each beat more sharply"), type: "slider", min: 20, max: 300, step: 10, unit: "ms" },
+                            { key: "waves.thickness", label: Tr.t("Thickness of bars and dots"), type: "choice", options: ["thick", "medium", "thin"], names: [Tr.t("Thick"), Tr.t("Medium"), Tr.t("Thin")] },
+                            { key: "waves.mirror", label: Tr.t("From the middle to the sides"), hint: Tr.t("Off puts low notes on the left"), type: "toggle" },
+                            { key: "waves.fromCover", label: Tr.t("Color of the album cover"), hint: Tr.t("Off uses the color below"), type: "toggle" },
+                            { key: "waves.color", label: Tr.t("Color"), type: "color", autoText: Tr.t("From wallpaper"), colors: ["#7aa2f7", "#bb9af7", "#f7768e", "#ff9e64", "#e0af68", "#9ece6a", "#2ac3de", "#ffffff"] }
                         ]
                     }
                 ]

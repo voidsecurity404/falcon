@@ -61,6 +61,38 @@ Singleton {
         return false;
     }
 
+    // Can the desktop be seen through this window? niri does not report it, so it comes from the settings.
+    function seeThrough(w) {
+        if (w.app_id === "kitty" && Settings.get("appearance.terminalOpacity", 1) < 1)
+            return true;
+        return Settings.get("windows.rules", []).some(rule => {
+            if (!rule.app || rule.opacity === undefined || rule.opacity >= 1)
+                return false;
+            try {
+                return new RegExp(rule.app).test(w.app_id);
+            } catch (e) {
+                return rule.app === w.app_id;
+            }
+        });
+    }
+
+    // Does a window hide the desktop here completely? Windows scrolled away and see-through ones do not.
+    function desktopHiddenOn(output, outputWidth, outputHeight) {
+        const workspace = activeWorkspaceOn(output);
+        if (!workspace)
+            return false;
+        const fills = w => !w.is_floating && w.layout && w.layout.tile_size[0] >= outputWidth * 0.95 && w.layout.tile_size[1] >= outputHeight * 0.88;
+        const focused = windows[focusedWindowId];
+        if (focused && focused.workspace_id === workspace.id && !focused.is_floating)
+            return fills(focused) && !seeThrough(focused);
+        for (const id in windows) {
+            const w = windows[id];
+            if (w.workspace_id === workspace.id && fills(w) && !seeThrough(w))
+                return true;
+        }
+        return false;
+    }
+
     function hasWindows(workspaceId) {
         for (const id in windows) {
             if (windows[id].workspace_id === workspaceId)

@@ -154,8 +154,19 @@
     "enabled": true,
     "firstOnly": false,
     "opacity": 0.5,
-    "followWallpaper": "full",
-    "musicWaves": true
+    "followWallpaper": "full"
+  },
+  "waves": {
+    "enabled": true,
+    "style": "bars",
+    "height": 140,
+    "opacity": 0.8,
+    "gain": 1,
+    "smoothing": 70,
+    "thickness": "medium",
+    "mirror": true,
+    "fromCover": false,
+    "color": ""
   },
   "wallpaper": {
     "transition": "grow",

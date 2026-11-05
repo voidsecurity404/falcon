@@ -133,8 +133,8 @@ Singleton {
     readonly property bool enabled: Settings.get("widgets.enabled", true)
     readonly property bool firstOnly: Settings.get("widgets.firstOnly", false)
     // The music waves own the bottom of the desktop, so widgets stay above them.
-    readonly property bool wavesEnabled: Settings.get("widgets.musicWaves", true)
-    readonly property int wavesHeight: 140
+    readonly property bool wavesEnabled: Settings.get("waves.enabled", true)
+    readonly property int wavesHeight: Math.max(60, Math.min(320, Number(Settings.get("waves.height", 140)) || 140))
     readonly property int topInset: Settings.bottom ? 16 : 56
     readonly property int bottomInset: (Settings.bottom ? 56 : 16) + (wavesEnabled ? wavesHeight : 0)
     readonly property real glass: Settings.get("widgets.opacity", 0.5)
