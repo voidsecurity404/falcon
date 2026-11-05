@@ -2,13 +2,17 @@ import QtQuick
 import qs.services
 
 // CPU load over the last two minutes: a thin line with a soft fill. Hover reads a value.
+// The newest value stands at the right edge, and the line grows to the left as values come in.
 Item {
     id: root
 
     property var values: []
     property int stepSeconds: 2
+    property int slots: 60
 
-    readonly property int hoverIndex: area.containsMouse && values.length > 1 ? Math.max(0, Math.min(values.length - 1, Math.round(area.mouseX / width * (values.length - 1)))) : -1
+    readonly property real step: width / (slots - 1)
+    readonly property int hoverAge: area.containsMouse && values.length > 1 ? Math.max(0, Math.round((width - area.mouseX) / step)) : -1
+    readonly property int hoverIndex: hoverAge >= 0 && hoverAge < values.length ? values.length - 1 - hoverAge : -1
 
     onValuesChanged: chart.requestPaint()
     onWidthChanged: chart.requestPaint()
@@ -30,7 +34,7 @@ Item {
             const v = root.values;
             if (v.length < 2)
                 return;
-            const x = i => i / (v.length - 1) * width;
+            const x = i => width - (v.length - 1 - i) * root.step;
             const y = n => height - 2 - (height - 4) * Math.max(0, Math.min(100, n)) / 100;
             ctx.beginPath();
             ctx.moveTo(x(0), y(v[0]));
@@ -41,7 +45,7 @@ Item {
             ctx.strokeStyle = Theme.accent;
             ctx.stroke();
             ctx.lineTo(width, height);
-            ctx.lineTo(0, height);
+            ctx.lineTo(x(0), height);
             ctx.closePath();
             const fill = ctx.createLinearGradient(0, 0, 0, height);
             fill.addColorStop(0, Qt.alpha(Theme.accent, 0.26));
@@ -53,7 +57,7 @@ Item {
 
     Rectangle {
         visible: root.hoverIndex >= 0
-        x: root.hoverIndex / Math.max(1, root.values.length - 1) * root.width
+        x: root.width - root.hoverAge * root.step
         width: 1
         height: root.height
         color: Qt.alpha(Theme.text, 0.35)
@@ -71,7 +75,7 @@ Item {
             id: tip
 
             anchors.centerIn: parent
-            text: root.hoverIndex >= 0 ? Math.round(root.values[root.hoverIndex]) + "% · " + Tr.t("{n} s ago").replace("{n}", (root.values.length - 1 - root.hoverIndex) * root.stepSeconds) : ""
+            text: root.hoverIndex >= 0 ? Math.round(root.values[root.hoverIndex]) + "% · " + Tr.t("{n} s ago").replace("{n}", root.hoverAge * root.stepSeconds) : ""
             size: 11
         }
     }

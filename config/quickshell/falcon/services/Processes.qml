@@ -4,7 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// Busiest processes and the GPU clock. Runs only while the System tab of the dashboard is open.
+// Busiest programs and the GPU clock. Runs only while the System tab of the dashboard is open.
 Singleton {
     id: root
 
@@ -25,14 +25,15 @@ Singleton {
         const report = content.slice(content.lastIndexOf("PID USER"));
         rows = report.split("\n").slice(1).map(line => {
             const f = line.trim().split(/\s+/);
-            return f.length < 12 ? null : {
+            // Kernel threads have no memory of their own, and nothing can be done about them here.
+            return f.length < 12 || f[4] === "0" ? null : {
                 pid: Number(f[0]),
                 user: f[1],
                 cpu: Number(f[8]),
                 mem: Number(f[9]),
                 name: f.slice(11).join(" ")
             };
-        }).filter(r => r && r.name !== "top").slice(0, 11);
+        }).filter(r => r && r.name !== "top").slice(0, 7);
     }
 
     Process {
