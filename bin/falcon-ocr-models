@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+"""Downloads the text reading models of the picture translator, one for each kind of script, about
+200 MB, and checks them. It needs no root and is safe to run again.
+
+  falcon-ocr-models           downloads what is missing
+  falcon-ocr-models status    says how many are there
+"""
+import fcntl
+import hashlib
+import os
+import sys
+import urllib.request
+from pathlib import Path
+
+# tessdata_fast of the Tesseract project, Apache-2.0. One commit, so the checksums below stay right.
+COMMIT = "87416418657359cb625c412a48b6e1d6d41c29bd"
+BASE = f"https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/{COMMIT}/script/"
+FOLDER = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "falcon/tessdata"
+MODELS = {
+    "Arabic": "47c262ac4e843c024df87ffa1363b77a821a843c069c71ef7650f4d2ecfea1e8",
+    "Armenian": "e94e3cfcb79dc6bc24b819ce01340b690f2aabe4c5ac295545ae1bca5d7472f4",
+    "Bengali": "d04c2064bd0ffcd18488c4048d40d88ab056185f3462c2337b52f9e6c51158e5",
+    "Cyrillic": "a80325ebb1c7aa2dca5002ec05b15052a51dcb2e9e65373c264a3df7ac284358",
+    "Devanagari": "3bbb87c1de2a6a2ef0a97dc041e6eea2723a1c22d638f5e38157a5cd441c12b7",
+    "Georgian": "8da5cc7e2af2c8da04d126ab1f2604904305e548bc3fc20d3c0bae6d519ca013",
+    "Greek": "52e201e4a22336d89ee202b579aca04f15ffd6e5e6af1fe164498f2c7de898e6",
+    "Hangul": "cae2d12b8cdac6b62643b65915bec347e80970adc55228ca42ac1ec8909b198a",
+    "HanS": "d03c250faaa48015bfde2213f3d7d5bda82bcee93422fceac5906a32073d9152",
+    "HanT": "29588327f0d830b5c112209045d826b9be014138266b20f2b08843aac2730fbb",
+    "Hebrew": "4f4f3405404a61e21e5c16316ed5c3052ddb3572a75e0b3dc3fe118b12dea76e",
+    "Japanese": "c176cdca0c17e9be97bda854ac91baea90b92e2813b45749ad05e409477ba8b2",
+    "Latin": "6dbdaf8ecc6c40f025c2648bf3b3f3fbffe073e1fd2df2047fde2e2b2f020d53",
+    "Tamil": "6857e222c6977986915bd073f669c2cde33039dedde26603ed6be87b0a8d62bb",
+    "Thai": "d9e34be94556ddb65fd7e04892ff606e1a5b696d0eb422b5a7efc6859943702d",
+}
+
+
+def digest(path):
+    hashed = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for piece in iter(lambda: handle.read(1 << 20), b""):
+            hashed.update(piece)
+    return hashed.hexdigest()
+
+
+def present():
+    return [name for name in MODELS if (FOLDER / f"{name}.traineddata").exists()]
+
+
+def fetch(name):
+    target = FOLDER / f"{name}.traineddata"
+    partial = target.with_suffix(".part")
+    with urllib.request.urlopen(BASE + target.name, timeout=60) as answer, open(partial, "wb") as out:
+        while piece := answer.read(1 << 20):
+            out.write(piece)
+    if digest(partial) != MODELS[name]:
+        partial.unlink()
+        raise OSError(f"{name}: checksum does not match")
+    partial.replace(target)
+
+
+def main(argv):
+    if argv[1:] == ["status"]:
+        print(f"{len(present())}/{len(MODELS)}")
+        return 0
+    FOLDER.mkdir(parents=True, exist_ok=True)
+    with open(FOLDER / ".lock", "w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return 0
+        failed = 0
+        for name in MODELS:
+            if name in present():
+                continue
+            print(name, flush=True)
+            try:
+                fetch(name)
+            except OSError as error:
+                print(error, file=sys.stderr)
+                failed += 1
+    return 1 if failed else 0
+
+
+sys.exit(main(sys.argv))

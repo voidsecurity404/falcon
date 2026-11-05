@@ -34,8 +34,6 @@ FILES = [
     ("config/falcon/defaults.json", ".config/falcon/defaults.json"),
     ("config/falcon/i18n-ru.json", ".config/falcon/i18n-ru.json"),
     ("config/falcon/emoji.json", ".config/falcon/emoji.json"),
-    ("config/falcon/tessdata/eng.traineddata", ".config/falcon/tessdata/eng.traineddata"),
-    ("config/falcon/tessdata/rus.traineddata", ".config/falcon/tessdata/rus.traineddata"),
     ("config/falcon/tmux.conf", ".config/falcon/tmux.conf"),
 ]
 # These are read when the shell starts.

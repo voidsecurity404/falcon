@@ -144,7 +144,7 @@ fonts/              Geist, Geist Mono and Unbounded (SIL OFL 1.1)
 
 No code was copied from these projects, the ideas were rewritten.
 
-Reading uses the small `tessdata_fast` models of the Tesseract project (Apache-2.0), kept in `config/falcon/tessdata`.
+Picture translation reads text with the `tessdata_fast` script models of the Tesseract project (Apache-2.0). `falcon-ocr-models` downloads them, about 200 MB.
 
 ## Status
 

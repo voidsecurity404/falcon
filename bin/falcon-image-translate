@@ -17,6 +17,7 @@ import re
 import statistics
 import subprocess
 import sys
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 import urllib.error
 import urllib.parse
@@ -39,8 +40,18 @@ PAD = 30
 MAX_REQUESTS = 6
 CHUNK_CHARS = 3500
 TRANSLATE_TIMEOUT = 60
-# Small models that read several times faster than the system ones and nearly as well.
-FAST_MODELS = Path.home() / ".config/falcon/tessdata"
+# One model for each kind of script, from falcon-ocr-models. Each also knows the Latin letters, so
+# a Russian page with English words on it reads correctly.
+MODELS = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "falcon/tessdata"
+OTHER_SCRIPTS = ["Cyrillic", "Arabic", "HanS", "HanT", "Japanese", "Hangul", "Devanagari", "Greek", "Hebrew", "Thai", "Georgian", "Armenian", "Bengali", "Tamil"]
+# These have capitals and a clear line of letters, so the words can be put together here. In the
+# others the reader's own idea of the page is far better, because signs differ so much in height.
+OWN_LINES = {"Latin", "Cyrillic", "Greek"}
+# Latin text scores well in every model, so another one must beat Latin clearly to be chosen.
+SURELY_LATIN = 80
+SAMPLE_HEIGHT = 130
+SURE_SCRIPT = 55
+SCRIPT_MARGIN = 12
 TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single"
 BANDS = 4
 BAND_OVERLAP = 90
@@ -51,6 +62,17 @@ TALL_LETTERS = set("bdfhijkltб()[]/!?'\"йё")
 DEEP_LETTERS = set("gjpqyруфдцщ()[],;")
 
 
+def is_unspaced(ch):
+    """Writing that has no spaces between its words."""
+    return "\u3040" <= ch <= "\u30ff" or "\u3400" <= ch <= "\u9fff" or "\uf900" <= ch <= "\ufaff" or "\u0e00" <= ch <= "\u0e7f"
+
+
+def is_rtl(text):
+    """Whether most letters of a text are written from right to left."""
+    letters = [ch for ch in text if ch.isalpha()]
+    return sum("\u0590" <= ch <= "\u08ff" for ch in letters) * 2 > len(letters) > 0
+
+
 @dataclass
 class Word:
     text: str
@@ -59,6 +81,8 @@ class Word:
     w: int
     h: int
     conf: float
+    # Which line the reader put it on, when its idea of the page is the one used.
+    group: tuple = None
 
     @property
     def right(self):
@@ -71,6 +95,10 @@ class Word:
     @property
     def em(self):
         """The font size. A word's box shows only the part of the font's height its letters reach."""
+        if any(is_unspaced(c) or "\uac00" <= c <= "\ud7a3" for c in self.text):
+            return self.h / 0.92
+        if self.group:
+            return self.h / 0.8
         tall = any(c.isupper() or c.isdigit() or c in TALL_LETTERS for c in self.text)
         deep = any(c in DEEP_LETTERS for c in self.text)
         share = 0.94 if tall and deep else 0.72 if tall else 0.70 if deep else 0.52
@@ -87,10 +115,24 @@ class Line:
 
     @property
     def text(self):
-        return " ".join(w.text for w in sorted(self.words, key=lambda w: w.x))
+        words = sorted(self.words, key=lambda w: w.x)
+        if is_rtl("".join(w.text for w in words)):
+            words.reverse()
+        out = words[0].text
+        for before, word in zip(words, words[1:]):
+            gap = max(word.x - before.right, before.x - word.right)
+            # The reader gives one sign at a time in these: only a real gap between them is a space.
+            joined = is_unspaced(before.text[-1]) and is_unspaced(word.text[0])
+            hangul = "\uac00" <= before.text[-1] <= "\ud7a3" and "\uac00" <= word.text[0] <= "\ud7a3" and gap < 0.2 * self.em
+            out += ("" if joined or hangul else " ") + word.text
+        return out
 
     @property
     def em(self):
+        if self.words[0].group and not any(is_unspaced(w.text[0]) or "\uac00" <= w.text[0] <= "\ud7a3" for w in self.words):
+            # Marks above and below belong to the writing here, and a whole line shows them all.
+            top, bottom = min(w.y for w in self.words), max(w.bottom for w in self.words)
+            return (bottom - top) / 1.25
         # The lower middle, because marks beside words only ever make a box larger.
         return statistics.median_low(w.em for w in self.words)
 
@@ -107,7 +149,16 @@ class Block:
 
     @property
     def text(self):
-        return re.sub(r"-\s+(?=[a-zа-я])", "", " ".join(line.text for line in self.lines))
+        out = ""
+        for line in self.lines:
+            text = line.text
+            if out.endswith("-") and text[0].islower():
+                out = out[:-1] + text
+            elif out and not (is_unspaced(out[-1]) and is_unspaced(text[0])):
+                out += " " + text
+            else:
+                out += text
+        return out
 
 
 def configured_target():
@@ -121,22 +172,25 @@ def say(stage, **values):
     print(json.dumps({"stage": stage, **values}, ensure_ascii=False), flush=True)
 
 
-def tesseract_command(langs):
-    models = langs.split("+")
-    if all((FAST_MODELS / f"{name}.traineddata").exists() for name in models):
-        return ["tesseract", "--tessdata-dir", str(FAST_MODELS), "stdin", "stdout", "-l", langs, "--oem", "1"]
-    return ["tesseract", "stdin", "stdout", "-l", langs]
+def tesseract_command(model):
+    if (MODELS / f"{model}.traineddata").exists():
+        return ["tesseract", "--tessdata-dir", str(MODELS), "stdin", "stdout", "-l", model, "--oem", "1"]
+    return ["tesseract", "stdin", "stdout", "-l", model]
 
 
-def recognize(picture, langs, factor):
+def run_reader(picture, model, psm=11):
     buffer = io.BytesIO()
     # An uncompressed picture costs nothing to write or to read.
     picture.save(buffer, "PPM")
     # Each run is given one thread, because they run side by side and tesseract's own threads only spin.
-    done = subprocess.run([*tesseract_command(langs), "--psm", "11", "--dpi", "150", "-c", "tessedit_create_tsv=1"],
+    done = subprocess.run([*tesseract_command(model), "--psm", str(psm), "--dpi", "150", "-c", "tessedit_create_tsv=1"],
                           input=buffer.getvalue(), capture_output=True, env={**os.environ, "OMP_THREAD_LIMIT": "1"})
+    return csv.DictReader(io.StringIO(done.stdout.decode("utf-8", "replace")), delimiter="\t", quoting=csv.QUOTE_NONE)
+
+
+def recognize(picture, model, factor):
     words = []
-    rows = csv.DictReader(io.StringIO(done.stdout.decode("utf-8", "replace")), delimiter="\t", quoting=csv.QUOTE_NONE)
+    rows = run_reader(picture, model)
     for row in rows:
         text = (row.get("text") or "").strip()
         if not text or float(row.get("conf") or -1) < MIN_CONFIDENCE_IN_LINE:
@@ -201,59 +255,146 @@ def finish_view(jobs, factor):
     return words
 
 
-def script_of(words):
-    latin = sum("a" <= ch.lower() <= "z" for w in words for ch in w.text)
-    cyrillic = sum("а" <= ch.lower() <= "я" for w in words for ch in w.text)
-    total = max(1, latin + cyrillic)
-    return latin / total, cyrillic / total
+def sample_score(picture, model):
+    """How sure a model is of a picture, by the letter. Under four letters it says nothing."""
+    letters = certainty = 0
+    for row in run_reader(picture, model):
+        text = (row.get("text") or "").strip()
+        conf = float(row.get("conf") or -1)
+        if text and conf >= 0:
+            letters += len(text)
+            certainty += conf * len(text)
+    return certainty / max(1, letters) * min(1, letters / 4)
 
 
-def start_draft(plain, pool):
-    """Reads only the two busiest parts of the picture, which is enough to see the alphabet."""
+def choose_model(plain):
+    """Reads the busiest part of the picture to see which kind of script it is in."""
     parts = bands(plain)
-    if len(parts) > 2:
-        rows = np.abs(np.diff(np.asarray(plain, dtype=np.int16), axis=1)).sum(axis=1)
-        parts = sorted(parts, key=lambda part: rows[part[0]:part[1]].sum(), reverse=True)[:2]
-    jobs = []
-    for top, bottom in parts:
-        part = ImageOps.expand(plain.crop((0, top, plain.width, bottom)), PAD, fill=plain.getpixel((0, 0)))
-        jobs.append((top, pool.submit(recognize, part, "eng+rus", 1)))
-    return jobs
+    rows = np.abs(np.diff(np.asarray(plain, dtype=np.int16), axis=1)).sum(axis=1)
+    top, bottom = max(parts, key=lambda part: rows[part[0]:part[1]].sum())
+    # A few lines are enough, and every model reads them.
+    if bottom - top > SAMPLE_HEIGHT:
+        totals = np.convolve(rows[top:bottom], np.ones(SAMPLE_HEIGHT), mode="valid")
+        top += int(np.argmax(totals))
+        bottom = top + SAMPLE_HEIGHT
+    sample = plain.crop((0, top, plain.width, bottom))
+    if sample.height < 120:
+        # Very small text reads better larger, as it is in the real reading.
+        sample = sample.resize((sample.width * 2, sample.height * 2), Image.LANCZOS)
+    sample = ImageOps.expand(sample, PAD, fill=plain.getpixel((0, 0)))
+    latin = sample_score(sample, "Latin")
+    if latin >= SURELY_LATIN:
+        return "Latin"
+    others = [name for name in OTHER_SCRIPTS if (MODELS / f"{name}.traineddata").exists()]
+    with ThreadPoolExecutor(max(1, len(others))) as pool:
+        scores = dict(zip(others, pool.map(lambda name: sample_score(sample, name), others)))
+    # Light text on a colored button says nothing until the colors are taken away.
+    if others and max(max(scores.values()), latin) < 50:
+        clear = ink_map(sample)
+        latin = sample_score(clear, "Latin")
+        with ThreadPoolExecutor(len(others)) as pool:
+            scores = dict(zip(others, pool.map(lambda name: sample_score(clear, name), others)))
+    best = max(scores, key=scores.get, default="Latin")
+    return best if best != "Latin" and scores[best] >= SURE_SCRIPT and scores[best] - latin >= SCRIPT_MARGIN else "Latin"
 
 
-def languages_from(draft):
-    latin, cyrillic = script_of(draft)
-    if latin >= 0.8:
-        return "eng"
-    if cyrillic >= 0.8:
-        return "rus"
-    return "eng+rus"
+def read_page(view, model, factor, index):
+    """The whole picture at once, with the lines the reader finds. Unsure lines are left out as a whole."""
+    part = ImageOps.expand(view, PAD, fill=view.getpixel((0, 0)))
+    lines = {}
+    for row in run_reader(part, model, 3):
+        text = (row.get("text") or "").strip()
+        conf = float(row.get("conf") or -1)
+        if text and conf >= 0:
+            key = (index, row["block_num"], row["par_num"], row["line_num"])
+            word = Word(text, round((int(row["left"]) - PAD) / factor), round((int(row["top"]) - PAD) / factor),
+                        max(1, round(int(row["width"]) / factor)), max(1, round(int(row["height"]) / factor)), conf, key)
+            lines.setdefault(key, []).append(word)
+    sure = [words for words in lines.values() if statistics.mean(w.conf for w in words) >= MIN_CONFIDENCE]
+    # It also joins things side by side, such as a row of buttons, which are not one line.
+    pieces = []
+    for words in sure:
+        words = sorted(words, key=lambda w: w.x)
+        # A sign it thinks is very tall has taken in a neighbor from the next line.
+        usual = statistics.median(w.h for w in words)
+        top = statistics.median(w.y for w in words if w.h <= usual * 1.2)
+        for word in words:
+            if word.h > usual * 1.7:
+                word.y, word.h = round(top), round(usual)
+        em = Line(words).em
+        pieces.append([words[0]])
+        for before, word in zip(words, words[1:]):
+            if word.x - before.right > 1.5 * em:
+                pieces.append([])
+            pieces[-1].append(word)
+    # And it sometimes cuts one line in two, which go back together here.
+    joined = []
+    for piece in sorted(pieces, key=lambda p: min(w.x for w in p)):
+        box = Line(piece).box()
+        home = None
+        for other in joined:
+            mine = Line(other).box()
+            shared = min(box[3], mine[3]) - max(box[1], mine[1])
+            if shared > 0.6 * min(box[3] - box[1], mine[3] - mine[1]) and box[0] - mine[2] < 0.4 * Line(other).em:
+                home = other
+                break
+        if home is None:
+            joined.append(list(piece))
+        else:
+            home.extend(piece)
+    for number, piece in enumerate(joined):
+        for word in piece:
+            word.group = (index, number)
+    return joined
 
 
-def read_words(image, target):
+def read_by_lines(views, model, factor):
+    """The plain view's lines, and the lines only the other view found, such as words on buttons."""
+    with ThreadPoolExecutor(len(views)) as pool:
+        readings = list(pool.map(lambda pair: read_page(pair[1], model, factor, pair[0]), enumerate(views)))
+    kept = list(readings[0])
+    for candidate in readings[1]:
+        if not any(overlaps(a, b) for a in candidate for line in kept for b in line):
+            kept.append(candidate)
+    return [word for line in kept for word in line]
+
+
+def read_words(image):
     """Reads two views of the picture side by side and keeps the surest reading of each place.
 
-    With two alphabets loaded, tesseract spells English words in Cyrillic letters that look alike, so
-    the real reading uses only what the picture has. A draft finds that out while the real reading
-    already runs on the likely language, and only a wrong guess costs a second reading.
+    The real reading starts on Latin, the most common case, while the script is being found out, and
+    only another script costs a second reading. Without the models, the system ones read English and
+    Russian, and falcon-ocr-models is started to fetch the rest for the next time.
     """
     factor = 3 if max(image.size) < 500 else 2 if max(image.size) < UPSCALE_BELOW else 1.5
-    available = subprocess.run(["tesseract", "--list-langs"], capture_output=True, text=True).stdout.split()
-    both = {"eng", "rus"} <= set(available)
-    guess = "rus" if both and target.startswith("en") else "eng" if both else "+".join(n for n in available[6:] if n != "osd") or "eng"
-    with ThreadPoolExecutor(os.cpu_count() or 4) as pool:
-        plain = image.convert("L")
-        draft = start_draft(plain, pool) if both else []
+    ready = (MODELS / "Latin.traineddata").exists()
+    if not ready:
+        subprocess.Popen([str(Path(__file__).with_name("falcon-ocr-models"))], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+    guess = "Latin" if ready else "eng+rus"
+    plain = image.convert("L")
+    pool = ThreadPoolExecutor(os.cpu_count() or 4)
+    finding = pool.submit(choose_model, plain) if ready else None
+    size = (round(image.width * factor), round(image.height * factor))
+    gray = plain.resize(size, Image.LANCZOS)
+    started = [start_view(gray, guess, factor, pool)]
+    views = [gray, ink_map(gray)]
+    started.append(start_view(views[1], guess, factor, pool))
+    # Another script is known before the Latin reading ends, and that reading is not waited for.
+    model = finding.result() if ready else guess
+    if ready and model not in OWN_LINES:
+        pool.shutdown(wait=False, cancel_futures=True)
+        factor = max(2, factor)
         size = (round(image.width * factor), round(image.height * factor))
         gray = plain.resize(size, Image.LANCZOS)
-        started = [start_view(gray, guess, factor, pool)]
-        views = [gray, ink_map(gray)]
-        started.append(start_view(views[1], guess, factor, pool))
-        readings = [finish_view(jobs, factor) for jobs in started]
-        langs = languages_from(finish_view(draft, 1)) if both else guess
-        if langs != guess:
-            started = [start_view(view, langs, factor, pool) for view in views]
-            readings = [finish_view(jobs, factor) for jobs in started]
+        return read_by_lines([gray, ink_map(gray)], model, factor)
+    if model != guess:
+        for jobs in started:
+            for _, job in jobs:
+                job.cancel()
+        started = [start_view(view, model, factor, pool) for view in views]
+    readings = [finish_view(jobs, factor) for jobs in started]
+    pool.shutdown()
     # The plain view is the most exact where it can read at all, so it wins near ties.
     ranked = sorted(((w.conf + (15 if index == 0 else 0), order, w) for index, reading in enumerate(readings) for order, w in enumerate(reading)),
                     key=lambda item: (-item[0], item[1]))
@@ -273,8 +414,24 @@ def read_words(image, target):
     return sure + [w for w in kept if w.conf < MIN_CONFIDENCE and between_sure_words(w)]
 
 
-def make_lines(words):
+def same_ground(source, left, right):
+    """Whether the space between two words on a line is plain background, the same as behind the words."""
+    y0, y1 = max(left.y, right.y), min(left.bottom, right.bottom)
+    if y1 <= y0 or right.x <= left.right:
+        return True
+    gap = source[y0:y1, left.right : right.x].reshape(-1, 3).astype(float)
+    behind = background_of(source, left)
+    return gap.size > 0 and np.mean(np.linalg.norm(gap - behind, axis=1) < 40) > 0.95
+
+
+def make_lines(words, source):
     lines = []
+    grouped = {}
+    for word in words:
+        if word.group:
+            grouped.setdefault(word.group, []).append(word)
+    if grouped:
+        return [Line(found) for found in grouped.values()]
     for word in sorted(words, key=lambda w: w.x):
         center = word.y + word.h / 2
         best = None
@@ -282,8 +439,9 @@ def make_lines(words):
             last = max(line.words, key=lambda w: w.right)
             em = max(last.em, word.em)
             # A normal space is about a quarter of the font size, so this is another column or button.
-            near = word.x - last.right < 1.1 * em
-            level = abs(center - (last.y + last.h / 2)) < 0.45 * em
+            # A little more when nothing is in between: a short word may have gone unread there.
+            near = word.x - last.right < 1.1 * em or (word.x - last.right < 1.6 * em and same_ground(source, last, word))
+            level = abs(center - (last.y + last.h / 2)) < 0.6 * em
             similar = 0.6 < word.em / last.em < 1.67
             if near and level and similar and (best is None or last.right > best[1]):
                 best = (line, last.right)
@@ -302,11 +460,56 @@ def looks_like_icon(word, following):
     return gap > 0.42 * following.em and (not word.text.isalpha() or word.text.isupper() or word.conf < 75)
 
 
+def background_of(source, word):
+    """The most common color in a word's box, which is what is behind it."""
+    area = source[word.y : word.bottom, word.x : word.right].reshape(-1, 3)
+    if area.size == 0:
+        return np.zeros(3)
+    bins, counts = np.unique(area >> 4, axis=0, return_counts=True)
+    return bins[np.argmax(counts)].astype(float) * 16
+
+
+def without_strays(line, source):
+    """A lone sign set apart from its neighbors, or lying on another background than they do, is the
+    edge of a button read as a letter. It also joins what is on either side of it, so the line ends there."""
+    words = sorted(line.words, key=lambda w: w.x)
+    if not words or words[0].group:
+        return [line]
+    parts = [[]]
+    for index, word in enumerate(words):
+        before = words[index - 1] if index else None
+        after = words[index + 1] if index + 1 < len(words) else None
+        apart = before and after and len(word.text) == 1 and word.x - before.right > 0.7 * line.em and after.x - word.right > 0.7 * line.em
+        neighbor = max((w for w in (before, after) if w), key=lambda w: len(w.text), default=None)
+        # Taller than the words beside it, as the side of a button is.
+        apart = apart or (len(word.text) <= 2 and neighbor and len(neighbor.text) > 2 and word.h > 1.5 * neighbor.h)
+        foreign = False
+        if len(word.text) <= 2 and neighbor and len(neighbor.text) > 2:
+            behind = background_of(source, neighbor)
+            # Just outside it where no word stands close, which is where an edge read as a letter crosses out.
+            colors = []
+            if not before or word.x - before.right >= 6:
+                colors.append(np.median(source[word.y : word.bottom, max(0, word.x - 3) : word.x].reshape(-1, 3), axis=0))
+            if not after or after.x - word.right >= 6:
+                colors.append(np.median(source[word.y : word.bottom, word.right : word.right + 3].reshape(-1, 3), axis=0))
+            foreign = any(np.linalg.norm(color - behind) > 60 for color in colors)
+        if apart or foreign:
+            parts.append([])
+        else:
+            parts[-1].append(word)
+    return [Line(part) for part in parts if part]
+
+
 def without_icons(line):
     """Takes icons off the start of a line, so that they are not painted over or translated."""
     words = sorted(line.words, key=lambda w: w.x)
+    if words[0].group:
+        return line
     while len(words) > 1 and looks_like_icon(words[0], words[1]):
         words.pop(0)
+    # The end of a button or an arrow after a label, which would also make the text seem wider.
+    while len(words) > 1 and len(words[-1].text) <= 2 and words[-1].conf < 85 and words[-1].x - words[-2].right > 0.42 * words[-2].em:
+        words.pop()
     return Line(words)
 
 
@@ -320,7 +523,11 @@ def is_code(text):
 def worth_translating(line):
     """Stray marks read from icons and pictures are not text."""
     text = line.text
-    letters = sum(ch.isalpha() for ch in text)
+    # Vowels of many scripts are marks and count as letters too.
+    letters = sum(unicodedata.category(ch)[0] in "LM" for ch in text)
+    if line.words[0].group:
+        # The reader has already judged these lines, and one sign can be a word.
+        return letters >= 1
     if letters < 2 or is_code(text):
         return False
     if len(line.words) == 1 and (letters < 3 or line.words[0].conf < 70):
@@ -343,15 +550,22 @@ def continues(block, line, ink_near):
     x0, y0, x1, _ = line.box()
     lx0, _, lx1, ly1 = last.box()
     em = last.em
-    if not -0.3 * em < y0 - ly1 < 0.95 * em or not 0.8 < line.em / em < 1.25:
+    # Right to left text is the same thing seen in a mirror.
+    mirrored = is_rtl(line.text)
+    if mirrored:
+        x0, x1, lx0, lx1 = -x1, -x0, -lx1, -lx0
+    # The height of a line says less about its size in writing with marks above and below.
+    low, high = (0.7, 1.4) if line.words[0].group else (0.8, 1.25)
+    if not -0.3 * em < y0 - ly1 < 0.95 * em or not low < line.em / em < high:
         return False
     left_aligned = abs(x0 - lx0) < 0.9 * em
     if not left_aligned and abs((x0 + x1) - (lx0 + lx1)) >= 1.8 * em:
         return False
-    first = min(line.words, key=lambda w: w.x)
-    lowercase = first.text[:1].islower()
+    first = max(line.words, key=lambda w: w.x) if mirrored else min(line.words, key=lambda w: w.x)
+    # Scripts without capitals never show where a sentence starts.
+    lowercase = first.text[:1].isalpha() and not first.text[:1].isupper()
     # The line above was wrapped only if the next word did not fit on it. A list's lines fail this.
-    right = max(max(l.box()[2] for l in block.lines), x1)
+    right = max(max(-l.box()[0] if mirrored else l.box()[2] for l in block.lines), x1)
     wrapped = lx1 + first.w + 0.3 * em >= right - em
     if not left_aligned:
         return wrapped
@@ -411,25 +625,50 @@ class TranslationFailed(Exception):
     pass
 
 
+def aligned_lines(pieces, count):
+    """The answer's own line breaks when there are as many as asked. If not, the pieces of the answer
+    come with their source text beside them, so a line can still end where its source line ended."""
+    whole = [line.strip() for line in "".join(piece[0] or "" for piece in pieces).split("\n") if line.strip()]
+    if len(whole) == count:
+        return whole
+    lines, current = [], ""
+    for piece in pieces:
+        if not piece[1] or not piece[0]:
+            continue
+        ends = piece[1].count("\n")
+        parts = piece[0].rstrip("\n").split("\n")
+        # Source lines this piece holds that its translation does not separate cannot be told apart.
+        if ends and len(parts) not in (ends, ends + 1):
+            return whole
+        for index, part in enumerate(parts):
+            current += part
+            if index < len(parts) - 1 or piece[1].endswith("\n"):
+                lines.append(current.strip())
+                current = ""
+    if current.strip():
+        lines.append(current.strip())
+    return lines if len(lines) == count and all(lines) else whole
+
+
 def request_lines(part, target):
     """One request to the address translate-shell itself uses, without its slow start. If the service
-    says no, that is the answer. Only when this way itself fails, translate-shell tries once."""
+    says it is limiting requests, that is the answer. If this way itself fails, translate-shell tries once."""
     body = urllib.parse.urlencode({"client": "gtx", "ie": "UTF-8", "oe": "UTF-8", "dt": "t", "sl": "auto", "tl": target, "q": "\n".join(part)})
     request = urllib.request.Request(TRANSLATE_URL, data=body.encode(), headers={"User-Agent": "Mozilla/5.0"})
     try:
         with urllib.request.urlopen(request, timeout=TRANSLATE_TIMEOUT) as answer:
-            text = "".join(piece[0] for piece in json.load(answer)[0] if piece[0])
+            return aligned_lines(json.load(answer)[0], len(part))
     except urllib.error.HTTPError as error:
         if error.code == 429:
             raise TranslationFailed("429") from error
-        text = None
     except (OSError, ValueError, TypeError, IndexError):
-        text = None
-    if text is None:
-        done = subprocess.run(["trans", "-b", "-no-ansi", "-no-autocorrect", f":{target}", "--", "\n".join(part)],
-                              capture_output=True, text=True, timeout=TRANSLATE_TIMEOUT)
-        text = done.stdout
-    return [line.strip() for line in text.split("\n") if line.strip()]
+        pass
+    done = subprocess.run(["trans", "-b", "-no-ansi", "-no-autocorrect", f":{target}", "--", "\n".join(part)],
+                          capture_output=True, text=True, timeout=TRANSLATE_TIMEOUT)
+    return [line.strip() for line in done.stdout.split("\n") if line.strip()]
+
+
+FOREIGN_MARKS = str.maketrans("《》「」『』。，、？！：；（）", "«»«»«».,,?!:;()")
 
 
 def translate_lines(texts, target):
@@ -472,17 +711,43 @@ def translate_lines(texts, target):
     return results
 
 
+CJK_FACES = {"zh-cn": "CJK SC", "zh-tw": "CJK TC", "ja": "CJK JP", "ko": "CJK KR"}
+
+
 def font_path(target):
-    for pattern in (f"Geist:lang={target}", f"sans:lang={target}", "sans"):
-        found = subprocess.run(["fc-match", "-f", "%{file}", pattern], capture_output=True, text=True).stdout.strip()
-        if found and Path(found).exists():
-            return found
+    """The file and which face in it, because one file of CJK fonts holds several languages. Geist
+    when it has the language's letters, and if not, what the system has for that language."""
+    lang = target.lower()
+    lang = {"zh": "zh-cn", "zh-hans": "zh-cn", "zh-hant": "zh-tw", "iw": "he"}.get(lang, lang)
+    listed = subprocess.run(["fc-list", f":lang={lang}", "-f", "%{family}|%{file}|%{index}|%{style}\n"], capture_output=True, text=True).stdout.splitlines()
+    fonts = [row.split("|") for row in listed if row.count("|") == 3]
+
+    def rank(font):
+        family = font[0]
+        name = Path(font[1]).name
+        # The files of one family differ in weight, and the name of the file says which it is.
+        regular = "wght" in name or not re.search(r"Thin|Light|Medium|Bold|Black|Demi|Extra|Semi|Condensed|Display|UI|Looped", name)
+        wanted = CJK_FACES.get(lang)
+        if family.startswith("Geist") and "Mono" not in family:
+            return 0
+        if wanted and wanted in family and "Sans" in family and regular:
+            return 1
+        if family.startswith("Noto Sans") and "Mono" not in family and regular:
+            return 2
+        return 4 if "Sans" in family else 5
+
+    if fonts:
+        best = min(fonts, key=rank)
+        return best[1], int(best[2]) & 0xffff
+    found = subprocess.run(["fc-match", "-f", "%{file}", "sans"], capture_output=True, text=True).stdout.strip()
+    if found and Path(found).exists():
+        return found, 0
     raise RuntimeError("no font found")
 
 
 @functools.lru_cache(maxsize=None)
 def load_font(path, size, heavy):
-    font = ImageFont.truetype(path, size)
+    font = ImageFont.truetype(path[0], size, index=path[1])
     try:
         axes = font.get_variation_axes()
         font.set_variation_by_axes([(640 if heavy else 430) if "eight" in str(a.get("name")) else a["default"] for a in axes])
@@ -514,6 +779,14 @@ def erase(pixels, box, pad):
     middle = np.median(ring, axis=0)
     if np.mean(np.linalg.norm(ring - middle, axis=1) < 12) > 0.85:
         pixels[y0:y1, x0:x1] = middle.astype(np.uint8)
+        return
+    # Lines set close together fill the ring with ink, while a flat background still shows between letters.
+    area = pixels[y0:y1, x0:x1].reshape(-1, 3)
+    bins, counts = np.unique(area >> 4, axis=0, return_counts=True)
+    common = bins[np.argmax(counts)]
+    same = np.all(area >> 4 == common, axis=1)
+    if same.mean() > 0.4:
+        pixels[y0:y1, x0:x1] = np.median(area[same], axis=0).astype(np.uint8)
         return
 
     def smooth(rows):
@@ -570,7 +843,8 @@ def free_edges(source, columns, block, others):
         if word.y < y1 and word.bottom > y0 and word.x >= x1:
             right = min(right, word.x - round(em_size(block) * 0.6))
         if word.x < x1 and word.right > x0 and word.y >= y1:
-            bottom = min(bottom, word.y - 2)
+            # Words in a button or panel below have some room around them too.
+            bottom = min(bottom, word.y - max(2, round(word.em * 0.4)))
     # A few pixels are skipped, because the soft edge of the last letter is still there.
     edge = first_change(columns, x1 + 4, min(right, width - 1))
     if edge is not None:
@@ -600,16 +874,40 @@ def panel_middle(columns, block):
     return (left + right) / 2 if abs((x0 - left) - (right - x1)) <= 4 + em_size(block) * 0.35 else None
 
 
-def wrap(text, font, width):
+def broken_up(text):
+    """Places a line may break: at spaces, and anywhere in writing that has none."""
+    pieces, current = [], ""
+    for ch in text:
+        if ch == " ":
+            if current:
+                pieces.append(current)
+            pieces.append(" ")
+            current = ""
+        elif is_unspaced(ch) and current and is_unspaced(current[-1]):
+            pieces.append(current)
+            current = ch
+        else:
+            current += ch
+    return pieces + ([current] if current else [])
+
+
+def wrap(text, font, width, hard=False):
+    """hard also cuts a word that is wider than the line, as the last thing to try."""
     lines, current = [], ""
-    for word in text.split():
-        attempt = f"{current} {word}".strip()
-        if font.getlength(attempt) <= width or not current:
+    for piece in broken_up(text):
+        if piece == " " and not current:
+            continue
+        attempt = current + piece
+        if font.getlength(attempt.rstrip()) <= width or not current.strip():
             current = attempt
         else:
-            lines.append(current)
-            current = word
-    return lines + ([current] if current else [])
+            lines.append(current.rstrip())
+            current = "" if piece == " " else piece
+        while hard and font.getlength(current.rstrip()) > width and len(current) > 1:
+            cut = next((n for n in range(len(current) - 1, 0, -1) if font.getlength(current[:n]) <= width), 1)
+            lines.append(current[:cut])
+            current = current[cut:]
+    return lines + ([current.rstrip()] if current.strip() else [])
 
 
 def fit(block, path, heavy, right, bottom):
@@ -640,7 +938,7 @@ def fit(block, path, heavy, right, bottom):
                     return font, lines, step
         size -= 0.5
     font = load_font(path, 8 * DRAW_SCALE, heavy)
-    return font, wrap(block.translation, font, wide), 9.6
+    return font, wrap(block.translation, font, wide, hard=True), 9.6
 
 
 def draw_block(canvas, block, source, words, path, ink, heavy):
@@ -655,6 +953,7 @@ def draw_block(canvas, block, source, words, path, ink, heavy):
     if middle is None and len(boxes) > 1 and statistics.pstdev(b[0] for b in boxes) > 3 * statistics.pstdev((b[0] + b[2]) / 2 for b in boxes) + 1:
         middle = (x0 + x1) / 2
     centered = middle is not None
+    backward = is_rtl(block.translation)
     # A shorter text stays in the middle of the place of the old one, and a longer one starts at its top.
     height = len(lines) * step - (step - size)
     top = y0 + (y1 - y0 - height) / 2 if height < y1 - y0 else y0
@@ -665,10 +964,11 @@ def draw_block(canvas, block, source, words, path, ink, heavy):
     mask = Image.new("L", (area_w * DRAW_SCALE, area_h * DRAW_SCALE), 0)
     pen = ImageDraw.Draw(mask)
     for index, line in enumerate(lines):
-        left = (longest - font.getlength(line)) / 2 if centered else 0
+        room = longest - font.getlength(line)
+        left = room / 2 if centered else room if backward else 0
         pen.text((left + 4 * DRAW_SCALE, (index * step + size / 2 + 4) * DRAW_SCALE), line, font=font, fill=255, anchor="lm")
     mask = mask.resize((area_w, area_h), Image.LANCZOS)
-    origin_x = round(middle - longest / DRAW_SCALE / 2) if centered else x0
+    origin_x = round(middle - longest / DRAW_SCALE / 2) if centered else x1 - round(longest / DRAW_SCALE) if backward else x0
     canvas.paste(Image.new("RGB", mask.size, ink), (origin_x - 4, round(top) - 4), mask)
 
 
@@ -687,8 +987,9 @@ def main():
         return 1
 
     say("read")
-    words = read_words(image, target)
-    lines = [line for line in map(without_icons, make_lines(words)) if worth_translating(line)]
+    words = read_words(image)
+    source = np.asarray(image)
+    lines = [line for found in make_lines(words, source) for line in map(without_icons, without_strays(found, source)) if worth_translating(line)]
     blocks = make_blocks(lines, np.asarray(image))
     if not blocks:
         say("empty")
@@ -702,7 +1003,8 @@ def main():
         say("error", message=str(error))
         return 1
     for block, result in zip(blocks, results):
-        block.translation = result
+        # Marks of Chinese and Japanese that a Latin or Cyrillic font does not have.
+        block.translation = result if target[:2] in ("zh", "ja", "ko") else result.translate(FOREIGN_MARKS)
     if not any(block.translation for block in blocks):
         say("error", message="no translation")
         return 1

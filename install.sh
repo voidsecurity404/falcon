@@ -86,7 +86,7 @@ targets=(
     .local/bin/falcon-monitors
     .config/falcon/tmux.conf
     .config/falcon/emoji.json
-    .config/falcon/tessdata
+    .local/bin/falcon-ocr-models
     .config/falcon/defaults.json
 )
 
@@ -216,9 +216,10 @@ do_it cp -a "$root/bin/." "$HOME/.local/bin/"
 # Foydalanuvchi sozlamalari va fon rasmlari ustidan yozilmaydi.
 do_it mkdir -p "$HOME/.config/falcon" "$HOME/Pictures/Wallpapers" "$HOME/Pictures/Wallpapers/Live" "$HOME/.local/share/fonts/falcon"
 do_it cp "$root/config/falcon/tmux.conf" "$root/config/falcon/defaults.json" "$root/config/falcon/i18n-ru.json" "$root/config/falcon/emoji.json" "$HOME/.config/falcon/"
-do_it cp -r "$root/config/falcon/tessdata" "$HOME/.config/falcon/"
 [[ -e "$HOME/.config/falcon/settings.json" ]] || do_it cp "$root/config/falcon/settings.json" "$HOME/.config/falcon/settings.json"
 do_it cp -n "$root"/wallpapers/* "$HOME/Pictures/Wallpapers/"
+# The reading models of the picture translator. Without a network it fetches them at its first use.
+soft "$root/bin/falcon-ocr-models"
 do_it cp -a "$root"/fonts/. "$HOME/.local/share/fonts/falcon/"
 if command -v fc-cache >/dev/null; then do_it fc-cache -f "$HOME/.local/share/fonts/falcon"; fi
 
