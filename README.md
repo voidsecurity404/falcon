@@ -38,7 +38,7 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | `Mod+C` | Control center |
 | `Mod+W` | Wallpaper and color |
 | `Mod+F` | Focus mode |
-| `Mod+O` | Overview |
+| `Mod+O` | Overview (or move the pointer to the top left corner of the screen) |
 | `Mod+,` | Settings |
 | `` Mod+` `` | Scratchpad terminal (the session survives closing) |
 | `Mod+S` | Sticky window: visible on every workspace |

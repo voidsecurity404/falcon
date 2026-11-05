@@ -26,8 +26,9 @@ overview {
 }
 
 gestures {
+    // Pointer in the top left corner of the screen opens the overview of workspaces.
     hot-corners {
-        off
+        top-left
     }
 }
 

@@ -174,6 +174,14 @@ PanelWindow {
             complete: "emoji "
         },
         {
+            id: "wallpapers",
+            icon: "wallpaper",
+            name: Tr.t("Wallpapers"),
+            detail: Settings.get("binds.wallpapers", "Mod+W"),
+            keywords: "wallpaper wallpapers background обои фон",
+            run: () => Ui.popup = "wallpapers"
+        },
+        {
             id: "settings",
             icon: "settings",
             name: Tr.t("Settings"),
