@@ -11,7 +11,7 @@ Singleton {
     readonly property string home: Quickshell.env("HOME")
     readonly property string binDir: home + "/.local/bin/"
 
-    // "", menu, clipboard, wallpapers, dashboard, control, claude
+    // "", menu, power, clipboard, wallpapers, dashboard, control, claude
     property string popup: ""
     property bool zen: false
     property bool settingsOpen: false
@@ -26,11 +26,15 @@ Singleton {
     property bool pickerAlive: false
     // The app menu does the same.
     property bool menuAlive: false
+    // And the power menu.
+    property bool powerAlive: false
     onPopupChanged: {
         if (popup === "wallpapers")
             pickerAlive = true;
         if (popup === "menu")
             menuAlive = true;
+        if (popup === "power")
+            powerAlive = true;
     }
     property int pickerSelected: 0
     property int pickerFiles: 0

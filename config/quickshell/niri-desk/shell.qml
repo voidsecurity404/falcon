@@ -39,6 +39,7 @@ ShellRoot {
     LockScreen {}
     ClipboardMenu {}
     AppMenu {}
+    PowerMenu {}
     WallpaperPicker {}
     SettingsWindow {}
     WindowSwitcher {}
@@ -55,6 +56,9 @@ ShellRoot {
         }
         function menu(): void {
             Ui.togglePopup("menu");
+        }
+        function power(): void {
+            Ui.togglePopup("power");
         }
         function clipboard(): void {
             Ui.togglePopup("clipboard");

@@ -32,7 +32,7 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | Shortcut | Action |
 | --- | --- |
 | `Mod+Return` | Terminal |
-| `Mod+Space` | App menu from the bottom of the screen: type an app name, or `>` for commands. The red button beside the search field brings out lock, sleep, log out, reboot and shut down |
+| `Mod+Space` | App menu from the bottom of the screen: type an app name, or `>` for commands. The red button beside the search field opens the big power menu in the middle of the screen: lock, sleep, log out, reboot and shut down |
 | `Mod+V` | Clipboard history |
 | `Mod+D` | Dashboard |
 | `Mod+C` | Control center |
