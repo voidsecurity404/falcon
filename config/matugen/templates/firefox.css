@@ -34,11 +34,11 @@ html, body, #main-window, #browser, #appcontent, #tabbrowser-tabbox, #tabbrowser
   background: color-mix(in srgb, {{colors.surface.default.hex}} 65%, transparent) !important;
 }
 
-/* Sites are drawn exactly as they are, and this only decides how much of each pixel shows.
-   By brightness: near black is mostly glass, near white a little, and everything between is solid,
-   so a dark or a light page is glass while its text, icons, buttons and pictures stay. */
+/* Pages are drawn exactly as sites made them, and only the dark gray that dark sites use for their background
+   (mean brightness 0.02 to 0.105, such as #0f0f0f or #0d1117) shows at 35%, over the tint.
+   Pure black, text, icons, buttons and pictures stay solid. Light sites stay as they are. */
 .browserStack > browser {
-  filter: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><filter id='g' color-interpolation-filters='sRGB' x='0' y='0' width='100%25' height='100%25'><feColorMatrix in='SourceGraphic' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .3333 .3333 .3334 0 0' result='l'/><feComponentTransfer in='l' result='a'><feFuncA type='table' tableValues='0.15 0.2 0.3 0.5 0.7 0.85 1 1 1 1 1 1 1 1 1 1 1 1 0.95 0.87 0.8'/></feComponentTransfer><feComposite in='SourceGraphic' in2='a' operator='in'/></filter></svg>#g") !important;
+  filter: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><filter id='g' color-interpolation-filters='sRGB' x='0' y='0' width='100%25' height='100%25'><feColorMatrix in='SourceGraphic' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .3333 .3333 .3334 0 0' result='l'/><feComponentTransfer in='l' result='a'><feFuncA type='table' tableValues='1 1 1 0.81 0.48 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.57 0.78 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'/></feComponentTransfer><feComposite in='SourceGraphic' in2='a' operator='in'/></filter></svg>#g") !important;
 }
 /* A video or game filling the screen has nothing behind it. */
 :root[inDOMFullscreen] .browserStack > browser {

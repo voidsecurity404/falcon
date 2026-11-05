@@ -19,6 +19,7 @@ PREFS = (
 STALE = (
     'user_pref("browser.tabs.allow_transparent_browser", true);\n',
     'user_pref("layout.css.scroll-driven-animations.enabled", true);\n',
+    'user_pref("gfx.webrender.svg-filter-effects.fetile", true);\n',
 )
 HOME = Path.home()
 SOURCE = HOME / ".local/state/falcon/firefox-userChrome.css"
