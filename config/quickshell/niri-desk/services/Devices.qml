@@ -37,7 +37,7 @@ Singleton {
             Quickshell.execDetached(["kdeconnect-cli", "--device", phones[0].id, "--share", path]);
             Toasts.show(Tr.t("Sent to the phone"), phones[0].name, "phone");
         } else if (extras.localsend) {
-            Quickshell.execDetached(["localsend_app", path]);
+            Quickshell.execDetached(["localsend", path]);
         } else {
             Toasts.show(Tr.t("Nothing to send with"), "niri-desk-extras setup", "alert");
         }
@@ -45,7 +45,7 @@ Singleton {
 
     function openLocalSend() {
         if (extras.localsend)
-            Quickshell.execDetached([Ui.binDir + "niri-desk-raise", "localsend", "localsend_app"]);
+            Quickshell.execDetached([Ui.binDir + "niri-desk-raise", "localsend", "localsend"]);
         else
             Toasts.show(Tr.t("LocalSend is not installed"), "niri-desk-extras setup", "alert");
     }

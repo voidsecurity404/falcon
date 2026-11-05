@@ -30,6 +30,12 @@ start() {
     fi
     setsid wl-mirror --fullscreen --fullscreen-output "$target" "$source" >/dev/null 2>&1 &
     echo $! >"$pidfile"
+    sleep 0.5
+    if ! running; then
+        rm -f "$pidfile"
+        desk toast "$(tr_ "Mirroring did not start")" "$source → $target"
+        return 1
+    fi
     desk toast "$(tr_ "Mirroring")" "$source → $target"
 }
 

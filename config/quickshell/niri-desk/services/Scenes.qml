@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import Quickshell.Io
 
 // Scenes, like macOS Focus: which apps may show notifications, what opens, which wallpaper is on.
 // Everything still goes to the notification history, as with Silent mode.
@@ -49,26 +50,28 @@ Singleton {
         });
     }
 
-    function shownWallpaper() {
-        return Wallpapers.currentLive || Wallpapers.currentImage || "";
+    // Wallpapers keeps a list for the picker that can be behind, so the links themselves are read.
+    function withWallpaper(done) {
+        afterRead = done;
+        wallpaperRead.running = true;
     }
 
-    function leaveWallpaper(next) {
+    function leaveWallpaper(shown, next) {
         const scene = current;
         const before = Saved.get("sceneWallpaper", "");
         if (!scene || scene.wallpaper === "" || (next && next.wallpaper !== ""))
             return;
         // A wallpaper chosen by hand during the scene stays.
-        if (before !== "" && shownWallpaper() === scene.wallpaper)
+        if (before !== "" && shown === scene.wallpaper)
             setWallpaper(before);
         Saved.set("sceneWallpaper", "");
     }
 
-    function enterWallpaper(scene) {
+    function enterWallpaper(shown, scene) {
         if (scene.wallpaper === "")
             return;
         if (Saved.get("sceneWallpaper", "") === "")
-            Saved.set("sceneWallpaper", shownWallpaper());
+            Saved.set("sceneWallpaper", shown);
         setWallpaper(scene.wallpaper);
     }
 
@@ -86,15 +89,33 @@ Singleton {
     // Pressing the scene that is on turns it off.
     function toggle(id) {
         const next = id === active ? null : list.find(s => s.id === id) || null;
-        leaveWallpaper(next);
-        active = next ? next.id : "";
-        Saved.set("scene", active);
-        if (next) {
-            enterWallpaper(next);
-            openApps(next);
-            Toasts.show(next.name, Tr.t("Scene is on"), next.icon);
-        } else {
-            Toasts.show(Tr.t("Scene is off"), "", "bell");
+        withWallpaper(shown => {
+            leaveWallpaper(shown, next);
+            active = next ? next.id : "";
+            Saved.set("scene", active);
+            if (next) {
+                enterWallpaper(shown, next);
+                openApps(next);
+                Toasts.show(next.name, Tr.t("Scene is on"), next.icon);
+            } else {
+                Toasts.show(Tr.t("Scene is off"), "", "bell");
+            }
+        });
+    }
+
+    property var afterRead: null
+
+    Process {
+        id: wallpaperRead
+
+        command: ["sh", "-c", 'cd "$HOME/.local/state/niri-desk" && { readlink wallpaper-live || readlink wallpaper; }']
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const done = root.afterRead;
+                root.afterRead = null;
+                if (done)
+                    done(text.trim());
+            }
         }
     }
 

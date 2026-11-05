@@ -25,13 +25,7 @@ print(json.dumps(value))
 PY
 }
 
-kdeconnect_daemon() {
-    local path
-    for path in /usr/lib/kdeconnectd /usr/bin/kdeconnectd; do
-        [[ -x "$path" ]] && { echo "$path"; return 0; }
-    done
-    return 1
-}
+kdeconnect_daemon() { command -v kdeconnectd; }
 
 case "${1:-status}" in
 status)
@@ -39,7 +33,7 @@ status)
     camera=false
     grep -qs "niri-desk phone" /sys/class/video4linux/video*/name && camera=true
     printf '{"localsend":%s,"kdeconnect":%s,"scrcpy":%s,"adb":%s,"camera":%s,"mirror":%s,"restic":%s,"wtype":%s,"sushi":%s,"whisper":%s,"wayvnc":%s}\n' \
-        "$(has localsend_app)" "$(kdeconnect_daemon >/dev/null && echo true || echo false)" "$(has scrcpy)" "$(has adb)" "$camera" \
+        "$(has localsend)" "$(kdeconnect_daemon >/dev/null && echo true || echo false)" "$(has scrcpy)" "$(has adb)" "$camera" \
         "$(has wl-mirror)" "$(has restic)" "$(has wtype)" "$(has sushi)" "$(has whisper-cli)" "$(has wayvnc)"
     ;;
 setup)
@@ -54,7 +48,7 @@ setup)
     printf 'options v4l2loopback video_nr=42 card_label="niri-desk phone" exclusive_caps=1\n' | sudo tee /etc/modprobe.d/niri-desk-phonecam.conf >/dev/null
     sudo modprobe v4l2loopback 2>/dev/null || echo "$("$HOME/.local/bin/niri-desk-tr" "The camera module loads after the next reboot.")"
     # KDE Connect and LocalSend must be reachable, from private networks only.
-    if command -v ufw >/dev/null && sudo ufw status | grep -q '^Status: active\|^Состояние: активен'; then
+    if systemctl is-active --quiet ufw; then
         for net in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16; do
             sudo ufw allow from "$net" to any port 1714:1764 proto tcp comment "KDE Connect"
             sudo ufw allow from "$net" to any port 1714:1764 proto udp comment "KDE Connect"
@@ -68,8 +62,8 @@ daemons)
     if [[ "$(setting connect.kdeconnect true)" == true ]] && daemon="$(kdeconnect_daemon)" && ! pgrep -x kdeconnectd >/dev/null; then
         setsid -f "$daemon" >/dev/null 2>&1
     fi
-    if [[ "$(setting connect.localsend false)" == true ]] && command -v localsend_app >/dev/null && ! pgrep -x localsend_app >/dev/null; then
-        setsid -f localsend_app --hidden >/dev/null 2>&1
+    if [[ "$(setting connect.localsend false)" == true ]] && command -v localsend >/dev/null && ! pgrep -x localsend >/dev/null; then
+        setsid -f localsend --hidden >/dev/null 2>&1
     fi
     ;;
 *)

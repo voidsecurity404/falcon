@@ -726,5 +726,6 @@
  "{n} pages": "Страниц: {n}",
  "Dictation failed": "Диктовка не удалась",
  "Optional": "Необязательно",
- "Not installed: {names}. To add them: niri-desk-extras setup": "Не установлено: {names}. Чтобы добавить: niri-desk-extras setup"
+ "Not installed: {names}. To add them: niri-desk-extras setup": "Не установлено: {names}. Чтобы добавить: niri-desk-extras setup",
+ "Mirroring did not start": "Дублирование не запустилось"
 }
