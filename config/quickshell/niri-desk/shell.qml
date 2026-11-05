@@ -32,12 +32,6 @@ ShellRoot {
                 Dock {
                     screen: perScreen.modelData
                 }
-                StageStrip {
-                    screen: perScreen.modelData
-                }
-                HotCorners {
-                    screen: perScreen.modelData
-                }
                 RegionSelector {
                     screen: perScreen.modelData
                 }
@@ -53,9 +47,6 @@ ShellRoot {
     SettingsWindow {}
     TranslateWindow {}
     WindowSwitcher {}
-    QuickLook {}
-    QuickNote {}
-    BackupWindow {}
 
     // niri bindlari shu funksiyalarni chaqiradi: qs -c niri-desk ipc call desk <nom>
     IpcHandler {
@@ -169,19 +160,7 @@ ShellRoot {
                 rebootNeeded: Updates.rebootNeeded,
                 privacy: { mic: Privacy.mic, camera: Privacy.camera },
                 clipPins: ClipPins.pins.length,
-                wallpaperAuto: WallpaperAuto.mode,
-                quickFiles: Ui.quickFiles,
-                quickIndex: Ui.quickIndex,
-                dictating: Ui.dictating,
-                transcribing: Ui.transcribing,
-                scene: Scenes.active,
-                snippets: Snippets.items.length,
-                stages: Ui.stagesOn,
-                screenToday: ScreenTime.todaySeconds,
-                screenApps: ScreenTime.apps.map(a => a.app),
-                backups: Backups.status,
-                extras: Devices.extras,
-                corners: ["topLeft", "topRight", "bottomLeft", "bottomRight"].map(c => Settings.get("corners." + c, "none"))
+                wallpaperAuto: WallpaperAuto.mode
             });
         }
         // Testlar uchun: shell'ni boshlang'ich holatga qaytaradi.
@@ -207,7 +186,7 @@ ShellRoot {
             Ui.controlPage = ["wifi", "bluetooth"].includes(name) ? name : "";
         }
         function dashboardTab(index: int): void {
-            Ui.dashTab = Math.max(0, Math.min(3, index));
+            Ui.dashTab = Math.max(0, Math.min(2, index));
             Ui.popup = "dashboard";
         }
         function launcherQuery(text: string): void {
@@ -218,48 +197,6 @@ ShellRoot {
         }
         function powerRefresh(): void {
             Power.refresh();
-        }
-        // Paths, each percent-encoded, separated by "|".
-        function quickLook(files: string): void {
-            try {
-                Ui.quickLook(files.split("|").filter(f => f !== "").map(decodeURIComponent), 0);
-            } catch (e) {
-                Toasts.show(Tr.t("Nothing to show"), "", "alert");
-            }
-        }
-        function quickNote(): void {
-            Ui.togglePopup("note");
-        }
-        function snippets(): void {
-            Ui.popup = "menu";
-            Ui.launcherInject(">snip ");
-        }
-        function stages(): void {
-            Ui.stagesOn = !Ui.stagesOn;
-        }
-        function stageNew(): void {
-            Ui.stageNew();
-        }
-        function scene(id: string): void {
-            Scenes.toggle(id);
-        }
-        function dictating(on: bool): void {
-            Ui.dictating = on;
-            if (on)
-                Toasts.show(Tr.t("Listening"), Tr.t("Press the dictation key again to finish"), "mic");
-        }
-        function transcribing(on: bool): void {
-            Ui.transcribing = on;
-        }
-        function backupChanged(): void {
-            Backups.refresh();
-        }
-        function devicesRefresh(): void {
-            Devices.refresh();
-            Backups.refresh();
-        }
-        function backups(): void {
-            Ui.backupsOpen = !Ui.backupsOpen;
         }
         function timer(text: string): void {
             const seconds = Countdown.parse(text);
@@ -316,10 +253,5 @@ ShellRoot {
         Privacy.enabled;
         WallpaperAuto.mode;
         Monitors.wantConnect;
-        Scenes.active;
-        Snippets.items;
-        ScreenTime.enabled;
-        Backups.enabled;
-        Devices.extras;
     }
 }

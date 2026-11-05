@@ -14,15 +14,7 @@ LazyLoader {
         readonly property int page: Math.max(0, Math.min(pages.length - 1, Ui.settingsPage))
         property string filter: ""
 
-        onPageChanged: {
-            scroller.contentY = 0;
-            // A panel can open a page lower than the sidebar shows.
-            const top = page * tabHeight + (pages[page].group + 1) * groupHeight;
-            if (top < sideList.contentY)
-                sideList.contentY = Math.max(0, top - groupHeight);
-            else if (top + tabHeight > sideList.contentY + sideList.height)
-                sideList.contentY = top + tabHeight - sideList.height;
-        }
+        onPageChanged: scroller.contentY = 0
 
         property var outputs: []
         readonly property var monitorSections: {
@@ -60,10 +52,7 @@ LazyLoader {
             return { key: "binds." + name, label: label, type: "text", width: 200 };
         }
 
-        readonly property var cornerOptions: ["none", "overview", "apps", "dashboard", "control", "note", "wallpapers", "stages", "lock"]
-        readonly property var cornerNames: [Tr.t("Nothing"), Tr.t("Overview"), Tr.t("Apps"), Tr.t("Dashboard"), Tr.t("Control center"), Tr.t("Quick note"), Tr.t("Wallpapers"), Tr.t("Stages"), Tr.t("Lock")]
-
-        readonly property var groups: [Tr.t("Personalization"), Tr.t("Workspace"), Tr.t("Input"), Tr.t("Other"), Tr.t("Tools")]
+        readonly property var groups: [Tr.t("Personalization"), Tr.t("Workspace"), Tr.t("Input"), Tr.t("Other")]
 
         readonly property var pages: [
             {
@@ -157,15 +146,6 @@ LazyLoader {
                         ]
                     },
                     {
-                        title: Tr.t("Hot corners"),
-                        items: [
-                            { key: "corners.topLeft", label: Tr.t("Top left"), type: "choice", layout: "chips", options: win.cornerOptions, names: win.cornerNames },
-                            { key: "corners.topRight", label: Tr.t("Top right"), type: "choice", layout: "chips", options: win.cornerOptions, names: win.cornerNames },
-                            { key: "corners.bottomLeft", label: Tr.t("Bottom left"), type: "choice", layout: "chips", options: win.cornerOptions, names: win.cornerNames },
-                            { key: "corners.bottomRight", label: Tr.t("Bottom right"), type: "choice", layout: "chips", options: win.cornerOptions, names: win.cornerNames }
-                        ]
-                    },
-                    {
                         title: Tr.t("Clock"),
                         items: [
                             { key: "panel.clock24", label: Tr.t("24-hour clock"), type: "toggle" },
@@ -253,12 +233,6 @@ LazyLoader {
                         ]
                     },
                     {
-                        title: Tr.t("Stage strip"),
-                        items: [
-                            { key: "stages.width", label: Tr.t("Width of the strip"), type: "slider", min: 130, max: 260, step: 2, unit: "px" }
-                        ]
-                    },
-                    {
                         title: Tr.t("Animations"),
                         items: [
                             { key: "windows.animations", label: Tr.t("Animations"), type: "toggle" },
@@ -300,13 +274,6 @@ LazyLoader {
                             { key: "keyboard.layouts", label: Tr.t("Layouts"), hint: Tr.t("Example: us,ru"), type: "text" },
                             { key: "keyboard.options", label: Tr.t("XKB options"), type: "text", width: 340 },
                             { key: "keyboard.perWindow", label: Tr.t("Remember layout per window"), type: "toggle" }
-                        ]
-                    },
-                    {
-                        title: Tr.t("Dictation"),
-                        items: [
-                            { key: "dictation.language", label: Tr.t("Language"), type: "choice", options: ["auto", "uz", "ru", "en"], names: [Tr.t("Automatic"), "O'zbek", "Русский", "English"] },
-                            { key: "dictation.model", label: Tr.t("Speech model"), hint: Tr.t("Bigger understands better and works slower. It is downloaded at first use"), type: "choice", options: ["tiny", "base", "small", "medium"], names: ["75 MB", "142 MB", "466 MB", "1.5 GB"] }
                         ]
                     },
                     {
@@ -361,13 +328,7 @@ LazyLoader {
                             win.bind("control", Tr.t("Control center")),
                             win.bind("wallpapers", Tr.t("Wallpaper and color")),
                             win.bind("settings", Tr.t("Settings")),
-                            win.bind("widgets", Tr.t("Edit widgets")),
-                            win.bind("quicklook", Tr.t("Quick Look of a copied file")),
-                            win.bind("quicknote", Tr.t("Quick note")),
-                            win.bind("dictate", Tr.t("Dictation")),
-                            win.bind("snippets", Tr.t("Text snippets")),
-                            win.bind("stages", Tr.t("Stage strip")),
-                            win.bind("stageNew", Tr.t("Move the column to a new stage"))
+                            win.bind("widgets", Tr.t("Edit widgets"))
                         ]
                     },
                     {
@@ -497,12 +458,6 @@ LazyLoader {
                         ]
                     },
                     {
-                        title: Tr.t("Screen Time"),
-                        items: [
-                            { key: "screentime.enabled", label: Tr.t("Count time per app"), hint: Tr.t("Only app names and minutes, kept on this computer"), type: "toggle" }
-                        ]
-                    },
-                    {
                         title: Tr.t("System updates"),
                         items: [
                             { key: "updates.enabled", label: Tr.t("Check for updates"), hint: Tr.t("Only looks. Installing always asks you first"), type: "toggle" },
@@ -554,84 +509,6 @@ LazyLoader {
                         title: Tr.t("Reset"),
                         items: [
                             { label: Tr.t("Restore default values"), hint: Tr.t("Location and wallpaper folder are kept"), type: "action", danger: true, text: Tr.t("Reset to defaults"), confirm: Tr.t("Press to confirm"), run: () => { Settings.resetAll(); Toasts.show(Tr.t("Settings reset"), Tr.t("Location was kept"), "check"); } }
-                        ]
-                    }
-                ]
-            },
-            {
-                title: Tr.t("Scenes"),
-                subtitle: Tr.t("Who may notify, what opens, which wallpaper"),
-                icon: "bell",
-                group: 4,
-                sections: [
-                    {
-                        title: Tr.t("Work"),
-                        items: [
-                            { key: "scenes.work.name", label: Tr.t("Name"), type: "text", width: 200 },
-                            { key: "scenes.work.allow", label: Tr.t("Apps that may notify"), hint: Tr.t("Names separated by commas. Others wait in the history"), type: "text", width: 280, fallback: "" },
-                            { key: "scenes.work.open", label: Tr.t("Apps to open"), hint: Tr.t("Names separated by commas"), type: "text", width: 280, fallback: "" },
-                            { key: "scenes.work.wallpaper", label: Tr.t("Wallpaper"), hint: Tr.t("Full path. Empty keeps the current one"), type: "text", width: 280, fallback: "" }
-                        ]
-                    },
-                    {
-                        title: Tr.t("Reading"),
-                        items: [
-                            { key: "scenes.reading.name", label: Tr.t("Name"), type: "text", width: 200 },
-                            { key: "scenes.reading.allow", label: Tr.t("Apps that may notify"), hint: Tr.t("Names separated by commas. Others wait in the history"), type: "text", width: 280, fallback: "" },
-                            { key: "scenes.reading.open", label: Tr.t("Apps to open"), hint: Tr.t("Names separated by commas"), type: "text", width: 280, fallback: "" },
-                            { key: "scenes.reading.wallpaper", label: Tr.t("Wallpaper"), hint: Tr.t("Full path. Empty keeps the current one"), type: "text", width: 280, fallback: "" }
-                        ]
-                    },
-                    {
-                        title: Tr.t("Personal"),
-                        items: [
-                            { key: "scenes.personal.name", label: Tr.t("Name"), type: "text", width: 200 },
-                            { key: "scenes.personal.allow", label: Tr.t("Apps that may notify"), hint: Tr.t("Names separated by commas. Others wait in the history"), type: "text", width: 280, fallback: "" },
-                            { key: "scenes.personal.open", label: Tr.t("Apps to open"), hint: Tr.t("Names separated by commas"), type: "text", width: 280, fallback: "" },
-                            { key: "scenes.personal.wallpaper", label: Tr.t("Wallpaper"), hint: Tr.t("Full path. Empty keeps the current one"), type: "text", width: 280, fallback: "" }
-                        ]
-                    }
-                ]
-            },
-            {
-                title: Tr.t("Text snippets"),
-                subtitle: Tr.t("Short names for text you type often"),
-                icon: "text",
-                group: 4,
-                snippets: true,
-                sections: []
-            },
-            {
-                title: Tr.t("Devices"),
-                subtitle: Tr.t("Phone, sending files, camera, tablet, mirroring"),
-                icon: "phone",
-                group: 4,
-                devices: true,
-                sections: [
-                    {
-                        title: Tr.t("In the background"),
-                        items: [
-                            { key: "connect.kdeconnect", label: Tr.t("KDE Connect"), hint: Tr.t("Phone clipboard and notifications"), type: "toggle" },
-                            { key: "connect.localsend", label: Tr.t("LocalSend"), hint: Tr.t("Can receive files at any time"), type: "toggle" }
-                        ]
-                    }
-                ]
-            },
-            {
-                title: "Time Machine",
-                subtitle: Tr.t("Encrypted backups of the home folder"),
-                icon: "history",
-                group: 4,
-                backups: true,
-                sections: [
-                    {
-                        title: Tr.t("Backups"),
-                        items: [
-                            { key: "backups.enabled", label: Tr.t("Back up by itself"), type: "toggle" },
-                            { key: "backups.repo", label: Tr.t("Folder for backups"), hint: Tr.t("Full path, best on an external disk"), type: "text", width: 320 },
-                            { key: "backups.hours", label: Tr.t("Every (hours)"), type: "slider", min: 1, max: 24, step: 1 },
-                            { key: "backups.onBattery", label: Tr.t("Also on battery"), type: "toggle" },
-                            { key: "backups.exclude", label: Tr.t("Leave out"), hint: Tr.t("Folders in the home folder, separated by commas"), type: "text", width: 320, fallback: "" }
                         ]
                     }
                 ]
@@ -794,8 +671,6 @@ LazyLoader {
 
                 // Pages, in groups
                 Flickable {
-                    id: sideList
-
                     x: 14
                     y: 108
                     width: parent.width - 28
@@ -989,16 +864,6 @@ LazyLoader {
                         width: scroller.width - 56
                         spacing: 16
 
-                        DevicesPanel {
-                            visible: win.filter === "" && !!win.pages[win.page].devices
-                            width: cards.width
-                        }
-
-                        BackupPanel {
-                            visible: win.filter === "" && !!win.pages[win.page].backups
-                            width: cards.width
-                        }
-
                         Repeater {
                             model: win.shown
 
@@ -1086,11 +951,6 @@ LazyLoader {
 
                         PowerCare {
                             visible: win.filter === "" && !!win.pages[win.page].power
-                            width: cards.width
-                        }
-
-                        SnippetEditor {
-                            visible: win.filter === "" && !!win.pages[win.page].snippets
                             width: cards.width
                         }
                     }

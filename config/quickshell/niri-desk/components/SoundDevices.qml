@@ -31,36 +31,6 @@ Column {
         objects: root.sinks.concat(root.sources)
     }
 
-    Column {
-        width: parent.width
-        spacing: 7
-        visible: appLevels.visible
-
-        Label {
-            x: 6
-            text: Tr.t("Apps playing now")
-            color: Theme.muted
-            size: 12
-            font.weight: Font.Medium
-        }
-        Rectangle {
-            width: parent.width
-            height: appLevels.implicitHeight + 16
-            radius: 18
-            color: Qt.alpha(Theme.text, 0.045)
-            border.width: 1
-            border.color: Qt.alpha(Theme.text, 0.06)
-
-            AppVolumes {
-                id: appLevels
-
-                x: 10
-                y: 8
-                width: parent.width - 20
-            }
-        }
-    }
-
     Repeater {
         model: root.sections
 

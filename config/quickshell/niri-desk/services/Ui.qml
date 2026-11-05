@@ -19,9 +19,6 @@ Singleton {
     // Places in the pages list of SettingsWindow, for panels that open a page directly.
     readonly property int pageMonitors: 6
     readonly property int pagePower: 11
-    readonly property int pageSnippets: 15
-    readonly property int pageDevices: 16
-    readonly property int pageBackups: 17
     property int dashTab: 0
     // "", wifi, bluetooth
     property string controlPage: ""
@@ -34,22 +31,7 @@ Singleton {
     property bool menuAlive: false
     // And the power menu.
     property bool powerAlive: false
-    // Quick Look and the quick note too.
-    property bool quickAlive: false
-    property bool noteAlive: false
-    property var quickFiles: []
-    property int quickIndex: 0
-    property bool backupsOpen: false
-    property bool dictating: false
-    property bool transcribing: false
-    property bool stagesOn: false
-    onStagesOnChanged: Saved.set("stages", stagesOn)
-    Component.onCompleted: stagesOn = Saved.get("stages", false)
     onPopupChanged: {
-        if (popup === "quicklook")
-            quickAlive = true;
-        if (popup === "note")
-            noteAlive = true;
         if (popup === "wallpapers")
             pickerAlive = true;
         if (popup === "menu")
@@ -92,21 +74,6 @@ Singleton {
         popup = popup === name ? "" : name;
     }
 
-    function quickLook(files, index) {
-        if (files.length === 0)
-            return;
-        quickFiles = files;
-        quickIndex = Math.max(0, Math.min(files.length - 1, index || 0));
-        popup = "quicklook";
-    }
-
-    // The empty workspace niri keeps last becomes the new stage.
-    function stageNew() {
-        const list = Niri.workspacesOn(Niri.focusedOutput);
-        if (list.length > 0)
-            Niri.action("move-column-to-workspace", String(list[list.length - 1].idx));
-    }
-
     // Opens the selector, or changes its action or closes it when it is already open.
     function region(action) {
         if (action === "record" && recording) {
@@ -124,7 +91,7 @@ Singleton {
         regionLasso = false;
         regionReady = 0;
         // A panel that is closing must not get into the picture.
-        const panel = popup !== "" || menuAlive || powerAlive || pickerAlive || quickAlive || noteAlive;
+        const panel = popup !== "" || menuAlive || powerAlive || pickerAlive;
         popup = "";
         regionPhase = "wait";
         regionDelay.interval = panel ? 300 : 1;

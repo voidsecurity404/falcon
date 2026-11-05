@@ -4647,32 +4647,6 @@ def _():
     ipc("timer", "0")
 
 
-feature("macos", "macOS style features")
-
-@case("Quick Look opens a file and closes")
-def _():
-    sh("niri-desk-quicklook /etc/hostname")
-    wait(lambda: st()["popup"] == "quicklook" and st()["quickFiles"] == ["/etc/hostname"], 4, "did not open")
-    ipc("close")
-    wait(lambda: st()["popup"] == "", 3, "did not close")
-
-@case("A scene turns on and off and hides notifications of other apps")
-def _():
-    ipc("scene", "work")
-    wait(lambda: st()["scene"] == "work", 3, "did not turn on")
-    sh("notify-send -a OtherApp scene-hidden")
-    wait(lambda: "scene-hidden" in st()["history"], 3, "not in the history")
-    ok(st()["toast"] != "scene-hidden")
-    ipc("scene", "work")
-    wait(lambda: st()["scene"] == "", 3, "did not turn off")
-
-@case("The stage strip appears and goes away")
-def _():
-    ipc("stages")
-    wait(lambda: "niri-desk-stages" in str(layers()), 3, "no layer")
-    ipc("stages")
-    wait(lambda: not st()["stages"], 3, "stayed on")
-
 feature("i18n", "Interfeys tili")
 
 CATALOG = HOME / ".config/niri-desk/i18n-ru.json"

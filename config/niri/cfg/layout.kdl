@@ -26,9 +26,9 @@ overview {
 }
 
 gestures {
-    // The corners of the screen belong to the shell, see modules/HotCorners.qml.
+    // Pointer in the top left corner of the screen opens the overview of workspaces.
     hot-corners {
-        off
+        top-left
     }
 }
 

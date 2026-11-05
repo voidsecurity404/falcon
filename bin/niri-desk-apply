@@ -267,12 +267,6 @@ ACTIONS = {
     "ocr": ("Copy text from screen", "spawn " + desk("region", "ocr"), False),
     "translate": ("Translate from screen", "spawn " + desk("region", "translate"), False),
     "widgets": ("Edit widgets", "spawn " + desk("widgets"), False),
-    "quicklook": ("Quick Look of a copied file", f'spawn "{SCRIPTS}niri-desk-quicklook"', False),
-    "quicknote": ("Quick note", "spawn " + desk("quickNote"), False),
-    "dictate": ("Dictation", f'spawn "{SCRIPTS}niri-desk-dictate"', False),
-    "snippets": ("Text snippets", "spawn " + desk("snippets"), False),
-    "stages": ("Stage strip", "spawn " + desk("stages"), False),
-    "stageNew": ("Move the column to a new stage", "spawn " + desk("stageNew"), False),
 }
 
 

@@ -251,72 +251,6 @@ Rectangle {
                 }
             }
 
-            // Scenes: pressing the one that is on turns it off.
-            Reveal {
-                shown: root.shown
-                calm: true
-                delay: 130
-
-                Row {
-                    width: parent.width
-                    spacing: 8
-
-                    Repeater {
-                        model: Scenes.list
-
-                        delegate: Rectangle {
-                            id: sceneChip
-
-                            required property var modelData
-
-                            readonly property bool on: Scenes.active === modelData.id
-
-                            width: (parent.width - 16) / 3
-                            height: 38
-                            radius: on ? 12 : 19
-                            color: on ? Theme.accent : Qt.alpha(Theme.text, chipArea.containsMouse ? 0.12 : 0.06)
-
-                            Behavior on radius {
-                                NumberAnimation {
-                                    duration: 200
-                                }
-                            }
-                            Behavior on color {
-                                ColorAnimation {
-                                    duration: 160
-                                }
-                            }
-
-                            Row {
-                                anchors.centerIn: parent
-                                spacing: 6
-
-                                Icon {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    name: sceneChip.modelData.icon
-                                    size: 14
-                                    color: sceneChip.on ? Theme.accentText : Theme.text
-                                }
-                                Label {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: sceneChip.modelData.name
-                                    size: 12
-                                    color: sceneChip.on ? Theme.accentText : Theme.text
-                                }
-                            }
-                            MouseArea {
-                                id: chipArea
-
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: Scenes.toggle(sceneChip.modelData.id)
-                            }
-                        }
-                    }
-                }
-            }
-
             // Ovoz va yorqinlik
             Reveal {
                 shown: root.shown
@@ -365,9 +299,6 @@ Rectangle {
                             value: Brightness.percent / 100
                             text: Brightness.percent + "%"
                             onMoved: value => Brightness.setPercent(value * 100)
-                        }
-                        AppVolumes {
-                            width: parent.width
                         }
                     }
                 }
@@ -423,29 +354,6 @@ Rectangle {
                         icon: "focus"
                         title: Tr.t("Focus")
                         onClicked: root.tool("niri-desk-zen")
-                    }
-                    ToolButton {
-                        icon: "note"
-                        title: Tr.t("Note")
-                        onClicked: Ui.popup = "note"
-                    }
-                    ToolButton {
-                        icon: "mic"
-                        title: Tr.t("Dictate")
-                        onClicked: root.tool("niri-desk-dictate")
-                    }
-                    ToolButton {
-                        icon: "text"
-                        title: Tr.t("Snippets")
-                        onClicked: {
-                            Ui.popup = "menu";
-                            Ui.launcherInject(">snip ");
-                        }
-                    }
-                    ToolButton {
-                        icon: "stages"
-                        title: Tr.t("Stages")
-                        onClicked: Ui.stagesOn = !Ui.stagesOn
                     }
                 }
             }

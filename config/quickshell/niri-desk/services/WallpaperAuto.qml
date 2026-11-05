@@ -20,7 +20,7 @@ Singleton {
     property string changing: ""
     property bool started: false
 
-    readonly property bool busy: changer.running || Ui.pickerAlive || Ui.regionPhase !== "" || Widgets.editMode || Lock.active || idle.isIdle || Scenes.holdsWallpaper
+    readonly property bool busy: changer.running || Ui.pickerAlive || Ui.regionPhase !== "" || Widgets.editMode || Lock.active || idle.isIdle
     readonly property bool canSlide: Settings.get("wallpaper.slideshowOnBattery", false) || !UPower.onBattery
 
     function keep() {

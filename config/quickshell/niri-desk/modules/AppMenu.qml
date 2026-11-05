@@ -41,15 +41,11 @@ PanelWindow {
     readonly property bool emojiMode: commandMode && wordIs(["emoji", "эмодзи"]) && commandText.length > commandWord.length
     readonly property bool fileMode: commandMode && wordIs(["file", "файл"]) && commandText.length > commandWord.length
     readonly property bool timerMode: commandMode && wordIs(["timer", "таймер"]) && commandText.length > commandWord.length
-    readonly property bool textMode: commandMode && wordIs(["text", "текст"]) && commandText.length > commandWord.length
-    readonly property bool snippetMode: commandMode && wordIs(["snip", "шаблон"]) && commandText.length > commandWord.length
-    readonly property bool sceneMode: commandMode && wordIs(["scene", "сцена"]) && commandText.length > commandWord.length
-    readonly property string mode: textMode ? "text" : snippetMode ? "snippets" : sceneMode ? "scenes" : timerMode ? "timer" : calcMode ? "calc" : schemeMode ? "scheme" : windowMode ? "windows" : emojiMode ? "emoji" : fileMode ? "files" : commandMode ? "commands" : "apps"
+    readonly property string mode: timerMode ? "timer" : calcMode ? "calc" : schemeMode ? "scheme" : windowMode ? "windows" : emojiMode ? "emoji" : fileMode ? "files" : commandMode ? "commands" : "apps"
 
     property var emojiRows: []
     property bool emojiWanted: false
     property var fileRows: []
-    property var textRows: []
 
     // What is on screen follows the text. A change of mode first fades the old content away.
     property string shownMode: "apps"
@@ -134,103 +130,6 @@ PanelWindow {
             complete: "file "
         },
         {
-            id: "text",
-            icon: "search",
-            name: Tr.t("Find text in files"),
-            detail: Tr.t("In the home folder. Ctrl+Y: Quick Look"),
-            keywords: "text content grep текст содержимое поиск",
-            complete: "text "
-        },
-        {
-            id: "note",
-            icon: "note",
-            name: Tr.t("Quick note"),
-            detail: Settings.get("binds.quicknote", ""),
-            keywords: "note заметка записка",
-            run: () => Ui.popup = "note"
-        },
-        {
-            id: "snip",
-            icon: "text",
-            name: Tr.t("Text snippets"),
-            detail: Settings.get("binds.snippets", ""),
-            keywords: "snip snippet шаблон текст",
-            complete: "snip "
-        },
-        {
-            id: "scene",
-            icon: "bell",
-            name: Tr.t("Scenes"),
-            detail: Scenes.current ? Scenes.current.name : Tr.t("Who may notify, what opens, which wallpaper"),
-            keywords: "scene focus сцена режим фокус работа чтение",
-            complete: "scene "
-        },
-        {
-            id: "dictate",
-            icon: "mic",
-            name: Tr.t("Dictation"),
-            detail: Settings.get("binds.dictate", ""),
-            keywords: "dictate voice диктовка голос whisper",
-            run: () => Ui.run("niri-desk-dictate")
-        },
-        {
-            id: "stages",
-            icon: "stages",
-            name: Tr.t("Stage strip"),
-            detail: Settings.get("binds.stages", ""),
-            keywords: "stage manager сцены полоса",
-            run: () => Ui.stagesOn = !Ui.stagesOn
-        },
-        {
-            id: "screentime",
-            icon: "clock",
-            name: Tr.t("Screen Time"),
-            detail: ScreenTime.format(ScreenTime.todaySeconds),
-            keywords: "screen time экранное время статистика",
-            run: () => {
-                Ui.dashTab = 3;
-                Ui.popup = "dashboard";
-            }
-        },
-        {
-            id: "backups",
-            icon: "history",
-            name: "Time Machine",
-            detail: Tr.t("Last backup: {t}").replace("{t}", Backups.lastText),
-            keywords: "time machine backup restore резервная копия восстановить",
-            run: () => {
-                Ui.settingsPage = Ui.pageBackups;
-                Ui.settingsOpen = true;
-            }
-        },
-        {
-            id: "devices",
-            icon: "phone",
-            name: Tr.t("Devices"),
-            detail: Tr.t("Phone, sending files, camera, tablet, mirroring"),
-            keywords: "phone send airdrop localsend kde connect camera tablet sidecar телефон камера планшет отправить",
-            run: () => {
-                Ui.settingsPage = Ui.pageDevices;
-                Ui.settingsOpen = true;
-            }
-        },
-        {
-            id: "localsend",
-            icon: "share",
-            name: "LocalSend",
-            detail: Tr.t("Send files to any nearby device, like AirDrop"),
-            keywords: "localsend airdrop send отправить файл",
-            run: () => Devices.openLocalSend()
-        },
-        {
-            id: "mirror",
-            icon: "copy",
-            name: Tr.t("Mirror to another display"),
-            detail: "wl-mirror",
-            keywords: "mirror зеркало дисплей монитор",
-            run: () => Devices.toggleTool("niri-desk-mirror")
-        },
-        {
             id: "emoji",
             icon: "sparkle",
             name: Tr.t("Emoji"),
@@ -272,12 +171,6 @@ PanelWindow {
             }))
 
     readonly property var results: {
-        if (textMode)
-            return textRows;
-        if (snippetMode)
-            return snippetRows();
-        if (sceneMode)
-            return sceneRows();
         if (timerMode)
             return timerRows();
         if (calcMode)
@@ -350,56 +243,6 @@ PanelWindow {
             return;
         }
         fileSearch.exec(["fd", "--type", "f", "--ignore-case", "--fixed-strings", "--max-results", "40", "--", commandRest, Quickshell.env("HOME")]);
-    }
-
-    function searchText() {
-        if (!textMode || commandRest.length < 2) {
-            textSearch.running = false;
-            if (textRows.length > 0)
-                textRows = [];
-            return;
-        }
-        textSearch.running = false;
-        // head ends rg once enough files were found.
-        textSearch.exec(["sh", "-c", 'rg --ignore-case --fixed-strings --max-count 1 --max-filesize 2M --null --line-number --no-heading --color never --max-columns 180 --max-columns-preview -- "$1" "$HOME" 2>/dev/null | head -n 40', "sh", commandRest]);
-    }
-
-    function snippetRows() {
-        const rows = Snippets.items.map((snippet, i) => ({
-                    id: "snip:" + i + ":" + snippet.trigger,
-                    icon: "text",
-                    name: snippet.trigger || snippet.text,
-                    detail: snippet.text.replace(/\s+/g, " "),
-                    run: () => Snippets.insert(snippet)
-                }));
-        rows.push({
-            id: "snip:edit",
-            icon: "settings",
-            name: Tr.t("Edit snippets"),
-            detail: Tr.t("Settings"),
-            run: () => {
-                Ui.settingsPage = Ui.pageSnippets;
-                Ui.settingsOpen = true;
-            }
-        });
-        return commandRest === "" ? rows : ranked(rows, r => r.name, r => r.detail, commandRest.toLowerCase());
-    }
-
-    function sceneRows() {
-        const rows = Scenes.list.map(scene => ({
-                    id: "scene:" + scene.id,
-                    icon: Scenes.active === scene.id ? "check" : scene.icon,
-                    name: scene.name,
-                    detail: Scenes.active === scene.id ? Tr.t("On. Enter turns it off") : scene.allow !== "" ? Tr.t("May notify: {a}").replace("{a}", scene.allow) : Tr.t("No app may notify"),
-                    run: () => Scenes.toggle(scene.id)
-                }));
-        return commandRest === "" ? rows : ranked(rows, r => r.name, r => r.detail, commandRest.toLowerCase());
-    }
-
-    function previewSelected() {
-        const row = results[selected];
-        if (row && row.path)
-            Ui.quickLook(results.filter(r => r.path).map(r => r.path), results.filter(r => r.path).indexOf(row));
     }
 
     function schemeRows() {
@@ -539,8 +382,6 @@ PanelWindow {
     function clearForNextTime() {
         modeSwap.stop();
         fileTimer.stop();
-        textTimer.stop();
-        textSearch.running = false;
         input.text = "";
         armed = "";
         pointerStart = null;
@@ -569,7 +410,6 @@ PanelWindow {
         armed = "";
         // Runs on every change: here the file mode binding may still hold its old value.
         fileTimer.restart();
-        textTimer.restart();
     }
     onEmojiModeChanged: {
         if (emojiMode)
@@ -597,41 +437,6 @@ PanelWindow {
         onTriggered: root.searchFiles()
     }
 
-    Timer {
-        id: textTimer
-
-        interval: 320
-        onTriggered: root.searchText()
-    }
-
-    Process {
-        id: textSearch
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const home = Quickshell.env("HOME");
-                const rows = [];
-                for (const line of text.split("\n")) {
-                    const gap = line.indexOf("\0");
-                    if (gap <= 0)
-                        continue;
-                    const path = line.slice(0, gap);
-                    const rest = line.slice(gap + 1);
-                    const colon = rest.indexOf(":");
-                    rows.push({
-                        id: "text:" + path,
-                        icon: "note",
-                        path: path,
-                        name: path.slice(path.lastIndexOf("/") + 1),
-                        detail: rest.slice(colon + 1).trim() + "  ·  " + (path.startsWith(home) ? "~" + path.slice(home.length) : path),
-                        run: () => Quickshell.execDetached(["xdg-open", path])
-                    });
-                }
-                root.textRows = rows;
-            }
-        }
-    }
-
     Process {
         id: fileSearch
 
@@ -641,7 +446,6 @@ PanelWindow {
                 root.fileRows = text.split("\n").filter(l => l !== "").map(path => ({
                             id: "file:" + path,
                             icon: "note",
-                            path: path,
                             name: path.slice(path.lastIndexOf("/") + 1),
                             detail: path.startsWith(home) ? "~" + path.slice(home.length) : path,
                             run: () => Quickshell.execDetached(["xdg-open", path])
@@ -1145,12 +949,6 @@ PanelWindow {
                     font.pixelSize: Math.round(15 * Theme.fontScale)
                     onTextChanged: root.query = text
                     Keys.onEscapePressed: Ui.popup = ""
-                    Keys.onPressed: event => {
-                        if (event.key === Qt.Key_Y && (event.modifiers & Qt.ControlModifier)) {
-                            root.previewSelected();
-                            event.accepted = true;
-                        }
-                    }
                     Keys.onReturnPressed: root.execute(root.selected)
                     Keys.onEnterPressed: root.execute(root.selected)
                     Keys.onDownPressed: root.selected = Math.min(root.results.length - 1, root.selected + 1)

@@ -83,15 +83,6 @@ targets=(
     .local/bin/niri-desk-updates
     .local/bin/niri-desk-privacy
     .local/bin/niri-desk-monitors
-    .local/bin/niri-desk-extras
-    .local/bin/niri-desk-type
-    .local/bin/niri-desk-preview
-    .local/bin/niri-desk-quicklook
-    .local/bin/niri-desk-dictate
-    .local/bin/niri-desk-timemachine
-    .local/bin/niri-desk-phonecam
-    .local/bin/niri-desk-sidecar
-    .local/bin/niri-desk-mirror
     .config/niri-desk/tmux.conf
     .config/niri-desk/emoji.json
     .config/niri-desk/defaults.json
@@ -279,12 +270,6 @@ fi
 if ((packages)) && compgen -G "/sys/class/power_supply/BAT*/charge_control_end_threshold" >/dev/null; then
     say "Setting up the battery charge limit"
     do_it "$HOME/.local/bin/niri-desk-charge" setup
-fi
-
-# The camera module and the local network ports of the macOS style features.
-if ((packages)); then
-    say "Setting up the optional device features"
-    do_it "$HOME/.local/bin/niri-desk-extras" setup
 fi
 
 if command -v niri >/dev/null; then

@@ -31,7 +31,7 @@ PanelWindow {
     // Cards keep the same curve however many there are.
     readonly property real spacing: Math.min(170, 320 / Math.max(0.5, (items.length - 1) / 2))
     readonly property string shotDir: Quickshell.env("XDG_RUNTIME_DIR") + "/niri-desk-switcher"
-    readonly property bool capturable: phase === "" && Ui.popup === "" && !Ui.menuAlive && !Ui.powerAlive && !Ui.pickerAlive && !Ui.quickAlive && !Ui.noteAlive && Ui.regionPhase === "" && !Lock.active && !Lock.preview && !Niri.overview
+    readonly property bool capturable: phase === "" && Ui.popup === "" && !Ui.menuAlive && !Ui.powerAlive && !Ui.pickerAlive && Ui.regionPhase === "" && !Lock.active && !Lock.preview && !Niri.overview
 
     function recentWindows(sameApp) {
         const stamp = w => {
