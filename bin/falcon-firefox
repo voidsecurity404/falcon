@@ -13,6 +13,8 @@ PREFS = (
     'user_pref("browser.tabs.allow_transparent_browser", true);\n',
     # Sites that have a dark look use it, so the parts of them left alone stay readable on the glass.
     'user_pref("layout.css.prefers-color-scheme.content-override", 0);\n',
+    # A bar at the top of a site fades in with the scroll position.
+    'user_pref("layout.css.scroll-driven-animations.enabled", true);\n',
 )
 # Splits the generated file: what comes after this line goes to userContent.css.
 SPLIT = "/* userContent */\n"

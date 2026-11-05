@@ -31,7 +31,7 @@ html, body, #main-window, #browser, #appcontent, #tabbrowser-tabbox, #tabbrowser
 
 /* A tint under every page, so light text stays readable over a bright wallpaper. */
 #tabbrowser-tabpanels {
-  background: color-mix(in srgb, {{colors.surface.default.hex}} 45%, transparent) !important;
+  background: color-mix(in srgb, {{colors.surface.default.hex}} 65%, transparent) !important;
 }
 
 /* One sheet of glass under the tabs and the address bar, with no lines across it. */
@@ -59,6 +59,10 @@ findbar {
   :root, body { --newtab-background-color: transparent !important; --newtab-background-color-secondary: transparent !important; background: transparent !important; }
 }
 
+@keyframes falcon-bar {
+  to { opacity: 1; }
+}
+
 /* Every site is glass. With their backgrounds gone, dark text would be lost, so all text turns light. */
 @-moz-document url-prefix("http"), url-prefix("file:") {
   *:not(img, video, canvas, svg, svg *, picture, source, iframe, embed, object) {
@@ -72,9 +76,13 @@ findbar {
   a, a * {
     color: {{colors.primary.default.hex}} !important;
   }
-  /* Buttons and fields keep a shape, since their own fill is gone. */
-  button, input, select, textarea, [role="button"], [role="textbox"], [role="searchbox"], [role="combobox"] {
+  /* Fields and labelled buttons keep a shape, since their own fill is gone. Icons need none. */
+  button:not(:has(> svg, > img, yt-icon, .yt-icon-shape, .ytIconWrapperHost, yt-img-shadow, #avatar-btn)), input:not([type="checkbox"], [type="radio"], [type="range"]), select, textarea {
     background-color: color-mix(in srgb, {{colors.on_surface.default.hex}} 10%, transparent) !important;
+  }
+  /* These sit inside a shape that YouTube draws itself. */
+  ytd-masthead input, ytd-masthead button, ytd-masthead form, ytd-masthead [role="button"], ytd-masthead .ytSearchboxComponentInputBox * {
+    background-color: transparent !important;
   }
   ::selection {
     background-color: {{colors.primary.default.hex}} !important;
@@ -82,12 +90,33 @@ findbar {
     -webkit-text-fill-color: {{colors.on_primary.default.hex}} !important;
   }
   /* What floats over the page would mix with the text under it, so it gets frosted glass of its own. */
-  body > header, [role="banner"], #masthead-container, ytd-masthead, .AppHeader, .Header,
   dialog, [role="dialog"], [role="menu"], [role="listbox"], [role="tooltip"], [aria-modal="true"], [popover],
+  ytd-app:not([guide-persistent-and-visible]) tp-yt-app-drawer #contentContainer, ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-searchbox"],
   tp-yt-iron-dropdown, tp-yt-paper-dialog, ytd-menu-popup-renderer, ytd-multi-page-menu-renderer, .ytp-popup, .ytp-settings-menu, ytd-searchbox + *, .sbsb_a, .ytSearchboxComponentSuggestionsContainer,
   [class*="dropdown-content" i], [class*="dropdown-menu" i], [class*="popover" i], [class*="tooltip" i], [class*="modal" i], .Overlay, .SelectMenu-modal {
     background-color: color-mix(in srgb, {{colors.surface.default.hex}} 78%, transparent) !important;
     backdrop-filter: blur(24px) !important;
+  }
+  /* A bar at the top shows nothing until the page scrolls under it, then its glass fades in. */
+  body > header, [role="banner"], #masthead-container, .AppHeader, .Header {
+    position: relative;
+    isolation: isolate;
+  }
+  body > header::before, [role="banner"]::before, #masthead-container::before, .AppHeader::before, .Header::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: color-mix(in srgb, {{colors.surface.default.hex}} 88%, transparent) !important;
+    backdrop-filter: blur(24px);
+    opacity: 0;
+    animation: falcon-bar linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 48px;
+  }
+  ytd-masthead, ytd-masthead #background, #masthead-container #background {
+    background: transparent !important;
   }
   /* YouTube: the glow around a video is a canvas across the whole page, and it hides the glass. */
   #cinematics, #cinematics-container {
