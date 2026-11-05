@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Writes a copy of a picture with the text on it translated, in place.
 
-Reads the text with tesseract, sends it to the online translation service translate-shell also uses,
+Reads the text with tesseract, translates it online, or on this computer when that does not work,
 paints over the old words with the colors around them and draws the translation in their place.
 Prints one JSON object per line as it goes: stage is read, translate, draw, then done, same (already in that language), empty or error.
 
@@ -17,6 +17,7 @@ import re
 import statistics
 import subprocess
 import sys
+import time
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 import urllib.error
@@ -39,7 +40,10 @@ UPSCALE_BELOW = 1400
 PAD = 30
 MAX_REQUESTS = 6
 CHUNK_CHARS = 3500
-TRANSLATE_TIMEOUT = 60
+REQUEST_TIMEOUT = 12
+LOCAL_TIMEOUT = 180
+RESTING = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "falcon-translate-resting"
+REST_SECONDS = 900
 # One model for each kind of script, from falcon-ocr-models. Each also knows the Latin letters, so
 # a Russian page with English words on it reads correctly.
 MODELS = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "falcon/tessdata"
@@ -650,28 +654,70 @@ def aligned_lines(pieces, count):
     return lines if len(lines) == count and all(lines) else whole
 
 
+class ServiceDown(Exception):
+    """Google cannot be reached or is limiting requests, so the translator here takes over."""
+
+
+def service_resting():
+    """After a refusal it stays alone for a while, because asking again makes the limit last longer."""
+    try:
+        return time.time() - RESTING.stat().st_mtime < REST_SECONDS
+    except OSError:
+        return False
+
+
 def request_lines(part, target):
-    """One request to the address translate-shell itself uses, without its slow start. If the service
-    says it is limiting requests, that is the answer. If this way itself fails, translate-shell tries once."""
+    """One request to the address translate-shell itself uses, without its slow start."""
     body = urllib.parse.urlencode({"client": "gtx", "ie": "UTF-8", "oe": "UTF-8", "dt": "t", "sl": "auto", "tl": target, "q": "\n".join(part)})
     request = urllib.request.Request(TRANSLATE_URL, data=body.encode(), headers={"User-Agent": "Mozilla/5.0"})
     try:
-        with urllib.request.urlopen(request, timeout=TRANSLATE_TIMEOUT) as answer:
+        with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as answer:
             return aligned_lines(json.load(answer)[0], len(part))
     except urllib.error.HTTPError as error:
         if error.code == 429:
-            raise TranslationFailed("429") from error
-    except (OSError, ValueError, TypeError, IndexError):
-        pass
-    done = subprocess.run(["trans", "-b", "-no-ansi", "-no-autocorrect", f":{target}", "--", "\n".join(part)],
-                          capture_output=True, text=True, timeout=TRANSLATE_TIMEOUT)
-    return [line.strip() for line in done.stdout.split("\n") if line.strip()]
+            RESTING.touch()
+        raise ServiceDown(str(error.code)) from error
+    except (OSError, ValueError, TypeError, IndexError) as error:
+        # A refusal can also arrive as a redirect to a web page, which is not JSON.
+        if isinstance(error, ValueError):
+            RESTING.touch()
+        raise ServiceDown(str(error)) from error
+
+
+def translate_here(texts, target):
+    """On this computer, with falcon-translate-models. None when that is not there."""
+    python = MODELS.parent / "translate/venv/bin/python"
+    if not python.exists():
+        subprocess.Popen([str(Path(__file__).with_name("falcon-translate-models"))], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+        return None
+    try:
+        done = subprocess.run([str(python), str(Path(__file__).with_name("falcon-translate-local"))], input=json.dumps({"to": target, "texts": texts}),
+                              capture_output=True, text=True, timeout=LOCAL_TIMEOUT)
+        answer = json.loads(done.stdout)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    return answer if len(answer) == len(texts) else None
 
 
 FOREIGN_MARKS = str.maketrans("《》「」『』。，、？！：；（）", "«»«»«».,,?!:;()")
 
 
 def translate_lines(texts, target):
+    """Google while it answers, because its translations are the best, and otherwise this computer."""
+    if not service_resting():
+        try:
+            return ask_service(texts, target)
+        except ServiceDown:
+            pass
+    say("translate", engine="local")
+    answer = translate_here(texts, target)
+    if answer is None:
+        raise TranslationFailed("no translator")
+    return answer
+
+
+def ask_service(texts, target):
     """Translates with as few requests as possible, one after another, because the free service
     answers too many requests with an error for a while. Lines it could not match stay untranslated."""
     budget = [MAX_REQUESTS]

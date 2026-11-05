@@ -67,5 +67,9 @@ models = subprocess.run([str(HOME / ".local/bin/falcon-ocr-models"), "status"], 
 have, _, total = models.partition("/")
 report(have == total and bool(total), tr("Reading models of the translator: {models}", models=models), tr("Run: falcon-ocr-models"))
 
+parts = subprocess.run([str(HOME / ".local/bin/falcon-translate-models"), "status"], capture_output=True, text=True, check=False).stdout.strip()
+have, _, total = parts.partition("/")
+report(have == total and bool(total), tr("Offline translator: {parts}", parts=parts), tr("Run: falcon-translate-models"))
+
 print(tr("Result: {count} problem(s)", count=problems))
 sys.exit(1 if problems else 0)

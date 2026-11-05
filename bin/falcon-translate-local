@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+"""Translates on this computer. Runs in the translator's own Python, from falcon-translate-models.
+
+Reads {"to": LANGUAGE, "texts": [...]} on stdin and prints a JSON list of the same length.
+"""
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+import ctranslate2
+import sentencepiece
+from langdetect import DetectorFactory, LangDetectException, detect
+
+DetectorFactory.seed = 0
+FOLDER = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "falcon/translate"
+THREADS = os.cpu_count() or 4
+NLLB_CODES = {
+    "en": "eng_Latn", "ru": "rus_Cyrl", "uz": "uzn_Latn", "de": "deu_Latn", "fr": "fra_Latn", "es": "spa_Latn", "it": "ita_Latn",
+    "pt": "por_Latn", "tr": "tur_Latn", "pl": "pol_Latn", "uk": "ukr_Cyrl", "ar": "arb_Arab", "zh": "zho_Hans", "zh-cn": "zho_Hans",
+    "zh-tw": "zho_Hant", "ja": "jpn_Jpan", "ko": "kor_Hang", "hi": "hin_Deva", "fa": "pes_Arab", "he": "heb_Hebr", "th": "tha_Thai",
+    "el": "ell_Grek", "ka": "kat_Geor", "hy": "hye_Armn", "bn": "ben_Beng", "ta": "tam_Taml", "kk": "kaz_Cyrl", "ky": "kir_Cyrl",
+    "tg": "tgk_Cyrl", "az": "azj_Latn", "tk": "tuk_Latn", "nl": "nld_Latn", "sv": "swe_Latn", "da": "dan_Latn", "nb": "nob_Latn",
+    "fi": "fin_Latn", "cs": "ces_Latn", "sk": "slk_Latn", "ro": "ron_Latn", "hu": "hun_Latn", "bg": "bul_Cyrl", "sr": "srp_Cyrl",
+    "hr": "hrv_Latn", "sl": "slv_Latn", "lt": "lit_Latn", "lv": "lvs_Latn", "et": "est_Latn", "id": "ind_Latn", "vi": "vie_Latn",
+    "ur": "urd_Arab", "ca": "cat_Latn", "mk": "mkd_Cyrl", "sq": "als_Latn", "af": "afr_Latn", "sw": "swh_Latn", "tl": "tgl_Latn",
+}
+UZ_LATIN = dict(zip("абвгдежзийклмнопрстуфхцчшъьэюяёўқғҳ", ["a", "b", "v", "g", "d", "e", "j", "z", "i", "y", "k", "l", "m", "n", "o", "p", "r", "s", "t", "u", "f", "x", "s", "ch", "sh", "’", "", "e", "yu", "ya", "yo", "o‘", "q", "g‘", "h"]))
+SCRIPTS = [("가", "힣", "ko"), ("぀", "ヿ", "ja"), ("㐀", "鿿", "zh"), ("؀", "ۿ", "ar"), ("֐", "׿", "he"),
+           ("ऀ", "ॿ", "hi"), ("฀", "๿", "th"), ("Ͱ", "Ͽ", "el"), ("Ⴀ", "ჿ", "ka"), ("԰", "֏", "hy"),
+           ("ঀ", "৿", "bn"), ("஀", "௿", "ta")]
+UZ_WORDS = re.compile(r"\b(va|bilan|uchun|bu|ham|bir|yil|eng|keyin|o[‘'ʻ`’]z|ning|lar|dagi)\b|\w(ning|lar|larni|ladi|moqda|gan|dan|lari)\b|[og][‘'ʻ`’]", re.I)
+
+
+def script_of(text):
+    """The script most letters of a text are in, and Latin or Cyrillic where a language has to be found."""
+    counts = {}
+    for ch in text:
+        if not ch.isalpha():
+            continue
+        name = next((code for low, high, code in SCRIPTS if low <= ch <= high), None)
+        if name is None:
+            name = "cyr" if "Ѐ" <= ch <= "ԯ" else "lat"
+        counts[name] = counts.get(name, 0) + 1
+    if "ja" in counts and "zh" in counts:
+        # Japanese also uses Chinese signs, and its kana is what tells them apart.
+        counts["ja"] += counts.pop("zh")
+    return max(counts, key=counts.get) if counts else "lat"
+
+
+def latin_language(text):
+    if len(UZ_WORDS.findall(text)) >= max(2, len(text.split()) * 0.18):
+        return "uz"
+    return guess(text, "en")
+
+
+def cyrillic_language(text):
+    if re.search(r"[ўқғҳ]", text, re.I):
+        return "uz"
+    if re.search(r"[іїєґ]", text, re.I):
+        return "uk"
+    return guess(text, "ru")
+
+
+def guess(text, fallback):
+    try:
+        return detect(text)
+    except LangDetectException:
+        return fallback
+
+
+def sentences(text):
+    return [part for part in re.split(r"(?<=[.!?。！？؟।])\s*", text) if part.strip()]
+
+
+class Argos:
+    def __init__(self):
+        self.loaded = {}
+
+    def has(self, pair):
+        return (FOLDER / "argos" / pair / "model/model.bin").exists()
+
+    def run(self, texts, pair):
+        if pair not in self.loaded:
+            folder = FOLDER / "argos" / pair
+            self.loaded[pair] = (ctranslate2.Translator(str(folder / "model"), device="cpu", inter_threads=1, intra_threads=THREADS),
+                                 sentencepiece.SentencePieceProcessor(str(folder / "sentencepiece.model")))
+        model, pieces = self.loaded[pair]
+        answers = model.translate_batch([pieces.encode(text, out_type=str) for text in texts], beam_size=4, max_batch_size=32)
+        return [pieces.decode(answer.hypotheses[0]) for answer in answers]
+
+
+class Nllb:
+    def __init__(self):
+        self.model = None
+
+    def run(self, texts, source, target):
+        if self.model is None:
+            self.model = ctranslate2.Translator(str(FOLDER / "nllb"), device="cpu", inter_threads=1, intra_threads=THREADS, compute_type="int8")
+            self.pieces = sentencepiece.SentencePieceProcessor(str(FOLDER / "nllb/sentencepiece.bpe.model"))
+        batch = [[source, *self.pieces.encode(text, out_type=str), "</s>"] for text in texts]
+        answers = self.model.translate_batch(batch, target_prefix=[[target]] * len(batch), beam_size=3, max_batch_size=32, repetition_penalty=1.15, no_repeat_ngram_size=4)
+        return [self.pieces.decode(answer.hypotheses[0][1:]) for answer in answers]
+
+
+def translate_all(texts, target):
+    target = target.lower()
+    short = target.split("-")[0]
+    latin_page = " ".join(text for text in texts if script_of(text) == "lat")
+    cyrillic_page = " ".join(text for text in texts if script_of(text) == "cyr")
+    latin = latin_language(latin_page) if latin_page.strip() else "en"
+    cyrillic = cyrillic_language(cyrillic_page) if cyrillic_page.strip() else "ru"
+    argos, nllb = Argos(), Nllb()
+    groups = {}
+    for index, text in enumerate(texts):
+        script = script_of(text)
+        language = latin if script == "lat" else cyrillic if script == "cyr" else script
+        if script == "cyr" and re.search(r"[ўқғҳ]", text, re.I):
+            language = "uz"
+        groups.setdefault(language, []).append(index)
+    results = list(texts)
+    for language, members in groups.items():
+        if language == short:
+            continue
+        parts, owners = [], []
+        for index in members:
+            text = texts[index]
+            if language == "uz" and script_of(text) == "cyr":
+                text = "".join(UZ_LATIN.get(ch.lower(), ch).capitalize() if ch.isupper() else UZ_LATIN.get(ch, ch) for ch in text)
+            for sentence in sentences(text):
+                parts.append(sentence)
+                owners.append(index)
+        if not parts:
+            continue
+        if short == "ru" and language == "en" and argos.has("en_ru"):
+            done = argos.run(parts, "en_ru")
+        elif short == "en" and argos.has(f"{language}_en"):
+            done = argos.run(parts, f"{language}_en")
+        elif short == "ru" and argos.has(f"{language}_en") and argos.has("en_ru"):
+            done = argos.run(argos.run(parts, f"{language}_en"), "en_ru")
+        elif language in NLLB_CODES and target in NLLB_CODES or short in NLLB_CODES:
+            done = nllb.run(parts, NLLB_CODES.get(language, "eng_Latn"), NLLB_CODES.get(target, NLLB_CODES.get(short)))
+        else:
+            continue
+        collected = {}
+        for owner, sentence in zip(owners, done):
+            collected.setdefault(owner, []).append(sentence.strip())
+        for owner, pieces in collected.items():
+            results[owner] = " ".join(pieces)
+    return results
+
+
+job = json.load(sys.stdin)
+print(json.dumps(translate_all(job["texts"], job["to"]), ensure_ascii=False))

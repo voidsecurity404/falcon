@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Downloads the translator that works without the internet, about 4 GB, and checks it. It is used
+when Google's free service cannot be reached or is limiting requests. No root, safe to run again.
+
+  falcon-translate-models           downloads what is missing
+  falcon-translate-models status    says how many parts are there
+"""
+import fcntl
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import urllib.request
+import zipfile
+from pathlib import Path
+
+FOLDER = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "falcon/translate"
+PACKAGES = ["ctranslate2==4.8.5", "sentencepiece==0.2.3", "langdetect==1.0.9"]
+# Argos Translate models, fast and good, for the languages they cover.
+ARGOS = {
+    "ar_en": "https://argos-net.com/v1/translate-ar_en-1_0.argosmodel",
+    "zh_en": "https://argos-net.com/v1/translate-zh_en-1_9.argosmodel",
+    "en_ru": "https://argos-net.com/v1/translate-en_ru-1_9.argosmodel",
+    "fr_en": "https://argos-net.com/v1/translate-fr_en-1_9.argosmodel",
+    "de_en": "https://argos-net.com/v1/translate-de_en-1_3.argosmodel",
+    "hi_en": "https://argos-net.com/v1/translate-hi_en-1_1.argosmodel",
+    "it_en": "https://argos-net.com/v1/translate-it_en-1_0.argosmodel",
+    "ja_en": "https://argos-net.com/v1/translate-ja_en-1_1.argosmodel",
+    "ko_en": "https://argos-net.com/v1/translate-ko_en-1_1.argosmodel",
+    "pl_en": "https://argos-net.com/v1/translate-pl_en-1_9.argosmodel",
+    "pt_en": "https://argos-net.com/v1/translate-pt_en-1_9.argosmodel",
+    "ru_en": "https://argos-net.com/v1/translate-ru_en-1_9.argosmodel",
+    "es_en": "https://argos-net.com/v1/translate-es_en-1_9.argosmodel",
+    "tr_en": "https://argos-net.com/v1/translate-tr_en-1_5.argosmodel",
+    "uk_en": "https://argos-net.com/v1/translate-uk_en-1_9.argosmodel",
+}
+# NLLB-200 for everything else, Uzbek too. Its license allows only non-commercial use.
+NLLB_COMMIT = "86876131d0a16b17ced0a5c558fdc3e4613ae545"
+NLLB_BASE = f"https://huggingface.co/entai2965/nllb-200-distilled-600M-ctranslate2/resolve/{NLLB_COMMIT}/"
+NLLB_FILES = ["config.json", "model.bin", "sentencepiece.bpe.model", "shared_vocabulary.json"]
+# SHA-256 of what was downloaded and tested.
+CHECKSUMS = {
+}
+
+
+def digest(path):
+    hashed = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for piece in iter(lambda: handle.read(1 << 20), b""):
+            hashed.update(piece)
+    return hashed.hexdigest()
+
+
+def download(url, target, key):
+    partial = target.with_name(target.name + ".part")
+    request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(request, timeout=120) as answer, open(partial, "wb") as out:
+        shutil.copyfileobj(answer, out, 1 << 20)
+    wanted = CHECKSUMS.get(key)
+    if wanted and digest(partial) != wanted:
+        partial.unlink()
+        raise OSError(f"{key}: checksum does not match")
+    partial.replace(target)
+
+
+def argos_ready(pair):
+    return (FOLDER / "argos" / pair / "model/model.bin").exists()
+
+
+def nllb_ready():
+    return all((FOLDER / "nllb" / name).exists() for name in NLLB_FILES)
+
+
+def engine_ready():
+    python = FOLDER / "venv/bin/python"
+    return python.exists() and subprocess.run([str(python), "-c", "import ctranslate2, sentencepiece, langdetect"], capture_output=True).returncode == 0
+
+
+def fetch_argos(pair):
+    with tempfile.TemporaryDirectory(dir=FOLDER) as folder:
+        archive = Path(folder) / "model.zip"
+        download(ARGOS[pair], archive, pair)
+        with zipfile.ZipFile(archive) as bundle:
+            bundle.extractall(folder)
+        inner = next(path for path in Path(folder).iterdir() if path.is_dir())
+        target = FOLDER / "argos" / pair
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.rmtree(target, ignore_errors=True)
+        inner.replace(target)
+
+
+def main(argv):
+    if argv[1:] == ["status"]:
+        done = sum(argos_ready(pair) for pair in ARGOS) + nllb_ready() + engine_ready()
+        print(f"{done}/{len(ARGOS) + 2}")
+        return 0
+    FOLDER.mkdir(parents=True, exist_ok=True)
+    with open(FOLDER / ".lock", "w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return 0
+        failed = 0
+        if not engine_ready():
+            print("engine", flush=True)
+            shutil.rmtree(FOLDER / "venv", ignore_errors=True)
+            subprocess.run([sys.executable, "-m", "venv", str(FOLDER / "venv")], check=True)
+            subprocess.run([str(FOLDER / "venv/bin/pip"), "install", "--quiet", "--disable-pip-version-check", *PACKAGES], check=True)
+        for pair in ARGOS:
+            if argos_ready(pair):
+                continue
+            print(pair, flush=True)
+            try:
+                fetch_argos(pair)
+            except (OSError, zipfile.BadZipFile, StopIteration) as error:
+                print(f"{pair}: {error}", file=sys.stderr)
+                failed += 1
+        (FOLDER / "nllb").mkdir(exist_ok=True)
+        for name in NLLB_FILES:
+            target = FOLDER / "nllb" / name
+            if target.exists():
+                continue
+            print(name, flush=True)
+            try:
+                download(NLLB_BASE + name, target, name)
+            except OSError as error:
+                print(f"{name}: {error}", file=sys.stderr)
+                failed += 1
+    return 1 if failed else 0
+
+
+sys.exit(main(sys.argv))

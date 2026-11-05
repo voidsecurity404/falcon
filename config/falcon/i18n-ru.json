@@ -586,5 +586,10 @@
  "Removed.": "Удалено.",
  "The charge limit needs a one time setup with your password. Your choice is kept until then.": "Для предела заряда нужна разовая настройка с вашим паролем. Ваш выбор сохранится до этого момента.",
  "Reading models of the translator: {models}": "Модели распознавания для перевода: {models}",
- "Run: falcon-ocr-models": "Выполните: falcon-ocr-models"
+ "Run: falcon-ocr-models": "Выполните: falcon-ocr-models",
+ "Translating on this computer…": "Перевожу на этом компьютере…",
+ "Translated on this computer": "Переведено на этом компьютере",
+ "The translator on this computer is not ready yet. Run falcon-translate-models": "Локальный переводчик ещё не готов. Выполните falcon-translate-models",
+ "Offline translator: {parts}": "Локальный переводчик: {parts}",
+ "Run: falcon-translate-models": "Выполните: falcon-translate-models"
 }

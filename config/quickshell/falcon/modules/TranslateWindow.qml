@@ -25,6 +25,8 @@ LazyLoader {
         // read, translate, draw, done
         property string stage: "read"
         property string translatedText: ""
+        // Google could not be used, so this computer translated it.
+        property bool translatedHere: false
         property bool showOriginal: false
         readonly property bool done: stage === "done"
 
@@ -166,9 +168,11 @@ LazyLoader {
                         Toasts.show(Tr.t("Nothing to translate"), Tr.t("The text is already in this language. Change it in Settings → System"), "alert");
                         win.close();
                     } else if (message.stage === "error") {
-                        Toasts.show(Tr.t("Translation failed"), Tr.t("No internet, or the free service is limiting requests. Try again in a few minutes"), "alert");
+                        Toasts.show(Tr.t("Translation failed"), Tr.t("The translator on this computer is not ready yet. Run falcon-translate-models"), "alert");
                         win.close();
                     } else {
+                        if (message.engine === "local")
+                            win.translatedHere = true;
                         if (message.stage === "done") {
                             win.translatedText = message.text;
                             translated.source = "file://" + win.result;
@@ -351,7 +355,7 @@ LazyLoader {
                 }
                 Label {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: win.showOriginal ? Tr.t("Original") : win.stage === "read" ? Tr.t("Reading the text…") : win.stage === "translate" ? Tr.t("Translating…") : win.stage === "draw" ? Tr.t("Drawing…") : Tr.t("Translated")
+                    text: win.showOriginal ? Tr.t("Original") : win.stage === "read" ? Tr.t("Reading the text…") : win.stage === "translate" ? (win.translatedHere ? Tr.t("Translating on this computer…") : Tr.t("Translating…")) : win.stage === "draw" ? Tr.t("Drawing…") : win.translatedHere ? Tr.t("Translated on this computer") : Tr.t("Translated")
                     color: Theme.muted
                     size: 13
                 }
