@@ -35,9 +35,6 @@ ShellRoot {
                 RegionSelector {
                     screen: perScreen.modelData
                 }
-                SessionCover {
-                    screen: perScreen.modelData
-                }
             }
         }
     }

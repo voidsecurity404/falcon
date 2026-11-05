@@ -10,8 +10,8 @@ Each window comes back on its workspace and monitor, in its column, with its siz
 windows at their position. A terminal comes back in its folder. Only the app is started, never its
 arguments, so a one-off terminal command does not run again. What is inside a window is up to the app.
 
-While restoring, a flag file asks the shell to cover the screen, and apps start only once that cover is
-up, so after login the desktop appears with every window already in place.
+While restoring, a small cover (quickshell/falcon/cover) hides the screen until every window is in
+place. It is up in about 0.1 s, and apps start only once it is on screen.
 """
 import fcntl
 import json
@@ -19,6 +19,7 @@ import os
 import select
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -29,6 +30,7 @@ FILE = STATE / "session.json"
 FLAG = Path(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}") / "falcon-restoring"
 COVER = "falcon-cover"
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+COVER_DIR = CONFIG / "quickshell/falcon/cover"
 SKIP = {"org.quickshell", "falcon-scratch", "falcon-tool", "com.gabm.satty"}
 # Folder option of each terminal. Their windows are separate processes, so the next can start at once.
 TERMINALS = {"kitty": "--directory", "alacritty": "--working-directory", "foot": "--working-directory"}
@@ -39,7 +41,8 @@ HELPERS = {"kitten", "kitty"}
 SAVE_DELAY = 1.5        # after a change, so a burst of events writes once
 SAVE_EVERY = 30         # also catches a terminal changing folder, which sends no event
 SETTLE = 3.5            # an app may open several windows itself, such as a browser restoring its own
-COVER_WAIT = 4          # the shell starts with the session, a broken one must not hold the windows back
+COVER_WAIT = 2          # a cover that does not come up must not hold the windows back
+POLL = 0.05             # how often new windows are looked for while restoring
 LAUNCH_WAIT = 20        # a launch that opened nothing by then is given up
 RESTORE_WAIT = 60
 IGNORED_EVENTS = {"KeyboardLayoutsChanged", "KeyboardLayoutSwitched", "OverviewOpenedOrClosed", "ConfigLoaded",
@@ -47,12 +50,76 @@ IGNORED_EVENTS = {"KeyboardLayoutsChanged", "KeyboardLayoutSwitched", "OverviewO
                   "WorkspaceUrgencyChanged"}
 
 
+def ask(request):
+    """Sends one request straight through niri's socket, which takes well under a millisecond, while
+    starting `niri msg` takes about ten. Restoring asks many times a second. None when it fails."""
+    try:
+        with socket.socket(socket.AF_UNIX) as sock:
+            sock.settimeout(2)
+            sock.connect(os.environ["NIRI_SOCKET"])
+            sock.sendall(json.dumps(request).encode() + b"\n")
+            sock.shutdown(socket.SHUT_WR)
+            data = b""
+            while not data.endswith(b"\n"):
+                chunk = sock.recv(65536)
+                if not chunk:
+                    break
+                data += chunk
+        reply = json.loads(data)
+    except (OSError, KeyError, ValueError):
+        return None
+    return reply.get("Ok") if isinstance(reply, dict) else None
+
+
 def niri_json(what):
+    request = what.capitalize()
+    reply = ask(request)
+    if isinstance(reply, dict) and request in reply:
+        return reply[request]
     return json.loads(subprocess.run(["niri", "msg", "--json", what], capture_output=True, text=True, check=True).stdout)
 
 
+def window_id(o):
+    return int(o["--id"])
+
+
+fixed = lambda value: {"SetFixed": value}
+# The socket form of each action used here, built from the same words `niri msg action` takes.
+REQUESTS = {
+    "spawn": lambda o, p: {"Spawn": {"command": p}},
+    "focus-window": lambda o, p: {"FocusWindow": {"id": window_id(o)}},
+    "move-window-to-monitor": lambda o, p: {"MoveWindowToMonitor": {"id": window_id(o), "output": p[0]}},
+    "move-window-to-workspace": lambda o, p: {"MoveWindowToWorkspace": {
+        "window_id": int(o["--window-id"]), "reference": {"Index": int(p[0])}, "focus": o.get("--focus") != "false"}},
+    "move-window-to-floating": lambda o, p: {"MoveWindowToFloating": {"id": window_id(o)}},
+    "set-window-width": lambda o, p: {"SetWindowWidth": {"id": window_id(o), "change": fixed(int(p[0]))}},
+    "set-window-height": lambda o, p: {"SetWindowHeight": {"id": window_id(o), "change": fixed(int(p[0]))}},
+    "move-floating-window": lambda o, p: {"MoveFloatingWindow": {
+        "id": window_id(o), "x": fixed(float(o["-x"])), "y": fixed(float(o["-y"]))}},
+    "move-column-to-index": lambda o, p: {"MoveColumnToIndex": {"index": int(p[0])}},
+    "consume-or-expel-window-left": lambda o, p: {"ConsumeOrExpelWindowLeft": {"id": window_id(o)}},
+    "fullscreen-window": lambda o, p: {"FullscreenWindow": {"id": window_id(o)}},
+}
+
+
 def action(*args):
-    subprocess.run(["niri", "msg", "action", *map(str, args)], capture_output=True, check=False)
+    args = [str(a) for a in args]
+    options, words = {}, []
+    rest = iter(args[1:])
+    for word in rest:
+        if word == "--":
+            words.extend(rest)
+        elif word.startswith("-"):
+            options[word] = next(rest, "")
+        else:
+            words.append(word)
+    try:
+        request = REQUESTS[args[0]](options, words)
+    except (KeyError, IndexError, ValueError):
+        request = None
+    if request and ask({"Action": request}) == "Handled":
+        return
+    subprocess.run(["niri", "msg", "action", *args], capture_output=True, check=False)
 
 
 def executable(pid):
@@ -188,15 +255,19 @@ def watch():
                 pass
 
 
-def enabled():
+def setting(section, key, fallback):
     for name in ("settings.json", "defaults.json"):
         try:
-            value = json.loads((CONFIG / "falcon" / name).read_text() or "{}").get("session", {}).get("restore")
-        except (OSError, ValueError):
+            value = json.loads((CONFIG / "falcon" / name).read_text() or "{}").get(section, {}).get(key)
+        except (OSError, ValueError, AttributeError):
             continue
         if value is not None:
             return value
-    return True
+    return fallback
+
+
+def enabled():
+    return setting("session", "restore", True)
 
 
 def desktop_command(app):
@@ -258,29 +329,51 @@ class Group:
         self.arrived = 0.0
         self.got_window = False
 
+    @property
+    def terminal(self):
+        return bool(self.items) and self.items[0].get("exe") in TERMINALS
+
     def launch(self, now):
-        action("spawn", "--", *self.launch_args())
+        # Each terminal window is its own process, so all of them start at once and are told
+        # apart by their folder when they arrive.
+        for item in (self.items if self.terminal else self.items[:1]):
+            action("spawn", "--", *(launch_command(item) or self.command))
         self.launched = now
         self.got_window = False
-
-    def launch_args(self):
-        return launch_command(self.items[0]) or self.command
 
     def due(self, now):
         if not self.items:
             return False
         if not self.launched:
             return True
+        if self.terminal:
+            if now - self.launched >= LAUNCH_WAIT:
+                self.items.clear()
+            return False
         if self.got_window:
-            return self.items[0].get("exe") in TERMINALS or now - self.arrived >= SETTLE
+            return now - self.arrived >= SETTLE
         return now - self.launched >= LAUNCH_WAIT
 
 
 def pick(group, window):
-    if group.items[0].get("exe") not in TERMINALS:
+    if group.terminal:
+        # The shell starts a moment after the window, and its folder says which saved one this is.
+        folder = ""
+        end = time.monotonic() + 0.5
+        while not folder and time.monotonic() < end:
+            folder = terminal_folder(window.get("pid"))
+            if not folder:
+                time.sleep(0.02)
         for i, item in enumerate(group.items):
-            if item.get("title") and item.get("title") == window.get("title"):
+            if folder and item.get("folder") == folder:
                 return group.items.pop(i)
+        for i, item in enumerate(group.items):
+            if not item.get("folder") or not os.path.isdir(item["folder"]):
+                return group.items.pop(i)
+        return group.items.pop(0)
+    for i, item in enumerate(group.items):
+        if item.get("title") and item.get("title") == window.get("title"):
+            return group.items.pop(i)
     return group.items.pop(0)
 
 
@@ -298,9 +391,13 @@ def place(bound, ranks, outputs):
     """Puts windows on their workspaces, lowest first, because a higher one exists only after that.
     A window sent to a workspace that did not exist yet lands on the last one, so every window is
     checked again each time and moved only when it is not where it belongs."""
+    spaces = windows = None
     for window_id, item in sorted(bound.items(), key=lambda b: ranks[b[1]["output"], b[1]["workspace"]]):
-        spaces = {w["id"]: w for w in niri_json("workspaces")}
-        window = next((w for w in niri_json("windows") if w["id"] == window_id), None)
+        # Asked again only after a move, which can add or renumber workspaces.
+        if spaces is None:
+            spaces = {w["id"]: w for w in niri_json("workspaces")}
+            windows = {w["id"]: w for w in niri_json("windows")}
+        window = windows.get(window_id)
         if not window:
             continue
         space = spaces.get(window.get("workspace_id")) or {}
@@ -308,8 +405,10 @@ def place(bound, ranks, outputs):
         rank = ranks[item["output"], item["workspace"]]
         if output and space.get("output") != output:
             action("move-window-to-monitor", "--id", window_id, output)
+            spaces = None
         if space.get("output") != output or space.get("idx") != rank:
             action("move-window-to-workspace", "--window-id", window_id, "--focus", "false", rank)
+            spaces = None
 
 
 def float_window(window_id, item):
@@ -355,6 +454,8 @@ def arrange_columns(bound, ranks):
 
 
 def fix_sizes(bound, outputs):
+    """Returns whether any size had to change."""
+    changed = False
     current = {w["id"]: w for w in niri_json("windows")}
     columns = {}
     for item in bound.values():
@@ -367,12 +468,15 @@ def fix_sizes(bound, outputs):
         tile = layout.get("window_size") or layout.get("tile_size") or [0, 0]
         if abs(tile[0] - item["width"]) > 1:
             action("set-window-width", "--id", window_id, int(item["width"]))
+            changed = True
         # A lone window normally fills the height, and the panel may not be up yet. A fixed
         # height would stop it following the panel, so only a clearly shorter one is set.
         screen = ((outputs.get(item.get("output")) or {}).get("logical") or {}).get("height", 0)
         stacked = columns[item.get("output"), item.get("workspace"), item.get("column")] > 1
         if item.get("height") and abs(tile[1] - item["height"]) > 1 and (stacked or item["height"] < screen * 0.85):
             action("set-window-height", "--id", window_id, int(item["height"]))
+            changed = True
+    return changed
 
 
 def filling(window, outputs, output):
@@ -433,17 +537,52 @@ def own_windows():
     return [w for w in niri_json("windows") if (w.get("app_id") or "") not in SKIP]
 
 
-def wait_for_cover():
+def open_cover():
+    if not (COVER_DIR / "shell.qml").exists() or not shutil.which("qs"):
+        return None
+    env = dict(os.environ, FALCON_COVER_FLAG=str(FLAG))
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from falcon_tr import tr
+        env["FALCON_COVER_TEXT"] = tr("Restoring your windows")
+    except Exception:  # noqa: BLE001  the English text is used then
+        pass
+    font = setting("appearance", "font", "")
+    if isinstance(font, str) and font:
+        env["FALCON_COVER_FONT"] = font
+    try:
+        return subprocess.Popen(["qs", "-n", "-p", str(COVER_DIR)], env=env, stdin=subprocess.DEVNULL,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        return None
+
+
+def close_cover(cover):
+    """The flag is gone by now, so the cover fades out and quits by itself."""
+    if not cover:
+        return
+    try:
+        cover.wait(timeout=1.5)
+    except subprocess.TimeoutExpired:
+        cover.kill()
+        cover.wait()
+
+
+def wait_for_cover(cover):
+    if not cover:
+        return
     end = time.monotonic() + COVER_WAIT
     while time.monotonic() < end:
+        if cover.poll() is not None:
+            return
         try:
             if any(layer.get("namespace") == COVER for layer in niri_json("layers")):
                 # One more frame, so the cover is on screen and not only mapped.
-                time.sleep(0.1)
+                time.sleep(0.03)
                 return
         except (OSError, ValueError, subprocess.CalledProcessError):
             pass
-        time.sleep(0.1)
+        time.sleep(0.02)
 
 
 def restore(force):
@@ -458,17 +597,24 @@ def restore(force):
     if not isinstance(items, list) or not items:
         return 0
     # Set before anything slow, so the shell finds it when it starts.
+    groups, wanted = plan(items)
+    if not wanted:
+        return 0
     try:
         FLAG.write_text(str(time.time()))
     except OSError:
         pass
+    cover = open_cover()
     try:
-        return restore_items(items)
+        wait_for_cover(cover)
+        bring_back(groups, wanted)
     finally:
         FLAG.unlink(missing_ok=True)
+        close_cover(cover)
+    return 0
 
 
-def restore_items(items):
+def plan(items):
     groups = {}
     wanted = []
     for item in map(clean, items):
@@ -479,12 +625,7 @@ def restore_items(items):
             continue
         wanted.append(item)
         groups.setdefault(item.get("app") or item.get("exe"), Group(command)).items.append(item)
-    if not wanted:
-        return 0
-
-    wait_for_cover()
-    bring_back(groups, wanted)
-    return 0
+    return groups, wanted
 
 
 def bring_back(groups, wanted):
@@ -521,17 +662,17 @@ def bring_back(groups, wanted):
                 group.launch(now)
         if not any(g.items for g in groups.values()):
             break
-        time.sleep(0.15)
+        time.sleep(POLL)
 
     # Sizes settle only after the app answers, so they get a second look.
-    time.sleep(0.5)
+    time.sleep(0.1)
     arrange_columns(bound, ranks)
-    fix_sizes(bound, outputs)
-    time.sleep(0.4)
-    fix_sizes(bound, outputs)
+    if fix_sizes(bound, outputs):
+        time.sleep(0.12)
+        fix_sizes(bound, outputs)
     restore_focus(bound, outputs)
     # The last focus change scrolls the view, which should end before the cover lifts.
-    time.sleep(0.3)
+    time.sleep(0.12)
 
 
 def main():
