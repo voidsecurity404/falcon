@@ -246,7 +246,7 @@ Singleton {
             const body = n.body.replace(/<[^>]*>/g, "").replace(/\s+/g, " ");
             root.remember(n.summary || n.appName, body, n.appName);
             const critical = n.urgency === NotificationUrgency.Critical;
-            if (root.doNotDisturb && !critical) {
+            if ((root.doNotDisturb || !Scenes.allows(n.appName)) && !critical) {
                 n.dismiss();
                 return;
             }

@@ -63,5 +63,14 @@ try:
 except (OSError, ValueError, KeyError):
     pass
 
+# Optional programs of the macOS style features: a note, not a problem.
+OPTIONAL = {"localsend_app": "LocalSend", "scrcpy": "scrcpy", "adb": "android-tools", "wl-mirror": "wl-mirror", "restic": "restic", "wtype": "wtype", "whisper-cli": "whisper-cpp", "wayvnc": "wayvnc", "rg": "ripgrep"}
+absent = [package for command, package in OPTIONAL.items() if not shutil.which(command)]
+if not Path("/usr/lib/kdeconnectd").exists():
+    absent.append("kdeconnect")
+if absent:
+    print(tr("Optional"))
+    print("  note " + tr("Not installed: {names}. To add them: niri-desk-extras setup", names=", ".join(absent)))
+
 print(tr("Result: {count} problem(s)", count=problems))
 sys.exit(1 if problems else 0)

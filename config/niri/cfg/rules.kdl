@@ -87,6 +87,20 @@ window-rule {
     open-floating true
 }
 
+// Time Machine window and the Quick Look of Nautilus float.
+window-rule {
+    match title="^niri-desk backups$"
+    open-floating true
+    default-column-width { fixed 920; }
+    default-window-height { fixed 620; }
+}
+window-rule {
+    match app-id=r#"^org\.gnome\.NautilusPreviewer$"#
+    match app-id=r#"^org\.localsend\.localsend_app$"#
+    match app-id=r#"^org\.kde\.kdeconnect\.app$"#
+    open-floating true
+}
+
 // Scratchpad terminal tepada suzib turadi.
 window-rule {
     match app-id="^niri-desk-scratch$"
@@ -141,6 +155,9 @@ layer-rule {
     match namespace="^niri-desk-power$"
     match namespace="^niri-desk-top$"
     match namespace="^niri-desk-dock$"
+    match namespace="^niri-desk-quicklook$"
+    match namespace="^niri-desk-note$"
+    match namespace="^niri-desk-stages$"
     background-effect {
         xray false
     }

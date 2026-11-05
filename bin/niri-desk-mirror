@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Shows one display on another. niri has no mirror mode, so wl-mirror does it in a fullscreen window.
+#   niri-desk-mirror                 starts or stops: the focused display on the other one
+#   niri-desk-mirror start SOURCE TARGET
+#   niri-desk-mirror stop
+#   niri-desk-mirror status          prints the state as JSON
+set -uo pipefail
+
+pidfile="${XDG_RUNTIME_DIR:-/tmp}/niri-desk-mirror.pid"
+tr_() { "$HOME/.local/bin/niri-desk-tr" "$1"; }
+desk() { qs -c niri-desk ipc call desk "$@" >/dev/null 2>&1; }
+running() { [[ -f "$pidfile" ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null; }
+outputs() {
+    niri msg --json outputs 2>/dev/null | python3 -c 'import json,sys; [print(k) for k,v in json.load(sys.stdin).items() if v.get("logical")]'
+}
+focused() { niri msg --json focused-output 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])' 2>/dev/null; }
+
+start() {
+    local source="${1:-}" target="${2:-}"
+    running && return 0
+    if ! command -v wl-mirror >/dev/null; then
+        desk toast "$(tr_ "Mirroring is not installed")" "niri-desk-extras setup"
+        return 1
+    fi
+    [[ -n "$source" ]] || source="$(focused)"
+    [[ -n "$target" ]] || target="$(outputs | grep -vxF "$source" | head -n 1)"
+    if [[ -z "$target" ]]; then
+        desk toast "$(tr_ "Only one display is connected")" "$(tr_ "Connect another one to mirror to it")"
+        return 1
+    fi
+    setsid wl-mirror --fullscreen --fullscreen-output "$target" "$source" >/dev/null 2>&1 &
+    echo $! >"$pidfile"
+    desk toast "$(tr_ "Mirroring")" "$source → $target"
+}
+
+stop() {
+    running && kill "$(cat "$pidfile")" 2>/dev/null
+    rm -f "$pidfile"
+}
+
+case "${1:-toggle}" in
+toggle) if running; then stop; else start; fi ;;
+start) start "${2:-}" "${3:-}" ;;
+stop) stop ;;
+status)
+    running && on=true || on=false
+    command -v wl-mirror >/dev/null && installed=true || installed=false
+    printf '{"on":%s,"installed":%s,"outputs":%s}\n' "$on" "$installed" "$(outputs | wc -l)"
+    ;;
+*) sed -n '2,6p' "$0" | cut -c3- >&2; exit 2 ;;
+esac

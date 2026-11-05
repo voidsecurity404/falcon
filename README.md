@@ -91,6 +91,28 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 - **Wallpaper by itself:** a slideshow, or one picture for the day and one for the night, in Settings → Wallpaper.
 - **Displays keep their settings** by display, not by port. A new display gets a toast that opens its settings. Mirroring is not offered, because niri has no mirror mode.
 
+## macOS style features
+
+| Feature | How to use it |
+|---|---|
+| Quick Look | `Mod+Y` shows a copied file. In `>file` and `>text`, `Ctrl+Y` shows the selected one. In Nautilus, `Space` uses Sushi |
+| Find text in files | `>text WORDS` in the app menu |
+| Scenes | Control center or `>scene`: who may notify, what opens, which wallpaper |
+| Dictation | `Mod+Shift+D` starts, the same key types the text. Whisper runs on this computer |
+| Time Machine | Settings, Tools: encrypted restic backups, restoring makes a copy beside your files. Copy the password somewhere safe |
+| Phone and sending | KDE Connect and LocalSend, Settings, Tools, Devices |
+| Phone as a camera | Android 12 or newer by USB, Settings, Devices |
+| Tablet screen | Android by USB and a VNC app. The same picture, niri cannot add a virtual display |
+| Mirror | `>mirror`, wl-mirror shows one display on another |
+| Hot corners | Settings, Panel. By default top left opens the overview and bottom right the quick note |
+| Quick note | `Mod+Shift+N`, the same text as the notes widget |
+| Text snippets | `Mod+;` lists them, Enter types into the window you were in |
+| App volume | Control center and Settings, Sound |
+| Screen Time | Dashboard, Time tab. Only app names and minutes, kept on this computer |
+| Stage strip | `Mod+G` shows other workspaces at the left, `Mod+Shift+G` sends a column to a new one |
+
+Programs, the camera module and local network ports are installed once with `niri-desk-extras setup`.
+
 ## Helper commands
 
 - `niri-desk-session run|watch|save|restore`: windows come back after a reboot on their workspace and monitor, in their column, with their size, floating ones at their position, and terminals in their folder. Saved on every change. Arguments are never replayed, and what is inside a window is up to the app.

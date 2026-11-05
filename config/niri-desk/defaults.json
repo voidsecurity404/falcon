@@ -92,7 +92,11 @@
   },
   "dock": {
     "enabled": true,
-    "pinned": ["firefox", "org.gnome.Nautilus", "kitty"]
+    "pinned": [
+      "firefox",
+      "org.gnome.Nautilus",
+      "kitty"
+    ]
   },
   "notifications": {
     "seconds": 3.6,
@@ -135,7 +139,13 @@
     "record": "Mod+Shift+R",
     "ocr": "Mod+P",
     "translate": "Mod+Alt+P",
-    "widgets": "Mod+Shift+W"
+    "widgets": "Mod+Shift+W",
+    "quicklook": "Mod+Y",
+    "quicknote": "Mod+Shift+N",
+    "dictate": "Mod+Shift+D",
+    "snippets": "Mod+Semicolon",
+    "stages": "Mod+G",
+    "stageNew": "Mod+Shift+G"
   },
   "session": {
     "restore": true,
@@ -183,5 +193,52 @@
     "shortBreak": 5,
     "longBreak": 15
   },
-  "monitorConnect": "stay"
+  "monitorConnect": "stay",
+  "corners": {
+    "topLeft": "overview",
+    "topRight": "none",
+    "bottomLeft": "none",
+    "bottomRight": "note"
+  },
+  "dictation": {
+    "language": "auto",
+    "model": "base"
+  },
+  "backups": {
+    "enabled": false,
+    "repo": "",
+    "hours": 1,
+    "exclude": "",
+    "onBattery": false
+  },
+  "connect": {
+    "kdeconnect": true,
+    "localsend": false
+  },
+  "screentime": {
+    "enabled": true
+  },
+  "stages": {
+    "width": 176
+  },
+  "scenes": {
+    "work": {
+      "name": "Work",
+      "allow": "",
+      "open": "",
+      "wallpaper": ""
+    },
+    "reading": {
+      "name": "Reading",
+      "allow": "",
+      "open": "",
+      "wallpaper": ""
+    },
+    "personal": {
+      "name": "Personal",
+      "allow": "Telegram",
+      "open": "",
+      "wallpaper": ""
+    }
+  }
 }

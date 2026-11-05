@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+"""Backups of the home folder with restic, and restoring from them.
+
+  niri-desk-timemachine status              what is known, as JSON
+  niri-desk-timemachine run                 makes a backup now
+  niri-desk-timemachine list                snapshots, newest first, as JSON
+  niri-desk-timemachine ls SNAPSHOT PATH    the entries of one folder in a snapshot, as JSON
+  niri-desk-timemachine restore SNAPSHOT PATH   copies PATH beside your files, it never overwrites them
+  niri-desk-timemachine password            prints the password of the backups
+"""
+import fcntl
+import json
+import os
+import secrets
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+from niri_desk_tr import tr
+
+HOME = Path.home()
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "niri-desk"
+STATE = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local/state")) / "niri-desk"
+RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp"))
+SOURCE = Path(os.environ.get("NIRI_DESK_BACKUP_SOURCE", HOME))
+PASSWORD = CONFIG / "backup-password"
+RESULT = STATE / "backups.json"
+LOCK = RUNTIME / "niri-desk-timemachine.lock"
+EXCLUDES = [
+    ".cache", ".local/share/Trash", ".local/share/Steam", ".local/share/niri-desk/whisper", ".local/state/niri-desk/thumbs",
+    ".local/state/niri-desk/live-posters", ".android/avd", ".var/app/*/cache", "**/node_modules", "**/__pycache__", "**/.venv",
+    "**/target/debug", "**/target/release",
+]
+
+
+def settings():
+    merged = {}
+    for name in ("defaults.json", "settings.json"):
+        try:
+            merged.update(json.loads((CONFIG / name).read_text()).get("backups", {}))
+        except (OSError, ValueError):
+            pass
+    return merged
+
+
+def repository():
+    value = str(settings().get("repo", "") or "").strip()
+    return Path(value).expanduser() if value else None
+
+
+def ensure_password():
+    if not PASSWORD.exists():
+        PASSWORD.parent.mkdir(parents=True, exist_ok=True)
+        descriptor = os.open(PASSWORD, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "w") as handle:
+            handle.write(secrets.token_urlsafe(24) + "\n")
+    return PASSWORD
+
+
+def restic(*args, capture=True, check=True):
+    env = dict(os.environ, RESTIC_REPOSITORY=str(repository()), RESTIC_PASSWORD_FILE=str(ensure_password()))
+    res = subprocess.run(["restic", *args], env=env, capture_output=capture, text=True, errors="replace", check=False)
+    if check and res.returncode != 0:
+        lines = (res.stderr or "").strip().splitlines()
+        raise RuntimeError(lines[-1] if lines else f"restic: {res.returncode}")
+    return res
+
+
+def initialized(repo):
+    return (repo / "config").is_file()
+
+
+def reachable(repo):
+    """The folder of the backups, or the disk it would be made on, must really be there."""
+    if repo.exists():
+        return True
+    # A path under /run/media or /mnt means a removable disk: do not fill the folder under its mount point.
+    parts = repo.parts
+    if len(parts) > 2 and parts[1] in ("run", "mnt", "media"):
+        depth = 5 if parts[1] == "run" else 3
+        return Path(*parts[:depth]).is_mount()
+    return repo.parent.exists()
+
+
+def result():
+    try:
+        return json.loads(RESULT.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def save_result(**values):
+    RESULT.parent.mkdir(parents=True, exist_ok=True)
+    next_value = dict(result(), **values)
+    temporary = RESULT.with_suffix(".tmp")
+    temporary.write_text(json.dumps(next_value, ensure_ascii=False) + "\n")
+    temporary.replace(RESULT)
+
+
+def is_running():
+    try:
+        with open(LOCK, "a") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(handle, fcntl.LOCK_UN)
+        return False
+    except OSError:
+        return True
+
+
+def status():
+    repo = repository()
+    print(json.dumps(dict(result(), installed=bool(shutil.which("restic")), repo=str(repo or ""), reachable=bool(repo and reachable(repo)),
+                          ready=bool(repo and initialized(repo)), running=is_running()), ensure_ascii=False))
+    return 0
+
+
+def exclude_args(repo):
+    out = []
+    for pattern in EXCLUDES:
+        out += ["--exclude", str(SOURCE / pattern) if not pattern.startswith("**") else pattern]
+    for extra in str(settings().get("exclude", "") or "").split(","):
+        extra = extra.strip()
+        if extra:
+            out += ["--exclude", extra if extra.startswith(("/", "*")) else str(SOURCE / extra)]
+    # A repository inside the home folder would swallow itself.
+    out += ["--exclude", str(repo)]
+    return out
+
+
+def desk(*args):
+    subprocess.run(["qs", "-c", "niri-desk", "ipc", "call", "desk", *args], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+
+def run_backup():
+    repo = repository()
+    if not repo:
+        print(tr("Choose where backups go first"), file=sys.stderr)
+        return 3
+    if not shutil.which("restic"):
+        print("restic: not installed", file=sys.stderr)
+        return 3
+    if not reachable(repo):
+        save_result(lastError=tr("The backup disk is not connected"))
+        print(tr("The backup disk is not connected"), file=sys.stderr)
+        return 4
+    with open(LOCK, "a") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            print(tr("A backup is already running"), file=sys.stderr)
+            return 5
+        os.nice(10)
+        desk("backupChanged")
+        try:
+            if not initialized(repo):
+                repo.mkdir(parents=True, exist_ok=True)
+                restic("init")
+            res = restic("backup", "--json", "--tag", "niri-desk", "--one-file-system", *exclude_args(repo), str(SOURCE), check=False)
+            # Exit code 3 means some files could not be read, and the snapshot is still good.
+            if res.returncode not in (0, 3):
+                lines = res.stderr.strip().splitlines()
+                raise RuntimeError(lines[-1] if lines else f"restic: {res.returncode}")
+            summary = {}
+            for line in res.stdout.splitlines():
+                try:
+                    message = json.loads(line)
+                    if message.get("message_type") == "summary":
+                        summary = message
+                except ValueError:
+                    pass
+            restic("forget", "--tag", "niri-desk", "--keep-hourly", "24", "--keep-daily", "14", "--keep-weekly", "8", "--keep-monthly", "12", "--prune")
+            save_result(last=int(time.time()), lastError="", files=summary.get("total_files_processed", 0), added=summary.get("data_added", 0), unreadable=res.returncode == 3)
+        except (RuntimeError, OSError) as err:
+            save_result(lastError=str(err))
+            desk("backupChanged")
+            print(err, file=sys.stderr)
+            return 1
+    desk("backupChanged")
+    return 0
+
+
+def snapshots():
+    repo = repository()
+    if not repo or not initialized(repo):
+        print("[]")
+        return 0
+    rows = json.loads(restic("snapshots", "--json").stdout or "[]")
+    rows.sort(key=lambda r: r["time"], reverse=True)
+    print(json.dumps([{"id": r["short_id"], "time": r["time"][:16].replace("T", " "), "files": (r.get("summary") or {}).get("total_files_processed", 0)} for r in rows], ensure_ascii=False))
+    return 0
+
+
+def listing(snapshot, folder):
+    folder = folder.rstrip("/") or "/"
+    res = restic("ls", "--json", snapshot, folder)
+    rows = []
+    for line in res.stdout.splitlines():
+        try:
+            node = json.loads(line)
+        except ValueError:
+            continue
+        if node.get("struct_type") == "node" or node.get("message_type") == "node":
+            if str(Path(node["path"]).parent) == folder and node["path"] != folder:
+                rows.append({"name": node["name"], "path": node["path"], "dir": node.get("type") == "dir", "size": node.get("size", 0)})
+    rows.sort(key=lambda r: (not r["dir"], r["name"].lower()))
+    print(json.dumps(rows, ensure_ascii=False))
+    return 0
+
+
+def restore(snapshot, path):
+    # Never over the live files: a copy lands in a folder of its own.
+    target = HOME / tr("Restored") / f"{time.strftime('%Y-%m-%d %H-%M-%S')} {snapshot}"
+    target.mkdir(parents=True, exist_ok=True)
+    restic("restore", f"{snapshot}:{Path(path).parent}", "--target", str(target), "--include", "/" + Path(path).name)
+    print(target)
+    return 0
+
+
+def main(argv):
+    command = argv[1] if len(argv) > 1 else "status"
+    try:
+        if command == "status":
+            return status()
+        if command == "run":
+            return run_backup()
+        if command == "list":
+            return snapshots()
+        if command == "ls" and len(argv) == 4:
+            return listing(argv[2], argv[3])
+        if command == "restore" and len(argv) == 4:
+            return restore(argv[2], argv[3])
+        if command == "password":
+            print(ensure_password().read_text().strip())
+            return 0
+    except (RuntimeError, OSError, ValueError) as err:
+        print(err, file=sys.stderr)
+        return 1
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+sys.exit(main(sys.argv))

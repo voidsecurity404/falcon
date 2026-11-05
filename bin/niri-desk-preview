@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+"""Prepares a file for Quick Look and prints what the window should show, as JSON.
+
+  niri-desk-preview FILE
+
+Pictures it makes go to $XDG_RUNTIME_DIR/niri-desk-preview, which the next call empties.
+"""
+import json
+import mimetypes
+import os
+import shutil
+import stat
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+
+MAX_TEXT = 96 * 1024
+MAX_ENTRIES = 300
+CACHE = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "niri-desk-preview"
+TEXT_TYPES = ("application/json", "application/xml", "application/javascript", "application/x-shellscript", "application/toml", "application/x-yaml", "application/yaml", "application/sql", "image/svg+xml")
+ARCHIVES = ("zip", "x-tar", "gzip", "x-bzip2", "x-xz", "zstd", "x-7z-compressed", "x-rar", "vnd.rar", "java-archive", "x-iso9660-image", "vnd.debian.binary-package")
+
+
+def human(size):
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if value < 1024 or unit == "TB":
+            return f"{int(value)} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+
+
+def run(*cmd, timeout=15):
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout, check=False)
+        return res.stdout if res.returncode == 0 else ""
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def mime_of(path):
+    return run("file", "--brief", "--mime-type", "--", str(path)).strip() or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+
+
+def fresh_cache():
+    shutil.rmtree(CACHE, ignore_errors=True)
+    CACHE.mkdir(mode=0o700, parents=True)
+
+
+def read_text(path):
+    with open(path, "rb") as handle:
+        data = handle.read(MAX_TEXT + 1)
+    if b"\0" in data[:8192]:
+        return None, False
+    cut = len(data) > MAX_TEXT
+    return data[:MAX_TEXT].decode("utf-8", errors="replace"), cut
+
+
+def describe_folder(path, out):
+    names = []
+    try:
+        with os.scandir(path) as it:
+            for entry in it:
+                names.append((not entry.is_dir(follow_symlinks=False), entry.name.lower(), entry.name, entry.is_dir(follow_symlinks=False)))
+    except OSError as err:
+        out.update(kind="other", error=err.strerror or str(err))
+        return
+    names.sort()
+    out.update(kind="folder", count=len(names), entries=[{"name": n[2], "dir": n[3]} for n in names[:MAX_ENTRIES]])
+
+
+def describe_pdf(path, out):
+    info = run("pdfinfo", "--", str(path))
+    for line in info.splitlines():
+        if line.startswith("Pages:"):
+            out["pages"] = int(line.split(":")[1].strip() or 0)
+    target = CACHE / "page"
+    run("pdftoppm", "-f", "1", "-l", "1", "-singlefile", "-scale-to", "1400", "-png", "--", str(path), str(target), timeout=25)
+    picture = target.with_suffix(".png")
+    if picture.exists():
+        out.update(kind="pdf", picture=str(picture))
+
+
+def describe_media(path, out, kind):
+    probe = run("ffprobe", "-v", "error", "-show_entries", "format=duration:stream=width,height", "-of", "json", str(path))
+    try:
+        data = json.loads(probe or "{}")
+        seconds = float(data.get("format", {}).get("duration", 0) or 0)
+        if seconds:
+            out["duration"] = time.strftime("%H:%M:%S" if seconds >= 3600 else "%M:%S", time.gmtime(seconds))
+        for stream in data.get("streams", []):
+            if stream.get("width"):
+                out["dimensions"] = f"{stream['width']}×{stream['height']}"
+                break
+    except ValueError:
+        pass
+    out["kind"] = kind
+    if kind == "video":
+        target = CACHE / "poster.jpg"
+        run("ffmpegthumbnailer", "-i", str(path), "-o", str(target), "-s", "1280", "-q", "8", timeout=25)
+        if target.exists():
+            out["picture"] = str(target)
+
+
+def describe_archive(path, out):
+    listing = run("bsdtar", "-tf", str(path), timeout=20)
+    if not listing:
+        return False
+    names = listing.splitlines()
+    out.update(kind="archive", count=len(names), entries=[{"name": n, "dir": n.endswith("/")} for n in names[:MAX_ENTRIES]])
+    return True
+
+
+def main(argv):
+    if len(argv) != 2:
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    fresh_cache()
+    path = Path(argv[1]).expanduser()
+    out = {"path": str(path), "name": path.name or str(path), "kind": "other"}
+    try:
+        info = path.stat()
+    except OSError as err:
+        out.update(kind="missing", error=err.strerror or str(err))
+        print(json.dumps(out, ensure_ascii=False))
+        return 0
+    out["modified"] = time.strftime("%Y-%m-%d %H:%M", time.localtime(info.st_mtime))
+    if stat.S_ISDIR(info.st_mode):
+        describe_folder(path, out)
+        print(json.dumps(out, ensure_ascii=False))
+        return 0
+    out["size"] = human(info.st_size)
+    if not stat.S_ISREG(info.st_mode):
+        print(json.dumps(out, ensure_ascii=False))
+        return 0
+    mime = mime_of(path)
+    out["mime"] = mime
+    major, _, minor = mime.partition("/")
+    try:
+        if major == "image":
+            out["kind"] = "image"
+            out["animated"] = minor in ("gif", "webp")
+        elif mime == "application/pdf":
+            describe_pdf(path, out)
+        elif major == "video":
+            describe_media(path, out, "video")
+        elif major == "audio":
+            describe_media(path, out, "audio")
+        elif minor in ARCHIVES and describe_archive(path, out):
+            pass
+        elif major == "text" or mime in TEXT_TYPES or mime == "application/octet-stream" or info.st_size == 0:
+            text, cut = read_text(path)
+            if text is not None:
+                out.update(kind="text", text=text, truncated=cut)
+    except (OSError, ValueError) as err:
+        out["error"] = str(err)
+    print(json.dumps(out, ensure_ascii=False))
+    return 0
+
+
+sys.exit(main(sys.argv))

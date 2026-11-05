@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Quick Look. Shows the given files, or the files or the path on the clipboard.
+#   niri-desk-quicklook [FILE...]
+set -uo pipefail
+
+desk() { qs -c niri-desk ipc call desk "$@" >/dev/null 2>&1; }
+
+files=()
+if (($# > 0)); then
+    files=("$@")
+else
+    # A file manager copies text/uri-list. Plain text counts when it is a path.
+    if wl-paste --list-types 2>/dev/null | grep -qx 'text/uri-list'; then
+        mapfile -t files < <(wl-paste --type text/uri-list 2>/dev/null | tr -d '\r' | python3 -c '
+import sys, urllib.parse
+for line in sys.stdin:
+    line = line.strip()
+    if line.startswith("file://"):
+        print(urllib.parse.unquote(urllib.parse.urlparse(line).path))')
+    else
+        candidate="$(wl-paste --no-newline 2>/dev/null | head -c 4096 | head -n 1)"
+        candidate="${candidate/#\~/$HOME}"
+        [[ -n "$candidate" && -e "$candidate" ]] && files=("$candidate")
+    fi
+fi
+if ((${#files[@]} == 0)); then
+    tr_() { "$HOME/.local/bin/niri-desk-tr" "$1"; }
+    desk toast "$(tr_ "Nothing to show")" "$(tr_ "Copy a file first, then press the key again")"
+    exit 0
+fi
+# Each path is escaped, so nothing in a file name can reach the IPC parser.
+desk quickLook "$(python3 -c 'import sys, urllib.parse; print("|".join(urllib.parse.quote(f) for f in sys.argv[1:]))' "${files[@]}")"

@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Android phone as a camera of this computer, over USB. Needs USB debugging on the phone.
+#   niri-desk-phonecam              starts or stops
+#   niri-desk-phonecam start [back|front]
+#   niri-desk-phonecam stop
+#   niri-desk-phonecam status       prints the state as JSON
+set -uo pipefail
+
+pidfile="${XDG_RUNTIME_DIR:-/tmp}/niri-desk-phonecam.pid"
+tr_() { "$HOME/.local/bin/niri-desk-tr" "$1"; }
+desk() { qs -c niri-desk ipc call desk "$@" >/dev/null 2>&1; }
+
+device() {
+    local file
+    for file in /sys/class/video4linux/video*/name; do
+        grep -qs "niri-desk phone" "$file" && { echo "/dev/$(basename "$(dirname "$file")")"; return 0; }
+    done
+    return 1
+}
+running() { [[ -f "$pidfile" ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null; }
+phone() { adb devices 2>/dev/null | awk 'NR>1 && $2=="device"{print $1; exit}'; }
+
+start() {
+    local dev serial
+    running && return 0
+    if ! command -v scrcpy >/dev/null || ! command -v adb >/dev/null; then
+        desk toast "$(tr_ "Phone camera is not installed")" "niri-desk-extras setup"
+        return 1
+    fi
+    if ! dev="$(device)"; then
+        desk toast "$(tr_ "The camera module is not loaded")" "sudo modprobe v4l2loopback"
+        return 1
+    fi
+    serial="$(phone)"
+    if [[ -z "$serial" ]]; then
+        desk toast "$(tr_ "No phone found")" "$(tr_ "Connect it by USB and allow USB debugging")"
+        return 1
+    fi
+    setsid scrcpy --serial "$serial" --video-source=camera --camera-facing="${1:-back}" --no-audio --no-playback --no-window --v4l2-sink="$dev" >/dev/null 2>&1 &
+    echo $! >"$pidfile"
+    sleep 1.5
+    if running; then
+        desk toast "$(tr_ "Phone camera is on")" "$dev"
+    else
+        rm -f "$pidfile"
+        desk toast "$(tr_ "Phone camera did not start")" "$(tr_ "It needs Android 12 or newer")"
+        return 1
+    fi
+}
+
+stop() {
+    running && kill "$(cat "$pidfile")" 2>/dev/null
+    rm -f "$pidfile"
+}
+
+case "${1:-toggle}" in
+toggle) if running; then stop; else start; fi ;;
+start) start "${2:-back}" ;;
+stop) stop ;;
+status)
+    running && on=true || on=false
+    device >/dev/null && module=true || module=false
+    command -v scrcpy >/dev/null && installed=true || installed=false
+    printf '{"on":%s,"module":%s,"installed":%s,"phone":"%s"}\n' "$on" "$module" "$installed" "$(phone)"
+    ;;
+*) sed -n '2,6p' "$0" | cut -c3- >&2; exit 2 ;;
+esac
