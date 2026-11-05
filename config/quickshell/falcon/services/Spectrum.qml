@@ -4,13 +4,25 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// Sound levels for the music tab. Listens only while that tab is open and something is playing.
+// Sound levels for the music tab and the desktop waves. Listens only while one of them is on screen and something is playing.
 Singleton {
     id: root
 
     readonly property int count: 36
-    readonly property bool wanted: Ui.popup === "dashboard" && Ui.dashTab === 1 && !!Media.player && Media.player.isPlaying
+    // Screens where the desktop waves can be seen right now.
+    property var watching: ({})
+    readonly property bool musicTab: Ui.popup === "dashboard" && Ui.dashTab === 1
+    readonly property bool wanted: (musicTab || Object.keys(watching).length > 0) && !!Media.player && Media.player.isPlaying
     property var levels: []
+
+    function setWatching(screen, on) {
+        const next = Object.assign({}, watching);
+        if (on)
+            next[screen] = true;
+        else
+            delete next[screen];
+        watching = next;
+    }
 
     Process {
         running: root.wanted

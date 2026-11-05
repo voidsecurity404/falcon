@@ -132,6 +132,11 @@ Singleton {
 
     readonly property bool enabled: Settings.get("widgets.enabled", true)
     readonly property bool firstOnly: Settings.get("widgets.firstOnly", false)
+    // The music waves own the bottom of the desktop, so widgets stay above them.
+    readonly property bool wavesEnabled: Settings.get("widgets.musicWaves", true)
+    readonly property int wavesHeight: 140
+    readonly property int topInset: Settings.bottom ? 16 : 56
+    readonly property int bottomInset: (Settings.bottom ? 56 : 16) + (wavesEnabled ? wavesHeight : 0)
     readonly property real glass: Settings.get("widgets.opacity", 0.5)
     // What a new wallpaper changes: "full" place and form, "place" only the place, "off" nothing.
     readonly property string follow: Settings.get("widgets.followWallpaper", "full")
@@ -306,8 +311,8 @@ Singleton {
         const screen = Quickshell.screens.find(s => s.name === Niri.focusedOutput) || Quickshell.screens[0];
         if (!screen)
             return;
-        const top = Settings.bottom ? 16 : 56;
-        const bottom = Settings.bottom ? 56 : 16;
+        const top = topInset;
+        const bottom = bottomInset;
         const spanX = screen.width - 32;
         const spanY = screen.height - bottom - top;
         const list = items.map(w => {

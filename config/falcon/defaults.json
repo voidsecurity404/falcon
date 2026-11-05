@@ -154,7 +154,8 @@
     "enabled": true,
     "firstOnly": false,
     "opacity": 0.5,
-    "followWallpaper": "full"
+    "followWallpaper": "full",
+    "musicWaves": true
   },
   "wallpaper": {
     "transition": "grow",

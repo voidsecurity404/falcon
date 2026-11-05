@@ -142,6 +142,7 @@ ShellRoot {
                 widgets: Widgets.items,
                 widgetRects: Widgets.rects,
                 spectrumWanted: Spectrum.wanted,
+                widgetsBottomInset: Widgets.bottomInset,
                 claudeHasData: ClaudeUsage.hasData,
                 claudeFive: ClaudeUsage.fiveHour,
                 claudeWeek: ClaudeUsage.weekly,

@@ -1,10 +1,12 @@
 import QtQuick
 import Quickshell
+import Quickshell.Services.UPower
 import Quickshell.Wayland
+import qs.components
 import qs.services
 
-// What you see: widgets in niri's backdrop, which never slides, so they stay still while workspaces
-// switch. This layer takes no input, DesktopWidgets holds the clickable copies.
+// What you see: widgets and the music waves in niri's backdrop, which never slides, so they stay still
+// while workspaces switch. This layer takes no input, DesktopWidgets holds the clickable copies.
 PanelWindow {
     id: root
 
@@ -16,8 +18,11 @@ PanelWindow {
     // Caffeine counts as active by itself: this monitor still reports idle with its inhibitor held.
     readonly property bool seen: wanted && !covered && (Caffeine.enabled || !idle.isIdle)
     readonly property bool contentOn: seen || keepAlive.running
-    readonly property int topInset: Settings.bottom ? 16 : 56
-    readonly property int bottomInset: Settings.bottom ? 56 : 16
+    // After this long without input the session is locked, so nothing here can be seen.
+    readonly property int lockAfter: Settings.get(UPower.onBattery ? "idle.battery.lock" : "idle.lock", 300)
+    readonly property bool wavesSeen: Widgets.wavesEnabled && !covered && !Niri.overview && (Caffeine.enabled || !lockIdle.isIdle)
+    readonly property int topInset: Widgets.topInset
+    readonly property int bottomInset: Widgets.bottomInset
 
     anchors {
         top: true
@@ -27,7 +32,7 @@ PanelWindow {
     }
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
-    visible: wanted && !Widgets.restacking
+    visible: (wanted || Widgets.wavesEnabled) && !Widgets.restacking
     mask: Region {}
     WlrLayershell.layer: WlrLayer.Background
     WlrLayershell.namespace: "falcon-widgets-face"
@@ -40,8 +45,15 @@ PanelWindow {
             keepAlive.restart();
     }
     onContentOnChanged: Widgets.setLive(outputName, contentOn)
-    Component.onCompleted: Widgets.setLive(outputName, contentOn)
-    Component.onDestruction: Widgets.setLive(outputName, false)
+    onWavesSeenChanged: Spectrum.setWatching(outputName, wavesSeen)
+    Component.onCompleted: {
+        Widgets.setLive(outputName, contentOn);
+        Spectrum.setWatching(outputName, wavesSeen);
+    }
+    Component.onDestruction: {
+        Widgets.setLive(outputName, false);
+        Spectrum.setWatching(outputName, false);
+    }
 
     // Ko'rinmay qolgach yarim daqiqa kutadi: oyna bir lahzaga yopsa, vidjet qayta qurilmaydi.
     Timer {
@@ -55,10 +67,17 @@ PanelWindow {
         timeout: 300
         respectInhibitors: true
     }
+    IdleMonitor {
+        id: lockIdle
+
+        enabled: root.lockAfter > 0
+        timeout: Math.max(root.lockAfter, 1)
+        respectInhibitors: true
+    }
 
     // The overview shows the backdrop around the workspaces, so widgets leave it there. The blur must go too.
     BackgroundEffect.blurRegion: Region {
-        regions: Niri.overview ? [] : blurs.instances
+        regions: Niri.overview || !root.wanted ? [] : blurs.instances
     }
     Variants {
         id: blurs
@@ -79,8 +98,29 @@ PanelWindow {
         }
     }
 
+    // The floor of the desktop, under the widgets. It has no place of its own to change.
+    SpectrumBars {
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: Settings.bottom ? 56 : 0
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: Widgets.wavesHeight
+        active: root.wavesSeen
+        topAlpha: 0.8
+        bottomAlpha: 0.08
+        opacity: Niri.overview ? 0 : 1
+        visible: Widgets.wavesEnabled && opacity > 0
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 180
+            }
+        }
+    }
+
     Item {
         anchors.fill: parent
+        visible: root.wanted
         opacity: Widgets.editMode || Niri.overview ? 0 : 1
 
         Behavior on opacity {

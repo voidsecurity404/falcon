@@ -14,8 +14,8 @@ PanelWindow {
     readonly property var workspace: Niri.activeWorkspaceOn(outputName)
     readonly property bool wanted: Widgets.enabled && Widgets.loaded && !Niri.overview && (!Widgets.firstOnly || (!!workspace && workspace.idx === 1))
     readonly property bool focusedScreen: Niri.focusedOutput === "" || Niri.focusedOutput === outputName
-    readonly property int topInset: Settings.bottom ? 16 : 56
-    readonly property int bottomInset: Settings.bottom ? 56 : 16
+    readonly property int topInset: Widgets.topInset
+    readonly property int bottomInset: Widgets.bottomInset
     readonly property var plated: Widgets.ids.filter(id => {
         const w = Widgets.get(id);
         const i = w ? Widgets.info(w.type) : null;

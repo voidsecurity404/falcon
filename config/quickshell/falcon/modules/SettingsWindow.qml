@@ -204,6 +204,12 @@ LazyLoader {
                             { key: "widgets.followWallpaper", label: Tr.t("With a new wallpaper"), hint: Tr.t("A layout arranged by hand is remembered"), type: "choice", options: ["full", "place", "off"], names: [Tr.t("Place and form"), Tr.t("Place only"), Tr.t("Stay as they are")] },
                             { label: Tr.t("Move, add and remove widgets"), hint: Tr.t("Right click the desktop or press the shortcut"), type: "action", text: Tr.t("Edit widgets"), run: () => { Ui.settingsOpen = false; Widgets.editMode = true; } }
                         ]
+                    },
+                    {
+                        title: Tr.t("Music"),
+                        items: [
+                            { key: "widgets.musicWaves", label: Tr.t("Sound waves on the desktop"), hint: Tr.t("Along the bottom of the screen while music plays"), type: "toggle" }
+                        ]
                     }
                 ]
             },

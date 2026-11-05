@@ -43,55 +43,21 @@ FocusScope {
     }
 
     // Ovozga qarab chayqaladigan pol: panelning butun eni bo'ylab, o'rtadan chetlarga.
-    Row {
+    SpectrumBars {
         anchors.bottom: parent.bottom
-        anchors.horizontalCenter: parent.horizontalCenter
-        spacing: 4
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.leftMargin: 44
+        anchors.rightMargin: 44
+        height: 120
+        active: Spectrum.musicTab
+        color: Media.artAccent
         opacity: Ui.dashTab === 1 ? 1 : 0
         visible: opacity > 0
 
         Behavior on opacity {
             NumberAnimation {
                 duration: 400
-            }
-        }
-
-        Repeater {
-            model: Spectrum.count * 2
-
-            delegate: Item {
-                required property int index
-
-                readonly property int band: index < Spectrum.count ? Spectrum.count - 1 - index : index - Spectrum.count
-                readonly property real level: (Spectrum.levels[band] || 0) / 100
-
-                width: (root.width - 2 * 44 - 4 * (Spectrum.count * 2 - 1)) / (Spectrum.count * 2)
-                height: 124
-
-                Rectangle {
-                    anchors.bottom: parent.bottom
-                    width: parent.width
-                    height: parent.level * 120
-                    visible: height > 1
-                    topLeftRadius: width / 2
-                    topRightRadius: width / 2
-                    gradient: Gradient {
-                        GradientStop {
-                            position: 0
-                            color: Qt.alpha(Media.artAccent, 0.55)
-                        }
-                        GradientStop {
-                            position: 1
-                            color: Qt.alpha(Media.artAccent, 0.04)
-                        }
-                    }
-
-                    Behavior on height {
-                        NumberAnimation {
-                            duration: 70
-                        }
-                    }
-                }
             }
         }
     }
