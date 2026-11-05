@@ -25,11 +25,12 @@ PanelWindow {
     property real statusOut: barShown ? 0 : 1
     property real islandOut: islandShown ? 0 : 1
 
+    // A calm settle with no bounce, and it starts just off the screen, so all of the way is seen.
     Behavior on ribbonOut {
         NumberAnimation {
-            duration: root.barShown ? 460 : 300
+            duration: root.barShown ? 640 : 300
             easing.type: Easing.BezierSpline
-            easing.bezierCurve: root.barShown ? root.arriveCurve : root.leaveCurve
+            easing.bezierCurve: root.barShown ? [0.22, 0.61, 0.36, 1, 1, 1] : root.leaveCurve
         }
     }
     Behavior on statusOut {
@@ -180,8 +181,8 @@ PanelWindow {
         id: ribbon
 
         x: root.sideGap
-        y: (Settings.bottom ? parent.height - height - root.edgeGap : root.edgeGap) + root.edgeSign * root.ribbonOut * 64
-        opacity: Math.min(1, (1 - root.ribbonOut) * 3)
+        y: (Settings.bottom ? parent.height - height - root.edgeGap : root.edgeGap) + root.edgeSign * root.ribbonOut * 46
+        opacity: 1 - root.ribbonOut
         visible: root.ribbonOut < 1
         screenInfo: root.screen
     }

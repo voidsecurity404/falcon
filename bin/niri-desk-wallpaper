@@ -158,6 +158,12 @@ case "${1:-}" in
     *)
         image="$(readlink -f "$1")"
         [[ -f "$image" ]] || { echo "File not found: $1" >&2; exit 1; }
+        # Asked before anything below moves the links.
+        if is_video "$image"; then
+            [[ "$(readlink -f "$live_link" 2>/dev/null || true)" == "$image" ]] && again=1
+        else
+            [[ ! -e "$live_link" && "$(readlink -f "$link" 2>/dev/null || true)" == "$image" ]] && again=1
+        fi
         if is_video "$image"; then
             set_live "$image"
         else
@@ -169,6 +175,10 @@ case "${1:-}" in
             colors "$image"
             ln -sfn "$image" "$link"
         fi
-        toast "Colors updated" "$(basename "${image%.*}")"
+        if [[ -n "${again:-}" ]]; then
+            toast "You chose the wallpaper that is already set" "$(basename "${image%.*}")"
+        else
+            toast "Colors updated" "$(basename "${image%.*}")"
+        fi
         ;;
 esac
