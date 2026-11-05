@@ -715,7 +715,8 @@ def translate_here(texts, target):
     return answer if len(answer) == len(texts) else None
 
 
-FOREIGN_MARKS = str.maketrans("《》「」『』。，、？！：；（）", "«»«»«».,,?!:;()")
+# Marks a Latin or Cyrillic font does not have, the last two from Uzbek.
+FOREIGN_MARKS = str.maketrans("《》「」『』。，、？！：；（）ʻʼ", "«»«»«».,,?!:;()’’")
 
 
 def translate_lines(texts, target):
