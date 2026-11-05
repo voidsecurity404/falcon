@@ -144,6 +144,8 @@ fonts/              Geist, Geist Mono and Unbounded (SIL OFL 1.1)
 
 No code was copied from these projects, the ideas were rewritten.
 
+Reading uses the small `tessdata_fast` models of the Tesseract project (Apache-2.0), kept in `config/falcon/tessdata`.
+
 ## Status
 
 `tests/run.py` runs the scenarios on CachyOS in VirtualBox. It closes windows and changes settings, so run it only on a test machine. It needs `ydotool`, `foot`, `ffmpeg` and `network-manager-applet`.

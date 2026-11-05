@@ -117,6 +117,8 @@ sudo reboot
 | Обои | `~/Pictures/Wallpapers`, видео для вкладки живых обоев в папке `Live`. Папку можно сменить в настройках |
 | Скриншоты | `Screenshots` в папке изображений (`xdg-user-dir PICTURES`) |
 
+Для распознавания используются маленькие модели `tessdata_fast` проекта Tesseract (Apache-2.0), они лежат в `config/falcon/tessdata`.
+
 ## Статус
 
 `tests/run.py` прогоняет сценарии на CachyOS в VirtualBox. Он закрывает окна и меняет настройки, поэтому запускайте его только на тестовой машине.

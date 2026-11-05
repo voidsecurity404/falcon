@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Writes a copy of a picture with the text on it translated, in place.
 
-Reads the text with tesseract, sends it to an online translation service through translate-shell,
+Reads the text with tesseract, sends it to the online translation service translate-shell also uses,
 paints over the old words with the colors around them and draws the translation in their place.
 Prints one JSON object per line as it goes: stage is read, translate, draw, then done, same (already in that language), empty or error.
 
@@ -9,6 +9,7 @@ Usage: falcon-image-translate INPUT OUTPUT [--to LANGUAGE]
 """
 import argparse
 import csv
+import functools
 import io
 import json
 import os
@@ -17,6 +18,9 @@ import statistics
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+import urllib.error
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -35,6 +39,9 @@ PAD = 30
 MAX_REQUESTS = 6
 CHUNK_CHARS = 3500
 TRANSLATE_TIMEOUT = 60
+# Small models that read several times faster than the system ones and nearly as well.
+FAST_MODELS = Path.home() / ".config/falcon/tessdata"
+TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single"
 BANDS = 4
 BAND_OVERLAP = 90
 DRAW_SCALE = 4
@@ -114,11 +121,19 @@ def say(stage, **values):
     print(json.dumps({"stage": stage, **values}, ensure_ascii=False), flush=True)
 
 
+def tesseract_command(langs):
+    models = langs.split("+")
+    if all((FAST_MODELS / f"{name}.traineddata").exists() for name in models):
+        return ["tesseract", "--tessdata-dir", str(FAST_MODELS), "stdin", "stdout", "-l", langs, "--oem", "1"]
+    return ["tesseract", "stdin", "stdout", "-l", langs]
+
+
 def recognize(picture, langs, factor):
     buffer = io.BytesIO()
-    picture.save(buffer, "PNG")
+    # An uncompressed picture costs nothing to write or to read.
+    picture.save(buffer, "PPM")
     # Each run is given one thread, because they run side by side and tesseract's own threads only spin.
-    done = subprocess.run(["tesseract", "stdin", "stdout", "-l", langs, "--psm", "11", "--dpi", "150", "tsv"],
+    done = subprocess.run([*tesseract_command(langs), "--psm", "11", "--dpi", "150", "-c", "tessedit_create_tsv=1"],
                           input=buffer.getvalue(), capture_output=True, env={**os.environ, "OMP_THREAD_LIMIT": "1"})
     words = []
     rows = csv.DictReader(io.StringIO(done.stdout.decode("utf-8", "replace")), delimiter="\t", quoting=csv.QUOTE_NONE)
@@ -141,20 +156,17 @@ def long_runs(ink, length):
     return np.cumsum(starts - ends, axis=1)[:, : ink.shape[1]] > 0
 
 
-def ink_maps(gray):
-    """Black on white pictures of what differs from its surroundings, whatever the colors are.
-
-    This finds the words on buttons and colored panels, which tesseract misses on the plain picture.
-    A second one has long straight lines removed, because the frames of panels also confuse it.
+def ink_map(gray):
+    """A black on white picture of what differs from its surroundings, whatever the colors are, with
+    long straight lines removed. This finds the words on buttons and colored panels, which tesseract
+    misses on the plain picture, and the frames of panels no longer confuse it.
     """
     small = gray.resize((max(1, gray.width // 8), max(1, gray.height // 8)), Image.BILINEAR).filter(ImageFilter.MedianFilter(9))
     behind = np.asarray(small.resize(gray.size, Image.BILINEAR), dtype=np.int16)
     difference = np.abs(np.asarray(gray, dtype=np.int16) - behind).astype(float)
     ink = difference > 25
-    framed = Image.fromarray(np.clip(255 - difference * 2.5, 0, 255).astype(np.uint8))
     difference[long_runs(ink, 70) | long_runs(ink.T, 70).T] = 0
-    frameless = Image.fromarray(np.clip(255 - difference * 2.5, 0, 255).astype(np.uint8))
-    return framed, frameless
+    return Image.fromarray(np.clip(255 - difference * 2.5, 0, 255).astype(np.uint8))
 
 
 def overlaps(a, b):
@@ -196,13 +208,21 @@ def script_of(words):
     return latin / total, cyrillic / total
 
 
-def choose_languages(gray, pool):
-    """Reads a quick draft to see the alphabet. With two alphabets loaded, tesseract spells English
-    words in Cyrillic letters that look alike, so the real reading uses only what the picture has."""
-    available = subprocess.run(["tesseract", "--list-langs"], capture_output=True, text=True).stdout.split()
-    if not {"eng", "rus"} <= set(available):
-        return "+".join(name for name in available[6:] if name != "osd") or "eng"
-    latin, cyrillic = script_of(finish_view(start_view(gray, "eng+rus", 1, pool), 1))
+def start_draft(plain, pool):
+    """Reads only the two busiest parts of the picture, which is enough to see the alphabet."""
+    parts = bands(plain)
+    if len(parts) > 2:
+        rows = np.abs(np.diff(np.asarray(plain, dtype=np.int16), axis=1)).sum(axis=1)
+        parts = sorted(parts, key=lambda part: rows[part[0]:part[1]].sum(), reverse=True)[:2]
+    jobs = []
+    for top, bottom in parts:
+        part = ImageOps.expand(plain.crop((0, top, plain.width, bottom)), PAD, fill=plain.getpixel((0, 0)))
+        jobs.append((top, pool.submit(recognize, part, "eng+rus", 1)))
+    return jobs
+
+
+def languages_from(draft):
+    latin, cyrillic = script_of(draft)
     if latin >= 0.8:
         return "eng"
     if cyrillic >= 0.8:
@@ -210,16 +230,30 @@ def choose_languages(gray, pool):
     return "eng+rus"
 
 
-def read_words(image):
-    """Reads several views of the picture side by side and keeps the surest reading of each place."""
+def read_words(image, target):
+    """Reads two views of the picture side by side and keeps the surest reading of each place.
+
+    With two alphabets loaded, tesseract spells English words in Cyrillic letters that look alike, so
+    the real reading uses only what the picture has. A draft finds that out while the real reading
+    already runs on the likely language, and only a wrong guess costs a second reading.
+    """
     factor = 3 if max(image.size) < 500 else 2 if max(image.size) < UPSCALE_BELOW else 1.5
+    available = subprocess.run(["tesseract", "--list-langs"], capture_output=True, text=True).stdout.split()
+    both = {"eng", "rus"} <= set(available)
+    guess = "rus" if both and target.startswith("en") else "eng" if both else "+".join(n for n in available[6:] if n != "osd") or "eng"
     with ThreadPoolExecutor(os.cpu_count() or 4) as pool:
-        langs = choose_languages(image.convert("L"), pool)
+        plain = image.convert("L")
+        draft = start_draft(plain, pool) if both else []
         size = (round(image.width * factor), round(image.height * factor))
-        gray = image.convert("L").resize(size, Image.LANCZOS)
-        views = [gray, *ink_maps(gray)]
-        started = [start_view(view, langs, factor, pool) for view in views]
+        gray = plain.resize(size, Image.LANCZOS)
+        started = [start_view(gray, guess, factor, pool)]
+        views = [gray, ink_map(gray)]
+        started.append(start_view(views[1], guess, factor, pool))
         readings = [finish_view(jobs, factor) for jobs in started]
+        langs = languages_from(finish_view(draft, 1)) if both else guess
+        if langs != guess:
+            started = [start_view(view, langs, factor, pool) for view in views]
+            readings = [finish_view(jobs, factor) for jobs in started]
     # The plain view is the most exact where it can read at all, so it wins near ties.
     ranked = sorted(((w.conf + (15 if index == 0 else 0), order, w) for index, reading in enumerate(readings) for order, w in enumerate(reading)),
                     key=lambda item: (-item[0], item[1]))
@@ -377,6 +411,27 @@ class TranslationFailed(Exception):
     pass
 
 
+def request_lines(part, target):
+    """One request to the address translate-shell itself uses, without its slow start. If the service
+    says no, that is the answer. Only when this way itself fails, translate-shell tries once."""
+    body = urllib.parse.urlencode({"client": "gtx", "ie": "UTF-8", "oe": "UTF-8", "dt": "t", "sl": "auto", "tl": target, "q": "\n".join(part)})
+    request = urllib.request.Request(TRANSLATE_URL, data=body.encode(), headers={"User-Agent": "Mozilla/5.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=TRANSLATE_TIMEOUT) as answer:
+            text = "".join(piece[0] for piece in json.load(answer)[0] if piece[0])
+    except urllib.error.HTTPError as error:
+        if error.code == 429:
+            raise TranslationFailed("429") from error
+        text = None
+    except (OSError, ValueError, TypeError, IndexError):
+        text = None
+    if text is None:
+        done = subprocess.run(["trans", "-b", "-no-ansi", "-no-autocorrect", f":{target}", "--", "\n".join(part)],
+                              capture_output=True, text=True, timeout=TRANSLATE_TIMEOUT)
+        text = done.stdout
+    return [line.strip() for line in text.split("\n") if line.strip()]
+
+
 def translate_lines(texts, target):
     """Translates with as few requests as possible, one after another, because the free service
     answers too many requests with an error for a while. Lines it could not match stay untranslated."""
@@ -386,11 +441,9 @@ def translate_lines(texts, target):
         if budget[0] <= 0:
             return None
         budget[0] -= 1
-        done = subprocess.run(["trans", "-b", "-no-ansi", "-no-autocorrect", f":{target}", "--", "\n".join(part)],
-                              capture_output=True, text=True, timeout=TRANSLATE_TIMEOUT)
-        answer = [line.strip() for line in done.stdout.split("\n") if line.strip()]
+        answer = request_lines(part, target)
         if not answer:
-            raise TranslationFailed(done.stderr.strip())
+            raise TranslationFailed("empty answer")
         return answer
 
     def solve(part):
@@ -427,6 +480,7 @@ def font_path(target):
     raise RuntimeError("no font found")
 
 
+@functools.lru_cache(maxsize=None)
 def load_font(path, size, heavy):
     font = ImageFont.truetype(path, size)
     try:
@@ -495,7 +549,16 @@ def em_size(block):
     return block.size
 
 
-def free_edges(source, block, others):
+def first_change(profile, start, stop):
+    """The first place from start up to stop where the color along a line changes, or None."""
+    if stop <= start:
+        return None
+    jump = profile[start:stop] - profile[start - 2:stop - 2]
+    found = np.flatnonzero((jump * jump).sum(axis=1) > 256)
+    return start + int(found[0]) if found.size else None
+
+
+def free_edges(source, columns, block, others):
     """How far a block's text can grow: to another word, or to where the background behind it ends."""
     height, width = source.shape[:2]
     x0, y0, x1, y1 = block.box()
@@ -508,31 +571,32 @@ def free_edges(source, block, others):
             right = min(right, word.x - round(em_size(block) * 0.6))
         if word.x < x1 and word.right > x0 and word.y >= y1:
             bottom = min(bottom, word.y - 2)
-    columns = np.median(source[y0:y1].astype(float), axis=0)
     # A few pixels are skipped, because the soft edge of the last letter is still there.
-    for x in range(x1 + 4, min(right, width - 1)):
-        if np.linalg.norm(columns[x] - columns[x - 2]) > 16:
-            right = x - round(em_size(block) * 0.4)
-            break
-    rows = np.median(source[:, x0:x1].astype(float), axis=1)
-    for y in range(y1 + 4, min(bottom, height - 1)):
-        if np.linalg.norm(rows[y] - rows[y - 2]) > 16:
-            bottom = y - 2
-            break
+    edge = first_change(columns, x1 + 4, min(right, width - 1))
+    if edge is not None:
+        right = edge - round(em_size(block) * 0.4)
+    stop = min(bottom, height - 1)
+    if stop > y1 + 4:
+        rows = np.median(source[y1 + 2:stop, x0:x1], axis=1)
+        found = first_change(rows, 2, stop - y1 - 2)
+        if found is not None:
+            bottom = y1 + found
     return max(x1, right), max(y1, bottom)
 
 
-def panel_middle(source, block):
+def panel_middle(columns, block):
     """The middle of a button or tile when one line of text sits centered in it, else None."""
     if len(block.lines) != 1:
         return None
-    x0, y0, x1, y1 = block.box()
-    columns = np.median(source[y0:y1].astype(float), axis=0)
+    x0, _, x1, _ = block.box()
     width = columns.shape[0]
-    left = next((x for x in range(x0 - 4, 1, -1) if np.linalg.norm(columns[x] - columns[x + 2]) > 16), None)
-    right = next((x for x in range(x1 + 4, width - 2) if np.linalg.norm(columns[x] - columns[x - 2]) > 16), None)
-    if left is None or right is None:
+    right = first_change(columns, x1 + 4, width - 2)
+    # The same search toward the left, on the line read backward.
+    start = width - 1 - (x0 - 4)
+    found = first_change(columns[::-1], start, width - 2)
+    if found is None or right is None:
         return None
+    left = width - 1 - found
     return (left + right) / 2 if abs((x0 - left) - (right - x1)) <= 4 + em_size(block) * 0.35 else None
 
 
@@ -581,11 +645,13 @@ def fit(block, path, heavy, right, bottom):
 
 def draw_block(canvas, block, source, words, path, ink, heavy):
     x0, y0, x1, y1 = block.box()
-    right, bottom = free_edges(source, block, words)
+    # Both searches along the line use it, and it is the slow part of drawing.
+    columns = np.median(source[y0:y1], axis=0)
+    right, bottom = free_edges(source, columns, block, words)
     font, lines, step = fit(block, path, heavy, right, bottom)
     size = font.size / DRAW_SCALE
     boxes = [line.box() for line in block.lines]
-    middle = panel_middle(source, block)
+    middle = panel_middle(columns, block)
     if middle is None and len(boxes) > 1 and statistics.pstdev(b[0] for b in boxes) > 3 * statistics.pstdev((b[0] + b[2]) / 2 for b in boxes) + 1:
         middle = (x0 + x1) / 2
     centered = middle is not None
@@ -621,7 +687,7 @@ def main():
         return 1
 
     say("read")
-    words = read_words(image)
+    words = read_words(image, target)
     lines = [line for line in map(without_icons, make_lines(words)) if worth_translating(line)]
     blocks = make_blocks(lines, np.asarray(image))
     if not blocks:
