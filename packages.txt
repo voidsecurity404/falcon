@@ -8,7 +8,6 @@ jq
 python
 python-numpy
 python-pillow
-translate-shell
 tmux
 power-profiles-daemon
 bluetui

@@ -79,7 +79,7 @@ class Argos:
         self.loaded = {}
 
     def has(self, pair):
-        return (FOLDER / "argos" / pair / "model/model.bin").exists()
+        return (FOLDER / "argos" / pair / "sentencepiece.model").exists()
 
     def run(self, texts, pair):
         if pair not in self.loaded:

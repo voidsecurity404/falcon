@@ -19,7 +19,7 @@ from pathlib import Path
 
 FOLDER = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "falcon/translate"
 PACKAGES = ["ctranslate2==4.8.5", "sentencepiece==0.2.3", "langdetect==1.0.9"]
-# Argos Translate models, fast and good, for the languages they cover.
+# Argos Translate models, fast and good. Those of Spanish and Ukrainian are in a format these tools do not read.
 ARGOS = {
     "ar_en": "https://argos-net.com/v1/translate-ar_en-1_0.argosmodel",
     "zh_en": "https://argos-net.com/v1/translate-zh_en-1_9.argosmodel",
@@ -33,16 +33,18 @@ ARGOS = {
     "pl_en": "https://argos-net.com/v1/translate-pl_en-1_9.argosmodel",
     "pt_en": "https://argos-net.com/v1/translate-pt_en-1_9.argosmodel",
     "ru_en": "https://argos-net.com/v1/translate-ru_en-1_9.argosmodel",
-    "es_en": "https://argos-net.com/v1/translate-es_en-1_9.argosmodel",
     "tr_en": "https://argos-net.com/v1/translate-tr_en-1_5.argosmodel",
-    "uk_en": "https://argos-net.com/v1/translate-uk_en-1_9.argosmodel",
 }
 # NLLB-200 for everything else, Uzbek too. Its license allows only non-commercial use.
 NLLB_COMMIT = "86876131d0a16b17ced0a5c558fdc3e4613ae545"
 NLLB_BASE = f"https://huggingface.co/entai2965/nllb-200-distilled-600M-ctranslate2/resolve/{NLLB_COMMIT}/"
 NLLB_FILES = ["config.json", "model.bin", "sentencepiece.bpe.model", "shared_vocabulary.json"]
-# SHA-256 of what was downloaded and tested.
+# SHA-256 of the files that were downloaded and tested.
 CHECKSUMS = {
+    "config.json": "4244772990e30069563e3ddfb4ad6dc95bdfd2ac3de667ea8858c9b0a8433fa8",
+    "model.bin": "c04fb4ea42229c5f43f645e73d49175d34c3e0883ee5b3b110cbb1612dd4bcda",
+    "sentencepiece.bpe.model": "14bb8dfb35c0ffdea7bc01e56cea38b9e3d5efcdcb9c251d6b40538e1aab555a",
+    "shared_vocabulary.json": "af53bfd0e6f726209e7325e45b87ab3b14e5856f7d42d7b9be91de3287c45267",
 }
 
 

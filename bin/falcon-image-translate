@@ -127,7 +127,7 @@ class Line:
             gap = max(word.x - before.right, before.x - word.right)
             # The reader gives one sign at a time in these: only a real gap between them is a space.
             joined = is_unspaced(before.text[-1]) and is_unspaced(word.text[0])
-            hangul = "\uac00" <= before.text[-1] <= "\ud7a3" and "\uac00" <= word.text[0] <= "\ud7a3" and gap < 0.2 * self.em
+            hangul = "\uac00" <= before.text[-1] <= "\ud7a3" and "\uac00" <= word.text[0] <= "\ud7a3" and gap < 0.5 * self.em
             out += ("" if joined or hangul else " ") + word.text
         return out
 
@@ -306,7 +306,8 @@ def read_page(view, model, factor, index):
     """The whole picture at once, with the lines the reader finds. Unsure lines are left out as a whole."""
     part = ImageOps.expand(view, PAD, fill=view.getpixel((0, 0)))
     lines = {}
-    for row in run_reader(part, model, 3):
+    # Korean falls apart into pieces of lines when the reader looks for columns.
+    for row in run_reader(part, model, 4 if model == "Hangul" else 3):
         text = (row.get("text") or "").strip()
         conf = float(row.get("conf") or -1)
         if text and conf >= 0:
@@ -363,6 +364,20 @@ def read_by_lines(views, model, factor):
     return [word for line in kept for word in line]
 
 
+def without_tall_boxes(words):
+    """On a button a word's box can take in the whole button. It gets the height of the words beside it."""
+    for word in words:
+        if len(word.text) <= 2:
+            continue
+        beside = [w for w in words if w is not word and len(w.text) > 2 and abs(w.x - word.x) < 12 * word.h
+                  and min(w.bottom, word.bottom) - max(w.y, word.y) > 0.5 * w.h]
+        if beside:
+            usual = statistics.median(w.h for w in beside)
+            if word.h > 1.9 * usual:
+                word.y, word.h = round(statistics.median(w.y for w in beside)), round(usual)
+    return words
+
+
 def read_words(image):
     """Reads two views of the picture side by side and keeps the surest reading of each place.
 
@@ -415,7 +430,7 @@ def read_words(image):
         right = any(0 <= w.x - word.right < 1.1 * w.em for w in beside)
         return left and right
 
-    return sure + [w for w in kept if w.conf < MIN_CONFIDENCE and between_sure_words(w)]
+    return without_tall_boxes(sure + [w for w in kept if w.conf < MIN_CONFIDENCE and between_sure_words(w)])
 
 
 def same_ground(source, left, right):
