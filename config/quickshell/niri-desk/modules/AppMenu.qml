@@ -13,11 +13,8 @@ PanelWindow {
     id: root
 
     readonly property bool closing: Ui.popup !== "menu"
-    // A panel at the bottom takes the edge, so the menu floats above it.
-    readonly property int edgeGap: Settings.bottom ? 56 : 0
-    // The card reaches this far below the edge, so its overshoot never lifts it off the screen.
-    readonly property int overdraw: Settings.bottom ? 0 : 28
-    readonly property int curveSize: 24
+    // The menu floats above the bottom edge, and higher above a panel there.
+    readonly property int edgeGap: Settings.bottom ? 56 : 14
     readonly property int rowHeight: 54
     readonly property int maxRows: 7
     readonly property int padding: 12
@@ -495,26 +492,8 @@ PanelWindow {
         item: catcher
     }
     BackgroundEffect.blurRegion: Region {
-        Region {
-            item: card
-            topLeftRadius: card.topLeftRadius
-            topRightRadius: card.topRightRadius
-            bottomLeftRadius: card.bottomLeftRadius
-            bottomRightRadius: card.bottomRightRadius
-        }
-        CurveRegion {
-            size: !Settings.bottom && root.height - card.y - root.overdraw > 20 ? root.curveSize : 0
-            x: card.x - root.curveSize
-            y: root.height - root.curveSize
-            flipX: true
-            flipY: true
-        }
-        CurveRegion {
-            size: !Settings.bottom && root.height - card.y - root.overdraw > 20 ? root.curveSize : 0
-            x: card.x + card.width
-            y: root.height - root.curveSize
-            flipY: true
-        }
+        item: card
+        radius: card.radius
     }
 
     Connections {
@@ -611,38 +590,16 @@ PanelWindow {
         onClicked: Ui.popup = ""
     }
 
-    // Inner curves that join the menu to the screen edge. They stay on the edge when the card
-    // overshoots, and appear as soon as the card has risen far enough to meet them.
-    Repeater {
-        model: Settings.bottom ? [] : [0, 1]
-
-        delegate: EdgeCurve {
-            required property int modelData
-
-            size: root.curveSize
-            x: modelData === 0 ? card.x - size : card.x + card.width
-            y: root.height - size
-            flipX: modelData === 0
-            flipY: true
-            opacity: Math.max(0, Math.min(1, (root.height - card.y - root.overdraw) / 40))
-            color: Theme.glassTop
-        }
-    }
-
     Rectangle {
         id: card
 
-        readonly property int radiusSize: 26
         readonly property int bodyHeight: viewport.height + 10 + 46 + root.padding * 2
 
         x: Math.round((parent.width - width) / 2)
         y: parent.height - root.edgeGap - bodyHeight + (1 - root.reveal) * (bodyHeight + root.edgeGap + 4)
         width: 640
-        height: bodyHeight + root.overdraw
-        topLeftRadius: radiusSize
-        topRightRadius: radiusSize
-        bottomLeftRadius: Settings.bottom ? radiusSize : 0
-        bottomRightRadius: Settings.bottom ? radiusSize : 0
+        height: bodyHeight
+        radius: 26
         border.width: 1
         border.color: Theme.panelEdge
         gradient: Gradient {
