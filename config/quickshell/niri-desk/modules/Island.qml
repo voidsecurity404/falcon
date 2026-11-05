@@ -24,7 +24,7 @@ Item {
     readonly property bool showSeconds: Settings.get("panel.clockSeconds", false)
     readonly property bool showDate: Settings.get("panel.clockDate", false)
     readonly property bool clock24: Settings.get("panel.clock24", true)
-    readonly property int targetWidth: mode === "dashboard" ? 1160 : mode === "toast" ? 440 : (Ui.recording ? 232 : 186) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0) + (clock24 ? 0 : 26)
+    readonly property int targetWidth: mode === "dashboard" ? 1160 : mode === "toast" ? 440 : (Ui.recording ? 232 : 186) + (Countdown.active ? timerPart.width + 10 : 0) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0) + (clock24 ? 0 : 26)
     readonly property int cornerRadius: mode === "dashboard" ? 32 : 18
     readonly property int targetHeight: mode === "dashboard" ? 580 : mode === "toast" ? 68 : 44
 
@@ -171,6 +171,57 @@ Item {
                     }
                 }
             }
+            // The timer. A click pauses it, a right click stops it.
+            Item {
+                id: timerPart
+
+                anchors.verticalCenter: parent.verticalCenter
+                visible: Countdown.active
+                width: timerRow.implicitWidth + 14
+                height: 30
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 10
+                    color: Qt.alpha(Theme.text, timerArea.containsMouse ? 0.14 : 0.07)
+                }
+                Row {
+                    id: timerRow
+
+                    anchors.centerIn: parent
+                    spacing: 5
+                    opacity: Countdown.paused ? 0.5 : 1
+
+                    Icon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: Countdown.icon
+                        color: Countdown.left <= 10 && !Countdown.paused ? Theme.error : Theme.accent
+                    }
+                    Label {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Countdown.text
+                        size: 14
+                        font.weight: Font.Medium
+                        font.features: {
+                            "tnum": 1
+                        }
+                    }
+                }
+                MouseArea {
+                    id: timerArea
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: mouse => {
+                        if (mouse.button === Qt.RightButton)
+                            Countdown.stop();
+                        else
+                            Countdown.togglePause();
+                    }
+                }
+            }
             Label {
                 visible: Ui.recording
                 text: Ui.pad(Math.floor(Ui.recordSeconds / 60)) + ":" + Ui.pad(Ui.recordSeconds % 60)
@@ -179,6 +230,7 @@ Item {
                 font.weight: Font.Medium
             }
             Label {
+                anchors.verticalCenter: parent.verticalCenter
                 text: {
                     const hours = root.clock24 ? clock.hours : clock.hours % 12 || 12;
                     const time = Ui.pad(hours) + ":" + Ui.pad(clock.minutes) + (root.showSeconds ? ":" + Ui.pad(clock.seconds) : "") + (root.clock24 ? "" : clock.hours < 12 ? " AM" : " PM");

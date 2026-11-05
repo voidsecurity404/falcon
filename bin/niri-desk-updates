@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# System updates.
+#   niri-desk-updates check   prints how many packages wait, as JSON. Downloads no packages
+#   niri-desk-updates open    opens the update terminal, or goes to the one already open
+#   niri-desk-updates run     what that terminal runs
+set -uo pipefail
+
+title="niri-desk update"
+lock="${XDG_RUNTIME_DIR:-/tmp}/niri-desk-update.lock"
+_t() { "$HOME/.local/bin/niri-desk-tr" "$1"; }
+
+reboot_needed() {
+    # Arch removes the running kernel's modules when a new kernel is installed.
+    [[ -d "/usr/lib/modules/$(uname -r)" ]] && echo false || echo true
+}
+
+check() {
+    local list code
+    if ! command -v checkupdates >/dev/null; then
+        printf '{"ok":false,"reason":"missing","reboot":%s}\n' "$(reboot_needed)"
+        return 0
+    fi
+    list="$(timeout 180 checkupdates --nocolor 2>/dev/null)"
+    code=$?
+    # 0: updates wait. 2: none. Anything else: no network or a mirror failed, which says nothing about the count.
+    if [[ $code -ne 0 && $code -ne 2 ]]; then
+        printf '{"ok":false,"reason":"network","reboot":%s}\n' "$(reboot_needed)"
+        return 0
+    fi
+    printf '%s\n' "$list" | python3 -c '
+import json, sys
+names = [line.split()[0] for line in sys.stdin if line.strip()]
+print(json.dumps({"ok": True, "count": len(names), "packages": names[:200], "reboot": sys.argv[1] == "true"}))
+' "$(reboot_needed)"
+}
+
+open_terminal() {
+    if ! flock -n "$lock" true; then
+        id="$(niri msg -j windows 2>/dev/null | python3 -c '
+import json, sys
+print(next((w["id"] for w in json.load(sys.stdin) if w.get("title") == sys.argv[1]), ""))
+' "$title")"
+        [[ -n "$id" ]] && niri msg action focus-window --id "$id"
+        exit 0
+    fi
+    # Detached: a shell restart must never kill pacman halfway.
+    setsid -f kitty --title "$title" "$HOME/.local/bin/niri-desk-updates" run >/dev/null 2>&1
+}
+
+run() {
+    exec 9>"$lock"
+    flock -n 9 || { _t "An update is already running."; sleep 3; exit 1; }
+    if command -v paru >/dev/null; then
+        paru -Syu
+    elif command -v yay >/dev/null; then
+        yay -Syu
+    else
+        sudo pacman -Syu
+    fi
+    code=$?
+    echo
+    if [[ $code -ne 0 ]]; then
+        _t "The update did not finish."
+    elif [[ "$(reboot_needed)" == true ]]; then
+        _t "A new kernel was installed. Reboot to start using it."
+    else
+        _t "Done."
+    fi
+    qs -c niri-desk ipc call desk updatesCheck >/dev/null 2>&1 || true
+    read -rp "$(_t "Press Enter to close.") " _ || true
+}
+
+case "${1:-}" in
+    check) check ;;
+    open) open_terminal ;;
+    run) run ;;
+    *) sed -n '2,5p' "$0" | cut -c3-; exit 2 ;;
+esac

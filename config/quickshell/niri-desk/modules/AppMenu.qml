@@ -40,7 +40,8 @@ PanelWindow {
     readonly property bool windowMode: commandMode && wordIs(["win", "окна"]) && commandText.length > commandWord.length
     readonly property bool emojiMode: commandMode && wordIs(["emoji", "эмодзи"]) && commandText.length > commandWord.length
     readonly property bool fileMode: commandMode && wordIs(["file", "файл"]) && commandText.length > commandWord.length
-    readonly property string mode: calcMode ? "calc" : schemeMode ? "scheme" : windowMode ? "windows" : emojiMode ? "emoji" : fileMode ? "files" : commandMode ? "commands" : "apps"
+    readonly property bool timerMode: commandMode && wordIs(["timer", "таймер"]) && commandText.length > commandWord.length
+    readonly property string mode: timerMode ? "timer" : calcMode ? "calc" : schemeMode ? "scheme" : windowMode ? "windows" : emojiMode ? "emoji" : fileMode ? "files" : commandMode ? "commands" : "apps"
 
     property var emojiRows: []
     property bool emojiWanted: false
@@ -87,6 +88,30 @@ PanelWindow {
             detail: Tr.t("Enter: copy"),
             keywords: "calc счёт счет",
             complete: "calc "
+        },
+        {
+            id: "timer",
+            icon: "timer",
+            name: Tr.t("Timer"),
+            detail: Countdown.active ? Countdown.text : Tr.t("Example: {e}").replace("{e}", ">timer 25"),
+            keywords: "timer таймер countdown",
+            complete: "timer "
+        },
+        {
+            id: "pomodoro",
+            icon: "focus",
+            name: Tr.t("Pomodoro"),
+            detail: Tr.t("{w} min of work, {b} min of break").replace("{w}", Settings.get("timer.work", 25)).replace("{b}", Settings.get("timer.shortBreak", 5)),
+            keywords: "pomodoro помидор помодоро focus фокус",
+            run: () => Countdown.pomodoro()
+        },
+        {
+            id: "updates",
+            icon: "update",
+            name: Tr.t("Update the system"),
+            detail: Updates.count > 0 ? Tr.t("{n} packages wait").replace("{n}", Updates.count) : Tr.t("Up to date when last checked"),
+            keywords: "update upgrade обновить обновление pacman",
+            run: () => Updates.open()
         },
         {
             id: "win",
@@ -146,6 +171,8 @@ PanelWindow {
             }))
 
     readonly property var results: {
+        if (timerMode)
+            return timerRows();
         if (calcMode)
             return calcRows();
         if (schemeMode)
@@ -254,6 +281,39 @@ PanelWindow {
         ];
     }
 
+    function timerRows() {
+        const seconds = Countdown.parse(commandRest);
+        const rows = [];
+        if (seconds > 0)
+            rows.push({
+                id: "timer:start:" + seconds,
+                icon: "timer",
+                name: Tr.t("Start for {t}").replace("{t}", Countdown.format(seconds)),
+                detail: Countdown.active ? Tr.t("Replaces the running timer") : Tr.t("Enter: start"),
+                run: () => Countdown.start(seconds)
+            });
+        else if (commandRest !== "" && !/^[a-zа-яё]+$/i.test(commandRest))
+            rows.push({
+                id: "timer:bad",
+                icon: "alert",
+                name: Tr.t("Up to 24 hours. Examples: 25, 1:30, 90s, 1h"),
+                detail: "",
+                stay: true
+            });
+        const extra = Countdown.active ? [
+            { id: "timer:pause", icon: "timer", name: Countdown.paused ? Tr.t("Continue") : Tr.t("Pause"), detail: Countdown.text, keywords: "pause пауза continue продолжить", run: () => Countdown.togglePause() },
+            { id: "timer:add", icon: "timer", name: Tr.t("Add 5 minutes"), detail: Countdown.text, keywords: "add добавить", run: () => Countdown.add(300) },
+            { id: "timer:stop", icon: "close", name: Tr.t("Stop the timer"), detail: Countdown.text, keywords: "stop стоп отмена cancel", run: () => Countdown.stop() }
+        ] : [
+            { id: "timer:5", icon: "timer", name: Tr.t("{n} min").replace("{n}", 5), detail: Tr.t("Enter: start"), keywords: "", run: () => Countdown.start(300) },
+            { id: "timer:10", icon: "timer", name: Tr.t("{n} min").replace("{n}", 10), detail: Tr.t("Enter: start"), keywords: "", run: () => Countdown.start(600) },
+            { id: "timer:25", icon: "timer", name: Tr.t("{n} min").replace("{n}", 25), detail: Tr.t("Enter: start"), keywords: "", run: () => Countdown.start(1500) }
+        ];
+        // A word filters them. Numbers already made the first row.
+        const word = /^[a-zа-яё]+$/i.test(commandRest) ? commandRest.toLowerCase() : "";
+        return rows.concat(extra.filter(r => word === "" ? seconds === 0 : (r.name + " " + r.keywords).toLowerCase().indexOf(word) >= 0));
+    }
+
     function runSession(item) {
         if (item.confirm && armed !== item.id) {
             armed = item.id;
@@ -273,6 +333,8 @@ PanelWindow {
             input.text = ">" + item.complete;
             return;
         }
+        if (item.stay)
+            return;
         // A click or Enter in the list counts the same as a session button.
         if (item.confirm !== undefined) {
             runSession(item);

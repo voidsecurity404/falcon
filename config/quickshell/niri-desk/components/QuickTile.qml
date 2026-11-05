@@ -8,10 +8,11 @@ Rectangle {
     property string icon: ""
     property string title: ""
     property bool on: false
+    property int columns: 3
 
     signal clicked
 
-    width: (parent.width - 20) / 3
+    width: (parent.width - 10 * (columns - 1)) / columns
     height: 80
     radius: on ? 18 : 24
     color: on ? Theme.accent : Qt.alpha(Theme.text, quickArea.containsMouse ? 0.12 : 0.06)

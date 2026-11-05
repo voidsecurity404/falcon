@@ -79,6 +79,10 @@ targets=(
     .local/bin/niri-desk-doctor
     .local/bin/niri-desk-scratch
     .local/bin/niri-desk-color
+    .local/bin/niri-desk-charge
+    .local/bin/niri-desk-updates
+    .local/bin/niri-desk-privacy
+    .local/bin/niri-desk-monitors
     .config/niri-desk/tmux.conf
     .config/niri-desk/emoji.json
     .config/niri-desk/defaults.json
@@ -260,6 +264,12 @@ if ((packages && login)); then
         fi
         do_it env NIRI_DESK_REPO="$root" "$HOME/.local/bin/niri-desk-login"
     fi
+fi
+
+# Only asks for sudo on a laptop whose battery has a charge limit.
+if ((packages)) && compgen -G "/sys/class/power_supply/BAT*/charge_control_end_threshold" >/dev/null; then
+    say "Setting up the battery charge limit"
+    do_it "$HOME/.local/bin/niri-desk-charge" setup
 fi
 
 if command -v niri >/dev/null; then

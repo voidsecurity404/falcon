@@ -57,7 +57,9 @@
     "clockSeconds": false,
     "clockDate": false,
     "clock24": true,
-    "claude": true
+    "claude": true,
+    "updates": true,
+    "privacy": true
   },
   "keyboard": {
     "layouts": "us,ru",
@@ -156,6 +158,30 @@
   },
   "wallpaper": {
     "transition": "grow",
-    "duration": 1.0
-  }
+    "duration": 1.0,
+    "auto": "off",
+    "slideshowEvery": 3600,
+    "slideshowOrder": "random",
+    "slideshowOnBattery": false,
+    "day": "",
+    "night": ""
+  },
+  "power": {
+    "auto": true,
+    "onBattery": "power-saver",
+    "onCharger": "balanced",
+    "chargeLimitOn": false,
+    "chargeLimit": 80
+  },
+  "updates": {
+    "enabled": true,
+    "hours": 6
+  },
+  "timer": {
+    "sound": true,
+    "work": 25,
+    "shortBreak": 5,
+    "longBreak": 15
+  },
+  "monitorConnect": "stay"
 }

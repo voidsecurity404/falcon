@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""Prints which apps use the microphone and the camera, one JSON line each time that changes.
+
+Ends when its standard input closes, so nothing stays behind when the shell goes away.
+"""
+import atexit
+import json
+import os
+import select
+import subprocess
+import sys
+import time
+
+sys.dont_write_bytecode = True
+INTERVAL = 2
+# Sound level meters and the shell's own music bars do not record anyone.
+IGNORED = {"pavucontrol", "pavucontrol-qt", "wireplumber", "pipewire", "qs", "quickshell", "parec"}
+CAMERA_SERVERS = {"pipewire", "wireplumber"}
+WATCHED = ("PipeWire:Interface:Node", "PipeWire:Interface:Link")
+KNOWN = set()
+
+
+def app_name(props):
+    return props.get("application.name") or props.get("application.process.binary") or props.get("node.name") or "?"
+
+
+def from_pipewire():
+    try:
+        objects = json.loads(subprocess.run(["pw-dump"], capture_output=True, text=True, timeout=5, check=False).stdout or "[]")
+    except (subprocess.SubprocessError, OSError, ValueError):
+        return [], []
+    KNOWN.clear()
+    KNOWN.update(o["id"] for o in objects if o.get("type") in WATCHED)
+    nodes = {o["id"]: o for o in objects if o.get("type") == "PipeWire:Interface:Node" and o.get("info")}
+    links = [o["info"] for o in objects if o.get("type") == "PipeWire:Interface:Link" and o.get("info")]
+
+    def props(node):
+        return node["info"].get("props") or {}
+
+    def media(node):
+        return props(node).get("media.class") or ""
+
+    mic = []
+    for node_id, node in nodes.items():
+        p = props(node)
+        if media(node) != "Stream/Input/Audio" or node["info"].get("state") != "running":
+            continue
+        if p.get("stream.capture.sink") or p.get("stream.monitor") or p.get("application.process.binary") in IGNORED:
+            continue
+        # Recording what the speakers play is not the microphone: the stream must come from a real source.
+        origins = [nodes[l["output-node-id"]] for l in links if l.get("input-node-id") == node_id and l.get("output-node-id") in nodes]
+        if any(media(o).startswith("Audio/Source") for o in origins):
+            mic.append(app_name(p))
+
+    camera = []
+    for node_id, node in nodes.items():
+        if media(node) != "Video/Source" or node["info"].get("state") != "running":
+            continue
+        if props(node).get("device.api") not in ("v4l2", "libcamera"):
+            continue
+        users = [nodes[l["input-node-id"]] for l in links if l.get("output-node-id") == node_id and l.get("input-node-id") in nodes]
+        camera += [app_name(props(u)) for u in users] or ["?"]
+    return mic, camera
+
+
+def camera_opened():
+    # Cheap test first: with the usual webcam driver and no user, there is nothing to look for.
+    try:
+        if int(open("/sys/module/uvcvideo/refcnt", encoding="ascii").read()) == 0:
+            return []
+    except (OSError, ValueError):
+        pass
+    found = []
+    for pid in filter(str.isdigit, os.listdir("/proc")):
+        try:
+            for fd in os.scandir(f"/proc/{pid}/fd"):
+                if os.readlink(fd.path).startswith("/dev/video"):
+                    name = open(f"/proc/{pid}/comm", encoding="utf-8").read().strip()
+                    if name not in CAMERA_SERVERS:
+                        found.append(name)
+                    break
+        except OSError:
+            continue
+    return found
+
+
+def start_monitor():
+    return subprocess.Popen(["pw-dump", "--monitor", "--no-colors"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+
+
+class Changes:
+    """Reads the JSON that pw-dump keeps printing and says if a stream or a link changed.
+
+    Each look with pw-dump is a PipeWire client coming and going, so reacting to every message
+    would make it look forever, about 7% of a core. Only nodes and links count.
+    """
+
+    def __init__(self):
+        self.text = ""
+        self.decoder = json.JSONDecoder()
+
+    def feed(self, data):
+        self.text += data.decode("utf-8", "replace")
+        changed = False
+        while True:
+            self.text = self.text.lstrip()
+            try:
+                batch, end = self.decoder.raw_decode(self.text)
+            except ValueError:
+                return changed
+            self.text = self.text[end:]
+            for item in batch if isinstance(batch, list) else []:
+                if item.get("type") in WATCHED or (item.get("info") is None and item.get("id") in KNOWN):
+                    changed = True
+
+
+def main():
+    # PipeWire says when something changes, so there is nothing to do in the quiet time. A camera
+    # opened directly tells nobody, so that one is looked at, which is cheap while it is closed.
+    monitor = start_monitor()
+    atexit.register(monitor.kill)
+    changes = Changes()
+    last = None
+    mic, piped = from_pipewire()
+    while True:
+        state = {"mic": sorted(set(mic)), "camera": sorted(set(piped + camera_opened()))}
+        if state != last:
+            print(json.dumps(state, ensure_ascii=False), flush=True)
+            last = state
+        watched = [sys.stdin] + ([monitor.stdout] if monitor.poll() is None else [])
+        ready, _, _ = select.select(watched, [], [], INTERVAL)
+        if sys.stdin in ready and not sys.stdin.buffer.read1(4096):
+            return
+        if monitor.stdout in ready:
+            if changes.feed(os.read(monitor.stdout.fileno(), 65536)):
+                mic, piped = from_pipewire()
+        elif monitor.poll() is not None:
+            # PipeWire restarted. Everything it knew is gone too.
+            time.sleep(INTERVAL)
+            monitor = start_monitor()
+            atexit.register(monitor.kill)
+            changes = Changes()
+            mic, piped = from_pipewire()
+
+
+main()

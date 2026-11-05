@@ -4626,6 +4626,27 @@ def _():
     wait(lambda: "connected" in sh("nmcli -t -f STATE general").stdout, 40, "tarmoq qaytmadi")
 
 
+feature("timer", "Taymer")
+
+
+@case("Vaqt yozuvlari to'g'ri o'qiladi va noto'g'risi rad etiladi")
+def _():
+    ipc("timer", "90s")
+    wait(lambda: st()["timer"].startswith(("1:", "1:29")), 3, "boshlanmadi")
+    ipc("timer", "abc")
+    wait(lambda: st()["timer"] == "", 3, "to'xtamadi")
+
+
+@case("Taymer shell qayta ishga tushganda ham davom etadi")
+def _():
+    ipc("timer", "5m")
+    wait(lambda: st()["timer"] != "", 3, "boshlanmadi")
+    sh("pkill -x qs")
+    time.sleep(3)
+    wait(lambda: st()["timer"].startswith("4:"), 15, "yo'qoldi")
+    ipc("timer", "0")
+
+
 feature("i18n", "Interfeys tili")
 
 CATALOG = HOME / ".config/niri-desk/i18n-ru.json"

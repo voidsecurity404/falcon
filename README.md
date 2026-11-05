@@ -80,6 +80,17 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 "statusLine": { "type": "command", "command": "~/.local/bin/niri-desk-claude-status", "refreshInterval": 5 }
 ```
 
+## Things that look after themselves
+
+- **Battery charge limit:** Settings → Battery and power, or the tile in the control center. Needs one setup with your password (`niri-desk-charge setup`). Laptops whose firmware has no limit do not show it. Undo: `niri-desk-charge setup --undo`.
+- **Power mode follows the charger.** A mode you choose by hand stays until the charger changes.
+- **System updates:** the panel shows how many wait. A click opens a terminal with the update, which asks before installing. Checking downloads no packages.
+- **Timer:** `>timer 25`, `>timer 1:30`, `>timer 90s`, or `>pomodoro` in the app menu. Click it in the island to pause, right click to stop. It survives a restart and sleep, but it cannot wake the laptop.
+- **Microphone and camera:** an icon on the panel while an app uses them. A click names the apps.
+- **Clipboard pins:** `Ctrl+P` in `Mod+V` keeps up to 6 rows on top. They stay on disk until unpinned.
+- **Wallpaper by itself:** a slideshow, or one picture for the day and one for the night, in Settings → Wallpaper.
+- **Displays keep their settings** by display, not by port. A new display gets a toast that opens its settings. Mirroring is not offered, because niri has no mirror mode.
+
 ## Helper commands
 
 - `niri-desk-session run|watch|save|restore`: windows come back after a reboot on their workspace and monitor, in their column, with their size, floating ones at their position, and terminals in their folder. Saved on every change. Arguments are never replayed, and what is inside a window is up to the app.

@@ -4,6 +4,8 @@
 #   niri-desk-wallpaper --restore  oxirgi fonni qaytarish (sessiya boshida)
 #   niri-desk-wallpaper --colors RASM  faqat ranglarni yozish, rasm qo'ymasdan
 #   niri-desk-wallpaper --thumbs           tanlagich uchun yetishmagan kichik rasmlarni yasash
+#   niri-desk-wallpaper --reshow           put the current wallpaper on a display that just appeared
+# NIRI_DESK_QUIET=1 leaves out the toast, for changes the user did not start.
 set -euo pipefail
 
 state="${XDG_STATE_HOME:-$HOME/.local/state}/niri-desk"
@@ -88,6 +90,7 @@ arrange() {
 }
 
 toast() {
+    [[ -n "${NIRI_DESK_QUIET:-}" ]] && return 0
     qs -c niri-desk ipc call desk toast "$("$HOME/.local/bin/niri-desk-tr" "$1")" "$2" >/dev/null 2>&1 || true
 }
 
@@ -147,13 +150,24 @@ case "${1:-}" in
         show "$image"
         [[ -f "$state/colors.json" ]] || colors "$image"
         ;;
+    --reshow)
+        image="$(readlink -f "$link" 2>/dev/null || true)"
+        [[ -f "$image" ]] || exit 0
+        wait_daemon
+        awww img "$image" --transition-type none
+        video="$(readlink -f "$live_link" 2>/dev/null || true)"
+        if [[ -f "$video" ]] && command -v mpvpaper >/dev/null; then
+            stop_live
+            play "$video"
+        fi
+        ;;
     --colors)
         image="$(readlink -f "$2")"
         ln -sfn "$image" "$link"
         colors "$image"
         ;;
     "" | -h | --help)
-        sed -n '2,6p' "$0" | cut -c3-
+        sed -n '2,8p' "$0" | cut -c3-
         ;;
     *)
         image="$(readlink -f "$1")"

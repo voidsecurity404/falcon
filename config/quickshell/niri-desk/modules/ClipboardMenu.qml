@@ -26,7 +26,14 @@ LazyLoader {
         readonly property var results: {
             const q = query.trim().toLowerCase();
             // Ties keep the original order, so the newest stays on top.
-            const rows = clips.map((clip, order) => ({
+            const pinned = ClipPins.pins.map(p => ({
+                        id: "pin:" + p.file,
+                        text: p.text,
+                        image: p.image,
+                        file: p.file,
+                        pinned: true
+                    }));
+            const rows = pinned.concat(clips.filter(c => !ClipPins.isPinnedText(c.text))).map((clip, order) => ({
                         clip: clip,
                         order: order,
                         rank: Tools.score(clip.text, q, "")
@@ -40,8 +47,22 @@ LazyLoader {
             if (!clip)
                 return;
             Ui.popup = "";
-            Quickshell.execDetached(["sh", "-c", 'cliphist decode "$1" | wl-copy', "sh", clip.id]);
+            if (clip.pinned)
+                ClipPins.copy(clip);
+            else
+                Quickshell.execDetached(["sh", "-c", 'cliphist decode "$1" | wl-copy', "sh", clip.id]);
             Toasts.show(Tr.t("Copied"), clip.text, "check");
+        }
+
+        function togglePin(index) {
+            const clip = results[index];
+            if (!clip)
+                return;
+            if (clip.pinned)
+                ClipPins.unpin(clip.file);
+            else
+                ClipPins.pin(clip);
+            selected = 0;
         }
 
         // A row left under the pointer stays unselected until the pointer has really moved.
@@ -176,6 +197,13 @@ LazyLoader {
                         root.selected = 0;
                     }
                     Keys.onEscapePressed: Ui.popup = ""
+                    // The key's place, so it also works in the Russian layout (P is 33 with the evdev offset).
+                    Keys.onPressed: event => {
+                        if ((event.modifiers & Qt.ControlModifier) && (event.key === Qt.Key_P || event.nativeScanCode === 33)) {
+                            root.togglePin(root.selected);
+                            event.accepted = true;
+                        }
+                    }
                     Keys.onReturnPressed: root.execute(root.selected)
                     Keys.onEnterPressed: root.execute(root.selected)
                     Keys.onDownPressed: root.selected = Math.min(root.results.length - 1, root.selected + 1)
@@ -217,6 +245,7 @@ LazyLoader {
 
                     Repeater {
                         model: root.results
+                        // Rows are rebuilt when pins change, the selection stays by its number.
 
                         delegate: Rectangle {
                             id: row
@@ -244,7 +273,7 @@ LazyLoader {
 
                                 Image {
                                     anchors.fill: parent
-                                    source: row.modelData.image && root.thumbsReady ? "file://" + root.thumbDir + "/" + row.modelData.id : ""
+                                    source: row.modelData.pinned ? (row.modelData.image ? "file://" + ClipPins.dir + "/" + row.modelData.file : "") : row.modelData.image && root.thumbsReady ? "file://" + root.thumbDir + "/" + row.modelData.id : ""
                                     sourceSize: Qt.size(168, 104)
                                     fillMode: Image.PreserveAspectCrop
                                     asynchronous: true
@@ -256,7 +285,7 @@ LazyLoader {
                                 anchors.left: parent.left
                                 anchors.leftMargin: row.modelData.image ? 104 : 14
                                 anchors.right: parent.right
-                                anchors.rightMargin: 14
+                                anchors.rightMargin: 46
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: row.modelData.text
                                 color: row.isSelected ? Theme.accentText : Theme.text
@@ -269,7 +298,42 @@ LazyLoader {
                                 onPositionChanged: mouse => root.pointerMoved(row.index, mapToItem(null, mouse.x, mouse.y))
                                 onClicked: root.execute(row.index)
                             }
+                            // Pinned rows always show their pin, others only under the pointer or selection.
+                            Item {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 32
+                                height: 32
+                                visible: row.modelData.pinned || row.isSelected
+
+                                Icon {
+                                    anchors.centerIn: parent
+                                    name: "pin"
+                                    size: 16
+                                    color: row.isSelected ? Theme.accentText : Theme.accent
+                                    opacity: row.modelData.pinned || pinArea.containsMouse ? 1 : 0.55
+                                }
+                                MouseArea {
+                                    id: pinArea
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.togglePin(row.index)
+                                }
+                            }
                         }
+                    }
+
+                    Label {
+                        visible: root.results.length > 0
+                        leftPadding: 14
+                        topPadding: 8
+                        bottomPadding: 4
+                        text: Tr.t("Enter: copy · Ctrl+P: pin")
+                        color: Theme.muted
+                        size: 12
                     }
                 }
             }

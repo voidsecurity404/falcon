@@ -17,7 +17,7 @@ HOME = Path.home()
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
 STATE = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local/state")) / "niri-desk"
 COMMANDS = ["niri", "qs", "awww", "matugen", "hyprlock", "hypridle", "kitty", "cliphist", "wl-copy", "grim", "wf-recorder",
-            "tesseract", "playerctl", "brightnessctl", "wlsunset", "fd", "mpvpaper", "ffmpeg", "qt6ct", "satty"]
+            "tesseract", "playerctl", "brightnessctl", "wlsunset", "fd", "mpvpaper", "ffmpeg", "qt6ct", "satty", "checkupdates", "pw-dump"]
 PROCESSES = ["qs", "awww-daemon", "hypridle"]
 problems = 0
 
@@ -55,6 +55,13 @@ except (OSError, ValueError):
     report(False, tr("Wallpaper colors"), tr("Choose a wallpaper again with Mod+W."))
 report((STATE / "wallpaper").exists(), tr("Current wallpaper"), tr("Choose a wallpaper again with Mod+W."))
 report(os.environ.get("QT_QPA_PLATFORMTHEME") == "qt6ct", tr("Qt theme in this session"), tr("Log out and in to apply it."))
+
+try:
+    charge = json.loads(subprocess.run([str(HOME / ".local/bin/niri-desk-charge"), "status"], capture_output=True, text=True, check=False).stdout)
+    if charge["supported"]:
+        report(charge["writable"], tr("Battery charge limit"), tr("Run once in a terminal: niri-desk-charge setup"))
+except (OSError, ValueError, KeyError):
+    pass
 
 print(tr("Result: {count} problem(s)", count=problems))
 sys.exit(1 if problems else 0)

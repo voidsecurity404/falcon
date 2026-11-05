@@ -89,6 +89,24 @@ Singleton {
         });
     }
 
+    // Something the user asked to be told about. It shows in focus mode, stays a minute, and is
+    // kept in the history for whoever was away from the screen.
+    function alarm(title, sub, icon) {
+        remember(title, sub, Tr.t("Timer"));
+        enqueue({
+            title: title,
+            sub: sub,
+            icon: icon,
+            value: -1,
+            key: "",
+            notification: null,
+            sticky: false,
+            run: null,
+            inZen: true,
+            hold: 60000
+        });
+    }
+
     function clearBatteryAlerts() {
         queue = queue.filter(q => !q.battery);
         if (current && current.battery)
@@ -137,7 +155,7 @@ Singleton {
         if (item.sticky) {
             timer.stop();
         } else {
-            timer.interval = item.key !== "" ? 1600 : Settings.get("notifications.seconds", 3.6) * 1000;
+            timer.interval = item.hold ? item.hold : item.key !== "" ? 1600 : Settings.get("notifications.seconds", 3.6) * 1000;
             timer.restart();
         }
     }

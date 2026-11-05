@@ -102,6 +102,21 @@ LazyLoader {
                         ]
                     },
                     {
+                        title: Tr.t("Change by itself"),
+                        items: [
+                            { key: "wallpaper.auto", label: Tr.t("Mode"), hint: Tr.t("A wallpaper you choose yourself stays until the next change"), type: "choice", options: ["off", "slideshow", "dayNight"], names: [Tr.t("Off"), Tr.t("Slideshow"), Tr.t("Day and night")] },
+                            { key: "wallpaper.slideshowEvery", label: Tr.t("Slideshow: change every"), hint: Tr.t("It waits while you are away or a live wallpaper is on"), type: "slider", min: 300, max: 14400, step: 300, unit: "time" },
+                            { key: "wallpaper.slideshowOrder", label: Tr.t("Slideshow: order"), type: "choice", options: ["random", "name"], names: [Tr.t("Random"), Tr.t("By name")] },
+                            { key: "wallpaper.slideshowOnBattery", label: Tr.t("Slideshow: also on battery"), type: "toggle" },
+                            { key: "wallpaper.day", label: Tr.t("Day wallpaper"), type: "text" },
+                            { label: Tr.t("Use the current wallpaper for the day"), type: "action", text: Tr.t("Use"), run: () => WallpaperAuto.useCurrentFor("day") },
+                            { key: "wallpaper.night", label: Tr.t("Night wallpaper"), type: "text" },
+                            { label: Tr.t("Use the current wallpaper for the night"), type: "action", text: Tr.t("Use"), run: () => WallpaperAuto.useCurrentFor("night") },
+                            { key: "schedule.lightFrom", label: Tr.t("Day starts"), hint: Tr.t("The same times as light and dark mode"), type: "text", width: 100 },
+                            { key: "schedule.darkFrom", label: Tr.t("Night starts"), type: "text", width: 100 }
+                        ]
+                    },
+                    {
                         title: Tr.t("Transition"),
                         items: [
                             { key: "wallpaper.transition", label: Tr.t("Effect"), type: "choice", options: ["grow", "fade", "wipe", "wave", "none"], names: [Tr.t("Grow"), Tr.t("Fade"), Tr.t("Wipe"), Tr.t("Wave"), Tr.t("None")] },
@@ -145,6 +160,8 @@ LazyLoader {
                             { key: "panel.hideEmpty", label: Tr.t("Hide empty workspaces"), type: "toggle" },
                             { key: "panel.tray", label: Tr.t("Tray"), type: "toggle" },
                             { key: "panel.claude", label: Tr.t("Claude icon"), type: "toggle" },
+                            { key: "panel.updates", label: Tr.t("Waiting updates"), type: "toggle" },
+                            { key: "panel.privacy", label: Tr.t("Microphone and camera in use"), type: "toggle" },
                             { key: "panel.lang", label: Tr.t("Keyboard layout"), type: "toggle" },
                             { key: "panel.wifi", label: Tr.t("Wi-Fi icon"), type: "toggle" },
                             { key: "panel.volume", label: Tr.t("Volume"), type: "toggle" },
@@ -238,7 +255,12 @@ LazyLoader {
                 subtitle: Tr.t("Scale, rotation and position"),
                 icon: "monitor",
                 group: 1,
-                sections: win.monitorSections
+                sections: [{
+                    title: Tr.t("When a display is plugged in"),
+                    items: [
+                        { key: "monitorConnect", label: Tr.t("Current workspace"), hint: Tr.t("Each display keeps its own settings, on any port"), type: "choice", options: ["stay", "move"], names: [Tr.t("Stays here"), Tr.t("Moves to it")] }
+                    ]
+                }].concat(win.monitorSections)
             },
             {
                 title: Tr.t("Keyboard"),
@@ -352,6 +374,30 @@ LazyLoader {
                 sections: []
             },
             {
+                title: Tr.t("Battery and power"),
+                subtitle: Tr.t("Charge limit and power mode"),
+                icon: "charging",
+                group: 3,
+                power: true,
+                sections: [
+                    {
+                        title: Tr.t("Charge limit"),
+                        items: [
+                            { key: "power.chargeLimitOn", label: Tr.t("Stop charging early"), hint: Tr.t("Good when the laptop mostly stays on the charger"), type: "toggle" },
+                            { key: "power.chargeLimit", label: Tr.t("Stop at"), type: "slider", min: 50, max: 100, step: 5, unit: "lineHeight" }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Power mode"),
+                        items: [
+                            { key: "power.auto", label: Tr.t("Follow the charger"), hint: Tr.t("A mode you choose yourself stays until the charger changes"), type: "toggle" },
+                            { key: "power.onBattery", label: Tr.t("On battery"), type: "choice", options: ["power-saver", "balanced", "performance"], names: [Tr.t("Saver"), Tr.t("Balanced"), Tr.t("Performance")] },
+                            { key: "power.onCharger", label: Tr.t("On the charger"), type: "choice", options: ["power-saver", "balanced", "performance"], names: [Tr.t("Saver"), Tr.t("Balanced"), Tr.t("Performance")] }
+                        ]
+                    }
+                ]
+            },
+            {
                 title: Tr.t("Terminal"),
                 subtitle: Tr.t("Kitty look. Some changes apply to new windows"),
                 icon: "terminal",
@@ -409,6 +455,22 @@ LazyLoader {
                             { key: "idle.battery.lock", label: Tr.t("Lock after"), type: "slider", min: 0, max: 3600, step: 60, unit: "time" },
                             { key: "idle.battery.screenOff", label: Tr.t("Screen off after"), type: "slider", min: 0, max: 3600, step: 60, unit: "time" },
                             { key: "idle.battery.suspend", label: Tr.t("Sleep after"), type: "slider", min: 0, max: 7200, step: 60, unit: "time" }
+                        ]
+                    },
+                    {
+                        title: Tr.t("System updates"),
+                        items: [
+                            { key: "updates.enabled", label: Tr.t("Check for updates"), hint: Tr.t("Only looks. Installing always asks you first"), type: "toggle" },
+                            { key: "updates.hours", label: Tr.t("Check every (hours)"), type: "slider", min: 1, max: 24, step: 1 }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Timer"),
+                        items: [
+                            { key: "timer.sound", label: Tr.t("Sound when it ends"), hint: Tr.t("Silent mode turns it off too"), type: "toggle" },
+                            { key: "timer.work", label: Tr.t("Pomodoro: work (min)"), type: "slider", min: 5, max: 90, step: 5 },
+                            { key: "timer.shortBreak", label: Tr.t("Pomodoro: break (min)"), type: "slider", min: 1, max: 30, step: 1 },
+                            { key: "timer.longBreak", label: Tr.t("Pomodoro: every fourth break (min)"), type: "slider", min: 5, max: 60, step: 5 }
                         ]
                     },
                     {
@@ -884,6 +946,11 @@ LazyLoader {
 
                         SoundDevices {
                             visible: win.filter === "" && !!win.pages[win.page].sound
+                            width: cards.width
+                        }
+
+                        PowerCare {
+                            visible: win.filter === "" && !!win.pages[win.page].power
                             width: cards.width
                         }
                     }

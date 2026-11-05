@@ -58,6 +58,8 @@ wlsunset
 curl
 fd
 xdg-utils
+# Yangilanishlarni tekshirish
+pacman-contrib
 gvfs
 mesa
 noto-fonts

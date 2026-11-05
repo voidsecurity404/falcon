@@ -149,7 +149,18 @@ ShellRoot {
                 muted: Audio.muted,
                 error: Settings.lastError,
                 trayCount: SystemTray.items.values.length,
-                weather: Weather.summary
+                weather: Weather.summary,
+                timer: Countdown.active ? Countdown.text : "",
+                timerPaused: Countdown.paused,
+                timerPhase: Countdown.phase,
+                charge: { supported: Power.chargeSupported, writable: Power.chargeWritable, actual: Power.chargeActual, wanted: Power.wantedLimit },
+                onBattery: Power.onBattery,
+                updates: Updates.count,
+                updatesFailed: Updates.failed,
+                rebootNeeded: Updates.rebootNeeded,
+                privacy: { mic: Privacy.mic, camera: Privacy.camera },
+                clipPins: ClipPins.pins.length,
+                wallpaperAuto: WallpaperAuto.mode
             });
         }
         // Testlar uchun: shell'ni boshlang'ich holatga qaytaradi.
@@ -164,6 +175,7 @@ ShellRoot {
             Toasts.doNotDisturb = false;
             Caffeine.enabled = false;
             Sticky.ids = [];
+            Countdown.stop();
             Night.setEnabled(Settings.get("nightlight.auto", false));
             Ui.dashTab = 0;
             Widgets.editMode = false;
@@ -179,6 +191,19 @@ ShellRoot {
         }
         function launcherQuery(text: string): void {
             Ui.launcherInject(text);
+        }
+        function updatesCheck(): void {
+            Updates.check();
+        }
+        function powerRefresh(): void {
+            Power.refresh();
+        }
+        function timer(text: string): void {
+            const seconds = Countdown.parse(text);
+            if (seconds > 0)
+                Countdown.start(seconds);
+            else
+                Countdown.stop();
         }
         function close(): void {
             Ui.popup = "";
@@ -222,5 +247,11 @@ ShellRoot {
         Schedule.check();
         Sticky.ids;
         Night.enabled;
+        Power.started;
+        Updates.count;
+        Countdown.active;
+        Privacy.enabled;
+        WallpaperAuto.mode;
+        Monitors.wantConnect;
     }
 }

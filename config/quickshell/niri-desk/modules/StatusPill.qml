@@ -118,6 +118,77 @@ Rectangle {
             }
         }
 
+        // Who is using the microphone or the camera. A click names the apps.
+        Rectangle {
+            visible: Privacy.mic.length > 0 || Privacy.camera.length > 0
+            width: privacyRow.implicitWidth + 16
+            height: 34
+            radius: 9
+            color: privacyArea.containsMouse ? Qt.alpha(Theme.text, 0.08) : "transparent"
+
+            Row {
+                id: privacyRow
+
+                anchors.centerIn: parent
+                spacing: 6
+
+                Icon {
+                    visible: Privacy.mic.length > 0
+                    name: Audio.micMuted ? "micOff" : "mic"
+                    color: Audio.micMuted ? Theme.muted : Theme.error
+                }
+                Icon {
+                    visible: Privacy.camera.length > 0
+                    name: "camera"
+                    color: Theme.error
+                }
+            }
+            MouseArea {
+                id: privacyArea
+
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: Privacy.tell()
+            }
+        }
+
+        // Waiting system updates. Hidden when there are none.
+        Rectangle {
+            visible: Settings.get("panel.updates", true) && Updates.enabled && (Updates.count > 0 || Updates.rebootNeeded)
+            width: updateRow.implicitWidth + 16
+            height: 34
+            radius: 9
+            color: updateArea.containsMouse ? Qt.alpha(Theme.text, 0.08) : "transparent"
+
+            Row {
+                id: updateRow
+
+                anchors.centerIn: parent
+                spacing: 5
+
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "update"
+                    color: Updates.rebootNeeded && Updates.count === 0 ? Theme.accent : Theme.text
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: Updates.count > 0
+                    text: Updates.count
+                    size: 14
+                }
+            }
+            MouseArea {
+                id: updateArea
+
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: Updates.clicked()
+            }
+        }
+
         // Klaviatura tili
         Rectangle {
             visible: Settings.get("panel.lang", true)
