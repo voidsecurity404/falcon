@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Shapes
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -18,6 +17,7 @@ PanelWindow {
     readonly property int edgeGap: Settings.bottom ? 56 : 0
     // The card reaches this far below the edge, so its overshoot never lifts it off the screen.
     readonly property int overdraw: Settings.bottom ? 0 : 28
+    readonly property int curveSize: 24
     readonly property int rowHeight: 54
     readonly property int maxRows: 7
     readonly property int padding: 12
@@ -503,16 +503,16 @@ PanelWindow {
             bottomRightRadius: card.bottomRightRadius
         }
         CurveRegion {
-            size: !Settings.bottom && clipper.height - card.y - root.overdraw > 20 ? 18 : 0
-            x: card.x - 18
-            y: clipper.height - 18
+            size: !Settings.bottom && root.height - card.y - root.overdraw > 20 ? root.curveSize : 0
+            x: card.x - root.curveSize
+            y: root.height - root.curveSize
             flipX: true
             flipY: true
         }
         CurveRegion {
-            size: !Settings.bottom && clipper.height - card.y - root.overdraw > 20 ? 18 : 0
+            size: !Settings.bottom && root.height - card.y - root.overdraw > 20 ? root.curveSize : 0
             x: card.x + card.width
-            y: clipper.height - 18
+            y: root.height - root.curveSize
             flipY: true
         }
     }
@@ -611,644 +611,555 @@ PanelWindow {
         onClicked: Ui.popup = ""
     }
 
-    // The menu stands on the frame, and what reaches further down stays behind it.
-    Item {
-        id: clipper
+    // Inner curves that join the menu to the screen edge. They stay on the edge when the card
+    // overshoots, and appear as soon as the card has risen far enough to meet them.
+    Repeater {
+        model: Settings.bottom ? [] : [0, 1]
 
-        width: parent.width
-        height: parent.height - Ui.frameSize
-        clip: true
+        delegate: EdgeCurve {
+            required property int modelData
 
-        // Inner curves that join the menu to the screen edge. They stay on the edge when the card
-        // overshoots, and appear as soon as the card has risen far enough to meet them.
-        Repeater {
-            model: Settings.bottom ? [] : [0, 1]
+            size: root.curveSize
+            x: modelData === 0 ? card.x - size : card.x + card.width
+            y: root.height - size
+            flipX: modelData === 0
+            flipY: true
+            opacity: Math.max(0, Math.min(1, (root.height - card.y - root.overdraw) / 40))
+            color: Theme.glassTop
+        }
+    }
 
-            delegate: Shape {
-                id: curve
+    Rectangle {
+        id: card
 
-                required property int modelData
+        readonly property int radiusSize: 26
+        readonly property int bodyHeight: viewport.height + 10 + 46 + root.padding * 2
 
-                x: modelData === 0 ? card.x - 18 : card.x + card.width
-                y: clipper.height - 18
-                width: 18
-                height: 18
-                opacity: Math.max(0, Math.min(1, (clipper.height - card.y - root.overdraw) / 40))
-                preferredRendererType: Shape.CurveRenderer
-
-                ShapePath {
-                    strokeWidth: 0
-                    strokeColor: "transparent"
-                    fillColor: Theme.glassTop
-
-                    PathSvg {
-                        path: curve.modelData === 0 ? "M0 18 L18 18 L18 0 A18 18 0 0 1 0 18 Z" : "M18 18 L0 18 L0 0 A18 18 0 0 0 18 18 Z"
-                    }
-                }
+        x: Math.round((parent.width - width) / 2)
+        y: parent.height - root.edgeGap - bodyHeight + (1 - root.reveal) * (bodyHeight + root.edgeGap + 4)
+        width: 640
+        height: bodyHeight + root.overdraw
+        topLeftRadius: radiusSize
+        topRightRadius: radiusSize
+        bottomLeftRadius: Settings.bottom ? radiusSize : 0
+        bottomRightRadius: Settings.bottom ? radiusSize : 0
+        border.width: 1
+        border.color: Theme.panelEdge
+        gradient: Gradient {
+            GradientStop {
+                position: 0
+                color: Theme.panel
+            }
+            GradientStop {
+                position: 1
+                color: Theme.glassTop
             }
         }
 
-        Rectangle {
-            id: card
+        // Keeps clicks on the menu from closing it.
+        MouseArea {
+            anchors.fill: parent
+        }
 
-            readonly property int radiusSize: 26
-            readonly property int bodyHeight: viewport.height + 10 + 46 + root.padding * 2
+        // Rows above the search field. Only this height animates, so the field never moves.
+        Item {
+            id: viewport
 
-            x: Math.round((parent.width - width) / 2)
-            y: parent.height - root.edgeGap - bodyHeight + (1 - root.reveal) * (bodyHeight + root.edgeGap + 4)
-            width: 640
-            height: bodyHeight + root.overdraw
-            topLeftRadius: radiusSize
-            topRightRadius: radiusSize
-            bottomLeftRadius: Settings.bottom ? radiusSize : 0
-            bottomRightRadius: Settings.bottom ? radiusSize : 0
-            border.width: 1
-            border.color: Theme.panelEdge
-            gradient: Gradient {
-                GradientStop {
-                    position: 0
-                    color: Theme.panel
-                }
-                GradientStop {
-                    position: 1
-                    color: Theme.glassTop
+            x: root.padding
+            y: root.padding
+            width: parent.width - root.padding * 2
+            height: root.rowHeight * Math.min(root.maxRows, Math.max(1, root.shownRows.length))
+            clip: true
+            opacity: root.viewFade
+            scale: 0.97 + 0.03 * root.viewFade
+
+            Behavior on height {
+                enabled: root.reveal > 0.5
+
+                NumberAnimation {
+                    duration: 340
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: root.emphasized
                 }
             }
 
-            // Keeps clicks on the menu from closing it.
-            MouseArea {
+            // Apps and commands
+            ListView {
+                id: list
+
                 anchors.fill: parent
-            }
+                cacheBuffer: 600
+                currentIndex: root.selected
+                // The wheel moves the selection and the list follows, so nothing fights over it.
+                interactive: false
+                highlightFollowsCurrentItem: false
+                highlightRangeMode: ListView.ApplyRange
+                preferredHighlightBegin: 0
+                preferredHighlightEnd: height
+                highlightMoveDuration: 200
+                highlightMoveVelocity: -1
+                model: ScriptModel {
+                    values: root.shownIds
+                }
 
-            // Rows above the search field. Only this height animates, so the field never moves.
-            Item {
-                id: viewport
-
-                x: root.padding
-                y: root.padding
-                width: parent.width - root.padding * 2
-                height: root.rowHeight * Math.min(root.maxRows, Math.max(1, root.shownRows.length))
-                clip: true
-                opacity: root.viewFade
-                scale: 0.97 + 0.03 * root.viewFade
-
-                Behavior on height {
-                    enabled: root.reveal > 0.5
-
-                    NumberAnimation {
-                        duration: 340
-                        easing.type: Easing.BezierSpline
-                        easing.bezierCurve: root.emphasized
+                WheelHandler {
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                    onWheel: event => {
+                        const steps = root.wheelSteps(event.angleDelta.y);
+                        if (steps !== 0)
+                            root.selected = Math.max(0, Math.min(root.results.length - 1, root.selected + steps));
                     }
                 }
 
-                // Apps and commands
-                ListView {
-                    id: list
-
-                    anchors.fill: parent
-                    cacheBuffer: 600
-                    currentIndex: root.selected
-                    // The wheel moves the selection and the list follows, so nothing fights over it.
-                    interactive: false
-                    highlightFollowsCurrentItem: false
-                    highlightRangeMode: ListView.ApplyRange
-                    preferredHighlightBegin: 0
-                    preferredHighlightEnd: height
-                    highlightMoveDuration: 200
-                    highlightMoveVelocity: -1
-                    model: ScriptModel {
-                        values: root.shownIds
-                    }
-
-                    WheelHandler {
-                        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                        onWheel: event => {
-                            const steps = root.wheelSteps(event.angleDelta.y);
-                            if (steps !== 0)
-                                root.selected = Math.max(0, Math.min(root.results.length - 1, root.selected + steps));
-                        }
-                    }
-
-                    highlight: Rectangle {
-                        y: root.selected * root.rowHeight
-                        width: list.width
-                        height: root.rowHeight
-                        radius: 15
-                        visible: list.count > 0
-                        color: list.currentItem && list.currentItem.isArmed ? Theme.error : Qt.alpha(Theme.text, 0.1)
-
-                        Behavior on y {
-                            NumberAnimation {
-                                duration: 200
-                                easing.type: Easing.BezierSpline
-                                easing.bezierCurve: root.emphasized
-                            }
-                        }
-                        Behavior on color {
-                            ColorAnimation {
-                                duration: 160
-                            }
-                        }
-                    }
-
-                    // Leaving rows are gone before new ones come, so text never overlaps.
-                    add: Transition {
-                        SequentialAnimation {
-                            PropertyAction {
-                                property: "opacity"
-                                value: 0
-                            }
-                            PauseAnimation {
-                                duration: 70
-                            }
-                            NumberAnimation {
-                                property: "opacity"
-                                to: 1
-                                duration: 180
-                                easing.type: Easing.OutCubic
-                            }
-                        }
-                    }
-                    remove: Transition {
-                        NumberAnimation {
-                            property: "opacity"
-                            to: 0
-                            duration: 70
-                        }
-                    }
-                    displaced: Transition {
-                        NumberAnimation {
-                            property: "y"
-                            duration: 260
-                            easing.type: Easing.BezierSpline
-                            easing.bezierCurve: root.emphasized
-                        }
-                        NumberAnimation {
-                            properties: "opacity,scale"
-                            to: 1
-                            duration: 160
-                        }
-                    }
-                    move: Transition {
-                        NumberAnimation {
-                            property: "y"
-                            duration: 260
-                            easing.type: Easing.BezierSpline
-                            easing.bezierCurve: root.emphasized
-                        }
-                        NumberAnimation {
-                            properties: "opacity,scale"
-                            to: 1
-                            duration: 160
-                        }
-                    }
-
-                    delegate: Item {
-                        id: row
-
-                        required property string modelData
-                        required property int index
-
-                        readonly property var entry: root.rowsById[modelData] || null
-                        readonly property bool isSelected: index === root.selected
-                        readonly property bool isArmed: root.armed !== "" && root.armed === modelData
-                        readonly property color nameColor: isArmed ? Theme.pill : Theme.text
-                        readonly property bool hasImage: !!entry && !!entry.image && picture.status === Image.Ready
-                        // Rows unfold upward from the search field.
-                        readonly property real rise: root.progress(Math.max(0, Math.min(root.maxRows, root.shownRows.length) - 1 - index) * 0.07)
-
-                        width: ListView.view.width
-                        height: root.rowHeight
-
-                        Item {
-                            anchors.fill: parent
-                            opacity: row.rise
-                            transform: Translate {
-                                y: (1 - row.rise) * 18
-                            }
-                            scale: rowArea.pressed ? 0.98 : 1
-
-                            Behavior on scale {
-                                NumberAnimation {
-                                    duration: 110
-                                }
-                            }
-
-                            Item {
-                                x: 12
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: 32
-                                height: 32
-                                scale: row.isSelected ? 1.1 : 1
-
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 260
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 2
-                                    }
-                                }
-
-                                Image {
-                                    id: picture
-
-                                    anchors.fill: parent
-                                    source: row.entry && row.entry.image ? row.entry.image : ""
-                                    sourceSize: Qt.size(64, 64)
-                                    asynchronous: true
-                                    visible: row.hasImage
-                                }
-                                Label {
-                                    anchors.centerIn: parent
-                                    visible: !!row.entry && !!row.entry.glyph
-                                    text: row.entry && row.entry.glyph ? row.entry.glyph : ""
-                                    size: 22
-                                }
-                                Icon {
-                                    anchors.centerIn: parent
-                                    visible: !row.hasImage && !(row.entry && row.entry.glyph)
-                                    name: row.entry ? row.entry.icon : "windows"
-                                    size: 22
-                                    color: row.nameColor
-                                }
-                            }
-                            Column {
-                                x: row.isSelected ? 62 : 58
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: parent.parent.width - 74
-
-                                Behavior on x {
-                                    NumberAnimation {
-                                        duration: 220
-                                        easing.type: Easing.BezierSpline
-                                        easing.bezierCurve: root.emphasized
-                                    }
-                                }
-
-                                Label {
-                                    width: parent.width
-                                    text: row.entry ? row.entry.name : ""
-                                    size: 14
-                                    color: row.nameColor
-                                    elide: Text.ElideRight
-                                }
-                                Label {
-                                    width: parent.width
-                                    visible: text !== ""
-                                    text: row.isArmed ? Tr.t("Press once more to proceed") : row.entry ? row.entry.detail : ""
-                                    size: 12
-                                    color: row.isArmed ? Theme.pill : Theme.muted
-                                    elide: Text.ElideRight
-                                }
-                            }
-                        }
-                        MouseArea {
-                            id: rowArea
-
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onPositionChanged: mouse => {
-                                if (root.pointerMoved(mapToItem(null, mouse.x, mouse.y)))
-                                    root.selected = row.index;
-                            }
-                            onClicked: root.execute(row.index)
-                        }
-                    }
-                }
-
-                Label {
-                    anchors.centerIn: parent
-                    opacity: list.count === 0 ? 1 : 0
-                    text: Tr.t("Nothing found")
-                    color: Theme.muted
-
-                    Behavior on opacity {
-                        NumberAnimation {
-                            duration: 180
-                        }
-                    }
-                }
-
-            }
-
-            // Search and session buttons
-            Item {
-                id: bottomRow
-
-                x: root.padding
-                y: viewport.y + viewport.height + 10
-                width: parent.width - root.padding * 2
-                height: 46
-
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: sessionRow.left
-                    anchors.rightMargin: 10
-                    height: parent.height
-                    radius: 23
-                    color: Qt.alpha(Theme.text, input.text === "" ? 0.08 : 0.11)
-                    opacity: root.progress(0)
-
-                    Behavior on color {
-                        ColorAnimation {
-                            duration: 180
-                        }
-                    }
-
-                    // The glass turns from a search into a command prompt.
-                    Icon {
-                        x: 16
-                        anchors.verticalCenter: parent.verticalCenter
-                        name: "search"
-                        size: 17
-                        color: Theme.muted
-                        opacity: root.commandMode ? 0 : 1
-                        rotation: root.commandMode ? 90 : 0
-                        scale: root.commandMode ? 0.6 : 1
-
-                        Behavior on opacity {
-                            NumberAnimation {
-                                duration: 160
-                            }
-                        }
-                        Behavior on rotation {
-                            NumberAnimation {
-                                duration: 260
-                                easing.type: Easing.OutCubic
-                            }
-                        }
-                        Behavior on scale {
-                            NumberAnimation {
-                                duration: 260
-                                easing.type: Easing.OutCubic
-                            }
-                        }
-                    }
-                    Icon {
-                        x: 16
-                        anchors.verticalCenter: parent.verticalCenter
-                        name: "forward"
-                        size: 17
-                        color: Theme.accent
-                        opacity: root.commandMode ? 1 : 0
-                        rotation: root.commandMode ? 0 : -90
-                        scale: root.commandMode ? 1 : 0.6
-
-                        Behavior on opacity {
-                            NumberAnimation {
-                                duration: 160
-                            }
-                        }
-                        Behavior on rotation {
-                            NumberAnimation {
-                                duration: 260
-                                easing.type: Easing.OutCubic
-                            }
-                        }
-                        Behavior on scale {
-                            NumberAnimation {
-                                duration: 260
-                                easing.type: Easing.OutCubic
-                            }
-                        }
-                    }
-                    TextInput {
-                        id: input
-
-                        anchors.left: parent.left
-                        anchors.leftMargin: 44
-                        anchors.right: parent.right
-                        anchors.rightMargin: 16
-                        anchors.verticalCenter: parent.verticalCenter
-                        focus: true
-                        clip: true
-                        color: Theme.text
-                        selectionColor: Theme.accent
-                        selectedTextColor: Theme.accentText
-                        font.family: Theme.sans
-                        font.pixelSize: Math.round(15 * Theme.fontScale)
-                        onTextChanged: root.query = text
-                        Keys.onEscapePressed: {
-                            if (root.powerOpen)
-                                root.powerOpen = false;
-                            else
-                                Ui.popup = "";
-                        }
-                        Keys.onReturnPressed: root.execute(root.selected)
-                        Keys.onEnterPressed: root.execute(root.selected)
-                        Keys.onDownPressed: root.selected = Math.min(root.results.length - 1, root.selected + 1)
-                        Keys.onUpPressed: root.selected = Math.max(0, root.selected - 1)
-                        Keys.onTabPressed: {
-                            if (root.results.length > 0)
-                                root.selected = (root.selected + 1) % root.results.length;
-                        }
-
-
-                        Label {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width
-                            x: input.text === "" ? 0 : 10
-                            opacity: input.text === "" ? 1 : 0
-                            text: Tr.t("Search apps, or type > for commands")
-                            color: Qt.alpha(Theme.text, 0.45)
-                            size: 15
-                            elide: Text.ElideRight
-
-                            Behavior on x {
-                                NumberAnimation {
-                                    duration: 180
-                                    easing.type: Easing.OutCubic
-                                }
-                            }
-                            Behavior on opacity {
-                                NumberAnimation {
-                                    duration: 70
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Item {
-                    id: sessionRow
-
-                    readonly property int buttonSize: 42
-                    readonly property int step: buttonSize + 4
-                    readonly property real pop: root.progress(0.1)
-
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    // The search field gives way to the button going furthest, bounce included.
-                    width: buttonSize + step * root.session.length * root.powerProgress(0)
-                    height: buttonSize
-
-                    Repeater {
-                        model: root.session
-
-                        delegate: Item {
-                            id: sessionSlot
-
-                            required property var modelData
-                            required property int index
-
-                            readonly property real out: root.powerProgress(index)
-                            readonly property real distance: (root.session.length - index) * sessionRow.step
-
-                            anchors.right: parent.right
-                            anchors.rightMargin: distance * out
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: sessionRow.buttonSize
-                            height: sessionRow.buttonSize
-                            opacity: Math.min(1, Math.max(0, out * 1.6))
-                            scale: 0.45 + 0.55 * Math.min(1.15, Math.max(0, out))
-                            rotation: (1 - Math.min(1, Math.max(0, out))) * 90
-                            visible: root.powerReveal > 0
-
-                            Rectangle {
-                                id: sessionButton
-
-                                readonly property bool isArmed: root.armed === sessionSlot.modelData.id
-
-                                anchors.fill: parent
-                                radius: isArmed || sessionArea.containsMouse ? 14 : 21
-                                color: isArmed ? root.powerRed : Qt.alpha(Theme.text, sessionArea.containsMouse ? 0.15 : 0.06)
-                                scale: sessionArea.pressed ? 0.88 : sessionArea.containsMouse ? 1.06 : 1
-
-                                Behavior on radius {
-                                    NumberAnimation {
-                                        duration: 300
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.4
-                                    }
-                                }
-                                Behavior on color {
-                                    ColorAnimation {
-                                        duration: 160
-                                    }
-                                }
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 240
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 2.2
-                                    }
-                                }
-
-                                Icon {
-                                    anchors.centerIn: parent
-                                    name: sessionSlot.modelData.icon
-                                    size: 18
-                                    color: sessionButton.isArmed ? "white" : Theme.text
-                                }
-                                MouseArea {
-                                    id: sessionArea
-
-                                    anchors.fill: parent
-                                    enabled: root.powerOpen
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onContainsMouseChanged: {
-                                        if (containsMouse)
-                                            root.hoveredSession = sessionSlot.modelData.id;
-                                        else if (root.hoveredSession === sessionSlot.modelData.id)
-                                            root.hoveredSession = "";
-                                    }
-                                    onClicked: root.runSession(sessionSlot.modelData)
-                                }
-                            }
-                        }
-                    }
-
-                    // Drawn last: the buttons come out from behind it.
-                    Rectangle {
-                        id: powerButton
-
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: sessionRow.buttonSize
-                        height: sessionRow.buttonSize
-                        radius: root.powerOpen || powerArea.containsMouse ? 14 : 21
-                        color: powerArea.containsMouse ? Qt.lighter(root.powerRed, 1.14) : root.powerRed
-                        opacity: sessionRow.pop
-                        scale: (0.6 + 0.4 * sessionRow.pop) * (powerArea.pressed ? 0.88 : powerArea.containsMouse ? 1.06 : 1)
-
-                        Behavior on radius {
-                            NumberAnimation {
-                                duration: 300
-                                easing.type: Easing.OutBack
-                                easing.overshoot: 1.4
-                            }
-                        }
-                        Behavior on color {
-                            ColorAnimation {
-                                duration: 160
-                            }
-                        }
-
-                        Icon {
-                            anchors.centerIn: parent
-                            name: "power"
-                            size: 18
-                            color: "white"
-                            rotation: root.powerReveal * 360
-                        }
-                        MouseArea {
-                            id: powerArea
-
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onContainsMouseChanged: {
-                                if (containsMouse)
-                                    root.hoveredSession = root.powerMenu.id;
-                                else if (root.hoveredSession === root.powerMenu.id)
-                                    root.hoveredSession = "";
-                            }
-                            onClicked: root.togglePower()
-                        }
-                    }
-                }
-
-                // The buttons have no text: their name shows above them.
-                Rectangle {
-                    id: tipBox
-
-                    readonly property string current: root.armed || root.hoveredSession
-                    readonly property bool showing: current !== ""
-                    // Stays while it fades out, so the text does not vanish first.
-                    property var item: null
-
-                    onCurrentChanged: {
-                        if (current !== "")
-                            item = current === root.powerMenu.id ? root.powerMenu : root.session.find(s => s.id === current) || null;
-                    }
-
-                    anchors.right: parent.right
-                    y: showing ? -34 : -28
-                    width: tip.implicitWidth + 20
-                    height: 28
-                    radius: 10
-                    color: root.armed !== "" ? root.powerRed : Theme.pill
-                    opacity: showing ? 1 : 0
-                    visible: opacity > 0
+                highlight: Rectangle {
+                    y: root.selected * root.rowHeight
+                    width: list.width
+                    height: root.rowHeight
+                    radius: 15
+                    visible: list.count > 0
+                    color: list.currentItem && list.currentItem.isArmed ? Theme.error : Qt.alpha(Theme.text, 0.1)
 
                     Behavior on y {
                         NumberAnimation {
                             duration: 200
+                            easing.type: Easing.BezierSpline
+                            easing.bezierCurve: root.emphasized
+                        }
+                    }
+                    Behavior on color {
+                        ColorAnimation {
+                            duration: 160
+                        }
+                    }
+                }
+
+                // Leaving rows are gone before new ones come, so text never overlaps.
+                add: Transition {
+                    SequentialAnimation {
+                        PropertyAction {
+                            property: "opacity"
+                            value: 0
+                        }
+                        PauseAnimation {
+                            duration: 70
+                        }
+                        NumberAnimation {
+                            property: "opacity"
+                            to: 1
+                            duration: 180
                             easing.type: Easing.OutCubic
                         }
                     }
+                }
+                remove: Transition {
+                    NumberAnimation {
+                        property: "opacity"
+                        to: 0
+                        duration: 70
+                    }
+                }
+                displaced: Transition {
+                    NumberAnimation {
+                        property: "y"
+                        duration: 260
+                        easing.type: Easing.BezierSpline
+                        easing.bezierCurve: root.emphasized
+                    }
+                    NumberAnimation {
+                        properties: "opacity,scale"
+                        to: 1
+                        duration: 160
+                    }
+                }
+                move: Transition {
+                    NumberAnimation {
+                        property: "y"
+                        duration: 260
+                        easing.type: Easing.BezierSpline
+                        easing.bezierCurve: root.emphasized
+                    }
+                    NumberAnimation {
+                        properties: "opacity,scale"
+                        to: 1
+                        duration: 160
+                    }
+                }
+
+                delegate: Item {
+                    id: row
+
+                    required property string modelData
+                    required property int index
+
+                    readonly property var entry: root.rowsById[modelData] || null
+                    readonly property bool isSelected: index === root.selected
+                    readonly property bool isArmed: root.armed !== "" && root.armed === modelData
+                    readonly property color nameColor: isArmed ? Theme.pill : Theme.text
+                    readonly property bool hasImage: !!entry && !!entry.image && picture.status === Image.Ready
+                    // Rows unfold upward from the search field.
+                    readonly property real rise: root.progress(Math.max(0, Math.min(root.maxRows, root.shownRows.length) - 1 - index) * 0.07)
+
+                    width: ListView.view.width
+                    height: root.rowHeight
+
+                    Item {
+                        anchors.fill: parent
+                        opacity: row.rise
+                        transform: Translate {
+                            y: (1 - row.rise) * 18
+                        }
+                        scale: rowArea.pressed ? 0.98 : 1
+
+                        Behavior on scale {
+                            NumberAnimation {
+                                duration: 110
+                            }
+                        }
+
+                        Item {
+                            x: 12
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 32
+                            height: 32
+                            scale: row.isSelected ? 1.1 : 1
+
+                            Behavior on scale {
+                                NumberAnimation {
+                                    duration: 260
+                                    easing.type: Easing.OutBack
+                                    easing.overshoot: 2
+                                }
+                            }
+
+                            Image {
+                                id: picture
+
+                                anchors.fill: parent
+                                source: row.entry && row.entry.image ? row.entry.image : ""
+                                sourceSize: Qt.size(64, 64)
+                                asynchronous: true
+                                visible: row.hasImage
+                            }
+                            Label {
+                                anchors.centerIn: parent
+                                visible: !!row.entry && !!row.entry.glyph
+                                text: row.entry && row.entry.glyph ? row.entry.glyph : ""
+                                size: 22
+                            }
+                            Icon {
+                                anchors.centerIn: parent
+                                visible: !row.hasImage && !(row.entry && row.entry.glyph)
+                                name: row.entry ? row.entry.icon : "windows"
+                                size: 22
+                                color: row.nameColor
+                            }
+                        }
+                        Column {
+                            x: row.isSelected ? 62 : 58
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.parent.width - 74
+
+                            Behavior on x {
+                                NumberAnimation {
+                                    duration: 220
+                                    easing.type: Easing.BezierSpline
+                                    easing.bezierCurve: root.emphasized
+                                }
+                            }
+
+                            Label {
+                                width: parent.width
+                                text: row.entry ? row.entry.name : ""
+                                size: 14
+                                color: row.nameColor
+                                elide: Text.ElideRight
+                            }
+                            Label {
+                                width: parent.width
+                                visible: text !== ""
+                                text: row.isArmed ? Tr.t("Press once more to proceed") : row.entry ? row.entry.detail : ""
+                                size: 12
+                                color: row.isArmed ? Theme.pill : Theme.muted
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+                    MouseArea {
+                        id: rowArea
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onPositionChanged: mouse => {
+                            if (root.pointerMoved(mapToItem(null, mouse.x, mouse.y)))
+                                root.selected = row.index;
+                        }
+                        onClicked: root.execute(row.index)
+                    }
+                }
+            }
+
+            Label {
+                anchors.centerIn: parent
+                opacity: list.count === 0 ? 1 : 0
+                text: Tr.t("Nothing found")
+                color: Theme.muted
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 180
+                    }
+                }
+            }
+
+        }
+
+        // Search and session buttons
+        Item {
+            id: bottomRow
+
+            x: root.padding
+            y: viewport.y + viewport.height + 10
+            width: parent.width - root.padding * 2
+            height: 46
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: sessionRow.left
+                anchors.rightMargin: 10
+                height: parent.height
+                radius: 23
+                color: Qt.alpha(Theme.text, input.text === "" ? 0.08 : 0.11)
+                opacity: root.progress(0)
+
+                Behavior on color {
+                    ColorAnimation {
+                        duration: 180
+                    }
+                }
+
+                // The glass turns from a search into a command prompt.
+                Icon {
+                    x: 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "search"
+                    size: 17
+                    color: Theme.muted
+                    opacity: root.commandMode ? 0 : 1
+                    rotation: root.commandMode ? 90 : 0
+                    scale: root.commandMode ? 0.6 : 1
+
                     Behavior on opacity {
                         NumberAnimation {
-                            duration: 150
+                            duration: 160
                         }
                     }
-                    Behavior on width {
+                    Behavior on rotation {
                         NumberAnimation {
-                            duration: 200
+                            duration: 260
                             easing.type: Easing.OutCubic
+                        }
+                    }
+                    Behavior on scale {
+                        NumberAnimation {
+                            duration: 260
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                }
+                Icon {
+                    x: 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "forward"
+                    size: 17
+                    color: Theme.accent
+                    opacity: root.commandMode ? 1 : 0
+                    rotation: root.commandMode ? 0 : -90
+                    scale: root.commandMode ? 1 : 0.6
+
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: 160
+                        }
+                    }
+                    Behavior on rotation {
+                        NumberAnimation {
+                            duration: 260
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                    Behavior on scale {
+                        NumberAnimation {
+                            duration: 260
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                }
+                TextInput {
+                    id: input
+
+                    anchors.left: parent.left
+                    anchors.leftMargin: 44
+                    anchors.right: parent.right
+                    anchors.rightMargin: 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    focus: true
+                    clip: true
+                    color: Theme.text
+                    selectionColor: Theme.accent
+                    selectedTextColor: Theme.accentText
+                    font.family: Theme.sans
+                    font.pixelSize: Math.round(15 * Theme.fontScale)
+                    onTextChanged: root.query = text
+                    Keys.onEscapePressed: {
+                        if (root.powerOpen)
+                            root.powerOpen = false;
+                        else
+                            Ui.popup = "";
+                    }
+                    Keys.onReturnPressed: root.execute(root.selected)
+                    Keys.onEnterPressed: root.execute(root.selected)
+                    Keys.onDownPressed: root.selected = Math.min(root.results.length - 1, root.selected + 1)
+                    Keys.onUpPressed: root.selected = Math.max(0, root.selected - 1)
+                    Keys.onTabPressed: {
+                        if (root.results.length > 0)
+                            root.selected = (root.selected + 1) % root.results.length;
+                    }
+
+
+                    Label {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width
+                        x: input.text === "" ? 0 : 10
+                        opacity: input.text === "" ? 1 : 0
+                        text: Tr.t("Search apps, or type > for commands")
+                        color: Qt.alpha(Theme.text, 0.45)
+                        size: 15
+                        elide: Text.ElideRight
+
+                        Behavior on x {
+                            NumberAnimation {
+                                duration: 180
+                                easing.type: Easing.OutCubic
+                            }
+                        }
+                        Behavior on opacity {
+                            NumberAnimation {
+                                duration: 70
+                            }
+                        }
+                    }
+                }
+            }
+
+            Item {
+                id: sessionRow
+
+                readonly property int buttonSize: 42
+                readonly property int step: buttonSize + 4
+                readonly property real pop: root.progress(0.1)
+
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                // The search field gives way to the button going furthest, bounce included.
+                width: buttonSize + step * root.session.length * root.powerProgress(0)
+                height: buttonSize
+
+                Repeater {
+                    model: root.session
+
+                    delegate: Item {
+                        id: sessionSlot
+
+                        required property var modelData
+                        required property int index
+
+                        readonly property real out: root.powerProgress(index)
+                        readonly property real distance: (root.session.length - index) * sessionRow.step
+
+                        anchors.right: parent.right
+                        anchors.rightMargin: distance * out
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: sessionRow.buttonSize
+                        height: sessionRow.buttonSize
+                        opacity: Math.min(1, Math.max(0, out * 1.6))
+                        scale: 0.45 + 0.55 * Math.min(1.15, Math.max(0, out))
+                        rotation: (1 - Math.min(1, Math.max(0, out))) * 90
+                        visible: root.powerReveal > 0
+
+                        Rectangle {
+                            id: sessionButton
+
+                            readonly property bool isArmed: root.armed === sessionSlot.modelData.id
+
+                            anchors.fill: parent
+                            radius: isArmed || sessionArea.containsMouse ? 14 : 21
+                            color: isArmed ? root.powerRed : Qt.alpha(Theme.text, sessionArea.containsMouse ? 0.15 : 0.06)
+                            scale: sessionArea.pressed ? 0.88 : sessionArea.containsMouse ? 1.06 : 1
+
+                            Behavior on radius {
+                                NumberAnimation {
+                                    duration: 300
+                                    easing.type: Easing.OutBack
+                                    easing.overshoot: 1.4
+                                }
+                            }
+                            Behavior on color {
+                                ColorAnimation {
+                                    duration: 160
+                                }
+                            }
+                            Behavior on scale {
+                                NumberAnimation {
+                                    duration: 240
+                                    easing.type: Easing.OutBack
+                                    easing.overshoot: 2.2
+                                }
+                            }
+
+                            Icon {
+                                anchors.centerIn: parent
+                                name: sessionSlot.modelData.icon
+                                size: 18
+                                color: sessionButton.isArmed ? "white" : Theme.text
+                            }
+                            MouseArea {
+                                id: sessionArea
+
+                                anchors.fill: parent
+                                enabled: root.powerOpen
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onContainsMouseChanged: {
+                                    if (containsMouse)
+                                        root.hoveredSession = sessionSlot.modelData.id;
+                                    else if (root.hoveredSession === sessionSlot.modelData.id)
+                                        root.hoveredSession = "";
+                                }
+                                onClicked: root.runSession(sessionSlot.modelData)
+                            }
+                        }
+                    }
+                }
+
+                // Drawn last: the buttons come out from behind it.
+                Rectangle {
+                    id: powerButton
+
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: sessionRow.buttonSize
+                    height: sessionRow.buttonSize
+                    radius: root.powerOpen || powerArea.containsMouse ? 14 : 21
+                    color: powerArea.containsMouse ? Qt.lighter(root.powerRed, 1.14) : root.powerRed
+                    opacity: sessionRow.pop
+                    scale: (0.6 + 0.4 * sessionRow.pop) * (powerArea.pressed ? 0.88 : powerArea.containsMouse ? 1.06 : 1)
+
+                    Behavior on radius {
+                        NumberAnimation {
+                            duration: 300
+                            easing.type: Easing.OutBack
+                            easing.overshoot: 1.4
                         }
                     }
                     Behavior on color {
@@ -1257,14 +1168,83 @@ PanelWindow {
                         }
                     }
 
-                    Label {
-                        id: tip
-
+                    Icon {
                         anchors.centerIn: parent
-                        text: tipBox.item ? (root.armed !== "" ? tipBox.item.name + ": " + Tr.t("Press once more to proceed") : tipBox.item.name) : ""
-                        color: root.armed !== "" ? "white" : Theme.text
-                        size: 12
+                        name: "power"
+                        size: 18
+                        color: "white"
+                        rotation: root.powerReveal * 360
                     }
+                    MouseArea {
+                        id: powerArea
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onContainsMouseChanged: {
+                            if (containsMouse)
+                                root.hoveredSession = root.powerMenu.id;
+                            else if (root.hoveredSession === root.powerMenu.id)
+                                root.hoveredSession = "";
+                        }
+                        onClicked: root.togglePower()
+                    }
+                }
+            }
+
+            // The buttons have no text: their name shows above them.
+            Rectangle {
+                id: tipBox
+
+                readonly property string current: root.armed || root.hoveredSession
+                readonly property bool showing: current !== ""
+                // Stays while it fades out, so the text does not vanish first.
+                property var item: null
+
+                onCurrentChanged: {
+                    if (current !== "")
+                        item = current === root.powerMenu.id ? root.powerMenu : root.session.find(s => s.id === current) || null;
+                }
+
+                anchors.right: parent.right
+                y: showing ? -34 : -28
+                width: tip.implicitWidth + 20
+                height: 28
+                radius: 10
+                color: root.armed !== "" ? root.powerRed : Theme.pill
+                opacity: showing ? 1 : 0
+                visible: opacity > 0
+
+                Behavior on y {
+                    NumberAnimation {
+                        duration: 200
+                        easing.type: Easing.OutCubic
+                    }
+                }
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 150
+                    }
+                }
+                Behavior on width {
+                    NumberAnimation {
+                        duration: 200
+                        easing.type: Easing.OutCubic
+                    }
+                }
+                Behavior on color {
+                    ColorAnimation {
+                        duration: 160
+                    }
+                }
+
+                Label {
+                    id: tip
+
+                    anchors.centerIn: parent
+                    text: tipBox.item ? (root.armed !== "" ? tipBox.item.name + ": " + Tr.t("Press once more to proceed") : tipBox.item.name) : ""
+                    color: root.armed !== "" ? "white" : Theme.text
+                    size: 12
                 }
             }
         }

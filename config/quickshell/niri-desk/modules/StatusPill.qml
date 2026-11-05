@@ -8,14 +8,13 @@ import qs.services
 Rectangle {
     id: root
 
-    implicitWidth: row.implicitWidth + (Settings.framed ? 22 : 12)
-    height: Settings.framed ? 36 : 34
-    // In a frame the panel fills its corner, so only the corner facing the desktop stays round.
-    readonly property int floatRadius: Settings.framed ? 0 : 11
-    topRightRadius: floatRadius
-    bottomRightRadius: floatRadius
-    topLeftRadius: Settings.framed ? (Settings.bottom ? 14 : 0) : 11
-    bottomLeftRadius: Settings.framed ? (Settings.bottom ? 0 : 14) : 11
+    implicitWidth: row.implicitWidth + (Settings.hug ? 26 : 12)
+    height: Settings.hug ? 45 : 34
+    // In the corner only the free corner stays round. The border on the screen edges lies off the screen.
+    topRightRadius: Settings.hug ? 0 : 11
+    bottomRightRadius: Settings.hug ? 0 : 11
+    topLeftRadius: Settings.hug ? (Settings.bottom ? 18 : 0) : 11
+    bottomLeftRadius: Settings.hug ? (Settings.bottom ? 0 : 18) : 11
     gradient: Gradient {
         GradientStop {
             position: 0
@@ -23,31 +22,27 @@ Rectangle {
         }
         GradientStop {
             position: 1
-            // In a frame it has the strip's color, so nothing shows where they meet.
-            color: Settings.framed ? Theme.glassTop : Theme.panel
+            color: Theme.panel
         }
     }
-    // In a frame a border would draw a line where the panel meets it.
-    border.width: Settings.framed ? 0 : 1
+    border.width: 1
     border.color: Theme.panelEdge
 
     EdgeCurve {
-        visible: Settings.framed
-        size: 14
+        visible: Settings.hug
         x: -size
-        y: Settings.bottom ? root.height - size : 0
+        y: Settings.bottom ? 44 - size : 1
         flipX: true
         flipY: Settings.bottom
-        color: Theme.glassTop
+        color: Settings.bottom ? Theme.panel : Theme.glassTop
     }
     EdgeCurve {
-        visible: Settings.framed
-        size: 14
-        x: root.width - size
+        visible: Settings.hug
+        x: root.width - 1 - size
         y: Settings.bottom ? -size : root.height
         flipX: true
         flipY: Settings.bottom
-        color: Theme.glassTop
+        color: Settings.bottom ? Theme.glassTop : Theme.panel
     }
 
     // Belgi radio yoqilganini emas, haqiqiy ulanishni ko'rsatadi. Sim ustun turadi.

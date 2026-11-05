@@ -121,7 +121,7 @@ LazyLoader {
                         items: [
                             { key: "appearance.panelOpacity", label: Tr.t("Panel opacity"), hint: Tr.t("Lower is more see-through"), type: "slider", min: 0.15, max: 1, step: 0.05, unit: "percent" },
                             { key: "panel.position", label: Tr.t("Position"), type: "choice", options: ["top", "bottom"], names: [Tr.t("Top"), Tr.t("Bottom")] },
-                            { key: "panel.style", label: Tr.t("Panel shape"), type: "choice", options: ["frame", "float"], names: [Tr.t("In a frame"), Tr.t("Floating")] }
+                            { key: "panel.style", label: Tr.t("Panel shape"), type: "choice", options: ["hug", "float"], names: [Tr.t("In the corners"), Tr.t("Floating")] }
                         ]
                     },
                     {

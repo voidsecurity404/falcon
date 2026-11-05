@@ -18,10 +18,9 @@ PanelWindow {
     readonly property int edgeSign: Settings.bottom ? 1 : -1
     readonly property var leaveCurve: [0.4, 0, 0.9, 0.3, 1, 1]
     readonly property var arriveCurve: [0.25, 1.25, 0.35, 1, 1, 1]
-    // In a frame the side panels fill its corners. Otherwise they float.
-    readonly property real edgeGap: Settings.framed ? Ui.frameSize : 10
-    readonly property real sideGap: Settings.framed ? Ui.frameSize : 14
-    readonly property real popupGap: 52 + Ui.frameSize
+    // Side panels in the corners have their border just off the screen. Otherwise they float.
+    readonly property int edgeGap: Settings.hug ? -1 : 10
+    readonly property int sideGap: Settings.hug ? -1 : 14
     property real ribbonOut: barShown ? 0 : 1
     property real statusOut: barShown ? 0 : 1
     property real islandOut: islandShown ? 0 : 1
@@ -69,18 +68,6 @@ PanelWindow {
     // Faqat panellar orqasi xiralashadi, qolgan ekran toza qoladi.
     BackgroundEffect.blurRegion: Region {
         Region {
-            item: Ui.frameSize > 0 ? frameArea : null
-
-            Region {
-                item: frameHole
-                topLeftRadius: frameHole.topRadius
-                topRightRadius: frameHole.topRadius
-                bottomLeftRadius: frameHole.bottomRadius
-                bottomRightRadius: frameHole.bottomRadius
-                intersection: Intersection.Subtract
-            }
-        }
-        Region {
             item: root.ribbonOut < 1 ? ribbon : null
             topLeftRadius: ribbon.topLeftRadius
             topRightRadius: ribbon.topRightRadius
@@ -88,15 +75,15 @@ PanelWindow {
             bottomRightRadius: ribbon.bottomRightRadius
         }
         CurveRegion {
-            size: Settings.framed && root.ribbonOut < 1 ? 14 : 0
+            size: Settings.hug && root.ribbonOut < 1 ? 18 : 0
             x: ribbon.x + ribbon.width
-            y: ribbon.y + (Settings.bottom ? ribbon.height - 14 : 0)
+            y: Settings.bottom ? ribbon.y + 44 - 18 : ribbon.y + 1
             flipY: Settings.bottom
         }
         CurveRegion {
-            size: Settings.framed && root.ribbonOut < 1 ? 14 : 0
-            x: ribbon.x
-            y: Settings.bottom ? ribbon.y - 14 : ribbon.y + ribbon.height
+            size: Settings.hug && root.ribbonOut < 1 ? 18 : 0
+            x: ribbon.x + 1
+            y: Settings.bottom ? ribbon.y - 18 : ribbon.y + ribbon.height
             flipY: Settings.bottom
         }
         Region {
@@ -107,16 +94,16 @@ PanelWindow {
             bottomRightRadius: status.bottomRightRadius
         }
         CurveRegion {
-            size: Settings.framed && root.statusOut < 1 ? 14 : 0
-            x: status.x - 14
-            y: status.y + (Settings.bottom ? status.height - 14 : 0)
+            size: Settings.hug && root.statusOut < 1 ? 18 : 0
+            x: status.x - 18
+            y: Settings.bottom ? status.y + 44 - 18 : status.y + 1
             flipX: true
             flipY: Settings.bottom
         }
         CurveRegion {
-            size: Settings.framed && root.statusOut < 1 ? 14 : 0
-            x: status.x + status.width - 14
-            y: Settings.bottom ? status.y - 14 : status.y + status.height
+            size: Settings.hug && root.statusOut < 1 ? 18 : 0
+            x: status.x + status.width - 1 - 18
+            y: Settings.bottom ? status.y - 18 : status.y + status.height
             flipX: true
             flipY: Settings.bottom
         }
@@ -185,42 +172,6 @@ PanelWindow {
         }
     }
 
-    // The frame: one rectangle whose border is the strip. Its outer round corners lie off the screen.
-    // The two corners behind the side panels are square, so the glass does not lie there twice.
-    Rectangle {
-        readonly property int beyond: 40
-
-        x: -beyond
-        y: -beyond
-        width: parent.width + beyond * 2
-        height: parent.height + beyond * 2
-        visible: Ui.frameSize > 0
-        opacity: Math.min(1, Ui.frameSize / 4)
-        color: "transparent"
-        border.width: Ui.frameSize + beyond
-        border.color: Theme.glassTop
-        topLeftRadius: frameHole.topRadius + border.width
-        topRightRadius: frameHole.topRadius + border.width
-        bottomLeftRadius: frameHole.bottomRadius + border.width
-        bottomRightRadius: frameHole.bottomRadius + border.width
-    }
-    Item {
-        id: frameArea
-
-        anchors.fill: parent
-    }
-    Item {
-        id: frameHole
-
-        readonly property int topRadius: Settings.bottom ? 20 : 0
-        readonly property int bottomRadius: Settings.bottom ? 0 : 20
-
-        x: Ui.frameSize
-        y: Ui.frameSize
-        width: parent.width - Ui.frameSize * 2
-        height: parent.height - Ui.frameSize * 2
-    }
-
     Ribbon {
         id: ribbon
 
@@ -245,7 +196,7 @@ PanelWindow {
         id: island
 
         anchors.horizontalCenter: parent.horizontalCenter
-        y: Settings.bottom ? parent.height - height - Ui.frameSize : Ui.frameSize
+        y: Settings.bottom ? parent.height - height : 0
         slide: root.islandOut
         visible: root.islandOut < 1
         showDashboard: root.panelHere && Ui.popup === "dashboard"
@@ -253,15 +204,15 @@ PanelWindow {
 
     TrayMenu {
         anchors.right: parent.right
-        anchors.rightMargin: 14 + Ui.frameSize
-        y: Settings.bottom ? parent.height - height - root.popupGap : root.popupGap
+        anchors.rightMargin: 14
+        y: Settings.bottom ? parent.height - height - 52 : 52
         shown: root.panelHere && Ui.popup === "tray"
     }
 
     ClaudePanel {
         anchors.right: parent.right
-        anchors.rightMargin: 14 + Ui.frameSize
-        y: Settings.bottom ? parent.height - height - root.popupGap : root.popupGap
+        anchors.rightMargin: 14
+        y: Settings.bottom ? parent.height - height - 52 : 52
         shown: root.panelHere && Ui.popup === "claude"
     }
 
@@ -269,9 +220,25 @@ PanelWindow {
         id: control
 
         anchors.right: parent.right
-        anchors.rightMargin: 14 + Ui.frameSize
-        y: Settings.bottom ? parent.height - height - root.popupGap : root.popupGap
+        anchors.rightMargin: 14
+        y: Settings.bottom ? parent.height - height - 52 : 52
         shown: root.panelHere && Ui.popup === "control"
         onReleaseFocus: keyScope.forceActiveFocus()
+    }
+
+    // The screen's own corners look round, as on end-4's desktop. Fullscreen windows lie above this layer.
+    Repeater {
+        model: Settings.hug ? [[false, false], [true, false], [false, true], [true, true]] : []
+
+        delegate: EdgeCurve {
+            required property var modelData
+
+            size: 23
+            x: modelData[0] ? root.width - size : 0
+            y: modelData[1] ? root.height - size : 0
+            flipX: modelData[0]
+            flipY: modelData[1]
+            color: "black"
+        }
     }
 }

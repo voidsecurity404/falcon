@@ -46,7 +46,7 @@
   },
   "panel": {
     "position": "top",
-    "style": "frame",
+    "style": "hug",
     "ribbon": true,
     "hideEmpty": false,
     "lang": true,

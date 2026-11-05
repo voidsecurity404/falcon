@@ -52,8 +52,7 @@ Item {
         y: (Settings.bottom ? 1 : -1) * root.slide * (body.height + 28)
         width: root.targetWidth
         height: root.targetHeight
-        // In a frame a border would draw a line where the island meets it.
-        border.width: Settings.framed ? 0 : 1
+        border.width: 1
         border.color: root.mode === "dashboard" ? "transparent" : Theme.panelEdge
         gradient: Gradient {
             GradientStop {

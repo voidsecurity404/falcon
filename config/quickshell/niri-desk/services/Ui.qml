@@ -14,17 +14,6 @@ Singleton {
     // "", menu, clipboard, wallpapers, dashboard, control, claude
     property string popup: ""
     property bool zen: false
-    // How wide the frame around the desktop is now. Focus mode takes it away.
-    readonly property int frameTarget: Settings.framed && !zen ? 12 : 0
-    property real frameSize: frameTarget
-
-    Behavior on frameSize {
-        NumberAnimation {
-            duration: 300
-            easing.type: Easing.OutCubic
-        }
-    }
-
     property bool settingsOpen: false
     property int settingsPage: 0
     property int dashTab: 0

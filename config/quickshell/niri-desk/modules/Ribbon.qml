@@ -11,14 +11,13 @@ Rectangle {
     readonly property string output: screenInfo ? screenInfo.name : ""
 
     visible: Settings.get("panel.ribbon", true)
-    implicitWidth: row.implicitWidth + (Settings.framed ? 18 : 8)
-    height: Settings.framed ? 36 : 34
-    // In a frame the panel fills its corner, so only the corner facing the desktop stays round.
-    readonly property int floatRadius: Settings.framed ? 0 : 11
-    topLeftRadius: floatRadius
-    bottomLeftRadius: floatRadius
-    topRightRadius: Settings.framed ? (Settings.bottom ? 14 : 0) : 11
-    bottomRightRadius: Settings.framed ? (Settings.bottom ? 0 : 14) : 11
+    implicitWidth: row.implicitWidth + (Settings.hug ? 26 : 8)
+    height: Settings.hug ? 45 : 34
+    // In the corner only the free corner stays round. The border on the screen edges lies off the screen.
+    topLeftRadius: Settings.hug ? 0 : 11
+    bottomLeftRadius: Settings.hug ? 0 : 11
+    topRightRadius: Settings.hug ? (Settings.bottom ? 18 : 0) : 11
+    bottomRightRadius: Settings.hug ? (Settings.bottom ? 0 : 18) : 11
     gradient: Gradient {
         GradientStop {
             position: 0
@@ -26,29 +25,25 @@ Rectangle {
         }
         GradientStop {
             position: 1
-            // In a frame it has the strip's color, so nothing shows where they meet.
-            color: Settings.framed ? Theme.glassTop : Theme.panel
+            color: Theme.panel
         }
     }
-    // In a frame a border would draw a line where the panel meets it.
-    border.width: Settings.framed ? 0 : 1
+    border.width: 1
     border.color: Theme.panelEdge
 
     EdgeCurve {
-        visible: Settings.framed
-        size: 14
+        visible: Settings.hug
         x: root.width
-        y: Settings.bottom ? root.height - size : 0
+        y: Settings.bottom ? 44 - size : 1
         flipY: Settings.bottom
-        color: Theme.glassTop
+        color: Settings.bottom ? Theme.panel : Theme.glassTop
     }
     EdgeCurve {
-        visible: Settings.framed
-        size: 14
-        x: 0
+        visible: Settings.hug
+        x: 1
         y: Settings.bottom ? -size : root.height
         flipY: Settings.bottom
-        color: Theme.glassTop
+        color: Settings.bottom ? Theme.glassTop : Theme.panel
     }
 
     // Joriy raqam tagidagi rangli belgi: raqamlar orasida sirpanadi, rangi fon rasmidan.
