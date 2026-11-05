@@ -55,8 +55,9 @@ PanelWindow {
         respectInhibitors: true
     }
 
+    // The overview shows the backdrop around the workspaces, so widgets leave it there. The blur must go too.
     BackgroundEffect.blurRegion: Region {
-        regions: blurs.instances
+        regions: Niri.overview ? [] : blurs.instances
     }
     Variants {
         id: blurs
@@ -79,7 +80,7 @@ PanelWindow {
 
     Item {
         anchors.fill: parent
-        opacity: Widgets.editMode ? 0 : 1
+        opacity: Widgets.editMode || Niri.overview ? 0 : 1
 
         Behavior on opacity {
             NumberAnimation {
