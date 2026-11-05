@@ -9,6 +9,9 @@
 Each window comes back on its workspace and monitor, in its column, with its size, and floating
 windows at their position. A terminal comes back in its folder. Only the app is started, never its
 arguments, so a one-off terminal command does not run again. What is inside a window is up to the app.
+
+While restoring, a flag file asks the shell to cover the screen, and apps start only once that cover is
+up, so after login the desktop appears with every window already in place.
 """
 import fcntl
 import json
@@ -23,6 +26,8 @@ from pathlib import Path
 
 STATE = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "falcon"
 FILE = STATE / "session.json"
+FLAG = Path(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}") / "falcon-restoring"
+COVER = "falcon-cover"
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
 SKIP = {"org.quickshell", "falcon-scratch", "falcon-tool", "com.gabm.satty"}
 # Folder option of each terminal. Their windows are separate processes, so the next can start at once.
@@ -33,7 +38,8 @@ HELPERS = {"kitten", "kitty"}
 
 SAVE_DELAY = 1.5        # after a change, so a burst of events writes once
 SAVE_EVERY = 30         # also catches a terminal changing folder, which sends no event
-SETTLE = 2.5            # an app may open several windows itself, such as a browser restoring its own
+SETTLE = 3.5            # an app may open several windows itself, such as a browser restoring its own
+COVER_WAIT = 4          # the shell starts with the session, a broken one must not hold the windows back
 LAUNCH_WAIT = 20        # a launch that opened nothing by then is given up
 RESTORE_WAIT = 60
 IGNORED_EVENTS = {"KeyboardLayoutsChanged", "KeyboardLayoutSwitched", "OverviewOpenedOrClosed", "ConfigLoaded",
@@ -97,6 +103,7 @@ def snapshot():
         layout = w.get("layout") or {}
         pos = layout.get("pos_in_scrolling_layout") or [999, 1]
         tile = layout.get("tile_size") or [0, 0]
+        size = layout.get("window_size") or tile
         logical = (outputs.get(space.get("output")) or {}).get("logical") or {}
         floating = w.get("is_floating", False)
         item = {
@@ -108,8 +115,8 @@ def snapshot():
             "column": pos[0],
             "row": pos[1],
             "floating": floating,
-            "width": tile[0],
-            "height": tile[1],
+            "width": size[0],
+            "height": size[1],
             # niri has no fullscreen flag. Focus mode has no gaps, so a column can fill the screen there.
             "fullscreen": not floating and not zen and tile[0] >= logical.get("width", 1e9) and tile[1] >= logical.get("height", 1e9),
             "active": space.get("active_window_id") == w["id"],
@@ -288,12 +295,21 @@ def workspace_ranks(items):
 
 
 def place(bound, ranks, outputs):
-    """Puts windows on their workspaces, lowest first, because a higher one exists only after that."""
-    for window_id, item in sorted(bound.items(), key=lambda b: ranks[b[1].get("output", ""), b[1].get("workspace", 1)]):
-        output = item.get("output")
-        if output in outputs:
+    """Puts windows on their workspaces, lowest first, because a higher one exists only after that.
+    A window sent to a workspace that did not exist yet lands on the last one, so every window is
+    checked again each time and moved only when it is not where it belongs."""
+    for window_id, item in sorted(bound.items(), key=lambda b: ranks[b[1]["output"], b[1]["workspace"]]):
+        spaces = {w["id"]: w for w in niri_json("workspaces")}
+        window = next((w for w in niri_json("windows") if w["id"] == window_id), None)
+        if not window:
+            continue
+        space = spaces.get(window.get("workspace_id")) or {}
+        output = item["output"] if item["output"] in outputs else space.get("output")
+        rank = ranks[item["output"], item["workspace"]]
+        if output and space.get("output") != output:
             action("move-window-to-monitor", "--id", window_id, output)
-        action("move-window-to-workspace", "--window-id", window_id, "--focus", "false", ranks[item.get("output", ""), item.get("workspace", 1)])
+        if space.get("output") != output or space.get("idx") != rank:
+            action("move-window-to-workspace", "--window-id", window_id, "--focus", "false", rank)
 
 
 def float_window(window_id, item):
@@ -347,7 +363,8 @@ def fix_sizes(bound, outputs):
     for window_id, item in bound.items():
         if item.get("floating") or item.get("fullscreen") or window_id not in current or not item.get("width"):
             continue
-        tile = (current[window_id].get("layout") or {}).get("tile_size") or [0, 0]
+        layout = current[window_id].get("layout") or {}
+        tile = layout.get("window_size") or layout.get("tile_size") or [0, 0]
         if abs(tile[0] - item["width"]) > 1:
             action("set-window-width", "--id", window_id, int(item["width"]))
         # A lone window normally fills the height, and the panel may not be up yet. A fixed
@@ -358,9 +375,17 @@ def fix_sizes(bound, outputs):
             action("set-window-height", "--id", window_id, int(item["height"]))
 
 
-def restore_focus(bound, ranks):
+def filling(window, outputs, output):
+    tile = (window.get("layout") or {}).get("tile_size") or [0, 0]
+    logical = (outputs.get(output) or {}).get("logical") or {}
+    return tile[0] >= logical.get("width", 1e9) and tile[1] >= logical.get("height", 1e9)
+
+
+def restore_focus(bound, outputs):
+    current = {w["id"]: w for w in niri_json("windows")}
     for window_id, item in bound.items():
-        if item.get("fullscreen"):
+        # The action toggles, and an app may already have come back fullscreen by itself.
+        if item.get("fullscreen") and window_id in current and not filling(current[window_id], outputs, item["output"]):
             action("fullscreen-window", "--id", window_id)
     # The window each workspace had in view, then the one with the keyboard last.
     ordered = sorted(bound.items(), key=lambda b: (b[1].get("workspaceActive", False), b[1].get("focused", False)))
@@ -369,22 +394,85 @@ def restore_focus(bound, ranks):
             action("focus-window", "--id", window_id)
 
 
+def number(value, fallback, low=None):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != value:
+        return fallback
+    return value if low is None or value >= low else fallback
+
+
+def clean(item):
+    """A saved window with every field of the right type, or None. The file may come from an older
+    version or be edited by hand, and one bad entry must not stop the rest."""
+    if not isinstance(item, dict):
+        return None
+    text = lambda key: item.get(key) if isinstance(item.get(key), str) else ""
+    flag = lambda key: item.get(key) is True
+    out = {
+        "app": text("app"), "exe": text("exe"), "title": text("title"), "output": text("output"),
+        "workspace": int(number(item.get("workspace"), 1, 1)),
+        "column": int(number(item.get("column"), 999, 1)),
+        "row": int(number(item.get("row"), 1, 1)),
+        "floating": flag("floating"),
+        "width": number(item.get("width"), 0, 0), "height": number(item.get("height"), 0, 0),
+        "fullscreen": flag("fullscreen"), "active": flag("active"),
+        "workspaceActive": flag("workspaceActive"), "focused": flag("focused"),
+    }
+    if not out["app"] and not out["exe"]:
+        return None
+    if "x" in item and "y" in item:
+        out["x"], out["y"] = number(item["x"], None), number(item["y"], None)
+        if out["x"] is None or out["y"] is None:
+            del out["x"], out["y"]
+    if text("folder"):
+        out["folder"] = text("folder")
+    return out
+
+
+def own_windows():
+    """Windows that count as the user's. The shell's own windows do not."""
+    return [w for w in niri_json("windows") if (w.get("app_id") or "") not in SKIP]
+
+
+def wait_for_cover():
+    end = time.monotonic() + COVER_WAIT
+    while time.monotonic() < end:
+        try:
+            if any(layer.get("namespace") == COVER for layer in niri_json("layers")):
+                # One more frame, so the cover is on screen and not only mapped.
+                time.sleep(0.1)
+                return
+        except (OSError, ValueError, subprocess.CalledProcessError):
+            pass
+        time.sleep(0.1)
+
+
 def restore(force):
     if not force and not enabled():
         return 0
-    if niri_json("windows"):
+    if own_windows():
         return 0
     try:
         items = json.loads(FILE.read_text())
     except (OSError, ValueError):
         return 0
-    if not isinstance(items, list):
+    if not isinstance(items, list) or not items:
         return 0
+    # Set before anything slow, so the shell finds it when it starts.
+    try:
+        FLAG.write_text(str(time.time()))
+    except OSError:
+        pass
+    try:
+        return restore_items(items)
+    finally:
+        FLAG.unlink(missing_ok=True)
 
+
+def restore_items(items):
     groups = {}
     wanted = []
-    for item in items:
-        if not isinstance(item, dict):
+    for item in map(clean, items):
+        if not item:
             continue
         command = launch_command(item)
         if not command:
@@ -394,6 +482,12 @@ def restore(force):
     if not wanted:
         return 0
 
+    wait_for_cover()
+    bring_back(groups, wanted)
+    return 0
+
+
+def bring_back(groups, wanted):
     ranks = workspace_ranks(wanted)
     outputs = niri_json("outputs")
     bound = {}
@@ -435,8 +529,9 @@ def restore(force):
     fix_sizes(bound, outputs)
     time.sleep(0.4)
     fix_sizes(bound, outputs)
-    restore_focus(bound, ranks)
-    return 0
+    restore_focus(bound, outputs)
+    # The last focus change scrolls the view, which should end before the cover lifts.
+    time.sleep(0.3)
 
 
 def main():
@@ -452,8 +547,8 @@ def main():
         if args[:1] == ["run"]:
             try:
                 restore(False)
-            except (OSError, ValueError, subprocess.CalledProcessError) as error:
-                print(error, file=sys.stderr)
+            except Exception as error:  # noqa: BLE001  saving must keep working whatever restore met
+                print(f"restore failed: {error!r}", file=sys.stderr)
             return watch()
     except subprocess.CalledProcessError as error:
         print(f"niri is not answering: {error}", file=sys.stderr)

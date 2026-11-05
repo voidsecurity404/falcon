@@ -98,7 +98,7 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 
 ## Helper commands
 
-- `falcon-session run|watch|save|restore`: windows come back after a reboot on their workspace and monitor, in their column, with their size, floating ones at their position, and terminals in their folder. Saved on every change. Arguments are never replayed, and what is inside a window is up to the app.
+- `falcon-session run|watch|save|restore`: windows come back after a reboot on their workspace and monitor, in their column, with their size, floating ones at their position, and terminals in their folder. Saved on every change. While they come back the screen stays covered by the wallpaper and a clock, so after login the desktop appears with everything already in place. Arguments are never replayed, and what is inside a window is up to the app.
 - `falcon-backup export [file]`, `import file`: save settings to one file.
 - `falcon-doctor`: checks programs, running services, config and permissions, and says what to fix.
 - `falcon-sync [--check] [--pull]`: copies changed files from the repo to the live desktop, leaving generated files and user data alone.
