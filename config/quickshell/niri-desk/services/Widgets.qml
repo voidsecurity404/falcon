@@ -133,6 +133,10 @@ Singleton {
     readonly property bool enabled: Settings.get("widgets.enabled", true)
     readonly property bool firstOnly: Settings.get("widgets.firstOnly", false)
     readonly property real glass: Settings.get("widgets.opacity", 0.5)
+    // What a new wallpaper changes: "full" place and form, "place" only the place, "off" nothing.
+    readonly property string follow: Settings.get("widgets.followWallpaper", "full")
+    // The picture on screen now, the key for layouts the user arranged by hand.
+    property string currentImage: ""
     readonly property bool musicLive: (shownNow || editMode) && hasType("music")
     readonly property bool systemLive: (shownNow || editMode) && hasType("system")
     readonly property string notePath: Quickshell.env("HOME") + "/.config/niri-desk/note.txt"
@@ -209,14 +213,54 @@ Singleton {
             fx: Math.max(0, Math.min(1, fx)),
             fy: Math.max(0, Math.min(1, fy))
         });
+        remember();
+    }
+
+    // A layout changed by hand comes back whenever this wallpaper does.
+    function remember() {
+        if (currentImage === "" || follow === "off")
+            return;
+        const next = Object.assign({}, handLayouts());
+        next[currentImage] = items;
+        hand.setText(JSON.stringify(next, null, 1) + "\n");
+        handCache = next;
+    }
+
+    function forget() {
+        const next = Object.assign({}, handLayouts());
+        delete next[currentImage];
+        hand.setText(JSON.stringify(next, null, 1) + "\n");
+        handCache = next;
+    }
+
+    function handLayouts() {
+        if (handCache === null) {
+            try {
+                handCache = JSON.parse(hand.text() || "{}");
+            } catch (e) {
+                handCache = {};
+            }
+        }
+        return handCache;
+    }
+
+    // Widgets added since keep their place, and widgets removed since stay removed.
+    function restoreHand(saved) {
+        const list = validated(saved) || [];
+        apply(items.map(w => {
+            const old = list.find(s => s.id === w.id);
+            return old || w;
+        }), true);
     }
 
     function cycleSize(id) {
         const w = get(id);
-        if (w)
-            update(id, {
-                size: w.size === "s" ? "m" : w.size === "m" ? "l" : "s"
-            });
+        if (!w)
+            return;
+        update(id, {
+            size: w.size === "s" ? "m" : w.size === "m" ? "l" : "s"
+        });
+        remember();
     }
 
     function add(type) {
@@ -232,20 +276,29 @@ Singleton {
                 size: "m"
             }
         ]), true);
+        remember();
     }
 
     function remove(id) {
         apply(items.filter(w => w.id !== id), true);
+        remember();
     }
 
     function reset() {
         apply(defaults, true);
+        forget();
     }
 
     // Moves the widgets to the calm parts of a new wallpaper. The newest request wins.
     function arrange(image) {
-        if (!enabled || !loaded || editMode || items.length === 0)
+        currentImage = image;
+        if (follow === "off" || !enabled || !loaded || editMode || items.length === 0)
             return;
+        const saved = handLayouts()[image];
+        if (saved) {
+            restoreHand(saved);
+            return;
+        }
         if (placer.running) {
             pendingImage = image;
             return;
@@ -264,7 +317,7 @@ Singleton {
             return {
                 id: w.id,
                 form: form.name,
-                forms: i.forms.map(f => ({
+                forms: (follow === "place" ? [form] : i.forms).map(f => ({
                     name: f.name,
                     w: f.w * scale,
                     h: f.h * scale
@@ -352,6 +405,26 @@ Singleton {
 
     property string lastActive: ""
     property string pendingImage: ""
+    property var handCache: null
+
+    FileView {
+        id: hand
+
+        path: Quickshell.env("HOME") + "/.config/niri-desk/widget-layouts.json"
+        blockLoading: true
+        printErrors: false
+        atomicWrites: true
+    }
+    Process {
+        running: true
+        command: ["readlink", "-f", Quickshell.env("HOME") + "/.local/state/niri-desk/wallpaper"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (root.currentImage === "")
+                    root.currentImage = text.trim();
+            }
+        }
+    }
 
     Process {
         id: placer

@@ -150,7 +150,8 @@
   "widgets": {
     "enabled": true,
     "firstOnly": false,
-    "opacity": 0.5
+    "opacity": 0.5,
+    "followWallpaper": "full"
   },
   "wallpaper": {
     "transition": "grow",

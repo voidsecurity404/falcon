@@ -447,5 +447,10 @@
  "{n} ms": "{n} мс",
  "{n} px": "{n} пкс",
  "{n} s": "{n} с",
- "{n} s ago": "{n} с назад"
+ "{n} s ago": "{n} с назад",
+ "With a new wallpaper": "При смене обоев",
+ "A layout arranged by hand is remembered": "Ручное расположение запоминается",
+ "Place and form": "Место и форма",
+ "Place only": "Только место",
+ "Stay as they are": "Не менять"
 }
