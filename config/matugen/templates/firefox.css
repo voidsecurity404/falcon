@@ -29,17 +29,11 @@ html, body, #main-window, #browser, #appcontent, #tabbrowser-tabbox, #tabbrowser
   background: transparent !important;
 }
 
-/* A tint under every page, which is what shows through it. */
+/* A tint under every page, which is what shows through the sites made glass in userContent. */
 #tabbrowser-tabpanels {
   background: color-mix(in srgb, {{colors.surface.default.hex}} 65%, transparent) !important;
 }
 
-/* Pages are drawn exactly as sites made them, and only the dark gray that dark sites use for their background
-   (mean brightness 0.02 to 0.105, such as #0f0f0f or #0d1117) shows at 35%, over the tint.
-   Pure black, text, icons, buttons and pictures stay solid. Light sites stay as they are. */
-.browserStack > browser {
-  filter: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><filter id='g' color-interpolation-filters='sRGB' x='0' y='0' width='100%25' height='100%25'><feColorMatrix in='SourceGraphic' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .3333 .3333 .3334 0 0' result='l'/><feComponentTransfer in='l' result='a'><feFuncA type='table' tableValues='1 1 1 0.81 0.48 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.35 0.57 0.78 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'/></feComponentTransfer><feComposite in='SourceGraphic' in2='a' operator='in'/></filter></svg>#g") !important;
-}
 /* A video or game filling the screen has nothing behind it. */
 :root[inDOMFullscreen] .browserStack > browser {
   filter: none !important;
@@ -66,4 +60,64 @@ html, body, #main-window, #browser, #appcontent, #tabbrowser-tabbox, #tabbrowser
 #urlbar[open] > .urlbar-background, #urlbar[open] > #urlbar-background,
 findbar {
   background: var(--falcon-solid) !important;
+}
+/* falcon-firefox writes the rest of this file to userContent.css. */
+/* userContent */
+/* Sites are drawn as they are. Only the page color of a few dark sites below turns to glass, through
+   rules made for each of them. A rule for all sites at once lost icons, buttons and pictures. */
+
+/* Every other page keeps the background Firefox normally gives it. Frames of ads, buttons and sign-in boxes
+   stay see-through as sites expect: their hosts are left out, and so are small documents. */
+@-moz-document regexp("https?://(?![^/]*(doubleclick\\.net|googlesyndication\\.com|googleadservices\\.com|adservice\\.google|recaptcha|hcaptcha\\.com|challenges\\.cloudflare\\.com|accounts\\.google\\.com/gsi|facebook\\.com/plugins|platform\\.twitter\\.com|disqus\\.com)).*"), url-prefix("file:"), url-prefix("data:") {
+  @media (min-width: 480px) and (min-height: 320px) {
+    :root { background-color: Canvas; }
+  }
+}
+
+/* YouTube in its dark look: the page is glass, the video, cards and menus are as YouTube draws them. */
+@-moz-document domain("youtube.com") {
+  html[dark], html[dark] body, html[dark] ytd-app, html[dark] #page-manager, html[dark] ytd-browse, html[dark] ytd-watch-flexy {
+    background: transparent !important;
+  }
+  /* The bar at the top has no color of its own: what scrolls under it is blurred. */
+  html[dark] #masthead-container, html[dark] ytd-masthead, html[dark] ytd-masthead #container, html[dark] #masthead-container #background, html[dark] ytd-masthead #background {
+    background: transparent !important;
+  }
+  /* Once the page scrolls under the bar, frosted glass fades in behind it over the first 56 px. */
+  html[dark] #masthead-container::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: color-mix(in srgb, {{colors.surface.default.hex}} 82%, transparent);
+    backdrop-filter: blur(24px);
+    opacity: 0;
+    animation: falcon-bar linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 56px;
+  }
+}
+
+@keyframes falcon-bar {
+  to { opacity: 1; }
+}
+
+/* GitHub in its dark look: its page color is glass. */
+@-moz-document domain("github.com") {
+  html[data-color-mode="dark"], html[data-color-mode="auto"] {
+    --bgColor-default: transparent !important;
+  }
+  html[data-color-mode="dark"], html[data-color-mode="auto"], html[data-color-mode="dark"] body, html[data-color-mode="auto"] body,
+  html[data-color-mode="dark"] .AppHeader, html[data-color-mode="auto"] .AppHeader {
+    background-color: transparent !important;
+  }
+}
+
+/* Reddit in its dark look. */
+@-moz-document domain("reddit.com") {
+  html.theme-dark {
+    --color-neutral-background: transparent !important;
+    background-color: transparent !important;
+  }
 }
