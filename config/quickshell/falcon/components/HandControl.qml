@@ -337,7 +337,7 @@ Column {
                             id: speed
 
                             anchors.centerIn: parent
-                            text: Tr.t("{fps} fps · {ms} ms · CPU {cpu}%").replace("{fps}", Math.round(HandMouse.fps)).replace("{ms}", Math.round(HandMouse.latency)).replace("{cpu}", HandMouse.cpu)
+                            text: Tr.t("{fps} fps · {ms} ms · CPU {cpu}%").replace("{fps}", Math.round(HandMouse.fps)).replace("{ms}", Math.round(HandMouse.latency)).replace("{cpu}", HandMouse.cpu) + (HandMouse.gpu ? " · GPU" : "")
                             color: "white"
                             size: 11
                         }

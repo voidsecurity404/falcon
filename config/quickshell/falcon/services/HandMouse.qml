@@ -27,6 +27,7 @@ Singleton {
     property string gesture: ""
     property bool cameraOk: true
     property real fps: 0
+    property bool gpu: false
     property int cpu: 0
     property real latency: 0
     property string problem: ""
@@ -290,6 +291,7 @@ Singleton {
             gesture = m.state.gesture;
             cameraOk = m.state.camera;
             fps = m.state.fps;
+            gpu = !!m.state.gpu;
             cpu = m.state.cpu;
             latency = m.state.latency;
         } else if (m.preview) {

@@ -490,6 +490,127 @@ class Gestures:
         return out, events
 
 
+class Smoother:
+    """The camera gives 15 to 30 pictures a second, the screen shows 60 or more. This moves the pointer
+    at RATE between two pictures, so it glides instead of stepping, and spreads scrolling the same way.
+    Every write goes through `send`, under one lock, so a click always lands after the pointer reached
+    its place and never between two steps of a glide."""
+
+    RATE = 144
+
+    def __init__(self, apply, clock=time.monotonic):
+        self.apply, self.clock = apply, clock
+        self.lock = threading.RLock()
+        self.shown = self.start = self.goal = None
+        self.t0 = 0.0
+        self.duration = 0.03
+        self.interval = 1 / 24
+        self.last_frame = None
+        self.scroll_left = 0.0
+        self.scroll_until = 0.0
+        self.scroll_rest = 0.0
+        self.stopped = threading.Event()
+        self.thread = threading.Thread(target=self.loop, daemon=True)
+
+    def begin(self):
+        self.thread.start()
+
+    def stop(self):
+        self.stopped.set()
+        if self.thread.is_alive():
+            self.thread.join(timeout=1)
+
+    def send(self, commands):
+        with self.lock:
+            if commands:
+                self.apply(commands)
+
+    def frame(self, stamp):
+        """Learns the time between pictures, which is how long a glide takes."""
+        if self.last_frame is not None:
+            gap = min(0.15, max(0.01, stamp - self.last_frame))
+            self.interval = self.interval * 0.8 + gap * 0.2
+        self.last_frame = stamp
+
+    def glide(self, x, y):
+        with self.lock:
+            if self.shown is None:
+                self.shown = self.start = self.goal = (x, y)
+                self.apply([("move", x, y)])
+                return
+            # A little shorter than the gap, so the pointer arrives before the next picture.
+            self.start, self.goal = self.shown, (x, y)
+            self.t0, self.duration = self.clock(), self.interval * 0.8
+
+    def snap(self, x, y):
+        """Puts the pointer there at once, for a press or a release."""
+        with self.lock:
+            self.shown = self.start = self.goal = (x, y)
+            self.apply([("move", x, y)])
+
+    def jump(self, x, y):
+        """Takes the place as the current one without moving, for the relative mode."""
+        with self.lock:
+            self.shown = self.start = self.goal = (x, y)
+
+    def scroll(self, amount):
+        with self.lock:
+            self.scroll_left += amount
+            self.scroll_until = self.clock() + self.interval * 0.8
+
+    def tick(self):
+        with self.lock:
+            now = self.clock()
+            out = []
+            if self.goal is not None and self.shown != self.goal:
+                progress = 1.0 if self.duration <= 0 else min(1.0, (now - self.t0) / self.duration)
+                if progress >= 1.0:
+                    self.shown = self.goal
+                else:
+                    self.shown = (self.start[0] + (self.goal[0] - self.start[0]) * progress,
+                                  self.start[1] + (self.goal[1] - self.start[1]) * progress)
+                out.append(("move", *self.shown))
+            if self.scroll_left:
+                left = self.scroll_until - now
+                part = self.scroll_left if left <= 1 / self.RATE else self.scroll_left / (left * self.RATE)
+                self.scroll_left -= part
+                if abs(self.scroll_left) < 1e-6:
+                    self.scroll_left = 0.0
+                self.scroll_rest += part
+                # The last piece is rounded, so float error never eats a unit of scrolling.
+                whole = round(self.scroll_rest) if not self.scroll_left else int(self.scroll_rest)
+                if whole:
+                    self.scroll_rest -= whole
+                    out.append(("scroll", whole))
+            if out:
+                self.apply(out)
+            return out
+
+    def loop(self):
+        while not self.stopped.is_set():
+            self.tick()
+            self.stopped.wait(1 / self.RATE)
+
+    def deliver(self, commands, relative=False, fresh=False):
+        """Takes what Gestures returned. Buttons go out at once after the pointer reaches their place,
+        moves glide. `fresh` with the relative mode starts counting from here instead of moving."""
+        moves = [c for c in commands if c[0] == "move"]
+        scrolls = [c for c in commands if c[0] == "scroll"]
+        buttons = [c for c in commands if c[0] in ("press", "release")]
+        with self.lock:
+            if fresh and relative and moves:
+                self.jump(moves[-1][1], moves[-1][2])
+                return
+            if buttons:
+                if moves:
+                    self.snap(moves[0][1], moves[0][2])
+                self.apply(buttons)
+            elif moves:
+                self.glide(moves[-1][1], moves[-1][2])
+            for c in scrolls:
+                self.scroll(c[1])
+
+
 def run():
     if not is_ready():
         say(error="setup")
@@ -764,24 +885,37 @@ def engine():
         say(error="uinput", detail=str(error))
         return 1
     pointer.speed = cfg.speed
+    smoother = Smoother(pointer.apply)
+    smoother.begin()
     old_fps = None
     if cfg.steady_fps:
         old_fps = dynamic_fps(device)
         dynamic_fps(device, 0)
     camera = Camera(device)
 
-    def landmarker(hand):
+    def landmarker(hand, gpu):
+        """The GPU runs the hand model in about 12 ms at a third less CPU than the processor alone, with
+        the same points within a pixel. When it cannot start, the processor does the work."""
+        if gpu:
+            try:
+                return landmarker_on(hand, BaseOptions.Delegate.GPU), True
+            except (RuntimeError, ValueError, OSError):
+                pass
+        return landmarker_on(hand, BaseOptions.Delegate.CPU), False
+
+    def landmarker_on(hand, delegate):
         options = vision.HandLandmarkerOptions(
-            base_options=BaseOptions(model_asset_path=str(MODEL)),
+            base_options=BaseOptions(model_asset_path=str(MODEL), delegate=delegate),
             running_mode=vision.RunningMode.VIDEO,
             num_hands=1 if hand == "any" else 2,
             min_hand_detection_confidence=0.6,
-            min_hand_presence_confidence=0.6,
-            min_tracking_confidence=0.6,
+            # Lower than finding a hand: once found, it is kept through blur and quick moves.
+            min_hand_presence_confidence=0.5,
+            min_tracking_confidence=0.5,
         )
         return vision.HandLandmarker.create_from_options(options)
 
-    tracker = landmarker(cfg.hand)
+    tracker, on_gpu = landmarker(cfg.hand, not os.environ.get("FALCON_HANDMOUSE_CPU"))
     tracker_hand = cfg.hand
     gestures = Gestures(cfg, glide=cfg.mode == "absolute")
     smooth = OneEuro(cfg.min_cutoff, cfg.beta)
@@ -817,6 +951,18 @@ def engine():
         return (min(1.0, max(0.0, x)), min(1.0, max(0.0, y)))
 
     def detect(stamp, frame):
+        nonlocal tracker, on_gpu, last_ts
+        try:
+            return detect_on(stamp, frame)
+        except (RuntimeError, ValueError):
+            if not on_gpu:
+                raise
+            # The GPU failed while running: go on with the processor.
+            tracker.close()
+            (tracker, on_gpu), last_ts = landmarker(cfg.hand, False), -1
+            return None
+
+    def detect_on(stamp, frame):
         nonlocal last_ts
         ts = int(stamp * 1000)
         if ts <= last_ts:
@@ -882,7 +1028,7 @@ def engine():
         reported.update(state)
         report_at = now
         ordered = sorted(delays)
-        say(state=dict(state, fps=round(fps, 1), cpu=round(cpu), latency=round(ordered[len(ordered) // 2], 1) if ordered else 0,
+        say(state=dict(state, gpu=on_gpu, fps=round(fps, 1), cpu=round(cpu), latency=round(ordered[len(ordered) // 2], 1) if ordered else 0,
                        latency95=round(ordered[int(len(ordered) * 0.95)], 1) if ordered else 0))
 
     tracing = bool(os.environ.get("FALCON_HANDMOUSE_TRACE"))
@@ -902,18 +1048,18 @@ def engine():
                     pointer.speed = cfg.speed
                     if cfg.hand != tracker_hand:
                         tracker.close()
-                        tracker, tracker_hand, last_ts = landmarker(cfg.hand), cfg.hand, -1
+                        (tracker, on_gpu), tracker_hand, last_ts = landmarker(cfg.hand, on_gpu), cfg.hand, -1
                     report(True)
                 command = message.get("cmd")
                 if command == "preview":
                     preview = bool(message.get("on"))
                 elif command == "toggle":
-                    pointer.apply(gestures.release_all())
+                    smoother.send(gestures.release_all())
                     gestures.reset()
                     gestures.active = not gestures.active
                     say(event="on" if gestures.active else "off")
                 elif command == "calibrate":
-                    pointer.apply(gestures.release_all())
+                    smoother.send(gestures.release_all())
                     calibrating = {"step": 0, "since": None, "at": None, "samples": [], "points": []}
                 elif command == "cancelCalibration":
                     calibrating = None
@@ -994,7 +1140,8 @@ def engine():
                 if gestures.lost or gestures.last_seen is None:
                     smooth.reset()
                     still_px = None
-                    pointer.forget_place()
+                    with smoother.lock:
+                        pointer.forget_place()
                 # Smoothing works in screen pixels, so its speed term means the same on any zone.
                 px = smooth(np.array(to_screen(feats["anchor"])) * screen_px, stamp)
                 if still_px is None or math.dist(px, still_px) >= cfg.deadzone_px:
@@ -1012,11 +1159,14 @@ def engine():
                     "events": events,
                     "buttons": [list(c) for c in commands if c[0] != "move"],
                 })
-            if "glide" in events or "back" in events or "resume" in events:
-                # The pointer was held while the hand moved: in relative mode, start counting from here.
-                pointer.forget_place()
+            fresh = "glide" in events or "back" in events or "resume" in events
+            if fresh and cfg.mode == "relative":
+                # The pointer was held while the hand moved: start counting from here.
+                with smoother.lock:
+                    pointer.forget_place()
+            smoother.frame(stamp)
             if commands:
-                pointer.apply(commands)
+                smoother.deliver(commands, relative=cfg.mode == "relative", fresh=fresh)
                 delays.append((time.monotonic() - stamp) * 1000)
             for event in events:
                 if event in ("on", "off"):
@@ -1032,6 +1182,7 @@ def engine():
             report()
     finally:
         try:
+            smoother.stop()
             pointer.close()
         finally:
             stop.set()
