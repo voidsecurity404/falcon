@@ -768,7 +768,6 @@
  "It needs a one time download first": "Сначала нужна разовая загрузка",
  "Hand control on": "Управление рукой включено",
  "Hand control off": "Управление рукой выключено",
- "Pinch to click, hold an open palm to pause": "Щипок — клик, открытая ладонь — пауза",
  "Hand control is ready": "Управление рукой готово",
  "Turn it on with {key}": "Включается клавишами {key}",
  "Hand control stopped": "Управление рукой остановлено",
@@ -852,7 +851,6 @@
  "Gap between thumb and finger, in hand sizes. Lower needs a firmer pinch": "Расстояние между пальцами в размерах ладони. Меньше — нужен плотнее щипок",
  "Pinch opens at": "Щипок отпускается при",
  "Keep it above the closing value, so a click does not flicker": "Держите выше значения срабатывания, чтобы клик не дрожал",
- "Longest click": "Самый долгий клик",
  "Hold to drag": "Удержание для перетаскивания",
  "Pointer stays after a click": "Указатель стоит после клика",
  "So a double click lands in one place": "Чтобы двойной клик пришёлся в одну точку",
@@ -864,5 +862,8 @@
  "Keep the frame rate in dim light": "Держать частоту кадров при слабом свете",
  "The picture gets darker, but the pointer does not lag": "Кадр темнее, но указатель не отстаёт",
  "Messages on the island": "Сообщения на острове",
- "When hand control turns on, off or pauses": "Когда управление рукой включается, выключается или встаёт на паузу"
+ "When hand control turns on, off or pauses": "Когда управление рукой включается, выключается или встаёт на паузу",
+ "Moving while pinching starts a drag at once": "Движение во время щипка сразу начинает перетаскивание",
+ "Spread all five fingers and hold still": "Раскройте все пять пальцев и не двигайтесь",
+ "Pinch to click, a fist holds the pointer": "Щипок — клик, кулак держит указатель"
 }

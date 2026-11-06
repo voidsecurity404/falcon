@@ -4678,7 +4678,7 @@ def _():
     ipc("close")
 
 
-@case("Ishoralar: chimdish klik, ushlash sudrash, mushtdan va tasodifiy harakatdan klik yo'q")
+@case("Ishoralar: chimdish klik, ushlash sudrash, mushtdan, yakka kadrdan va tasodifiy harakatdan klik yo'q")
 def _():
     import importlib.machinery
     import importlib.util
@@ -4690,8 +4690,8 @@ def _():
     loader.exec_module(hm)
     cfg = hm.Config({})
 
-    def f(pi=0.6, pm=0.6, pose="other", up=True):
-        return {"anchor": np.array([0.5, 0.5]), "palm": np.array([0.5, 0.5]), "pinch_index": pi, "pinch_middle": pm, "pose": pose, "index_up": up}
+    def f(pi=0.6, pm=0.6, pose="other", up=True, ok=True):
+        return {"anchor": np.array([0.5, 0.5]), "palm": np.array([0.5, 0.5]), "pinch_index": pi, "pinch_middle": pm, "pose": pose, "index_up": up, "index_ok": ok, "middle_ok": ok}
 
     def buttons(seq):
         g, t, out = hm.Gestures(cfg), 0.0, []
@@ -4706,7 +4706,10 @@ def _():
     assert buttons([f()] * 10 + [f(pi=0.2)] * 15 + [f()] * 5) == click
     assert buttons([f()] * 10 + [f(pm=0.2)] * 6 + [f()] * 5) == [("press", "right"), ("release", "right")]
     assert buttons([f()] * 10 + [f(pm=0.2, up=False)] * 6 + [f()] * 5) == []
-    assert buttons([f()] * 5 + [f(pi=0.2, pose="fist")] * 15 + [f(pi=0.25)] * 3 + [f()] * 10) == []
+    assert buttons([f()] * 5 + [f(pi=0.2, pose="fist", ok=False)] * 15 + [f(pi=0.3)] * 3 + [f()] * 10) == []
+    assert buttons([f()] * 10 + [f(pi=0.2, pose="fist")] * 5 + [f()] * 10) == click
+    assert buttons([f()] * 10 + [f(pi=0.2)] * 10 + [f()] * 10) == click
+    assert buttons([f()] * 10 + [f(pi=0.2)] + [f()] * 10) == []
     assert buttons([f()] * 5 + [f(pi=0.2)] * 15 + [None] * 20) == click
     rng = np.random.default_rng(1)
     calm = [f(pi=float(rng.uniform(0.42, 1.2)), pm=float(rng.uniform(0.42, 1.2))) for _ in range(1800)]

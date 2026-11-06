@@ -363,7 +363,7 @@ Column {
                             [Tr.t("Two fingers up, move up or down"), Tr.t("scroll")],
                             [Tr.t("Fist"), Tr.t("hold the pointer still")],
                             [Tr.t("Spread palm, hold still"), Tr.t("pause or resume")]
-                        ]
+                        ].slice(0, Settings.get("handmouse.gestures.palmToggle", false) ? 7 : 6)
 
                         delegate: Label {
                             required property var modelData

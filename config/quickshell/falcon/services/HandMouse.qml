@@ -118,7 +118,7 @@ Singleton {
         }
         enabled = !enabled;
         if (notify || !enabled)
-            Toasts.show(enabled ? Tr.t("Hand control on") : Tr.t("Hand control off"), enabled ? Tr.t("Pinch to click, hold an open palm to pause") : "", "hand");
+            Toasts.show(enabled ? Tr.t("Hand control on") : Tr.t("Hand control off"), enabled ? Tr.t("Pinch to click, a fist holds the pointer") : "", "hand");
     }
 
     function openPage() {
@@ -218,6 +218,9 @@ Singleton {
         onStarted: {
             root.started = false;
             root.problem = "";
+            root.active = true;
+            root.hand = false;
+            root.gesture = "";
             root.send({ config: root.config });
             if (root.previewWanted)
                 root.send({ cmd: "preview", on: true });
@@ -230,7 +233,7 @@ Singleton {
                 root.calStep = -1;
             // An engine that could not start says why on its last line. It is not started again
             // until switched on again, so a missing camera does not loop.
-            if (root.enabled && !restart.running && code !== 0) {
+            if (root.enabled && !restart.running) {
                 root.enabled = false;
                 Toasts.show(Tr.t("Hand control stopped"), root.problemText(root.problem), "hand");
             }

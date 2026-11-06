@@ -86,11 +86,11 @@ The webcam watches one hand and the pointer follows it. Settings → Hand contro
 | --- | --- |
 | Move the hand | The pointer follows, smoothed so it stays still while the hand rests |
 | Tap thumb to index finger | Click, twice for a double click |
-| Hold thumb on index finger | Drag until you let go |
+| Hold thumb on index finger, or move while pinching | Drag until you let go |
 | Tap thumb to middle finger, index straight | Right click |
 | Index and middle up, move up or down | Scroll |
 | Fist | The pointer stays where it is while the hand moves |
-| Spread palm held still | Pause or resume |
+| Spread palm held still | Pause or resume, when turned on in the settings |
 
 The settings page shows the camera with the hand drawn over it and the part of the picture that covers the screen. It sets that area, the smoothing, every gesture threshold, and whether the pointer goes to where the hand is or moves with it like a mouse. Calibrate shows a circle in each corner: point at it and hold still, and the corners become easier to reach. Buttons are let go when the hand leaves the picture. It drives a virtual mouse through `/dev/uinput`, so it needs write access to it.
 

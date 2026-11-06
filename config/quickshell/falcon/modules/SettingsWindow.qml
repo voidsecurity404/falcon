@@ -371,7 +371,7 @@ LazyLoader {
                         title: Tr.t("Smoothing"),
                         items: [
                             { key: "handmouse.minCutoff", label: Tr.t("Following at rest"), hint: Tr.t("Lower keeps the pointer steadier, higher follows sooner"), type: "slider", min: 0.1, max: 3, step: 0.05 },
-                            { key: "handmouse.beta", label: Tr.t("Following fast moves"), hint: Tr.t("Higher means less lag when the hand moves fast"), type: "slider", min: 0, max: 0.2, step: 0.005 },
+                            { key: "handmouse.beta", label: Tr.t("Following fast moves"), hint: Tr.t("Higher means less lag when the hand moves fast"), type: "slider", min: 0, max: 0.05, step: 0.001 },
                             { key: "handmouse.deadzone", label: Tr.t("Dead zone"), hint: Tr.t("Smaller moves leave the pointer where it is"), type: "slider", min: 0, max: 8, step: 0.5, unit: "px" }
                         ]
                     },
@@ -380,11 +380,10 @@ LazyLoader {
                         items: [
                             { key: "handmouse.gestures.pinchPress", label: Tr.t("Pinch closes at"), hint: Tr.t("Gap between thumb and finger, in hand sizes. Lower needs a firmer pinch"), type: "slider", min: 0.12, max: 0.45, step: 0.01 },
                             { key: "handmouse.gestures.pinchRelease", label: Tr.t("Pinch opens at"), hint: Tr.t("Keep it above the closing value, so a click does not flicker"), type: "slider", min: 0.2, max: 0.7, step: 0.01 },
-                            { key: "handmouse.gestures.clickMs", label: Tr.t("Longest click"), type: "slider", min: 100, max: 600, step: 10, unit: "ms" },
-                            { key: "handmouse.gestures.dragMs", label: Tr.t("Hold to drag"), type: "slider", min: 150, max: 1200, step: 10, unit: "ms" },
+                            { key: "handmouse.gestures.dragMs", label: Tr.t("Hold to drag"), hint: Tr.t("Moving while pinching starts a drag at once"), type: "slider", min: 150, max: 1200, step: 10, unit: "ms" },
                             { key: "handmouse.gestures.freezeMs", label: Tr.t("Pointer stays after a click"), hint: Tr.t("So a double click lands in one place"), type: "slider", min: 0, max: 400, step: 10, unit: "ms" },
                             { key: "handmouse.gestures.scrollSpeed", label: Tr.t("Scroll speed"), type: "slider", min: 5, max: 150, step: 1 },
-                            { key: "handmouse.gestures.palmToggle", label: Tr.t("Open palm pauses and resumes"), type: "toggle" },
+                            { key: "handmouse.gestures.palmToggle", label: Tr.t("Open palm pauses and resumes"), hint: Tr.t("Spread all five fingers and hold still"), type: "toggle" },
                             { key: "handmouse.gestures.toggleHoldMs", label: Tr.t("Hold the palm for"), type: "slider", min: 300, max: 2000, step: 50, unit: "ms" },
                             { key: "handmouse.gestures.lostMs", label: Tr.t("Let go when the hand is lost for"), type: "slider", min: 150, max: 2000, step: 50, unit: "ms" }
                         ]
