@@ -4659,6 +4659,60 @@ def _():
     ipc("timer", "0")
 
 
+feature("handmouse", "Qo'l bilan boshqarish")
+
+
+@case("Holat buyrug'i kamera, uinput va tayyorlikni aytadi")
+def _():
+    out = json.loads(sh(f"{LBIN}/falcon-handmouse status", check=True).stdout)
+    assert {"ready", "cameras", "uinput", "calibrated"} <= set(out), out
+
+
+@case("Yuklanmagan bo'lsa tugma sozlamalar sahifasini ochadi, kamera yoqilmaydi")
+def _():
+    if st()["handmouse"]["ready"]:
+        return
+    ipc("handmouse")
+    wait(lambda: st()["settings"], 3, "sozlamalar ochilmadi")
+    assert not st()["handmouse"]["enabled"], "yoqilib qoldi"
+    ipc("close")
+
+
+@case("Ishoralar: chimdish klik, ushlash sudrash, mushtdan va tasodifiy harakatdan klik yo'q")
+def _():
+    import importlib.machinery
+    import importlib.util
+    import numpy as np
+
+    loader = importlib.machinery.SourceFileLoader("handmouse", str(LBIN / "falcon-handmouse"))
+    spec = importlib.util.spec_from_loader("handmouse", loader)
+    hm = importlib.util.module_from_spec(spec)
+    loader.exec_module(hm)
+    cfg = hm.Config({})
+
+    def f(pi=0.6, pm=0.6, pose="other", up=True):
+        return {"anchor": np.array([0.5, 0.5]), "palm": np.array([0.5, 0.5]), "pinch_index": pi, "pinch_middle": pm, "pose": pose, "index_up": up}
+
+    def buttons(seq):
+        g, t, out = hm.Gestures(cfg), 0.0, []
+        for item in seq:
+            commands, _ = g.step(t, item, (0.5, 0.5) if item else None)
+            out += [c for c in commands if c[0] in ("press", "release")]
+            t += 1 / 30
+        return out
+
+    click = [("press", "left"), ("release", "left")]
+    assert buttons([f()] * 10 + [f(pi=0.2)] * 5 + [f()] * 5) == click
+    assert buttons([f()] * 10 + [f(pi=0.2)] * 15 + [f()] * 5) == click
+    assert buttons([f()] * 10 + [f(pm=0.2)] * 6 + [f()] * 5) == [("press", "right"), ("release", "right")]
+    assert buttons([f()] * 10 + [f(pm=0.2, up=False)] * 6 + [f()] * 5) == []
+    assert buttons([f()] * 5 + [f(pi=0.2, pose="fist")] * 15 + [f(pi=0.25)] * 3 + [f()] * 10) == []
+    assert buttons([f()] * 5 + [f(pi=0.2)] * 15 + [None] * 20) == click
+    rng = np.random.default_rng(1)
+    calm = [f(pi=float(rng.uniform(0.42, 1.2)), pm=float(rng.uniform(0.42, 1.2))) for _ in range(1800)]
+    assert buttons(calm) == []
+
+
 feature("i18n", "Interfeys tili")
 
 CATALOG = HOME / ".config/falcon/i18n-ru.json"

@@ -267,6 +267,7 @@ ACTIONS = {
     "ocr": ("Copy text from screen", "spawn " + desk("region", "ocr"), False),
     "translate": ("Translate from screen", "spawn " + desk("region", "translate"), False),
     "widgets": ("Edit widgets", "spawn " + desk("widgets"), False),
+    "handmouse": ("Hand control", "spawn " + desk("handmouse"), False),
 }
 
 

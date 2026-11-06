@@ -57,6 +57,8 @@ wlsunset
 curl
 fd
 xdg-utils
+# Qo'l bilan boshqarish: kamera sozlamalari
+v4l-utils
 # Yangilanishlarni tekshirish
 pacman-contrib
 gvfs
