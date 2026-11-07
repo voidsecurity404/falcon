@@ -35,7 +35,7 @@ LazyLoader {
             enabled: !root.placing
 
             NumberAnimation {
-                duration: 520
+                duration: 320
             }
         }
 
