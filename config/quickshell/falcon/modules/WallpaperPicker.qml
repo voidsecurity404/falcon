@@ -28,8 +28,11 @@ LazyLoader {
         // The share of the change by which the far side of the screen starts later than the near one.
         readonly property real waveDelay: 0.4
 
+        // Choosing the starting tab shows no change. Any press animates, however soon after opening.
+        property bool placing: false
+
         Behavior on travel {
-            enabled: !root.opening
+            enabled: !root.placing
 
             NumberAnimation {
                 duration: 860
@@ -125,7 +128,9 @@ LazyLoader {
             const live = Wallpapers.liveFiles.indexOf(Wallpapers.currentLive);
             const image = Wallpapers.imageFiles.indexOf(Wallpapers.currentImage);
             marks = [Math.max(0, live), Math.max(0, image)];
+            placing = true;
             tab = live >= 0 ? 0 : 1;
+            placing = false;
         }
 
         function filesOf(which) {
