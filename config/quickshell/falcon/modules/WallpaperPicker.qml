@@ -22,6 +22,20 @@ LazyLoader {
         // 0: jonli fonlar, 1: oddiy rasmlar. Har biri o'z o'rnini eslab qoladi.
         property int tab: 1
         property var marks: [0, 0]
+        // Runs from 0 (live) to 1 (plain). Every part of a tab change is computed from this one
+        // value, so another Tab in the middle simply plays the same movement back from there.
+        property real travel: tab
+        // The share of the change by which the far side of the screen starts later than the near one.
+        readonly property real waveDelay: 0.4
+
+        Behavior on travel {
+            enabled: !root.opening
+
+            NumberAnimation {
+                duration: 860
+            }
+        }
+
         // Once the user has moved, a late answer about the current wallpaper must not move the carousel.
         property bool moved: false
         // True during the opening: cards made later, while scrolling, appear without it.
@@ -38,8 +52,8 @@ LazyLoader {
                 fadeIn.start();
             }
         }
-        readonly property var files: tab === 0 ? Wallpapers.liveFiles : Wallpapers.imageFiles
-        property int selected: 0
+        readonly property var files: filesOf(tab)
+        readonly property int selected: markOf(tab)
         onSelectedChanged: Ui.pickerSelected = selected
         onFilesChanged: Ui.pickerFiles = files.length
         onTabChanged: Ui.pickerTab = tab
@@ -112,23 +126,28 @@ LazyLoader {
             const image = Wallpapers.imageFiles.indexOf(Wallpapers.currentImage);
             marks = [Math.max(0, live), Math.max(0, image)];
             tab = live >= 0 ? 0 : 1;
-            selected = marks[tab];
+        }
+
+        function filesOf(which) {
+            return which === 0 ? Wallpapers.liveFiles : Wallpapers.imageFiles;
+        }
+
+        function markOf(which) {
+            return Math.min(marks[which], Math.max(0, filesOf(which).length - 1));
         }
 
         function step(by) {
             moved = true;
-            selected = Math.max(0, Math.min(files.length - 1, selected + by));
+            const next = marks.slice();
+            next[tab] = Math.max(0, Math.min(files.length - 1, selected + by));
+            marks = next;
         }
 
         function setTab(next) {
             if (next === tab)
                 return;
             moved = true;
-            const saved = marks.slice();
-            saved[tab] = selected;
-            marks = saved;
             tab = next;
-            selected = Math.min(marks[next], Math.max(0, files.length - 1));
         }
 
         function apply(index) {
@@ -218,247 +237,401 @@ LazyLoader {
             Keys.onReturnPressed: root.apply(root.selected)
             Keys.onEnterPressed: root.apply(root.selected)
 
-            Label {
-                anchors.centerIn: parent
-                visible: root.files.length === 0
-                text: Tr.t("No wallpapers found:") + " " + (root.tab === 0 ? root.liveDir : Settings.wallpaperDir)
-                color: "white"
-                size: 18
-            }
+            // One capsule holds both tabs. The colored piece stretches on its way across: its front
+            // edge goes ahead and its back edge catches up, and the labels change color exactly where it passes.
+            Item {
+                id: tabStrip
 
-            Row {
+                readonly property var items: [
+                    { label: Tr.t("Live wallpapers"), icon: "play" },
+                    { label: Tr.t("Wallpapers"), icon: "wallpaper" }
+                ]
+                readonly property int pad: 5
+                readonly property int gap: 2
+                property real width0: 0
+                property real width1: 0
+
+                function smooth(value) {
+                    return value * value * (3 - 2 * value);
+                }
+
                 anchors.horizontalCenter: parent.horizontalCenter
-                anchors.bottom: carousel.top
+                anchors.bottom: stage.top
                 anchors.bottomMargin: 30 + (1 - root.reveal) * 18
-                spacing: 8
+                width: width0 + width1 + gap + pad * 2
+                height: 54
                 opacity: root.reveal
 
-                Repeater {
-                    model: [
-                        { label: Tr.t("Live wallpapers"), icon: "play" },
-                        { label: Tr.t("Wallpapers"), icon: "wallpaper" }
-                    ]
+                Rectangle {
+                    anchors.fill: parent
+                    radius: height / 2
+                    color: Qt.rgba(0, 0, 0, 0.45)
+                    border.width: 1
+                    border.color: Qt.rgba(1, 1, 1, 0.14)
+                }
 
-                    delegate: Rectangle {
-                        id: tabButton
+                Row {
+                    x: tabStrip.pad
+                    y: tabStrip.pad
+                    spacing: tabStrip.gap
 
-                        required property var modelData
-                        required property int index
-                        readonly property bool active: root.tab === index
+                    Repeater {
+                        model: tabStrip.items
 
-                        width: tabRow.implicitWidth + 40
-                        height: 44
-                        radius: 22
-                        color: active ? Theme.accent : tabHover.containsMouse ? Qt.rgba(1, 1, 1, 0.2) : Qt.rgba(0, 0, 0, 0.45)
-                        border.width: active ? 0 : 1
-                        border.color: Qt.rgba(1, 1, 1, 0.14)
+                        delegate: Item {
+                            id: tabButton
 
-                        Behavior on color {
-                            ColorAnimation {
-                                duration: 160
+                            required property var modelData
+                            required property int index
+
+                            width: tabFace.implicitWidth + 40
+                            height: 44
+
+                            Binding {
+                                target: tabStrip
+                                property: "width" + tabButton.index
+                                value: tabButton.width
+                            }
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: height / 2
+                                color: "white"
+                                opacity: tabHover.containsMouse && root.tab !== tabButton.index ? 0.12 : 0
+
+                                Behavior on opacity {
+                                    NumberAnimation {
+                                        duration: 160
+                                    }
+                                }
+                            }
+
+                            Row {
+                                id: tabFace
+
+                                anchors.centerIn: parent
+                                spacing: 9
+
+                                Icon {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    name: tabButton.modelData.icon
+                                    size: 17
+                                    color: "white"
+                                }
+
+                                Label {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: tabButton.modelData.label
+                                    color: "white"
+                                    size: 15
+                                    font.weight: Font.Medium
+                                }
+                            }
+
+                            MouseArea {
+                                id: tabHover
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.setTab(tabButton.index)
                             }
                         }
+                    }
+                }
 
-                        Row {
-                            id: tabRow
+                ClippingRectangle {
+                    id: tabLight
 
-                            anchors.centerIn: parent
-                            spacing: 9
+                    readonly property real start: tabStrip.pad + (tabStrip.width0 + tabStrip.gap) * tabStrip.smooth(Math.pow(root.travel, 1.7))
+                    readonly property real end: tabStrip.pad + tabStrip.width0 + (tabStrip.width1 + tabStrip.gap) * tabStrip.smooth(Math.pow(root.travel, 0.6))
 
-                            Icon {
-                                anchors.verticalCenter: parent.verticalCenter
-                                name: tabButton.modelData.icon
-                                size: 17
-                                color: tabButton.active ? Theme.accentText : "white"
+                    x: start
+                    y: tabStrip.pad
+                    width: end - start
+                    height: 44
+                    radius: height / 2
+                    color: Theme.accent
+
+                    // The same labels in the accent's text color, seen only through this piece.
+                    Row {
+                        x: tabStrip.pad - tabLight.x
+                        spacing: tabStrip.gap
+
+                        Repeater {
+                            model: tabStrip.items
+
+                            delegate: Item {
+                                id: litTab
+
+                                required property var modelData
+                                required property int index
+
+                                width: index === 0 ? tabStrip.width0 : tabStrip.width1
+                                height: 44
+
+                                Row {
+                                    anchors.centerIn: parent
+                                    spacing: 9
+
+                                    Icon {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        name: litTab.modelData.icon
+                                        size: 17
+                                        color: Theme.accentText
+                                    }
+
+                                    Label {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: litTab.modelData.label
+                                        color: Theme.accentText
+                                        size: 15
+                                        font.weight: Font.Medium
+                                    }
+                                }
                             }
-
-                            Label {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: tabButton.modelData.label
-                                color: tabButton.active ? Theme.accentText : "white"
-                                size: 15
-                                font.weight: Font.Medium
-                            }
-                        }
-
-                        MouseArea {
-                            id: tabHover
-
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.setTab(tabButton.index)
                         }
                     }
                 }
             }
 
-            // Fonlar ko'p: tanlangani doim o'rtada, qolganlari yonga suriladi.
-            ListView {
-                id: carousel
+            Item {
+                id: stage
 
                 anchors.centerIn: parent
                 width: parent.width
                 height: root.cardHeight
-                orientation: ListView.Horizontal
-                spacing: -12
-                interactive: false
-                cacheBuffer: 1200
-                model: root.files
-                currentIndex: root.selected
-                highlightRangeMode: ListView.StrictlyEnforceRange
-                preferredHighlightBegin: (width - 440) / 2
-                preferredHighlightEnd: (width + 440) / 2
-                highlightMoveDuration: 320
-                highlightMoveVelocity: -1
 
-                delegate: Item {
-                    id: card
+                // Each tab keeps its own carousel, so it comes back where it was left. The live one
+                // waits off to the left of the plain one, and they cross as one wave.
+                Repeater {
+                    model: 2
 
-                    required property string modelData
-                    required property int index
+                    delegate: Item {
+                        id: deck
 
-                    readonly property bool active: index === root.selected
-                    readonly property string title: modelData.split("/").pop().replace(/\.[^.]+$/, "").replace(/[-_]/g, " ")
-                    // Cards rise one after another, from the selected one outwards.
-                    property real appear: root.opening ? 0 : 1
+                        required property int index
+                        readonly property var files: root.filesOf(index)
+                        // -1 for the carousel on the left, 1 for the one on the right.
+                        readonly property int side: index === 0 ? -1 : 1
+                        readonly property bool gone: Math.abs(root.travel - index) >= 1
 
-                    opacity: Math.min(1, appear)
-
-                    Component.onCompleted: {
-                        if (root.opening)
-                            rise.start();
-                    }
-
-                    Connections {
-                        target: root
-                        function onClosingChanged() {
-                            if (root.closing) {
-                                rise.stop();
-                                fall.start();
-                            } else {
-                                fall.stop();
-                                rise.start();
-                            }
-                        }
-                    }
-
-                    // Closing is the opening in reverse: the outer cards leave first.
-                    SequentialAnimation {
-                        id: fall
-
-                        PauseAnimation {
-                            duration: (6 - Math.min(6, Math.abs(card.index - root.selected))) * 16
-                        }
-                        NumberAnimation {
-                            target: card
-                            property: "appear"
-                            to: 0
-                            duration: 240
-                            easing.type: Easing.InCubic
-                        }
-                    }
-
-                    SequentialAnimation {
-                        id: rise
-
-                        PauseAnimation {
-                            duration: 40 + Math.min(6, Math.abs(card.index - root.selected)) * 55
-                        }
-                        NumberAnimation {
-                            target: card
-                            property: "appear"
-                            to: 1
-                            duration: 620
-                            easing.type: Easing.BezierSpline
-                            easing.bezierCurve: [0.22, 1.2, 0.36, 1, 1, 1]
-                        }
-                    }
-
-                    z: active ? 2 : 1
-                    width: active ? 440 : 340
-                    height: root.cardHeight
-
-                    Behavior on width {
-                        NumberAnimation {
-                            duration: 320
-                            easing.type: Easing.OutCubic
-                        }
-                    }
-
-                    transform: [
-                        Matrix4x4 {
-                            matrix: Qt.matrix4x4(1, -root.skew, 0, root.skew * root.cardHeight / 2, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
-                        },
-                        Translate {
-                            y: (1 - card.appear) * 90
-                        }
-                    ]
-
-                    ClippingRectangle {
                         anchors.fill: parent
-                        radius: 15
-                        color: Theme.pill
+                        enabled: root.tab === index
+                        // Not "visible": a hidden list would only find its place once it is shown.
+                        opacity: gone ? 0 : 1
 
-                        Image {
+                        Label {
                             anchors.centerIn: parent
-                            width: parent.width + root.cardHeight * root.skew + 8
-                            height: parent.height
-                            source: Wallpapers.thumbOf(card.modelData)
-                            // The same size as in the service: this finds the picture already in memory.
-                            sourceSize: Wallpapers.thumbSize
-                            fillMode: Image.PreserveAspectCrop
-                            asynchronous: true
-                            transform: Matrix4x4 {
-                                matrix: Qt.matrix4x4(1, root.skew, 0, -root.skew * root.cardHeight / 2, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
-                            }
+                            visible: deck.files.length === 0
+                            opacity: Math.max(0, 1 - Math.abs(root.travel - deck.index) * 2.5)
+                            text: Tr.t("No wallpapers found:") + " " + (deck.index === 0 ? root.liveDir : Settings.wallpaperDir)
+                            color: "white"
+                            size: 18
                         }
 
-                        // Nom yorug' rasm ustida ham o'qilsin.
-                        Rectangle {
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            height: 96
-                            gradient: Gradient {
-                                GradientStop {
-                                    position: 0
+                        // Fonlar ko'p: tanlangani doim o'rtada, qolganlari yonga suriladi.
+                        ListView {
+                            id: carousel
+
+                            anchors.fill: parent
+                            orientation: ListView.Horizontal
+                            spacing: -12
+                            interactive: false
+                            cacheBuffer: 1200
+                            model: deck.files
+                            currentIndex: root.markOf(deck.index)
+                            highlightRangeMode: ListView.StrictlyEnforceRange
+                            preferredHighlightBegin: (width - 440) / 2
+                            preferredHighlightEnd: (width + 440) / 2
+                            highlightMoveDuration: 320
+                            highlightMoveVelocity: -1
+
+                            delegate: Item {
+                                id: card
+
+                                required property string modelData
+                                required property int index
+
+                                readonly property bool active: index === carousel.currentIndex
+                                readonly property string title: modelData.split("/").pop().replace(/\.[^.]+$/, "").replace(/[-_]/g, " ")
+                                // Cards rise one after another, from the selected one outwards.
+                                property real appear: root.opening ? 0 : 1
+                                // How far this card is on its way to its place during a tab change, 1 when there.
+                                // The wave reaches cards on the left first. At rest nothing here reads the
+                                // carousel's position, so scrolling does not recompute it.
+                                readonly property real arrived: {
+                                    const t = root.travel;
+                                    if (t === deck.index)
+                                        return 1;
+                                    if (Math.abs(t - deck.index) >= 1)
+                                        return 0;
+                                    const place = Math.max(0, Math.min(1, (x - carousel.contentX + width / 2) / carousel.width));
+                                    const wave = Math.max(0, Math.min(1, (t - root.waveDelay * place) / (1 - root.waveDelay)));
+                                    return deck.index === 1 ? wave : 1 - wave;
+                                }
+                                // The moving part of the way. It starts late, so at the middle of a change the old
+                                // card has already slid off and never lies over the new one in the same place.
+                                readonly property real way: Math.max(0, (arrived - 0.5) / 0.5)
+                                // Goes a little past its place and settles. Played backward, the same curve makes
+                                // a leaving card first lean the other way.
+                                readonly property real glide: {
+                                    const u = way - 1;
+                                    return 1 + 1.9 * u * u * u + 0.9 * u * u;
+                                }
+
+                                opacity: Math.min(1, appear) * Math.min(1, way / 0.5)
+
+                                Component.onCompleted: {
+                                    if (root.opening)
+                                        rise.start();
+                                }
+
+                                Connections {
+                                    target: root
+                                    function onClosingChanged() {
+                                        if (root.closing) {
+                                            rise.stop();
+                                            fall.start();
+                                        } else {
+                                            fall.stop();
+                                            rise.start();
+                                        }
+                                    }
+                                }
+
+                                // Closing is the opening in reverse: the outer cards leave first.
+                                SequentialAnimation {
+                                    id: fall
+
+                                    PauseAnimation {
+                                        duration: (6 - Math.min(6, Math.abs(card.index - carousel.currentIndex))) * 16
+                                    }
+                                    NumberAnimation {
+                                        target: card
+                                        property: "appear"
+                                        to: 0
+                                        duration: 240
+                                        easing.type: Easing.InCubic
+                                    }
+                                }
+
+                                SequentialAnimation {
+                                    id: rise
+
+                                    PauseAnimation {
+                                        duration: 40 + Math.min(6, Math.abs(card.index - carousel.currentIndex)) * 55
+                                    }
+                                    NumberAnimation {
+                                        target: card
+                                        property: "appear"
+                                        to: 1
+                                        duration: 620
+                                        easing.type: Easing.BezierSpline
+                                        easing.bezierCurve: [0.22, 1.2, 0.36, 1, 1, 1]
+                                    }
+                                }
+
+                                z: active ? 2 : 1
+                                width: active ? 440 : 340
+                                height: root.cardHeight
+
+                                Behavior on width {
+                                    NumberAnimation {
+                                        duration: 320
+                                        easing.type: Easing.OutCubic
+                                    }
+                                }
+
+                                transform: [
+                                    Matrix4x4 {
+                                        matrix: Qt.matrix4x4(1, -root.skew, 0, root.skew * root.cardHeight / 2, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+                                    },
+                                    Rotation {
+                                        origin.x: card.width / 2
+                                        origin.y: card.height / 2
+                                        axis { x: 0; y: 1; z: 0 }
+                                        angle: deck.side * (1 - card.glide) * 38
+                                    },
+                                    Scale {
+                                        origin.x: card.width / 2
+                                        origin.y: card.height / 2
+                                        xScale: 1 - Math.max(0, 1 - card.glide) * 0.14
+                                        yScale: xScale
+                                    },
+                                    Translate {
+                                        x: deck.side * (1 - card.glide) * 560
+                                        y: (1 - card.appear) * 90
+                                    }
+                                ]
+
+                                ClippingRectangle {
+                                    anchors.fill: parent
+                                    radius: 15
+                                    color: Theme.pill
+
+                                    Image {
+                                        anchors.centerIn: parent
+                                        width: parent.width + root.cardHeight * root.skew + 8
+                                        height: parent.height
+                                        source: Wallpapers.thumbOf(card.modelData)
+                                        // The same size as in the service: this finds the picture already in memory.
+                                        sourceSize: Wallpapers.thumbSize
+                                        fillMode: Image.PreserveAspectCrop
+                                        asynchronous: true
+                                        transform: Matrix4x4 {
+                                            matrix: Qt.matrix4x4(1, root.skew, 0, -root.skew * root.cardHeight / 2, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+                                        }
+                                    }
+
+                                    // Nom yorug' rasm ustida ham o'qilsin.
+                                    Rectangle {
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.bottom: parent.bottom
+                                        height: 96
+                                        gradient: Gradient {
+                                            GradientStop {
+                                                position: 0
+                                                color: "transparent"
+                                            }
+                                            GradientStop {
+                                                position: 1
+                                                color: Qt.rgba(0, 0, 0, 0.62)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 15
                                     color: "transparent"
+                                    border.width: card.active ? 3 : 1
+                                    border.color: card.active ? "white" : cardHover.containsMouse ? Qt.rgba(1, 1, 1, 0.6) : Qt.rgba(1, 1, 1, 0.14)
                                 }
-                                GradientStop {
-                                    position: 1
-                                    color: Qt.rgba(0, 0, 0, 0.62)
+
+                                Label {
+                                    x: 26
+                                    anchors.bottom: parent.bottom
+                                    anchors.bottomMargin: 18
+                                    width: parent.width - 52
+                                    text: card.title
+                                    color: "white"
+                                    size: 17
+                                    font.weight: Font.Medium
+                                }
+
+                                MouseArea {
+                                    id: cardHover
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.apply(card.index)
                                 }
                             }
                         }
-                    }
-
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: 15
-                        color: "transparent"
-                        border.width: card.active ? 3 : 1
-                        border.color: card.active ? "white" : cardHover.containsMouse ? Qt.rgba(1, 1, 1, 0.6) : Qt.rgba(1, 1, 1, 0.14)
-                    }
-
-                    Label {
-                        x: 26
-                        anchors.bottom: parent.bottom
-                        anchors.bottomMargin: 18
-                        width: parent.width - 52
-                        text: card.title
-                        color: "white"
-                        size: 17
-                        font.weight: Font.Medium
-                    }
-
-                    MouseArea {
-                        id: cardHover
-
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.apply(card.index)
                     }
                 }
             }
