@@ -43,10 +43,13 @@ Singleton {
     function start() {
     }
 
-    function show(title, sub, icon, run) {
+    // isPrivate keeps the text off the disk, for what was copied from the clipboard.
+    function show(title, sub, icon, run, isPrivate) {
+        const text = String(sub || "").replace(/\x1b\[[0-9;]*m/g, "").replace(/\s+/g, " ").trim();
         enqueue({
+            historyId: remember(title, isPrivate ? "" : text, Tr.t("System"), true),
             title: title,
-            sub: String(sub || "").replace(/\x1b\[[0-9;]*m/g, "").replace(/\s+/g, " ").trim(),
+            sub: text,
             icon: icon || "check",
             value: -1,
             key: "",
@@ -76,6 +79,7 @@ Singleton {
     // Battery warnings show in focus mode too. An urgent one stays until it is clicked or the charger is plugged in.
     function batteryAlert(title, sub, urgent) {
         enqueue({
+            historyId: remember(title, sub, Tr.t("System"), true),
             title: title,
             sub: sub,
             icon: "alert",
@@ -92,8 +96,8 @@ Singleton {
     // Something the user asked to be told about. It shows in focus mode, stays a minute, and is
     // kept in the history for whoever was away from the screen.
     function alarm(title, sub, icon) {
-        remember(title, sub, Tr.t("Timer"));
         enqueue({
+            historyId: remember(title, sub, Tr.t("Timer")),
             title: title,
             sub: sub,
             icon: icon,
@@ -198,25 +202,67 @@ Singleton {
         return entry.date.slice(8, 10) + "." + entry.date.slice(5, 7) + " " + entry.time;
     }
 
-    function remember(title, sub, app) {
+    // Every message is kept until it is cleared by hand. The shell's own messages are about what
+    // the user just did, so they do not raise the unread dot.
+    function remember(title, sub, app, seen) {
+        const id = nextHistoryId++;
         history = [
             {
-                id: nextHistoryId++,
+                id: id,
                 title: title,
                 sub: sub,
                 app: app,
                 time: Qt.formatTime(new Date(), "hh:mm"),
                 date: Qt.formatDate(new Date(), "yyyy-MM-dd")
             }
-        ].concat(history).slice(0, Settings.get("notifications.history", 30));
-        if (!historySeen)
+        ].concat(history);
+        if (!historySeen && !seen)
             unread += 1;
+        return id;
     }
 
     function forget(ids) {
         history = history.filter(h => !ids.includes(h.id));
         if (history.length === 0)
             unread = 0;
+        // What was cleared must not appear on the island once the dashboard closes.
+        const cleared = item => item && ids.includes(item.historyId);
+        for (const item of queue.filter(cleared)) {
+            if (item.notification)
+                item.notification.dismiss();
+        }
+        queue = queue.filter(item => !cleared(item));
+        if (cleared(current))
+            advance();
+    }
+
+    function bodyOf(n) {
+        return n.body.replace(/<[^>]*>/g, "").replace(/\s+/g, " ");
+    }
+
+    // An app can replace a notification still on the screen, and the server then reports no new
+    // one. The new text is a message of its own in the history.
+    function replaced(n) {
+        const shown = current && current.notification === n ? current : queue.find(q => q.notification === n);
+        if (!shown)
+            return;
+        const title = n.summary || n.appName;
+        const body = bodyOf(n);
+        if (shown.title === title && shown.sub === body)
+            return;
+        const next = Object.assign({}, shown, {
+            historyId: remember(title, body, n.appName),
+            title: title,
+            sub: body,
+            image: n.image || ""
+        });
+        if (shown === current) {
+            current = next;
+            if (!next.sticky)
+                timer.restart();
+        } else {
+            queue = queue.map(q => q === shown ? next : q);
+        }
     }
 
     Timer {
@@ -243,15 +289,20 @@ Singleton {
                 n.dismiss();
                 return;
             }
-            const body = n.body.replace(/<[^>]*>/g, "").replace(/\s+/g, " ");
-            root.remember(n.summary || n.appName, body, n.appName);
+            const body = root.bodyOf(n);
+            const historyId = root.remember(n.summary || n.appName, body, n.appName);
             const critical = n.urgency === NotificationUrgency.Critical;
             if (root.doNotDisturb && !critical) {
                 n.dismiss();
                 return;
             }
             n.tracked = true;
+            // A replacement changes both fields at once and is one message.
+            const onReplaced = () => root.replaced(n);
+            n.summaryChanged.connect(() => Qt.callLater(onReplaced));
+            n.bodyChanged.connect(() => Qt.callLater(onReplaced));
             root.enqueue({
+                historyId: historyId,
                 title: n.summary || n.appName,
                 sub: body,
                 icon: critical ? "alert" : "bell",

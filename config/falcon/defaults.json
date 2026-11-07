@@ -95,8 +95,7 @@
     "pinned": ["firefox", "org.gnome.Nautilus", "kitty"]
   },
   "notifications": {
-    "seconds": 3.6,
-    "history": 30
+    "seconds": 3.6
   },
   "nightlight": {
     "temperature": 4000,

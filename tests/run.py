@@ -1545,6 +1545,13 @@ def _():
     toast("Salom")
 
 
+@case("Har bir xabar tarixda qoladi")
+def _():
+    for i in range(35):
+        sh(["notify-send", f"Tarix{i}"])
+    wait(lambda: sum(t.startswith("Tarix") for t in st()["history"]) == 35, 5)
+
+
 @case("Vaqti o'tgach yo'qoladi")
 def _():
     notify("Vaqtli")

@@ -51,7 +51,7 @@ LazyLoader {
                 ClipPins.copy(clip);
             else
                 Quickshell.execDetached(["sh", "-c", 'cliphist decode "$1" | wl-copy', "sh", clip.id]);
-            Toasts.show(Tr.t("Copied"), clip.text, "check");
+            Toasts.show(Tr.t("Copied"), clip.text, "check", null, true);
         }
 
         function togglePin(index) {

@@ -183,8 +183,7 @@ LazyLoader {
                     {
                         title: Tr.t("Notifications"),
                         items: [
-                            { key: "notifications.seconds", label: Tr.t("Notification duration"), type: "slider", min: 1, max: 15, step: 0.5, unit: "sec" },
-                            { key: "notifications.history", label: Tr.t("Notifications kept in history"), type: "slider", min: 5, max: 100, step: 5 }
+                            { key: "notifications.seconds", label: Tr.t("Notification duration"), type: "slider", min: 1, max: 15, step: 0.5, unit: "sec" }
                         ]
                     }
                 ]
