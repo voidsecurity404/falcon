@@ -750,5 +750,16 @@
  "Marcus Aurelius": "Марк Аврелий",
  "Seneca": "Сенека",
  "Alan Kay": "Алан Кей",
- "Kent Beck": "Кент Бек"
+ "Kent Beck": "Кент Бек",
+ "Proxy": "Прокси",
+ "Proxy on": "Прокси включён",
+ "Proxy off": "Прокси выключен",
+ "All traffic goes through the proxy": "Весь трафик идёт через прокси",
+ "The connection is direct": "Соединение прямое",
+ "The proxy does not answer. The connection is direct again.": "Прокси не отвечает. Соединение снова прямое.",
+ "The proxy service did not start.": "Служба прокси не запустилась.",
+ "Run once in a terminal: falcon-proxy setup": "Выполните один раз в терминале: falcon-proxy setup",
+ "No proxy link saved. Run: falcon-proxy set": "Ссылка на прокси не сохранена. Выполните: falcon-proxy set",
+ "Done. The proxy can now be turned on in the control center.": "Готово. Теперь прокси можно включить в центре управления.",
+ "Saved.": "Сохранено."
 }

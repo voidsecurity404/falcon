@@ -213,7 +213,7 @@ Rectangle {
                     spacing: 10
 
                     QuickTile {
-                        columns: Power.chargeSupported ? 4 : 3
+                        columns: Power.chargeSupported ? 5 : 4
                         icon: "coffee"
                         title: Tr.t("Awake")
                         on: Caffeine.enabled
@@ -223,21 +223,29 @@ Rectangle {
                         }
                     }
                     QuickTile {
-                        columns: Power.chargeSupported ? 4 : 3
+                        columns: Power.chargeSupported ? 5 : 4
                         icon: "moon"
                         title: Tr.t("Night")
                         on: Night.enabled
                         onClicked: Night.toggle()
                     }
                     QuickTile {
-                        columns: Power.chargeSupported ? 4 : 3
+                        columns: Power.chargeSupported ? 5 : 4
                         icon: "bell"
                         title: Tr.t("Silent")
                         on: Toasts.doNotDisturb
                         onClicked: Toasts.doNotDisturb = !Toasts.doNotDisturb
                     }
                     QuickTile {
-                        columns: 4
+                        columns: 5
+                        opacity: Proxy.busy ? 0.55 : 1
+                        icon: "shield"
+                        title: Tr.t("Proxy")
+                        on: Proxy.active
+                        onClicked: Proxy.toggle()
+                    }
+                    QuickTile {
+                        columns: 5
                         visible: Power.chargeSupported
                         icon: "charging"
                         title: Tr.t("Up to {n}%").replace("{n}", Power.limitValue)

@@ -1,0 +1,276 @@
+#!/usr/bin/env python3
+"""VLESS Reality proxy for the whole system, through sing-box on a TUN device.
+
+  falcon-proxy set [LINK]      saves a vless:// link, read from stdin without LINK
+  falcon-proxy on              connects, checks the internet, goes back to direct on failure
+  falcon-proxy start           connects without the check, for a login with no network yet
+  falcon-proxy off             goes back to a direct connection
+  falcon-proxy status          prints the state as JSON
+  falcon-proxy config          prints the sing-box config, which holds the secret key
+  falcon-proxy setup           one time setup, asks for sudo, safe to repeat
+  falcon-proxy setup --undo    removes the setup, keeps the link and the sing-box package
+
+The link is a secret and stays in ~/.config/falcon/proxy.url, never in the repo. A TUN device needs
+privileges, so the setup adds a system service running as this user with only the network
+capabilities, and a polkit rule letting this user start and stop that one service without a password.
+"""
+import getpass
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlsplit
+
+sys.dont_write_bytecode = True
+from falcon_tr import tr
+
+HOME = Path.home()
+LINK = HOME / ".config/falcon/proxy.url"
+CONFIG = HOME / ".local/state/falcon/proxy-sing-box.json"
+SERVICE = "falcon-proxy.service"
+UNIT = Path("/etc/systemd/system") / SERVICE
+RULE = "/etc/polkit-1/rules.d/50-falcon-proxy.rules"
+DEVICE = Path("/sys/class/net/falcon0")
+CHECK_URL = "https://www.gstatic.com/generate_204"
+
+UNIT_TEXT = """[Unit]
+Description=falcon proxy
+After=network.target
+
+[Service]
+User={user}
+ExecStart=/usr/bin/sing-box run -c {config}
+Restart=on-failure
+RestartSec=3
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+"""
+
+RULE_TEXT = """// Written by falcon-proxy setup.
+polkit.addRule(function(action, subject) {{
+    if (action.id == "org.freedesktop.systemd1.manage-units"
+            && action.lookup("unit") == "{service}"
+            && ["start", "stop", "restart"].indexOf(action.lookup("verb")) >= 0
+            && subject.user == "{user}") {{
+        return polkit.Result.YES;
+    }}
+}});
+"""
+
+
+def outbound(link):
+    """The sing-box outbound of a vless:// link. Raises ValueError for what it cannot use."""
+    parts = urlsplit(link.strip())
+    query = {key: values[0] for key, values in parse_qs(parts.query).items()}
+    if parts.scheme != "vless" or not parts.username or not parts.hostname or not parts.port:
+        raise ValueError("not a vless:// link")
+    if query.get("security") != "reality" or query.get("type", "tcp") != "tcp" or not query.get("pbk"):
+        raise ValueError("only VLESS over TCP with Reality is supported")
+    result = {
+        "type": "vless",
+        "tag": "proxy",
+        "server": parts.hostname,
+        "server_port": parts.port,
+        "uuid": unquote(parts.username),
+        "packet_encoding": "xudp",
+        "tls": {
+            "enabled": True,
+            "server_name": query.get("sni", ""),
+            "utls": {"enabled": True, "fingerprint": query.get("fp", "chrome")},
+            "reality": {"enabled": True, "public_key": query["pbk"], "short_id": query.get("sid", "")},
+        },
+    }
+    if query.get("flow"):
+        result["flow"] = query["flow"]
+    return result
+
+
+def config_for(link):
+    return {
+        "log": {"level": "warn"},
+        "dns": {
+            "servers": [
+                {"type": "https", "tag": "remote", "server": "1.1.1.1", "detour": "proxy"},
+                {"type": "udp", "tag": "direct-dns", "server": "1.1.1.1"},
+            ],
+            "final": "remote",
+            # The way out may have no IPv6, and an address that cannot be reached only makes apps wait.
+            "strategy": "ipv4_only",
+        },
+        "inbounds": [{
+            "type": "tun",
+            "tag": "tun",
+            "interface_name": DEVICE.name,
+            "address": ["172.19.0.1/30", "fdfe:dcba:9876::1/126"],
+            "auto_route": True,
+            "strict_route": True,
+            "stack": "system",
+        }],
+        "outbounds": [outbound(link), {"type": "direct", "tag": "direct"}],
+        "route": {
+            "auto_detect_interface": True,
+            "default_domain_resolver": "direct-dns",
+            "final": "proxy",
+            "rules": [
+                {"action": "sniff"},
+                {"protocol": "dns", "action": "hijack-dns"},
+                # Vision does not carry QUIC. Refusing it at once sends browsers straight to TCP.
+                {"protocol": "quic", "action": "reject"},
+                {"ip_is_private": True, "outbound": "direct"},
+            ],
+        },
+    }
+
+
+def write_private(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", dir=path.parent, delete=False) as out:
+        out.write(text)
+    os.chmod(out.name, 0o600)
+    os.replace(out.name, path)
+
+
+def read_link():
+    try:
+        return LINK.read_text().strip()
+    except OSError:
+        return ""
+
+
+def write_config():
+    write_private(CONFIG, json.dumps(config_for(read_link()), indent=2) + "\n")
+
+
+def systemctl(*args):
+    return subprocess.run(["systemctl", "--no-ask-password", *args], capture_output=True, text=True, check=False)
+
+
+def is_active():
+    return systemctl("is-active", SERVICE).stdout.strip() == "active"
+
+
+def status():
+    return {
+        "ready": UNIT.exists() and bool(shutil.which("sing-box")),
+        "link": bool(read_link()),
+        "active": is_active(),
+    }
+
+
+def fail(message):
+    print(message, file=sys.stderr)
+    return 1
+
+
+def start():
+    now = status()
+    if not now["ready"]:
+        return fail(tr("Run once in a terminal: falcon-proxy setup"))
+    if not now["link"]:
+        return fail(tr("No proxy link saved. Run: falcon-proxy set"))
+    write_config()
+    done = systemctl("restart" if now["active"] else "start", SERVICE)
+    if done.returncode != 0:
+        return fail(done.stderr.strip() or tr("The proxy service did not start."))
+    return 0
+
+
+def online():
+    done = subprocess.run(["curl", "-s", "-o", "/dev/null", "--max-time", "4", "-w", "%{http_code}", CHECK_URL],
+                          capture_output=True, text=True, check=False)
+    return done.stdout.strip() == "204"
+
+
+def turn_on():
+    code = start()
+    if code != 0:
+        return code
+    for _ in range(50):
+        if DEVICE.exists():
+            break
+        time.sleep(0.1)
+    if DEVICE.exists() and any(online() for _ in range(3)):
+        return 0
+    systemctl("stop", SERVICE)
+    return fail(tr("The proxy does not answer. The connection is direct again."))
+
+
+def turn_off():
+    done = systemctl("stop", SERVICE)
+    return 0 if done.returncode == 0 else fail(done.stderr.strip())
+
+
+def save_link(text):
+    link = text.strip()
+    try:
+        outbound(link)
+    except ValueError as err:
+        return fail(str(err))
+    write_private(LINK, link + "\n")
+    write_config()
+    if is_active():
+        systemctl("restart", SERVICE)
+    print(tr("Saved."))
+    return 0
+
+
+def sudo(*cmd):
+    return subprocess.run(["sudo", *cmd], check=False).returncode == 0
+
+
+def setup():
+    user = getpass.getuser()
+    with tempfile.TemporaryDirectory() as tmp:
+        unit = Path(tmp) / "unit"
+        rule = Path(tmp) / "rule"
+        unit.write_text(UNIT_TEXT.format(user=user, config=CONFIG))
+        rule.write_text(RULE_TEXT.format(service=SERVICE, user=user))
+        done = (sudo("pacman", "-S", "--needed", "--noconfirm", "sing-box")
+                and sudo("install", "-m", "644", str(unit), str(UNIT))
+                and sudo("install", "-m", "644", str(rule), RULE)
+                and sudo("systemctl", "daemon-reload"))
+    if done:
+        print(tr("Done. The proxy can now be turned on in the control center."))
+        return 0
+    return fail(tr("Setup did not finish."))
+
+
+def undo():
+    sudo("systemctl", "stop", SERVICE)
+    sudo("rm", "-f", str(UNIT), RULE)
+    sudo("systemctl", "daemon-reload")
+    print(tr("Removed."))
+    return 0
+
+
+def main(args):
+    command = args[0] if args else ""
+    if command == "set" and len(args) <= 2:
+        return save_link(args[1] if len(args) == 2 else sys.stdin.read())
+    if command == "on":
+        return turn_on()
+    if command == "start":
+        return start()
+    if command == "off":
+        return turn_off()
+    if command == "status":
+        print(json.dumps(status()))
+        return 0
+    if command == "config":
+        print(json.dumps(config_for(read_link()), indent=2))
+        return 0
+    if command == "setup":
+        return undo() if args[1:] == ["--undo"] else setup()
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+try:
+    sys.exit(main(sys.argv[1:]))
+except ValueError as err:
+    sys.exit(fail(str(err)))

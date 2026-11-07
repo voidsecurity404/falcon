@@ -88,6 +88,7 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 ## Things that look after themselves
 
 - **Battery charge limit:** Settings → Battery and power, or the tile in the control center. Needs one setup with your password (`falcon-charge setup`). Laptops whose firmware has no limit do not show it. Undo: `falcon-charge setup --undo`.
+- **Proxy:** the Proxy tile in the control center sends all traffic through a VLESS Reality server. Save your link with `falcon-proxy set`, which reads it from stdin, and run `falcon-proxy setup` once with your password. If the proxy does not answer, the connection goes back to direct. Undo: `falcon-proxy setup --undo`.
 - **Power mode follows the charger.** A mode you choose by hand stays until the charger changes.
 - **System updates:** the panel shows how many wait. A click opens a terminal with the update, which asks before installing. Checking downloads no packages.
 - **Timer:** `>timer 25`, `>timer 1:30`, `>timer 90s`, or `>pomodoro` in the app menu. Click it in the island to pause, right click to stop. It survives a restart and sleep, but it cannot wake the laptop.

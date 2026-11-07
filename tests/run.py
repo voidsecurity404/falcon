@@ -1355,6 +1355,13 @@ def _():
     toast("Caffeine on")
 
 
+@case("Proksi yaroqsiz havolani saqlamaydi")
+def _():
+    r = subprocess.run(["falcon-proxy", "set"], input="https://example.com", capture_output=True, text=True)
+    assert r.returncode == 1
+    assert not (Path.home() / ".config/falcon/proxy.url").exists()
+
+
 @case("Tungi rejim wlsunset'ni boshqaradi")
 def _():
     open_control()
