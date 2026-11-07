@@ -14,7 +14,8 @@ Singleton {
     property bool active: false
     property bool wanted: false
     property bool restoreChecked: false
-    readonly property bool busy: action.running
+    property bool pressed: false
+    readonly property bool busy: action.running || pressed
 
     function refresh() {
         status.running = true;
@@ -30,9 +31,15 @@ Singleton {
         Quickshell.execDetached(["kitty", "--title", "falcon proxy setup", "env", "PATH=" + Ui.binDir + ":" + Quickshell.env("PATH"), "sh", "-c", 'falcon-proxy setup; printf "\\n%s " "$(falcon-tr "Press Enter to close.")"; read _']);
     }
 
+    // The setup runs in its own window, so what was known before this press may be old.
     function toggle() {
         if (busy)
             return;
+        pressed = true;
+        refresh();
+    }
+
+    function act() {
         if (!ready) {
             Ui.popup = "";
             runSetup();
@@ -58,6 +65,12 @@ Singleton {
                     root.hasLink = s.link;
                     root.active = s.active;
                 } catch (e) {
+                    root.pressed = false;
+                    return;
+                }
+                if (root.pressed) {
+                    root.pressed = false;
+                    root.act();
                     return;
                 }
                 // Only once, after a start. A network that is not up yet must not undo the wish.
