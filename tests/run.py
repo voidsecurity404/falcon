@@ -4707,10 +4707,36 @@ def _():
     assert buttons([f()] * 10 + [f(pm=0.2)] * 6 + [f()] * 5) == [("press", "right"), ("release", "right")]
     assert buttons([f()] * 10 + [f(pm=0.2, up=False)] * 6 + [f()] * 5) == []
     assert buttons([f()] * 5 + [f(pi=0.2, pose="fist", ok=False)] * 15 + [f(pi=0.3)] * 3 + [f()] * 10) == []
-    assert buttons([f()] * 10 + [f(pi=0.2, pose="fist")] * 5 + [f()] * 10) == click
     assert buttons([f()] * 10 + [f(pi=0.2)] * 10 + [f()] * 10) == click
     assert buttons([f()] * 10 + [f(pi=0.2)] + [f()] * 10) == []
     assert buttons([f()] * 5 + [f(pi=0.2)] * 15 + [None] * 20) == click
+    # Hands built from how far each fingertip reaches from the wrist against its middle joint.
+    def hand(reaches, thumb):
+        w = np.zeros((21, 3))
+        w[9] = (0, 1, 0)
+        for x, (mcp, pip, tip), r in zip((-0.3, -0.1, 0.1, 0.3), ((5, 6, 8), (9, 10, 12), (13, 14, 16), (17, 18, 20)), reaches):
+            w[mcp] = (x, 1, 0)
+            w[pip] = (x, 1.4, 0)
+            w[tip] = w[pip] * r
+        w[9] = (0, 1, 0)
+        w[4] = thumb if thumb is not None else (-1, 0.6, 0)
+        w[3] = (-0.8, 0.5, 0)
+        return hm.features(w[:, :2], w, "index_mcp")
+
+    # As traced on a real hand: a fist with the thumb on the index finger is no pinch and pauses.
+    tip = np.array((-0.3, 1.4, 0)) * 0.95
+    fist = hand((0.95, 0.8, 0.8, 0.8), tip + (0.1, 0, 0))
+    assert fist["pose"] == "fist" and fist["pinch_index"] < 0.3 and not fist["index_ok"], fist
+    # The real pinch of that hand leaves the other fingers out, and is no spread palm.
+    tip = np.array((-0.3, 1.4, 0)) * 1.15
+    pinch = hand((1.15, 1.4, 1.4, 1.4), tip + (0.1, 0, 0))
+    assert pinch["index_ok"] and pinch["pinch_index"] < 0.3 and pinch["pose"] != "palm", pinch
+    # Two fingers up, also when the hand leans toward the camera. A relaxed hand is not that.
+    assert hand((1.35, 1.35, 0.75, 0.75), None)["pose"] == "two"
+    assert hand((1.2, 1.2, 0.95, 0.95), None)["pose"] == "two"
+    assert hand((1.15, 1.15, 1.05, 1.05), None)["pose"] != "two"
+    assert buttons([f()] * 10 + [f(pi=0.28)] * 5 + [f()] * 5) == click
+
     # The thumb near both fingers: the closer one is meant.
     assert buttons([f()] * 10 + [f(pi=0.15, pm=0.2)] * 5 + [f()] * 5) == click
     assert buttons([f()] * 10 + [f(pi=0.2, pm=0.15)] * 6 + [f()] * 5) == [("press", "right"), ("release", "right")]

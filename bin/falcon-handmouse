@@ -183,8 +183,8 @@ class Config:
         self.beta = number(raw, "beta", 0.02, 0, 0.2)
         self.deadzone_px = number(raw, "deadzone", 2, 0, 20)
         g = raw.get("gestures") if isinstance(raw.get("gestures"), dict) else {}
-        self.pinch_press = number(g, "pinchPress", 0.25, 0.1, 0.6)
-        self.pinch_release = max(self.pinch_press + 0.06, number(g, "pinchRelease", 0.38, 0.15, 0.8))
+        self.pinch_press = number(g, "pinchPress", 0.3, 0.1, 0.6)
+        self.pinch_release = max(self.pinch_press + 0.06, number(g, "pinchRelease", 0.45, 0.15, 0.8))
         self.drag_ms = number(g, "dragMs", 400, 150, 1500)
         self.freeze_ms = number(g, "freezeMs", 120, 0, 500)
         self.scroll_gain = number(g, "scrollSpeed", 40, 2, 200)
@@ -210,20 +210,25 @@ def features(p, w, anchor_kind):
     def curled(tip, pip):
         return d(tip, WRIST) < d(pip, WRIST)
 
-    def stretched(tip, pip):
-        return d(tip, WRIST) > d(pip, WRIST) * 1.2
+    def reach(tip, pip):
+        return d(tip, WRIST) / (d(pip, WRIST) + 1e-6)
 
     thumb_out = d(THUMB_TIP, INDEX_MCP) > 0.6 and d(THUMB_TIP, PINKY_MCP) > d(THUMB_IP, PINKY_MCP)
     fingers = (thumb_out, out(INDEX_TIP, INDEX_PIP), out(MIDDLE_TIP, MIDDLE_PIP), out(RING_TIP, RING_PIP), out(PINKY_TIP, PINKY_PIP))
     fist = all(curled(t, j) for t, j in ((INDEX_TIP, INDEX_PIP), (MIDDLE_TIP, MIDDLE_PIP), (RING_TIP, RING_PIP), (PINKY_TIP, PINKY_PIP)))
+    reaches = [reach(INDEX_TIP, INDEX_PIP), reach(MIDDLE_TIP, MIDDLE_PIP), reach(RING_TIP, RING_PIP), reach(PINKY_TIP, PINKY_PIP)]
+    # The three other fingers folded with the thumb near the index finger is a fist on its way, seen on
+    # a real hand as a pinch. A real pinch leaves them open: thumb to middle about 1.0, in a fist under 0.55.
+    folded = all(curled(t, j) for t, j in ((MIDDLE_TIP, MIDDLE_PIP), (RING_TIP, RING_PIP), (PINKY_TIP, PINKY_PIP)))
     # Spread: the tips of index and pinky stand well apart, which a relaxed open hand does not do.
-    if all(fingers) and d(INDEX_TIP, PINKY_TIP) > 1.0:
+    # A thumb on the index finger is a pinch, though MediaPipe can still call all five fingers out.
+    if all(fingers) and d(INDEX_TIP, PINKY_TIP) > 1.0 and d(THUMB_TIP, INDEX_TIP) > 0.6:
         pose = "palm"
     elif fist:
         pose = "fist"
-    # On photos a straight finger measures 1.3 or more, a curled one under 0.85. Half bent fingers of a
-    # relaxed hand fall between, and must not start scrolling.
-    elif stretched(INDEX_TIP, INDEX_PIP) and stretched(MIDDLE_TIP, MIDDLE_PIP) and curled(RING_TIP, RING_PIP) and curled(PINKY_TIP, PINKY_PIP):
+    # Two fingers clearly further out than the other two. Compared with each other, because a hand
+    # pointing toward the camera measures all its fingers shorter, and a relaxed hand has them all alike.
+    elif fingers[1] and fingers[2] and min(reaches[:2]) - max(reaches[2:]) > 0.2:
         pose = "two"
     else:
         pose = "other"
@@ -239,9 +244,10 @@ def features(p, w, anchor_kind):
         "pinch_index": d(THUMB_TIP, INDEX_TIP),
         "pinch_middle": d(THUMB_TIP, MIDDLE_TIP),
         # A finger folded into the palm can sit near the thumb tip in a fist: that is no pinch.
-        "index_ok": d(INDEX_TIP, WRIST) > d(INDEX_PIP, WRIST) * 0.85,
+        "index_ok": d(INDEX_TIP, WRIST) > d(INDEX_PIP, WRIST) * 0.85 and not folded,
         "middle_ok": d(MIDDLE_TIP, WRIST) > d(MIDDLE_PIP, WRIST) * 0.85,
         "index_up": fingers[1],
+        "reaches": reaches,
         "pose": pose,
     }
 
@@ -1245,6 +1251,7 @@ def engine():
                     "pinch": round(feats["pinch_index"], 3) if feats else None,
                     "middle": round(feats["pinch_middle"], 3) if feats else None,
                     "pose": feats["pose"] if feats else None,
+                    "reaches": [round(r, 2) for r in feats["reaches"]] if feats else None,
                     "state": gestures.state,
                     "events": events,
                     "buttons": [list(c) for c in commands if c[0] != "move"],
@@ -1321,6 +1328,7 @@ def trace(seconds):
     start = None
     frames = seen = 0
     low = {"pinch": [], "middle": []}
+    scrolled = 0
     poses = {}
     last_pose = None
     try:
@@ -1345,14 +1353,16 @@ def trace(seconds):
                 low["middle"].append(item["middle"])
             stamp = time.monotonic() - start
             if item["hand"] and item["pose"] != last_pose:
-                print(f"{stamp:5.1f}s  pose {item['pose']:6}  thumb-index {item['pinch']:.2f}  thumb-middle {item['middle']:.2f}")
+                print(f"{stamp:5.1f}s  pose {item['pose']:6}  thumb-index {item['pinch']:.2f}  thumb-middle {item['middle']:.2f}  fingers {' '.join(f'{r:.2f}' for r in item['reaches'])}")
                 last_pose = item["pose"]
             for event in item["events"]:
                 if event in ("click", "drag", "lost", "back", "pause", "resume", "on", "off"):
-                    print(f"{stamp:5.1f}s  {event:6}  thumb-index {item['pinch'] if item['pinch'] is not None else '-'}")
+                    print(f"{stamp:5.1f}s  {event:6}  thumb-index {item['pinch'] if item['pinch'] is not None else '-'}  thumb-middle {item['middle'] if item['middle'] is not None else '-'}")
             for button in item["buttons"]:
                 if button[0] != "scroll":
                     print(f"{stamp:5.1f}s    {button[0]} {button[1]}")
+                else:
+                    scrolled += button[1]
             if stamp > seconds:
                 break
     except KeyboardInterrupt:
@@ -1360,7 +1370,7 @@ def trace(seconds):
     finally:
         child.stdin.close()
         child.wait(timeout=5)
-    print(f"\nFrames {frames}, with a hand {seen}. Poses: " + ", ".join(f"{k} {v}" for k, v in sorted(poses.items(), key=lambda kv: -kv[1])))
+    print(f"\nFrames {frames}, with a hand {seen}. Poses: " + ", ".join(f"{k} {v}" for k, v in sorted(poses.items(), key=lambda kv: -kv[1])) + f". Scrolled {scrolled / 120:+.1f} notches.")
     for name, values in low.items():
         if values:
             values = sorted(values)

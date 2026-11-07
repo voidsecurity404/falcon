@@ -214,8 +214,8 @@
     "beta": 0.02,
     "deadzone": 2,
     "gestures": {
-      "pinchPress": 0.25,
-      "pinchRelease": 0.38,
+      "pinchPress": 0.3,
+      "pinchRelease": 0.45,
       "dragMs": 400,
       "freezeMs": 120,
       "scrollSpeed": 40,
