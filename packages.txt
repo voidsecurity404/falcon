@@ -59,8 +59,8 @@ fd
 xdg-utils
 # Yangilanishlarni tekshirish
 pacman-contrib
-# Proksi
-sing-box
+# Proksi dasturini yig'ish
+rust
 gvfs
 mesa
 noto-fonts

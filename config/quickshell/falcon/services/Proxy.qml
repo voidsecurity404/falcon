@@ -86,7 +86,7 @@ Singleton {
                 Saved.set("proxy", root.wanted);
             }
             if (code === 0 && verb === "on")
-                Toasts.show(Tr.t("Proxy on"), Tr.t("All traffic goes through the proxy"), "shield");
+                Toasts.show(Tr.t("Proxy on"), Tr.t("Traffic goes through the proxy"), "shield");
             else if (code === 0 && verb === "off")
                 Toasts.show(Tr.t("Proxy off"), Tr.t("The connection is direct"), "shield");
             root.refresh();

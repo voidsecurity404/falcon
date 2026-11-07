@@ -754,12 +754,16 @@
  "Proxy": "Прокси",
  "Proxy on": "Прокси включён",
  "Proxy off": "Прокси выключен",
- "All traffic goes through the proxy": "Весь трафик идёт через прокси",
  "The connection is direct": "Соединение прямое",
  "The proxy does not answer. The connection is direct again.": "Прокси не отвечает. Соединение снова прямое.",
  "The proxy service did not start.": "Служба прокси не запустилась.",
  "Run once in a terminal: falcon-proxy setup": "Выполните один раз в терминале: falcon-proxy setup",
  "No proxy link saved. Run: falcon-proxy set": "Ссылка на прокси не сохранена. Выполните: falcon-proxy set",
  "Done. The proxy can now be turned on in the control center.": "Готово. Теперь прокси можно включить в центре управления.",
- "Saved.": "Сохранено."
+ "Saved.": "Сохранено.",
+ "The server did not accept this link. Its public key, short id or server name does not match the server.": "Сервер не принял эту ссылку. Её публичный ключ, short id или имя сервера не совпадают с сервером.",
+ "This is not a vless:// link.": "Это не ссылка vless://.",
+ "Only VLESS over TCP with Reality is supported.": "Поддерживается только VLESS по TCP с Reality.",
+ "The proxy does not answer.": "Прокси не отвечает.",
+ "Traffic goes through the proxy": "Трафик идёт через прокси"
 }
