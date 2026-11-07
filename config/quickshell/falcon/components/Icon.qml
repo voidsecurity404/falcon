@@ -50,7 +50,6 @@ Item {
             system: "M5 6h14 M5 12h14 M5 18h14 M9 4v4 M15 10v4 M9 16v4",
             widgets: "M4 4h7v7H4Z M13 4h7v7h-7Z M4 13h7v7H4Z M13 13h7v7h-7Z",
             mouse: "M12 3a6 6 0 0 0-6 6v6a6 6 0 0 0 12 0V9a6 6 0 0 0-6-6Z M12 7v4",
-            hand: "M18 11V6a2 2 0 0 0-4 0v5 M14 10V4a2 2 0 0 0-4 0v6 M10 10.5V6a2 2 0 0 0-4 0v8 M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15",
             terminal: "M3 5h18v14H3Z M7 9l3 3l-3 3 M12.5 15H17",
             chip: "M7 7h10v10H7Z M10 3v4 M14 3v4 M10 17v4 M14 17v4 M3 10h4 M3 14h4 M17 10h4 M17 14h4",
             search: "M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14Z M16 16l5 5",

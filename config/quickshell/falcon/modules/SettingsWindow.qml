@@ -341,65 +341,6 @@ LazyLoader {
                 ]
             },
             {
-                title: Tr.t("Hand control"),
-                subtitle: Tr.t("Move the pointer with your hand through the webcam"),
-                icon: "hand",
-                group: 2,
-                hand: true,
-                sections: [
-                    {
-                        title: Tr.t("Pointer"),
-                        items: [
-                            { key: "handmouse.mode", label: Tr.t("Pointer moves"), type: "choice", options: ["absolute", "relative"], names: [Tr.t("To the hand"), Tr.t("Like a mouse")] },
-                            { key: "handmouse.speed", label: Tr.t("Speed like a mouse"), hint: Tr.t("How far the pointer goes for a move of the hand"), type: "slider", min: 0.3, max: 5, step: 0.1, unit: "scale", when: { key: "handmouse.mode", value: "relative" } },
-                            { key: "handmouse.anchor", label: Tr.t("Follows"), hint: Tr.t("The knuckle moves least while pinching"), type: "choice", options: ["index_mcp", "index_tip", "palm_center"], names: [Tr.t("Knuckle"), Tr.t("Fingertip"), Tr.t("Palm")] },
-                            { key: "handmouse.hand", label: Tr.t("Hand"), type: "choice", options: ["any", "right", "left"], names: [Tr.t("Either"), Tr.t("Right"), Tr.t("Left")] },
-                            { key: "handmouse.mirror", label: Tr.t("Mirror the camera"), hint: Tr.t("A move to the right moves the pointer to the right"), type: "toggle" },
-                            { key: "handmouse.useCalibration", label: Tr.t("Use calibration"), hint: Tr.t("Once calibrated, instead of the work area"), type: "toggle", when: { key: "handmouse.mode", value: "absolute" } }
-                        ]
-                    },
-                    {
-                        title: Tr.t("Work area"),
-                        when: { key: "handmouse.mode", value: "absolute" },
-                        items: [
-                            { key: "handmouse.zone.left", label: Tr.t("Left edge"), hint: Tr.t("The part of the camera picture that covers the screen"), type: "slider", min: 0, max: 0.45, step: 0.01, unit: "percent" },
-                            { key: "handmouse.zone.right", label: Tr.t("Right edge"), type: "slider", min: 0.55, max: 1, step: 0.01, unit: "percent" },
-                            { key: "handmouse.zone.top", label: Tr.t("Top edge"), type: "slider", min: 0, max: 0.45, step: 0.01, unit: "percent" },
-                            { key: "handmouse.zone.bottom", label: Tr.t("Bottom edge"), type: "slider", min: 0.55, max: 1, step: 0.01, unit: "percent" }
-                        ]
-                    },
-                    {
-                        title: Tr.t("Smoothing"),
-                        items: [
-                            { key: "handmouse.minCutoff", label: Tr.t("Following at rest"), hint: Tr.t("Lower keeps the pointer steadier, higher follows sooner"), type: "slider", min: 0.1, max: 3, step: 0.05 },
-                            { key: "handmouse.beta", label: Tr.t("Following fast moves"), hint: Tr.t("Higher means less lag when the hand moves fast"), type: "slider", min: 0, max: 0.05, step: 0.001 },
-                            { key: "handmouse.deadzone", label: Tr.t("Dead zone"), hint: Tr.t("Smaller moves leave the pointer where it is"), type: "slider", min: 0, max: 8, step: 0.5, unit: "px" }
-                        ]
-                    },
-                    {
-                        title: Tr.t("Gestures"),
-                        items: [
-                            { key: "handmouse.gestures.pinchPress", label: Tr.t("Pinch closes at"), hint: Tr.t("Gap between thumb and finger, in hand sizes. Lower needs a firmer pinch"), type: "slider", min: 0.12, max: 0.45, step: 0.01 },
-                            { key: "handmouse.gestures.pinchRelease", label: Tr.t("Pinch opens at"), hint: Tr.t("Keep it above the closing value, so a click does not flicker"), type: "slider", min: 0.2, max: 0.7, step: 0.01 },
-                            { key: "handmouse.gestures.dragMs", label: Tr.t("Hold to drag"), hint: Tr.t("Moving while pinching starts a drag at once"), type: "slider", min: 150, max: 1200, step: 10, unit: "ms" },
-                            { key: "handmouse.gestures.freezeMs", label: Tr.t("Pointer stays after a click"), hint: Tr.t("So a double click lands in one place"), type: "slider", min: 0, max: 400, step: 10, unit: "ms" },
-                            { key: "handmouse.gestures.scrollSpeed", label: Tr.t("Scroll speed"), type: "slider", min: 5, max: 150, step: 1 },
-                            { key: "handmouse.gestures.palmToggle", label: Tr.t("Open palm pauses and resumes"), hint: Tr.t("Spread all five fingers and hold still"), type: "toggle" },
-                            { key: "handmouse.gestures.toggleHoldMs", label: Tr.t("Hold the palm for"), type: "slider", min: 300, max: 2000, step: 50, unit: "ms" },
-                            { key: "handmouse.gestures.lostMs", label: Tr.t("Let go when the hand is lost for"), type: "slider", min: 150, max: 2000, step: 50, unit: "ms" }
-                        ]
-                    },
-                    {
-                        title: Tr.t("Camera"),
-                        items: [
-                            { key: "handmouse.camera", label: Tr.t("Camera"), hint: Tr.t("Like /dev/video0. Empty picks the first one"), type: "text", width: 160, fallback: "" },
-                            { key: "handmouse.steadyFps", label: Tr.t("Keep the frame rate in dim light"), hint: Tr.t("The picture gets darker, but the pointer does not lag"), type: "toggle" },
-                            { key: "handmouse.notify", label: Tr.t("Messages on the island"), hint: Tr.t("When hand control turns on, off or pauses"), type: "toggle" }
-                        ]
-                    }
-                ]
-            },
-            {
                 title: Tr.t("Shortcuts"),
                 subtitle: Tr.t("Example: Mod+Shift+T. Mod is the Super key"),
                 icon: "shortcut",
@@ -446,8 +387,7 @@ LazyLoader {
                             win.bind("screenshot", Tr.t("Screenshot")),
                             win.bind("record", Tr.t("Record screen")),
                             win.bind("ocr", Tr.t("Copy text from screen")),
-                            win.bind("translate", Tr.t("Translate from screen")),
-                            win.bind("handmouse", Tr.t("Hand control"))
+                            win.bind("translate", Tr.t("Translate from screen"))
                         ]
                     }
                 ]
@@ -601,11 +541,6 @@ LazyLoader {
                 ]
             }
         ]
-
-        // A section or a row with `when` shows only while that setting has that value.
-        function applies(entry) {
-            return !entry.when || Settings.get(entry.when.key, "") === entry.when.value;
-        }
 
         readonly property var shown: {
             const q = filter.trim().toLowerCase();
@@ -959,11 +894,6 @@ LazyLoader {
                         width: scroller.width - 56
                         spacing: 16
 
-                        HandControl {
-                            visible: win.filter === "" && !!win.pages[win.page].hand
-                            width: cards.width
-                        }
-
                         Repeater {
                             model: win.shown
 
@@ -975,7 +905,6 @@ LazyLoader {
                                 required property int index
 
                                 width: cards.width
-                                visible: win.applies(modelData)
                                 animate: win.filter === ""
                                 delay: Math.min(index, 5) * 40
 
@@ -1015,7 +944,6 @@ LazyLoader {
                                                     required property int index
 
                                                     width: rows.width
-                                                    visible: win.applies(modelData)
 
                                                     Rectangle {
                                                         visible: rowHolder.index > 0

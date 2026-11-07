@@ -89,7 +89,6 @@ targets=(
     .local/bin/falcon-ocr-models
     .local/bin/falcon-translate-models
     .local/bin/falcon-translate-local
-    .local/bin/falcon-handmouse
     .config/falcon/defaults.json
 )
 

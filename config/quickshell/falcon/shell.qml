@@ -47,7 +47,6 @@ ShellRoot {
     SettingsWindow {}
     TranslateWindow {}
     WindowSwitcher {}
-    HandCalibration {}
 
     // niri bindlari shu funksiyalarni chaqiradi: qs -c falcon ipc call desk <nom>
     IpcHandler {
@@ -163,7 +162,6 @@ ShellRoot {
                 privacy: { mic: Privacy.mic, camera: Privacy.camera },
                 clipPins: ClipPins.pins.length,
                 wallpaperAuto: WallpaperAuto.mode,
-                handmouse: { enabled: HandMouse.enabled, ready: HandMouse.ready, running: HandMouse.running, started: HandMouse.started, active: HandMouse.active, hand: HandMouse.hand, gesture: HandMouse.gesture, fps: HandMouse.fps, cpu: HandMouse.cpu, problem: HandMouse.problem, calStep: HandMouse.calStep }
             });
         }
         // Testlar uchun: shell'ni boshlang'ich holatga qaytaradi.
@@ -178,7 +176,6 @@ ShellRoot {
             Toasts.doNotDisturb = false;
             Caffeine.enabled = false;
             Sticky.ids = [];
-            HandMouse.enabled = false;
             Countdown.stop();
             Night.setEnabled(Settings.get("nightlight.auto", false));
             Ui.dashTab = 0;
@@ -213,7 +210,6 @@ ShellRoot {
             Ui.popup = "";
             if (Ui.regionPhase !== "")
                 Ui.regionCancel();
-            HandMouse.cancelCalibration();
         }
         function widgets(): void {
             Widgets.editMode = !Widgets.editMode;
@@ -241,12 +237,6 @@ ShellRoot {
         function sticky(): void {
             Sticky.toggle();
         }
-        function handmouse(): void {
-            HandMouse.toggle();
-        }
-        function handmouseCalibrate(): void {
-            HandMouse.calibrate();
-        }
         function brightness(step: string): void {
             Brightness.step(step);
         }
@@ -269,6 +259,5 @@ ShellRoot {
         Privacy.enabled;
         WallpaperAuto.mode;
         Monitors.wantConnect;
-        HandMouse.enabled;
     }
 }

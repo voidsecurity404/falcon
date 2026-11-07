@@ -135,8 +135,7 @@
     "record": "Mod+Shift+R",
     "ocr": "Mod+P",
     "translate": "Mod+Alt+P",
-    "widgets": "Mod+Shift+W",
-    "handmouse": "Mod+Shift+G"
+    "widgets": "Mod+Shift+W"
   },
   "session": {
     "restore": true,
@@ -195,36 +194,6 @@
     "work": 25,
     "shortBreak": 5,
     "longBreak": 15
-  },
-  "handmouse": {
-    "camera": "",
-    "mode": "absolute",
-    "speed": 1.5,
-    "anchor": "index_mcp",
-    "hand": "any",
-    "mirror": true,
-    "useCalibration": true,
-    "zone": {
-      "left": 0.2,
-      "right": 0.8,
-      "top": 0.15,
-      "bottom": 0.75
-    },
-    "minCutoff": 0.8,
-    "beta": 0.02,
-    "deadzone": 2,
-    "gestures": {
-      "pinchPress": 0.3,
-      "pinchRelease": 0.45,
-      "dragMs": 400,
-      "freezeMs": 120,
-      "scrollSpeed": 40,
-      "palmToggle": false,
-      "toggleHoldMs": 600,
-      "lostMs": 400
-    },
-    "steadyFps": true,
-    "notify": true
   },
   "monitorConnect": "stay"
 }
