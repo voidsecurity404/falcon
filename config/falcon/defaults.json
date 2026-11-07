@@ -211,7 +211,7 @@
       "bottom": 0.75
     },
     "minCutoff": 0.8,
-    "beta": 0.01,
+    "beta": 0.02,
     "deadzone": 2,
     "gestures": {
       "pinchPress": 0.25,

@@ -4711,6 +4711,66 @@ def _():
     assert buttons([f()] * 10 + [f(pi=0.2)] * 10 + [f()] * 10) == click
     assert buttons([f()] * 10 + [f(pi=0.2)] + [f()] * 10) == []
     assert buttons([f()] * 5 + [f(pi=0.2)] * 15 + [None] * 20) == click
+    # The thumb near both fingers: the closer one is meant.
+    assert buttons([f()] * 10 + [f(pi=0.15, pm=0.2)] * 5 + [f()] * 5) == click
+    assert buttons([f()] * 10 + [f(pi=0.2, pm=0.15)] * 6 + [f()] * 5) == [("press", "right"), ("release", "right")]
+
+    def run(seq):
+        g, t, out = hm.Gestures(cfg), 0.0, []
+        for item, point in seq:
+            out.append(g.step(t, item, point)[0])
+            t += 1 / 30
+        return out
+
+    # The button goes down when the fingers touch, not when they open.
+    steps = run([(f(), (0.5, 0.5))] * 10 + [(f(pi=0.2), (0.5, 0.5))] * 3)
+    assert ("press", "left") in steps[11] and not any(c[0] == "press" for s in steps[:11] for c in s), steps[9:]
+
+    # A click lands where the hand aimed, though closing the fingers pulled it along.
+    closing = [(f(), (0.5, 0.5))] * 10 + [(f(pi=0.8 - 0.09 * k), (0.5 + 0.003 * k, 0.5)) for k in range(7)] + [(f(pi=0.2), (0.53, 0.5))] * 3
+    pressed = [s for s in run(closing) if ("press", "left") in s][0]
+    assert abs(pressed[0][1] - 0.5) < 0.004, pressed
+
+    # A second click lands on the first, a hand setting off leaves at once.
+    tap = [(f(pi=0.2), (0.5, 0.5))] * 4
+    twice = [(f(), (0.5, 0.5))] * 10 + tap + [(f(), (0.506, 0.5))] * 6 + [(f(pi=0.2), (0.506, 0.5))] * 4 + [(f(), (0.506, 0.5))] * 3
+    presses = [c for s in run(twice) for c in s if c[0] == "press"]
+    places = [s[0] for s in run(twice) if ("press", "left") in s]
+    assert len(presses) == 2 and places[0][1:] == places[1][1:], places
+    away = run([(f(), (0.5, 0.5))] * 10 + tap + [(f(), (0.5, 0.5))] * 3 + [(f(), (0.5 + 0.01 * k, 0.5)) for k in range(1, 12)])
+    last_move = [c for c in away[-1] if c[0] == "move"][0]
+    assert last_move[1] > 0.55, last_move
+
+    # Shaking does not scroll, a real move does.
+    def scrolled(ys):
+        g, t, total = hm.Gestures(cfg), 0.0, 0
+        for y in ys:
+            item = f(pose="two")
+            item["palm"] = np.array([0.5, y])
+            for c in g.step(t, item, (0.5, 0.5))[0]:
+                total += c[1] if c[0] == "scroll" else 0
+            t += 1 / 30
+        return total
+
+    shake = np.random.default_rng(2).normal(0.5, 0.0015, 90)
+    assert scrolled(shake) == 0
+    assert scrolled(np.linspace(0.6, 0.4, 30)) > 400
+
+    # The dead zone holds still, then follows evenly.
+    assert hm.rope(np.array([10.0, 0.0]), np.array([11.0, 0.0]), 2)[0] == 10
+    assert hm.rope(np.array([10.0, 0.0]), np.array([15.0, 0.0]), 2)[0] == 13
+
+    # The mouse-like mode has no edges, and a gap in sight moves nothing.
+    b = hm.Ballistics(np.array([960.0, 540.0]))
+    b.step(np.array([0.0, 0.0]), 0.0, 1)
+    assert b.step(np.array([4000.0, 0.0]), 0.1, 1)[0] > 3000
+    before = b.place[0]
+    assert b.step(np.array([9000.0, 0.0]), 0.6, 1)[0] == before
+    # A slow hand gets less gain than a fast one.
+    slow, fast = hm.Ballistics(np.zeros(2)), hm.Ballistics(np.zeros(2))
+    slow.step(np.zeros(2), 0.0, 1), fast.step(np.zeros(2), 0.0, 1)
+    assert slow.step(np.array([5.0, 0.0]), 0.1, 1)[0] < 4 and fast.step(np.array([500.0, 0.0]), 0.1, 1)[0] > 600
+
     rng = np.random.default_rng(1)
     calm = [f(pi=float(rng.uniform(0.42, 1.2)), pm=float(rng.uniform(0.42, 1.2))) for _ in range(1800)]
     assert buttons(calm) == []

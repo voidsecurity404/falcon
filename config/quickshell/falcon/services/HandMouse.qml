@@ -13,6 +13,10 @@ Singleton {
     property bool enabled: false
     property bool loaded: false
 
+    // On the lock screen nothing may be clicked, and nobody needs the camera on.
+    property bool hyprlocked: false
+    readonly property bool locked: hyprlocked || Lock.active
+
     // From `falcon-handmouse status`.
     property bool ready: false
     property bool checked: false
@@ -214,7 +218,7 @@ Singleton {
         id: engine
 
         command: ["falcon-handmouse", "run"]
-        running: root.enabled && root.ready && !restart.running
+        running: root.enabled && root.ready && !root.locked && !restart.running
         stdinEnabled: true
         onStarted: {
             root.started = false;
@@ -234,7 +238,7 @@ Singleton {
                 root.calStep = -1;
             // An engine that could not start says why on its last line. It is not started again
             // until switched on again, so a missing camera does not loop.
-            if (root.enabled && !restart.running) {
+            if (root.enabled && !root.locked && !restart.running) {
                 root.enabled = false;
                 Toasts.show(Tr.t("Hand control stopped"), root.problemText(root.problem), "hand");
             }
@@ -242,6 +246,26 @@ Singleton {
         stdout: SplitParser {
             onRead: line => root.handle(line)
         }
+    }
+
+    // hyprlock tells nobody when it starts or ends.
+    Timer {
+        interval: 2000
+        repeat: true
+        running: root.enabled
+        triggeredOnStart: true
+        onTriggered: lockCheck.running = true
+        onRunningChanged: {
+            if (!running)
+                root.hyprlocked = false;
+        }
+    }
+
+    Process {
+        id: lockCheck
+
+        command: ["pgrep", "-x", "hyprlock"]
+        onExited: code => root.hyprlocked = root.enabled && code === 0
     }
 
     // A camera or pointer mode change needs a new engine.

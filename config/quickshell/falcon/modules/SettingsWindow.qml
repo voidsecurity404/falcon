@@ -351,15 +351,16 @@ LazyLoader {
                         title: Tr.t("Pointer"),
                         items: [
                             { key: "handmouse.mode", label: Tr.t("Pointer moves"), type: "choice", options: ["absolute", "relative"], names: [Tr.t("To the hand"), Tr.t("Like a mouse")] },
-                            { key: "handmouse.speed", label: Tr.t("Speed like a mouse"), hint: Tr.t("How far the pointer goes for a move of the hand"), type: "slider", min: 0.3, max: 5, step: 0.1, unit: "scale" },
+                            { key: "handmouse.speed", label: Tr.t("Speed like a mouse"), hint: Tr.t("How far the pointer goes for a move of the hand"), type: "slider", min: 0.3, max: 5, step: 0.1, unit: "scale", when: { key: "handmouse.mode", value: "relative" } },
                             { key: "handmouse.anchor", label: Tr.t("Follows"), hint: Tr.t("The knuckle moves least while pinching"), type: "choice", options: ["index_mcp", "index_tip", "palm_center"], names: [Tr.t("Knuckle"), Tr.t("Fingertip"), Tr.t("Palm")] },
                             { key: "handmouse.hand", label: Tr.t("Hand"), type: "choice", options: ["any", "right", "left"], names: [Tr.t("Either"), Tr.t("Right"), Tr.t("Left")] },
                             { key: "handmouse.mirror", label: Tr.t("Mirror the camera"), hint: Tr.t("A move to the right moves the pointer to the right"), type: "toggle" },
-                            { key: "handmouse.useCalibration", label: Tr.t("Use calibration"), hint: Tr.t("Once calibrated, instead of the work area"), type: "toggle" }
+                            { key: "handmouse.useCalibration", label: Tr.t("Use calibration"), hint: Tr.t("Once calibrated, instead of the work area"), type: "toggle", when: { key: "handmouse.mode", value: "absolute" } }
                         ]
                     },
                     {
                         title: Tr.t("Work area"),
+                        when: { key: "handmouse.mode", value: "absolute" },
                         items: [
                             { key: "handmouse.zone.left", label: Tr.t("Left edge"), hint: Tr.t("The part of the camera picture that covers the screen"), type: "slider", min: 0, max: 0.45, step: 0.01, unit: "percent" },
                             { key: "handmouse.zone.right", label: Tr.t("Right edge"), type: "slider", min: 0.55, max: 1, step: 0.01, unit: "percent" },
@@ -600,6 +601,11 @@ LazyLoader {
                 ]
             }
         ]
+
+        // A section or a row with `when` shows only while that setting has that value.
+        function applies(entry) {
+            return !entry.when || Settings.get(entry.when.key, "") === entry.when.value;
+        }
 
         readonly property var shown: {
             const q = filter.trim().toLowerCase();
@@ -969,6 +975,7 @@ LazyLoader {
                                 required property int index
 
                                 width: cards.width
+                                visible: win.applies(modelData)
                                 animate: win.filter === ""
                                 delay: Math.min(index, 5) * 40
 
@@ -1008,6 +1015,7 @@ LazyLoader {
                                                     required property int index
 
                                                     width: rows.width
+                                                    visible: win.applies(modelData)
 
                                                     Rectangle {
                                                         visible: rowHolder.index > 0

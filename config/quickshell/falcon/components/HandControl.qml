@@ -11,6 +11,7 @@ Column {
 
     readonly property bool live: HandMouse.running && HandMouse.started
     readonly property var zone: Settings.get("handmouse.zone", ({}))
+    readonly property bool toHand: Settings.get("handmouse.mode", "absolute") === "absolute"
     readonly property bool calibrationUsed: HandMouse.calibratedAt !== "" && Settings.get("handmouse.useCalibration", true)
     readonly property string shortcut: Settings.get("binds.handmouse", "")
 
@@ -256,7 +257,7 @@ Column {
 
                     // The part of the picture that covers the screen.
                     Rectangle {
-                        visible: frame.visible && !root.calibrationUsed
+                        visible: frame.visible && root.toHand && !root.calibrationUsed
                         x: view.width * Number(root.zone.left ?? 0.2)
                         y: view.height * Number(root.zone.top ?? 0.15)
                         width: view.width * (Number(root.zone.right ?? 0.8) - Number(root.zone.left ?? 0.2))
@@ -378,9 +379,9 @@ Column {
                 }
             }
 
-            // Calibration
+            // Calibration, which only the mode that goes to the hand uses.
             Item {
-                visible: HandMouse.ready
+                visible: HandMouse.ready && root.toHand
                 width: parent.width
                 height: 36
 
