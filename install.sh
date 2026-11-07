@@ -81,7 +81,6 @@ targets=(
     .local/bin/falcon-scratch
     .local/bin/falcon-color
     .local/bin/falcon-charge
-    .local/bin/falcon-proxy
     .local/bin/falcon-updates
     .local/bin/falcon-privacy
     .local/bin/falcon-monitors

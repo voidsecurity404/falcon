@@ -63,13 +63,6 @@ try:
 except (OSError, ValueError, KeyError):
     pass
 
-try:
-    proxy = json.loads(subprocess.run([str(HOME / ".local/bin/falcon-proxy"), "status"], capture_output=True, text=True, check=False).stdout)
-    if proxy["link"]:
-        report(proxy["ready"], tr("Proxy"), tr("Run once in a terminal: falcon-proxy setup"))
-except (OSError, ValueError, KeyError):
-    pass
-
 models = subprocess.run([str(HOME / ".local/bin/falcon-ocr-models"), "status"], capture_output=True, text=True, check=False).stdout.strip()
 have, _, total = models.partition("/")
 report(have == total and bool(total), tr("Reading models of the translator: {models}", models=models), tr("Run: falcon-ocr-models"))
