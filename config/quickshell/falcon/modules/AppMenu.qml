@@ -27,6 +27,7 @@ PanelWindow {
     property real stagger: 0
     // The pointer counts once it has really moved: a row left under it stays unselected at first.
     property var pointerStart: null
+    property var pointerLast: null
     property bool pointerLive: false
     property real wheelRest: 0
     // Dangerous actions need a second press, this holds the first one.
@@ -344,14 +345,22 @@ PanelWindow {
         item.run();
     }
 
+    // Qt also reports a move when rows slide under a pointer that stands still, so only a change of the
+    // place on the screen counts. Otherwise the arrow keys and the wheel get pulled back to the pointer.
     function pointerMoved(point) {
-        if (pointerLive)
-            return true;
+        const moved = !!pointerLast && Math.abs(pointerLast.x - point.x) + Math.abs(pointerLast.y - point.y) > 0.5;
+        pointerLast = point;
         if (!pointerStart)
             pointerStart = point;
         else if (Math.abs(pointerStart.x - point.x) + Math.abs(pointerStart.y - point.y) > 3)
             pointerLive = true;
-        return pointerLive;
+        return pointerLive && moved;
+    }
+
+    // Selecting a row scrolls the list to it. A row only partly in view is left alone, so the pointer can
+    // never scroll the list, which would bring the next row under it and scroll again.
+    function rowInView(item) {
+        return item.y >= list.contentY - 1 && item.y + item.height <= list.contentY + list.height + 1;
     }
 
     // Gives whole steps from a mouse wheel notch or from many small touchpad deltas.
@@ -385,6 +394,7 @@ PanelWindow {
         input.text = "";
         armed = "";
         pointerStart = null;
+        pointerLast = null;
         pointerLive = false;
         selected = 0;
         viewFade = 1;
@@ -828,7 +838,7 @@ PanelWindow {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onPositionChanged: mouse => {
-                            if (root.pointerMoved(mapToItem(null, mouse.x, mouse.y)))
+                            if (root.pointerMoved(mapToItem(null, mouse.x, mouse.y)) && root.rowInView(row))
                                 root.selected = row.index;
                         }
                         onClicked: root.execute(row.index)
