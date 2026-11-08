@@ -32,9 +32,13 @@ Item {
     readonly property bool holding: !isFace && interactive && (hover.hovered || (!!face.item && face.item.typing === true))
     readonly property bool showCopy: !isFace && (Widgets.editMode || (holding && !Widgets.sliding))
     readonly property bool hasContent: isFace ? contentOn : (Widgets.editMode || interactive)
-    // The face keeps its glass while the input copy is up, and only its content steps aside, so the
-    // widget looks the same under the pointer. The copy draws no plate of its own outside edit mode.
-    readonly property real drawOpacity: isFace ? 1 : (showCopy ? 1 : 0)
+    // Under the pointer the copy stays see-through and only takes the clicks, while the face goes on
+    // drawing everything, because the face sits in niri's backdrop and its blur picks up its own
+    // content as a soft glow the copy cannot draw. Only a widget being typed in shows its copy, so the
+    // cursor and selection are seen. Then the face keeps its glass and hides only its content.
+    readonly property bool typingHere: !isFace && interactive && !!face.item && face.item.typing === true
+    readonly property bool copyDrawn: !isFace && (Widgets.editMode || (typingHere && !Widgets.sliding))
+    readonly property real drawOpacity: isFace ? 1 : (copyDrawn ? 1 : 0)
     readonly property bool coveredHere: isFace && Widgets.hoverId === widgetId
     // Hidden only once the copy has faded in above it, so there is never a frame with neither.
     property bool contentCovered: false
@@ -85,9 +89,9 @@ Item {
         value: host.placeY()
     }
 
-    onShowCopyChanged: {
+    onCopyDrawnChanged: {
         if (!isFace && !Widgets.editMode)
-            Widgets.hoverId = showCopy ? widgetId : (Widgets.hoverId === widgetId ? "" : Widgets.hoverId);
+            Widgets.hoverId = copyDrawn ? widgetId : (Widgets.hoverId === widgetId ? "" : Widgets.hoverId);
     }
     onXChanged: report()
     onYChanged: report()
@@ -184,8 +188,9 @@ Item {
     Item {
         anchors.fill: parent
         opacity: host.drawOpacity
-        // A copy nobody sees must not keep animating its content.
-        visible: opacity > 0
+        // A copy nobody sees must not keep animating its content. Under the pointer it stays in place,
+        // see-through, because clicks still reach items at opacity 0.
+        visible: opacity > 0 || host.showCopy
 
         Behavior on opacity {
             NumberAnimation {
