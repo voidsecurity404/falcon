@@ -4666,6 +4666,274 @@ def _():
     ipc("timer", "0")
 
 
+feature("cookie", "Cookie soat vidjeti")
+
+WIDGETS = HOME / ".config/falcon/widgets.json"
+
+
+@case("Ikkala ko'rinish ham xatosiz chiziladi")
+def _():
+    before = WIDGETS.read_text() if WIDGETS.exists() else None
+    WIDGETS.write_text(json.dumps([
+        {"id": "c1", "type": "cookie", "fx": 0.3, "fy": 0.4, "size": "m", "form": "cookie"},
+        {"id": "c2", "type": "cookie", "fx": 0.7, "fy": 0.4, "size": "m", "form": "flower"}]))
+    try:
+        sh("pkill -x qs")
+        time.sleep(3)
+        wait(lambda: "falcon-top" in layers(), 12, "panel qaytmadi")
+        wait(lambda: len(st()["widgets"]) == 2, 5, "vidjetlar o'qilmadi")
+        log = sh("qs log -c falcon").stdout
+        ok("cookie.qml" not in log, "cookie.qml xatosi bor")
+    finally:
+        if before is None:
+            WIDGETS.unlink(missing_ok=True)
+        else:
+            WIDGETS.write_text(before)
+        sh("pkill -x qs")
+        time.sleep(3)
+
+
+feature("polkit", "Shell'ning parol oynasi (polkit)")
+
+
+def faillock_reset():
+    sh("faillock --user $(id -un) --reset")
+
+
+@case("Shell polkit agenti sifatida ro'yxatdan o'tgan, hyprpolkitagent o'chiq")
+def _():
+    wait(lambda: st()["polkitRegistered"], 8, "ro'yxatdan o'tmadi")
+    ok(sh("systemctl --user is-active hyprpolkitagent").stdout.strip() != "active", "hyprpolkitagent ishlab turibdi")
+
+
+@case("pkexec oynani ochadi, Esc bekor qiladi")
+def _():
+    p = subprocess.Popen(["pkexec", "/usr/bin/true"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        wait(lambda: "falcon-polkit" in layers() and st()["polkitActive"], 6, "oyna ochilmadi")
+        time.sleep(0.5)
+        key("esc")
+        wait(lambda: p.poll() is not None, 6, "pkexec tugamadi")
+        ok(p.returncode == 126, f"rc={p.returncode}")
+        wait(lambda: "falcon-polkit" not in layers(), 3, "oyna yopilmadi")
+    finally:
+        if p.poll() is None:
+            p.kill()
+        faillock_reset()
+
+
+@case("Noto'g'ri parol xato deydi va qayta so'raydi")
+def _():
+    p = subprocess.Popen(["pkexec", "/usr/bin/true"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        wait(lambda: st()["polkitActive"], 6, "oyna ochilmadi")
+        time.sleep(0.5)
+        typ("wrongpass")
+        key("enter")
+        time.sleep(4)
+        ok(p.poll() is None and st()["polkitActive"], "qayta so'ramadi")
+        key("esc")
+        wait(lambda: p.poll() is not None, 6, "pkexec tugamadi")
+    finally:
+        if p.poll() is None:
+            p.kill()
+        faillock_reset()
+
+
+feature("parallax", "Fon parallaksi")
+
+
+@case("Parallaks qatlami vidjetlar ostida turadi")
+def _():
+    names = layers()
+    ok("falcon-parallax" in names, "qatlam yo'q")
+    ok(names.index("falcon-parallax") < names.index("falcon-widgets-face"), f"tartib: {names}")
+
+
+@case("Sozlama qatlamni o'chiradi va qaytaradi, vidjetlar yana ustida")
+def _():
+    settings(wallpaper__parallax=False)
+    wait(lambda: "falcon-parallax" not in layers(), 4, "o'chmadi")
+    settings(wallpaper__parallax=True)
+    wait(lambda: "falcon-parallax" in layers(), 4, "qaytmadi")
+    time.sleep(0.5)
+    names = layers()
+    ok(names.index("falcon-parallax") < names.index("falcon-widgets-face"), f"tartib: {names}")
+
+
+@case("Fon almashganda shell yangi rasmni oladi")
+def _():
+    image = sorted((HOME / "Pictures/Wallpapers").glob("*.jpg"))[:2]
+    if len(image) < 2:
+        raise Skip("ikki rasm kerak")
+    old = os.path.realpath(HOME / ".local/state/falcon/wallpaper")
+    target = str(image[0]) if os.path.realpath(image[0]) != old else str(image[1])
+    sh(["env", "FALCON_QUIET=1", str(LBIN / "falcon-wallpaper"), target], timeout=60)
+    wait(lambda: st()["shownImage"] == os.path.realpath(target) and not st()["shownLive"], 6, "olinmadi")
+
+
+feature("appcolors", "KDE va VS Code ranglari")
+
+
+@case("kdeglobals'ga ranglar yoziladi, boshqa kalitlar qoladi")
+def _():
+    path = HOME / ".config/kdeglobals"
+    path.write_text("[KDE]\nwidgetStyle=Fusion\n\n[Colors:View]\nBackgroundNormal=1,2,3\n")
+    sh([str(LBIN / "falcon-apply"), "--colors", os.path.realpath(HOME / ".local/state/falcon/wallpaper")], timeout=60)
+    text = path.read_text()
+    ok("widgetStyle=Fusion" in text, "eski kalit yo'qoldi")
+    ok("[Colors:Window]" in text and "ColorScheme=Falcon" in text, "ranglar yozilmadi")
+    ok("BackgroundNormal=1,2,3" not in text, "eski rang qoldi")
+    ok((HOME / ".local/share/color-schemes/Falcon.colors").exists(), "sxema fayli yo'q")
+
+
+@case("VS Code bor bo'lsa Falcon mavzusi yoziladi")
+def _():
+    ext = HOME / ".vscode/extensions"
+    made = not ext.exists()
+    ext.mkdir(parents=True, exist_ok=True)
+    try:
+        sh([str(LBIN / "falcon-app-colors"), "code"], check=True)
+        theme = json.loads((ext / "falcon.falcon-theme-1.0.0/themes/falcon.json").read_text())
+        ok(theme["type"] in ("dark", "light") and theme["colors"]["editor.background"].startswith("#"), "mavzu noto'g'ri")
+    finally:
+        sh(["rm", "-rf", str(ext / "falcon.falcon-theme-1.0.0")])
+        if made:
+            sh(["rm", "-rf", str(HOME / ".vscode")])
+
+
+feature("sessionwarn", "O'chirishdan oldin ogohlantirish")
+
+
+@case("Tugamagan yuklab olish power menyusida aytiladi")
+def _():
+    folder = Path(sh("xdg-user-dir DOWNLOAD").stdout.strip() or HOME / "Downloads")
+    part = folder / "falcon-test.mkv.part"
+    part.write_text("x")
+    try:
+        ipc("power")
+        wait(lambda: "falcon-test.mkv" in st()["sessionWarning"], 5, "aytilmadi")
+    finally:
+        part.unlink(missing_ok=True)
+        ipc("close")
+
+
+@case("Ishlayotgan AUR yordamchisi yangilanish deb aytiladi")
+def _():
+    fake = Path("/tmp/nd-yay")
+    sh(["cp", "/usr/bin/sleep", str(fake)])
+    p = subprocess.Popen([str(fake), "30"])
+    try:
+        ipc("power")
+        wait(lambda: st()["sessionWarning"] != "", 5, "aytilmadi")
+    finally:
+        p.kill()
+        fake.unlink(missing_ok=True)
+        ipc("close")
+    wait(lambda: st()["sessionWarning"] == "", 3, "ogohlantirish qoldi")
+
+
+feature("hearing", "Quloqni himoya qilish")
+
+
+def volume():
+    return float(sh("wpctl get-volume @DEFAULT_AUDIO_SINK@").stdout.split()[1])
+
+
+@case("Keskin ko'tarilish qaytariladi, kichik qadamlar o'tadi")
+def _():
+    sh("wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.30")
+    time.sleep(1)
+    sh("wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.40")
+    time.sleep(0.6)
+    ok(abs(volume() - 0.40) < 0.02, f"kichik qadam o'tmadi: {volume()}")
+    sh("wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.95")
+    time.sleep(0.8)
+    ok(abs(volume() - 0.40) < 0.02, f"qaytarilmadi: {volume()}")
+    toast("volume jump")
+
+
+@case("Eng yuqori ovozdan oshmaydi")
+def _():
+    settings(audio__maxVolume=0.5)
+    sh("wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.45")
+    time.sleep(0.8)
+    sh("wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.05+ -l 1.0")
+    time.sleep(0.4)
+    sh("wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.05+ -l 1.0")
+    time.sleep(0.8)
+    ok(volume() <= 0.51, f"oshib ketdi: {volume()}")
+
+
+feature("songrec", "Qo'shiqni aniqlash")
+
+
+@case("songrec yo'q bo'lsa o'rnatishni taklif qiladi, tinglayapman demaydi")
+def _():
+    if sh("command -v songrec").returncode == 0:
+        raise Skip("songrec o'rnatilgan")
+    ipc("songrec")
+    toast("needs songrec")
+    ok("Listening…" not in st()["history"], "tinglayapman dedi")
+
+
+@case("Hech narsa chalinmasa shuni aytadi")
+def _():
+    if sh("command -v songrec").returncode != 0:
+        raise Skip("songrec o'rnatilmagan")
+    sh("playerctl -a pause")
+    ipc("songrec")
+    wait(lambda: st()["songrec"], 3, "tinglamadi")
+    toast("Nothing is playing", 16)
+
+
+feature("keys", "Tugmalar ro'yxati")
+
+
+@case("Mod+Shift+/ ro'yxatni ochadi, Esc yopadi")
+def _():
+    key("mod", "shift", "slash")
+    wait(lambda: st()["popup"] == "keys" and "falcon-keys" in layers(), 4, "ochilmadi")
+    key("esc")
+    wait(lambda: "falcon-keys" not in layers(), 3, "yopilmadi")
+
+
+@case("falcon-keys hamma bind'larni o'qiydi")
+def _():
+    rows = json.loads(sh([str(LBIN / "falcon-keys")], check=True).stdout)
+    keys = [k for r in rows for k in r["keys"]]
+    ok("Mod+Shift+Slash" in keys and "Mod+1…9" in keys and "Alt+Tab" in keys, keys[:20])
+    ok(all(r["title"] for r in rows), "sarlavhasiz qator bor")
+
+
+@case("user.kdl'dagi ko'p qatorli bind ko'rinadi va eski vazifani almashtiradi")
+def _():
+    user = HOME / ".config/niri/cfg/user.kdl"
+    before = user.read_text() if user.exists() else ""
+    try:
+        user.write_text(before + '\nbinds {\n    Mod+Y hotkey-overlay-title="Test app" {\n        spawn "true";\n    }\n    Mod+H { focus-column-right; }\n}\n')
+        rows = json.loads(sh([str(LBIN / "falcon-keys")], check=True).stdout)
+        mine = [r for r in rows if r["group"] == "Your keys"]
+        ok(any(r["title"] == "Test app" and r["keys"] == ["Mod+Y"] for r in mine), mine)
+        left = next(r for r in rows if r["title"] == "Focus the column on the left")
+        ok("Mod+H" not in left["keys"], left)
+    finally:
+        user.write_text(before)
+
+
+@case("cfg/binds.kdl'dagi har bir tugma ro'yxatda bor")
+def _():
+    fixed = (HOME / ".config/niri/cfg/binds.kdl").read_text()
+    wanted = {m for m in re.findall(r'^\s*([A-Za-z0-9_+]+)(?:\s+[a-z-]+=(?:"[^"]*"|\S+))*\s*\{', fixed, re.M) if m != "binds" and "Wheel" not in m}
+    rows = json.loads(sh([str(LBIN / "falcon-keys")], check=True).stdout)
+    shown = set()
+    for r in rows:
+        for k in r["keys"]:
+            m = re.fullmatch(r"(.*\+)(\d)…(\d)", k)
+            shown |= {f"{m.group(1)}{n}" for n in range(int(m.group(2)), int(m.group(3)) + 1)} if m else {k}
+    ok(not wanted - shown, f"sarlavhasiz: {sorted(wanted - shown)}")
+
+
 feature("i18n", "Interfeys tili")
 
 CATALOG = HOME / ".config/falcon/i18n-ru.json"

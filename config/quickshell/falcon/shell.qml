@@ -169,6 +169,12 @@ ShellRoot {
                 privacy: { mic: Privacy.mic, camera: Privacy.camera },
                 clipPins: ClipPins.pins.length,
                 wallpaperAuto: WallpaperAuto.mode,
+                sessionWarning: Session.warning,
+                polkitActive: Polkit.active,
+                polkitRegistered: Polkit.registered,
+                songrec: SongRec.listening,
+                shownImage: Wallpapers.shownImage,
+                shownLive: Wallpapers.shownLive,
             });
         }
         // Testlar uchun: shell'ni boshlang'ich holatga qaytaradi.
