@@ -281,7 +281,15 @@ def main():
         return
     stop(shell)
 
-    out = subprocess.run(["fastfetch", "--pipe", "false"], stdout=subprocess.PIPE).stdout
+    # fastfetch names the shell after its parent, which would be this script, so the shell that
+    # started it is passed on and shown by the "shell" line of the config.
+    try:
+        with open(f"/proc/{os.getppid()}/comm") as comm:
+            parent = comm.read().strip()
+    except OSError:
+        parent = ""
+    env = dict(os.environ, FALCON_SHELL=parent) if parent else None
+    out = subprocess.run(["fastfetch", "--pipe", "false"], stdout=subprocess.PIPE, env=env).stdout
     try:
         fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
     except OSError:

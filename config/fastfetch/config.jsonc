@@ -8,7 +8,7 @@
     { "type": "kernel", "key": "kernel", "format": "{release}" },
     { "type": "uptime", "key": "uptime" },
     { "type": "packages", "key": "packages", "format": "{all}" },
-    { "type": "shell", "key": "shell", "format": "{pretty-name}" },
+    { "type": "command", "key": "shell", "text": "n=\"${FALCON_SHELL:-$(ps -o comm= -p $(ps -o ppid= -p $PPID) 2>/dev/null)}\"; echo \"${n:-$(basename \"$SHELL\")}\"" },
     { "type": "custom", "key": "desktop", "format": "Falcon" },
     { "type": "wm", "key": "wm", "format": "{pretty-name}" },
     { "type": "terminal", "key": "terminal", "format": "{pretty-name}" },
