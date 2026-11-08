@@ -749,14 +749,5 @@
  "Marcus Aurelius": "Марк Аврелий",
  "Seneca": "Сенека",
  "Alan Kay": "Алан Кей",
- "Kent Beck": "Кент Бек",
- "Phone icon": "Значок телефона",
- "Connected directly, {ms} ms": "Прямое соединение, {ms} мс",
- "Connected through a relay, {ms} ms": "Через ретранслятор, {ms} мс",
- "Phone is offline": "Телефон не в сети",
- "Phone connection lost": "Связь с телефоном прервалась",
- "Reconnecting…": "Переподключаюсь…",
- "Phone is not reachable": "Телефон недоступен",
- "Still trying. Check that the phone has internet.": "Пробую дальше. Проверьте, есть ли на телефоне интернет.",
- "Gave up after 3 minutes": "Не удалось подключиться за 3 минуты"
+ "Kent Beck": "Кент Бек"
 }

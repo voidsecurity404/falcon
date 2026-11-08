@@ -58,7 +58,6 @@
     "clockDate": false,
     "clock24": true,
     "claude": true,
-    "phone": true,
     "updates": true,
     "privacy": true
   },
