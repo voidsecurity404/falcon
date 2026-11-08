@@ -183,8 +183,10 @@ Item {
                 size: 12
             }
         }
+        // A plain x, not an anchor: an anchor reset to undefined keeps its last place, so after the
+        // form changed from tall to wide the buttons stayed centered and ran off the plate.
         Row {
-            anchors.horizontalCenter: root.tall ? parent.horizontalCenter : undefined
+            x: root.tall ? (parent.width - width) / 2 : 0
             spacing: 8
             visible: !!root.player
 
