@@ -420,6 +420,32 @@ def colors(s, image=None):
         raise Bad(tr("Colors could not be written: {reason}", reason=text[0][:120] if text else "matugen"))
     (STATE / "theme-key").write_text(theme_key(s))
     run_quiet("dconf", "write", "/org/gnome/desktop/interface/color-scheme", "'prefer-light'" if mode == "light" else "'prefer-dark'")
+    claude_theme(mode)
+
+
+# Claude Code themes that may be swapped. Its "-ansi" ones draw with the terminal's
+# own palette, which follows the wallpaper. A theme chosen on purpose, such as a
+# daltonized one, is left alone.
+CLAUDE_THEMES = {None, "dark", "light", "dark-ansi", "light-ansi"}
+
+
+def claude_theme(mode):
+    path = HOME / ".claude.json"
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return
+    want = f"{mode}-ansi"
+    if not isinstance(data, dict) or data.get("theme") not in CLAUDE_THEMES or data.get("theme") == want:
+        return
+    data["theme"] = want
+    tmp = path.with_name(path.name + ".falcon-tmp")
+    try:
+        tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+        os.chmod(tmp, path.stat().st_mode & 0o777)
+        os.replace(tmp, path)
+    except OSError:
+        tmp.unlink(missing_ok=True)
 
 
 def theme_key(s):
