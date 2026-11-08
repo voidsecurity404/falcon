@@ -610,8 +610,10 @@ LazyLoader {
                                         }
                                     }
 
-                                    // A later card lies over an earlier one where they meet, as in a list.
-                                    z: 1 + nearness + slot / (deck.files.length + 1) * 0.01
+                                    // The card nearer the middle lies over its neighbour on both sides. The order
+                                    // follows the position smoothly, so a card leaving the middle to the right
+                                    // never drops under its neighbour at the end of the move.
+                                    z: 10 - Math.abs(offset)
                                     // The card at the middle is wider. Its neighbours make room for it on both
                                     // sides, and both change gradually as the carousel moves.
                                     width: 340 + 100 * nearness
