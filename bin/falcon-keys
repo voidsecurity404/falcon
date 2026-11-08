@@ -81,21 +81,80 @@ COMMANDS = [
     ("brightness 5%-", "Media keys", "Darker"),
 ]
 
-BIND = re.compile(r"^\s*([A-Za-z0-9_+]+)((?:\s+[a-z-]+=(?:\"[^\"]*\"|\S+))*)\s*\{\s*(.*?);?\s*\}\s*$")
+HEAD = re.compile(r"^([A-Za-z0-9_+]+)((?:\s+[a-z-]+=(?:\"[^\"]*\"|\S+))*)\s*$")
 TITLE = re.compile(r'hotkey-overlay-title="([^"]*)"')
 
 
+def strip_comments(text):
+    """Drops // and /* */ comments, leaving strings alone."""
+    out, i, quoted = [], 0, False
+    while i < len(text):
+        c = text[i]
+        if quoted:
+            out.append(c)
+            if c == "\\" and i + 1 < len(text):
+                out.append(text[i + 1])
+                i += 1
+            elif c == '"':
+                quoted = False
+        elif c == '"':
+            quoted = True
+            out.append(c)
+        elif text.startswith("//", i):
+            while i < len(text) and text[i] != "\n":
+                i += 1
+            continue
+        elif text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            i = len(text) if end < 0 else end + 2
+            continue
+        else:
+            out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def blocks(text):
+    """Yields (head, body) of each top-level `head { body }` in text, a bind written on one
+    line or on several."""
+    i, start, depth, quoted, head = 0, 0, 0, False, ""
+    while i < len(text):
+        c = text[i]
+        if quoted:
+            if c == "\\":
+                i += 1
+            elif c == '"':
+                quoted = False
+        elif c == '"':
+            quoted = True
+        elif c == "{":
+            if depth == 0:
+                head = text[start:i].strip()
+                body_start = i + 1
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                yield head, text[body_start:i]
+                start = i + 1
+        elif c in ";\n" and depth == 0:
+            start = i + 1
+        i += 1
+
+
 def binds(path):
-    """Yields (keys, options, action) from a niri config file."""
+    """Yields (keys, options, action) for every bind in the `binds` blocks of a niri file."""
     try:
-        text = path.read_text()
+        text = strip_comments(path.read_text())
     except OSError:
         return
-    for line in text.splitlines():
-        line = line.split("//", 1)[0] if not line.lstrip().startswith("//") else ""
-        m = BIND.match(line)
-        if m and m.group(1) != "binds":
-            yield m.group(1), m.group(2), m.group(3).strip()
+    for head, body in blocks(text):
+        if head != "binds":
+            continue
+        for bind_head, action in blocks(body):
+            m = HEAD.match(bind_head)
+            if m:
+                yield m.group(1), m.group(2), " ".join(action.replace(";", " ").split())
 
 
 def describe(action):
@@ -151,14 +210,27 @@ def main():
         found = describe(action)
         if found:
             add(found[0], found[1], key)
+    # cfg/user.kdl comes last in niri's config, so its keys replace the same keys above.
     for key, options, action in binds(USER):
+        for row in rows.values():
+            if key in row["keys"]:
+                row["keys"].remove(key)
         m = TITLE.search(options)
-        add("Your keys", m.group(1) if m else action, key, translated=True)
+        if m:
+            add("Your keys", m.group(1), key, translated=True)
+        else:
+            found = describe(action)
+            if found:
+                add("Your keys", found[1], key)
+            else:
+                words = shlex.split(action) if action else []
+                title = Path(words[1]).name if len(words) > 1 and words[0] in ("spawn", "spawn-sh") else action
+                add("Your keys", title, key, translated=True)
 
     out = []
     for group in GROUPS:
         for row in rows.values():
-            if row["group"] == group:
+            if row["group"] == group and row["keys"]:
                 row["keys"] = squeeze(row["keys"])
                 out.append(row)
     print(json.dumps(out, ensure_ascii=False))

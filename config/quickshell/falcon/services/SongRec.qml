@@ -9,25 +9,42 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    readonly property bool listening: proc.running
+    readonly property bool running: proc.running
+    // True from the moment the script really records until it answers.
+    property bool listening: false
+    property bool fromMic: false
     // The last song found: { title, artist, url, cover }.
     property var last: null
 
     function recognize(mic) {
         if (proc.running)
             return;
+        fromMic = !!mic;
+        answered = false;
         proc.command = [Ui.binDir + "falcon-songrec"].concat(mic ? ["--mic"] : []);
         proc.running = true;
-        Toasts.show(Tr.t("Listening…"), mic ? Tr.t("Naming the song from the microphone") : Tr.t("Naming the song that plays on the computer"), "music");
     }
 
-    function handle(text) {
+    property bool answered: false
+
+    function line(text) {
         let answer = null;
         try {
-            answer = JSON.parse(text.trim().split("\n").pop());
+            answer = JSON.parse(text);
         } catch (e) {
-            answer = { error: "failed" };
+            return;
         }
+        if (answer.state === "listening") {
+            listening = true;
+            Toasts.show(Tr.t("Listening…"), fromMic ? Tr.t("Naming the song from the microphone") : Tr.t("Naming the song that plays on the computer"), "music");
+            return;
+        }
+        answered = true;
+        listening = false;
+        handle(answer);
+    }
+
+    function handle(answer) {
         if (answer.error === "missing") {
             Toasts.show(Tr.t("Song recognition needs songrec"), Tr.t("Click to install it"), "music", () => Quickshell.execDetached(["kitty", "--class", "falcon-install", "sh", "-c", "sudo pacman -S --needed songrec; echo; read -p '" + Tr.t("Press Enter to close") + "' x"]));
         } else if (answer.error === "silent") {
@@ -45,8 +62,20 @@ Singleton {
     Process {
         id: proc
 
-        stdout: StdioCollector {
-            onStreamFinished: root.handle(text)
+        stdout: SplitParser {
+            onRead: data => root.line(data)
+        }
+        // The last line can arrive just after the exit, so the check waits a moment.
+        onExited: lateCheck.restart()
+    }
+    Timer {
+        id: lateCheck
+
+        interval: 300
+        onTriggered: {
+            root.listening = false;
+            if (!root.answered && !proc.running)
+                root.handle({ error: "failed" });
         }
     }
 }

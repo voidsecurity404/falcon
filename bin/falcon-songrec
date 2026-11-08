@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Names the song that is playing. Records 10 seconds of what the computer plays (or of the
 # microphone with --mic), and songrec asks Shazam about that sample. Only a fingerprint of the
-# sound is sent. Prints one JSON line:
+# sound is sent. Prints {"state": "listening"} when recording starts, then one JSON line:
 #   {"title": ..., "artist": ..., "url": ..., "cover": ...}
 #   {"error": "missing" | "silent" | "unknown" | "failed"}
 set -u
@@ -22,6 +22,7 @@ else
     device="$(pactl get-default-sink).monitor"
 fi
 
+say '{"state": "listening"}'
 timeout 10 parec -d "$device" --format=s16le --rate=44100 --channels=1 --raw >"$raw" 2>/dev/null
 ffmpeg -v error -y -f s16le -ar 44100 -ac 1 -i "$raw" "$wav" </dev/null || { say '{"error": "failed"}'; exit 1; }
 

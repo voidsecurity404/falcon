@@ -152,7 +152,8 @@ Item {
     Rectangle {
         id: second
 
-        readonly property real r: root.base * (root.flower ? 0.92 : 0.72)
+        // On the flower it runs inside the valleys between the waves (1 - depth), past the hour dots.
+        readonly property real r: root.base * (root.flower ? 0.86 : 0.72)
 
         width: 10
         height: 10
