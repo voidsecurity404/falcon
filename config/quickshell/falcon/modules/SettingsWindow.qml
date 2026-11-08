@@ -134,6 +134,13 @@ LazyLoader {
                             { key: "wallpaper.transition", label: Tr.t("Effect"), type: "choice", options: ["grow", "fade", "wipe", "wave", "none"], names: [Tr.t("Grow"), Tr.t("Fade"), Tr.t("Wipe"), Tr.t("Wave"), Tr.t("None")] },
                             { key: "wallpaper.duration", label: Tr.t("Duration"), type: "slider", min: 0.2, max: 4, step: 0.2, unit: "sec" }
                         ]
+                    },
+                    {
+                        title: Tr.t("Depth"),
+                        items: [
+                            { key: "wallpaper.parallax", label: Tr.t("Parallax"), hint: Tr.t("The wallpaper slides a little as you move between workspaces"), type: "toggle" },
+                            { key: "wallpaper.parallaxAmount", label: Tr.t("Parallax strength"), hint: Tr.t("How much taller than the screen the wallpaper is drawn"), type: "slider", min: 0.02, max: 0.2, step: 0.01, unit: "percent" }
+                        ]
                     }
                 ]
             },

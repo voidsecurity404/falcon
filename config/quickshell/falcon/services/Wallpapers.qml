@@ -17,6 +17,10 @@ Singleton {
     property var thumbs: ({})
     property string currentLive: ""
     property string currentImage: ""
+    // The picture on screen now (a live wallpaper's first frame) and whether a video plays over it.
+    // falcon-wallpaper reports each change through `desk wallpaperShown`, as its transition starts.
+    property string shownImage: ""
+    property bool shownLive: false
 
     signal currentChanged
 
@@ -89,6 +93,10 @@ Singleton {
                 const paths = text.trim().split("\n");
                 const image = paths[0] || "";
                 const live = paths[1] || "";
+                if (root.shownImage === "") {
+                    root.shownImage = image;
+                    root.shownLive = live !== "";
+                }
                 if (image !== root.currentImage || live !== root.currentLive) {
                     root.currentImage = image;
                     root.currentLive = live;

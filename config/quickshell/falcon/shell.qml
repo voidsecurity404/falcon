@@ -18,6 +18,11 @@ ShellRoot {
                 ExclusiveZone {
                     screen: perScreen.modelData
                 }
+                // Before WidgetFace, so the widgets open above it in the backdrop.
+                Parallax {
+                    screen: perScreen.modelData
+                    outputName: perScreen.modelData.name
+                }
                 WidgetFace {
                     screen: perScreen.modelData
                     outputName: perScreen.modelData.name
@@ -222,6 +227,10 @@ ShellRoot {
         }
         function widgetsArrange(image: string): void {
             Widgets.arrange(image);
+        }
+        function wallpaperShown(path: string, live: bool): void {
+            Wallpapers.shownImage = path;
+            Wallpapers.shownLive = live;
         }
         function widgetsRestack(): void {
             Widgets.restack();

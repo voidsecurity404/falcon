@@ -170,6 +170,8 @@
   "wallpaper": {
     "transition": "grow",
     "duration": 1.0,
+    "parallax": true,
+    "parallaxAmount": 0.06,
     "auto": "off",
     "slideshowEvery": 3600,
     "slideshowOrder": "random",

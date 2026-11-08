@@ -132,6 +132,7 @@ layer-rule {
 // Vidjetlar ham fon bilan birga turadi: ish stoli almashganda surilmaydi.
 layer-rule {
     match namespace="^falcon-widgets-face$"
+    match namespace="^falcon-parallax$"
     place-within-backdrop true
 }
 
