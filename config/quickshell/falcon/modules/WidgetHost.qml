@@ -32,7 +32,28 @@ Item {
     readonly property bool holding: !isFace && interactive && (hover.hovered || (!!face.item && face.item.typing === true))
     readonly property bool showCopy: !isFace && (Widgets.editMode || (holding && !Widgets.sliding))
     readonly property bool hasContent: isFace ? contentOn : (Widgets.editMode || interactive)
-    readonly property real drawOpacity: isFace ? (Widgets.hoverId === widgetId ? 0 : 1) : (showCopy ? 1 : 0)
+    // The face keeps its glass while the input copy is up, and only its content steps aside, so the
+    // widget looks the same under the pointer. The copy draws no plate of its own outside edit mode.
+    readonly property real drawOpacity: isFace ? 1 : (showCopy ? 1 : 0)
+    readonly property bool coveredHere: isFace && Widgets.hoverId === widgetId
+    // Hidden only once the copy has faded in above it, so there is never a frame with neither.
+    property bool contentCovered: false
+
+    onCoveredHereChanged: {
+        if (coveredHere) {
+            coverDelay.restart();
+        } else {
+            coverDelay.stop();
+            contentCovered = false;
+        }
+    }
+
+    Timer {
+        id: coverDelay
+
+        interval: 150
+        onTriggered: host.contentCovered = true
+    }
 
     function snap(v, low, high) {
         return Math.max(low, Math.min(high, Math.round(v / gridStep) * gridStep));
@@ -182,31 +203,37 @@ Item {
         }
 
         // Tarkib faqat ko'rinayotganda ishlaydi va sekin paydo bo'ladi. Ramka o'lchami o'zgarmaydi.
-        Loader {
-            id: face
+        Item {
+            anchors.fill: parent
+            // No fade here: the copy above already shows the same content.
+            visible: !host.contentCovered
 
-            property real reshapeOpacity: 1
+            Loader {
+                id: face
 
-            width: host.shownForm ? host.shownForm.w : 0
-            height: host.shownForm ? host.shownForm.h : 0
-            scale: host.factor
-            transformOrigin: Item.TopLeft
-            active: host.hasContent
-            source: host.entry ? Qt.resolvedUrl("widgets/" + host.entry.type + ".qml") : ""
-            enabled: !Widgets.editMode && !host.isFace
-            // Reduced from its full size, because text scaled down by itself turns rough.
-            layer.enabled: host.factor < 1
-            layer.smooth: true
-            layer.mipmap: true
-            opacity: status === Loader.Ready ? reshapeOpacity : 0
-            onLoaded: {
-                if ("form" in item)
-                    item.form = Qt.binding(() => host.shownForm ? host.shownForm.name : "");
-            }
+                property real reshapeOpacity: 1
 
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: 360
+                width: host.shownForm ? host.shownForm.w : 0
+                height: host.shownForm ? host.shownForm.h : 0
+                scale: host.factor
+                transformOrigin: Item.TopLeft
+                active: host.hasContent
+                source: host.entry ? Qt.resolvedUrl("widgets/" + host.entry.type + ".qml") : ""
+                enabled: !Widgets.editMode && !host.isFace
+                // Reduced from its full size, because text scaled down by itself turns rough.
+                layer.enabled: host.factor < 1
+                layer.smooth: true
+                layer.mipmap: true
+                opacity: status === Loader.Ready ? reshapeOpacity : 0
+                onLoaded: {
+                    if ("form" in item)
+                        item.form = Qt.binding(() => host.shownForm ? host.shownForm.name : "");
+                }
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 360
+                    }
                 }
             }
         }
