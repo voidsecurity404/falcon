@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+"""Prints every key of the desktop as JSON for the shell's key sheet (Mod+Shift+/).
+
+It reads niri's own files, so the sheet always matches them: the fixed keys in
+cfg/binds.kdl and those set in Settings → Shortcuts (generated/binds.kdl, whose titles are
+already translated). Output: [{"group": ..., "title": ..., "keys": [...], "translated": bool}]
+"""
+
+import json
+import os
+import re
+import shlex
+from pathlib import Path
+
+NIRI = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "niri"
+FIXED = NIRI / "cfg" / "binds.kdl"
+CHOSEN = NIRI / "generated" / "binds.kdl"
+USER = NIRI / "cfg" / "user.kdl"
+
+# Groups in the order they are shown.
+GROUPS = ["Falcon", "Windows", "Workspaces", "Monitors", "Screen", "Media keys", "System", "Your keys"]
+
+# niri actions: (group, title). A title may depend on the argument.
+ACTIONS = {
+    "focus-column-left": ("Windows", "Focus the column on the left"),
+    "focus-column-right": ("Windows", "Focus the column on the right"),
+    "focus-column-first": ("Windows", "Focus the first column"),
+    "focus-column-last": ("Windows", "Focus the last column"),
+    "move-column-left": ("Windows", "Move the column left"),
+    "move-column-right": ("Windows", "Move the column right"),
+    "center-column": ("Windows", "Center the column"),
+    "center-visible-columns": ("Windows", "Center the visible columns"),
+    "consume-or-expel-window-left": ("Windows", "Take into or out of the column on the left"),
+    "consume-or-expel-window-right": ("Windows", "Take into or out of the column on the right"),
+    "toggle-column-tabbed-display": ("Windows", "Column as tabs"),
+    "toggle-window-floating": ("Windows", "Floating or tiled"),
+    "switch-focus-between-floating-and-tiling": ("Windows", "Between floating and tiled windows"),
+    "expand-column-to-available-width": ("Windows", "Fill the free space"),
+    "maximize-window-to-edges": ("Windows", "Stretch to the screen edges"),
+    "switch-preset-window-height": ("Windows", "Window height"),
+    "reset-window-height": ("Windows", "Reset the window height"),
+    "swap-window-left": ("Windows", "Swap with the window on the left"),
+    "swap-window-right": ("Windows", "Swap with the window on the right"),
+    "focus-workspace-down": ("Workspaces", "Workspace below"),
+    "focus-workspace-up": ("Workspaces", "Workspace above"),
+    "focus-workspace-previous": ("Workspaces", "Previous workspace"),
+    "move-column-to-workspace-down": ("Workspaces", "Move the column down"),
+    "move-column-to-workspace-up": ("Workspaces", "Move the column up"),
+    "move-workspace-down": ("Workspaces", "Move the workspace down"),
+    "move-workspace-up": ("Workspaces", "Move the workspace up"),
+    "focus-workspace": ("Workspaces", "Go to a workspace"),
+    "move-column-to-workspace": ("Workspaces", "Move the column to a workspace"),
+    "focus-monitor-left": ("Monitors", "Monitor on the left"),
+    "focus-monitor-right": ("Monitors", "Monitor on the right"),
+    "move-column-to-monitor-left": ("Monitors", "Move the column to the left monitor"),
+    "move-column-to-monitor-right": ("Monitors", "Move the column to the right monitor"),
+    "power-off-monitors": ("Monitors", "Turn the monitors off"),
+    "toggle-keyboard-shortcuts-inhibit": ("System", "Let the app have all keys"),
+    "quit": ("System", "Log out"),
+    "show-hotkey-overlay": ("System", "This list"),
+}
+
+# What a spawned command does, by a piece of its text.
+COMMANDS = [
+    ("desk switcher 1 false", "Windows", "Next window"),
+    ("desk switcher -1 false", "Windows", "Previous window"),
+    ("desk switcher 1 true", "Windows", "Next window of the same app"),
+    ("desk switcher -1 true", "Windows", "Previous window of the same app"),
+    ("desk keys", "System", "This list"),
+    ("desk region copy", "Screen", "Screenshot of an area"),
+    ("falcon-shot screen", "Screen", "Screenshot of the whole screen"),
+    ("falcon-shot window", "Screen", "Screenshot of the window"),
+    ("0.05+", "Media keys", "Louder"),
+    ("0.05-", "Media keys", "Quieter"),
+    ("DEFAULT_AUDIO_SINK@ toggle", "Media keys", "Sound on or off"),
+    ("DEFAULT_AUDIO_SOURCE@ toggle", "Media keys", "Microphone on or off"),
+    ("play-pause", "Media keys", "Play or pause"),
+    ("playerctl previous", "Media keys", "Previous track"),
+    ("playerctl next", "Media keys", "Next track"),
+    ("brightness +", "Media keys", "Brighter"),
+    ("brightness 5%-", "Media keys", "Darker"),
+]
+
+BIND = re.compile(r"^\s*([A-Za-z0-9_+]+)((?:\s+[a-z-]+=(?:\"[^\"]*\"|\S+))*)\s*\{\s*(.*?);?\s*\}\s*$")
+TITLE = re.compile(r'hotkey-overlay-title="([^"]*)"')
+
+
+def binds(path):
+    """Yields (keys, options, action) from a niri config file."""
+    try:
+        text = path.read_text()
+    except OSError:
+        return
+    for line in text.splitlines():
+        line = line.split("//", 1)[0] if not line.lstrip().startswith("//") else ""
+        m = BIND.match(line)
+        if m and m.group(1) != "binds":
+            yield m.group(1), m.group(2), m.group(3).strip()
+
+
+def describe(action):
+    """(group, title) of an action, or None when it is unknown."""
+    words = shlex.split(action) if action else [""]
+    name = words[0]
+    if name in ("spawn", "spawn-sh"):
+        text = " ".join(words[1:])
+        text = text.replace('"', "").replace("qs -c falcon ipc call ", "")
+        for piece, group, title in COMMANDS:
+            if piece in text:
+                return group, title
+        return None
+    if name == "set-column-width" and len(words) > 1:
+        return "Windows", "Narrower column" if words[1].startswith("-") else "Wider column"
+    if name == "set-window-height" and len(words) > 1:
+        return "Windows", "Shorter window" if words[1].startswith("-") else "Taller window"
+    return ACTIONS.get(name)
+
+
+def squeeze(keys):
+    """Mod+1 … Mod+9 become one key, Mod+1…9."""
+    out, digits = [], {}
+    for key in keys:
+        m = re.fullmatch(r"(.*\+)([1-9])", key)
+        if m:
+            digits.setdefault(m.group(1), []).append(int(m.group(2)))
+        else:
+            out.append(key)
+    for prefix, ns in digits.items():
+        ns.sort()
+        if len(ns) > 2 and ns == list(range(ns[0], ns[-1] + 1)):
+            out.append(f"{prefix}{ns[0]}…{ns[-1]}")
+        else:
+            out += [f"{prefix}{n}" for n in ns]
+    return out
+
+
+def main():
+    rows = {}
+
+    def add(group, title, key, translated=False):
+        row = rows.setdefault((group, title), {"group": group, "title": title, "keys": [], "translated": translated})
+        if key not in row["keys"]:
+            row["keys"].append(key)
+
+    for key, options, action in binds(CHOSEN):
+        m = TITLE.search(options)
+        add("Falcon", m.group(1) if m else action, key, translated=bool(m))
+    for key, options, action in binds(FIXED):
+        if key.startswith("Mod+Wheel") or key.startswith("Mod+Shift+Wheel"):
+            continue
+        found = describe(action)
+        if found:
+            add(found[0], found[1], key)
+    for key, options, action in binds(USER):
+        m = TITLE.search(options)
+        add("Your keys", m.group(1) if m else action, key, translated=True)
+
+    out = []
+    for group in GROUPS:
+        for row in rows.values():
+            if row["group"] == group:
+                row["keys"] = squeeze(row["keys"])
+                out.append(row)
+    print(json.dumps(out, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()

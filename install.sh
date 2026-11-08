@@ -58,6 +58,7 @@ targets=(
     .local/bin/falcon-claude-usage
     .local/bin/falcon-spectrum
     .local/bin/falcon-songrec
+    .local/bin/falcon-keys
     .local/bin/falcon-fetch
     .local/bin/falcon-shot
     .local/bin/falcon-wallpaper

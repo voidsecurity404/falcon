@@ -1,6 +1,6 @@
 // Mod — Super tugmasi. Yordam oynasi: Mod+Shift+/
 binds {
-    Mod+Shift+Slash { show-hotkey-overlay; }
+    Mod+Shift+Slash repeat=false { spawn "qs" "-c" "falcon" "ipc" "call" "desk" "keys"; }
 
     // Ko'p ishlatiladigan klavishlar Sozlamalar → Klavishlar bo'limida (generated/binds.kdl).
 

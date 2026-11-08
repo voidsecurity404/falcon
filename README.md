@@ -27,7 +27,7 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 
 ## Shortcuts
 
-`Mod` is the Super key. Full list: `Mod+Shift+/`.
+`Mod` is the Super key. Full list: `Mod+Shift+/` opens a sheet of every key, read from niri's own files, with a search field.
 
 | Shortcut | Action |
 | --- | --- |

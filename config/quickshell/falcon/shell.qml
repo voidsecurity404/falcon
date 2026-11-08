@@ -49,6 +49,7 @@ ShellRoot {
     AppMenu {}
     PowerMenu {}
     PolkitDialog {}
+    KeysSheet {}
     WallpaperPicker {}
     SettingsWindow {}
     TranslateWindow {}
@@ -227,6 +228,9 @@ ShellRoot {
         }
         function widgetsArrange(image: string): void {
             Widgets.arrange(image);
+        }
+        function keys(): void {
+            Ui.togglePopup("keys");
         }
         function songrec(): void {
             SongRec.recognize(false);
