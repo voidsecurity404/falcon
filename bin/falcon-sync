@@ -31,6 +31,7 @@ FILES = [
     ("config/hypr/hyprlock.conf", ".config/hypr/hyprlock.conf"),
     ("config/fastfetch/config.jsonc", ".config/fastfetch/config.jsonc"),
     ("config/fastfetch/brand.txt", ".config/fastfetch/brand.txt"),
+    ("config/fish/conf.d/falcon-fetch.fish", ".config/fish/conf.d/falcon-fetch.fish"),
     ("config/falcon/defaults.json", ".config/falcon/defaults.json"),
     ("config/falcon/i18n-ru.json", ".config/falcon/i18n-ru.json"),
     ("config/falcon/emoji.json", ".config/falcon/emoji.json"),

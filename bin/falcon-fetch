@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+"""Terminal greeting: fastfetch, then the logo keeps spinning in its place.
+
+fastfetch draws the logo once. This script prints fastfetch's output itself,
+finds where the logo landed, and leaves a small background process that redraws
+that spot with the logo turned around its vertical axis, like a coin.
+
+The spinner stops by itself when:
+  - `falcon-fetch --stop` runs (fish calls it before every command and on Ctrl+L),
+  - the shell that started it exits,
+  - the terminal changes size.
+It writes each frame as one write between a cursor save and restore, so the
+prompt and what the user types stay where they are.
+"""
+import math
+import os
+import re
+import select
+import signal
+import subprocess
+import sys
+import termios
+import time
+import tty
+import fcntl
+import struct
+
+FPS = 24
+TURN_SECONDS = 3.2          # one full turn
+LOGO_LINES = 14
+LOGO_COL = 2                # padding.left 1 in config.jsonc
+FRONT = (255, 52, 58)       # brand.txt color
+BACK = (190, 38, 44)        # deeper red for the reverse side
+BRAND = os.path.expanduser("~/.config/fastfetch/brand.txt")
+MIRROR = str.maketrans("/\\()[]{}<>", "\\/)(][}{><")
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def pid_file(shell):
+    base = os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/falcon-{os.getuid()}"
+    os.makedirs(os.path.join(base, "falcon-fetch"), exist_ok=True)
+    return os.path.join(base, "falcon-fetch", str(shell))
+
+
+def stop(shell):
+    path = pid_file(shell)
+    try:
+        with open(path) as f:
+            pid = int(f.read().strip())
+        os.kill(pid, signal.SIGTERM)
+    except (OSError, ValueError):
+        pass
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+def cursor_row(fd):
+    """Ask the terminal where the cursor is. Returns the row, or None."""
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd, termios.TCSANOW)
+        os.write(fd, b"\x1b[6n")
+        reply = b""
+        end = time.monotonic() + 0.3
+        while not reply.endswith(b"R"):
+            left = end - time.monotonic()
+            if left <= 0 or not select.select([fd], [], [], left)[0]:
+                return None
+            reply += os.read(fd, 32)
+        m = re.search(rb"\x1b\[(\d+);(\d+)R", reply)
+        return int(m.group(1)) if m else None
+    finally:
+        termios.tcsetattr(fd, termios.TCSANOW, old)
+
+
+def term_size(fd):
+    rows, cols, _, _ = struct.unpack("HHHH", fcntl.ioctl(fd, termios.TIOCGWINSZ, b"\0" * 8))
+    return rows, cols
+
+
+def load_logo():
+    with open(BRAND) as f:
+        lines = [ANSI.sub("", l.rstrip("\n")) for l in f]
+    width = max(len(l) for l in lines)
+    return [l.ljust(width) for l in lines], width
+
+
+def frames(lines, width):
+    """Every frame of one turn, as ready-to-write rows."""
+    count = round(FPS * TURN_SECONDS)
+    mid = (width - 1) / 2
+    out = []
+    for i in range(count):
+        angle = 2 * math.pi * i / count
+        c = math.cos(angle)
+        squeeze = max(abs(c), 0.06)
+        back = c < 0
+        # Light falls on the face turned to the viewer, edges go darker.
+        base = BACK if back else FRONT
+        light = 0.6 + 0.4 * abs(c)
+        color = tuple(round(v * light) for v in base)
+        sgr = "\x1b[1;38;2;%d;%d;%dm" % color
+        rows = []
+        for line in lines:
+            cells = []
+            for x in range(width):
+                u = (x - mid) / squeeze
+                if back:
+                    u = -u
+                src = round(mid + u)
+                ch = line[src] if 0 <= src < width else " "
+                cells.append(ch.translate(MIRROR) if back else ch)
+            rows.append(sgr + "".join(cells) + "\x1b[0m")
+        out.append(rows)
+    return out
+
+
+def spin(fd, top, shell):
+    lines, width = load_logo()
+    turn = frames(lines, width)
+    rendered = []
+    for rows in turn:
+        moves = "".join(f"\x1b[{top + i};{LOGO_COL}H{r}" for i, r in enumerate(rows))
+        rendered.append(("\x1b[?2026h\x1b7" + moves + "\x1b8\x1b[?2026l").encode())
+    def rest(*_):
+        # Leave the logo facing the viewer, not caught halfway through a turn.
+        try:
+            os.write(fd, rendered[0])
+        except OSError:
+            pass
+        os._exit(0)
+
+    signal.signal(signal.SIGTERM, rest)
+    size = term_size(fd)
+    step = 1 / FPS
+    start = time.monotonic()
+    n = 0
+    while True:
+        try:
+            os.kill(shell, 0)
+        except OSError:
+            return
+        try:
+            if term_size(fd) != size:
+                return
+        except OSError:
+            return
+        os.write(fd, rendered[n % len(rendered)])
+        n += 1
+        delay = start + n * step - time.monotonic()
+        if delay > 0:
+            time.sleep(delay)
+
+
+def main():
+    args = sys.argv[1:]
+    shell = os.getppid()
+    if "--shell" in args:
+        shell = int(args[args.index("--shell") + 1])
+    if "--stop" in args:
+        stop(shell)
+        return
+    stop(shell)
+
+    out = subprocess.run(["fastfetch", "--pipe", "false"], stdout=subprocess.PIPE).stdout
+    try:
+        fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
+    except OSError:
+        sys.stdout.buffer.write(out)
+        return
+    os.write(fd, out)
+    printed = out.count(b"\n")
+    row = cursor_row(fd)
+    if row is None or printed < LOGO_LINES:
+        return
+    top = row - printed
+    rows, _ = term_size(fd)
+    # Too close to the bottom: the prompt would scroll the logo away.
+    if top < 1 or row + 2 > rows:
+        return
+
+    pid = os.fork()
+    if pid:
+        with open(pid_file(shell), "w") as f:
+            f.write(str(pid))
+        return
+    os.setsid()
+    signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
+    signal.signal(signal.SIGHUP, lambda *_: os._exit(0))
+    devnull = os.open(os.devnull, os.O_RDWR)
+    for n in (0, 1, 2):
+        os.dup2(devnull, n)
+    try:
+        spin(fd, top, shell)
+    finally:
+        try:
+            if open(pid_file(shell)).read().strip() == str(os.getpid()):
+                os.remove(pid_file(shell))
+        except OSError:
+            pass
+        os._exit(0)
+
+
+if __name__ == "__main__":
+    main()

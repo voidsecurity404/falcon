@@ -42,6 +42,7 @@ targets=(
     .config/matugen
     .config/fastfetch/config.jsonc
     .config/fastfetch/brand.txt
+    .config/fish/conf.d/falcon-fetch.fish
     .config/kitty/kitty.conf
     .config/kitty/falcon-colors.conf
     .config/kitty/falcon-user.conf
@@ -54,6 +55,7 @@ targets=(
     .local/bin/falcon-claude-status
     .local/bin/falcon-claude-usage
     .local/bin/falcon-spectrum
+    .local/bin/falcon-fetch
     .local/bin/falcon-shot
     .local/bin/falcon-wallpaper
     .local/bin/falcon-widgets-place
@@ -212,6 +214,15 @@ do_it cp -a "$root/config/kitty/." "$HOME/.config/kitty/"
 do_it mkdir -p "$HOME/.config/fastfetch"
 do_it cp "$root/config/fastfetch/config.jsonc" "$HOME/.config/fastfetch/config.jsonc"
 do_it cp "$root/config/fastfetch/brand.txt" "$HOME/.config/fastfetch/brand.txt"
+do_it mkdir -p "$HOME/.config/fish/conf.d"
+do_it cp "$root/config/fish/conf.d/falcon-fetch.fish" "$HOME/.config/fish/conf.d/falcon-fetch.fish"
+# CachyOS config.fish o'z fish_greeting'ini conf.d dan keyin yozadi, shuning uchun
+# aylanadigan logo uchun salomlashuv config.fish oxirida qayta belgilanadi.
+fish_conf="$HOME/.config/fish/config.fish"
+if ! grep -q falcon_greeting "$fish_conf" 2>/dev/null; then
+    if ((dry)); then echo "  [dry-run] append fish_greeting to $fish_conf"
+    else printf '\n# Falcon: spinning fastfetch logo (conf.d/falcon-fetch.fish)\nfunction fish_greeting\n    falcon_greeting\nend\n' >>"$fish_conf"; fi
+fi
 do_it cp -a "$root/config/hypr/." "$HOME/.config/hypr/"
 do_it cp -a "$root/bin/." "$HOME/.local/bin/"
 

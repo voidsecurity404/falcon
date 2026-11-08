@@ -90,6 +90,7 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 - **Battery charge limit:** Settings → Battery and power, or the tile in the control center. Needs one setup with your password (`falcon-charge setup`). Laptops whose firmware has no limit do not show it. Undo: `falcon-charge setup --undo`.
 - **Power mode follows the charger.** A mode you choose by hand stays until the charger changes.
 - **System updates:** the panel shows how many wait. A click opens a terminal with the update, which asks before installing. Checking downloads no packages.
+- **Terminal greeting:** a new fish terminal shows fastfetch with its logo spinning in place. It stops when you run a command or press Ctrl+L.
 - **Timer:** `>timer 25`, `>timer 1:30`, `>timer 90s`, or `>pomodoro` in the app menu. Click it in the island to pause, right click to stop. It survives a restart and sleep, but it cannot wake the laptop.
 - **Microphone and camera:** an icon on the panel while an app uses them. A click names the apps.
 - **Clipboard pins:** `Ctrl+P` in `Mod+V` keeps up to 6 rows on top. They stay on disk until unpinned.
