@@ -471,11 +471,13 @@ LazyLoader {
 
                             anchors.fill: parent
                             readonly property int target: root.markOf(deck.index)
-                            property real pos: target
-                            property real speed: 0
-                            // How fast the carousel closes in: settles in about a third of a second, as long
-                            // as the list's old move took.
-                            readonly property real stiffness: 18
+                            // Not bound to target: a binding would carry every change across at once.
+                            property real pos: 0
+                            // Each move eases out from where the carousel is to the new target, so a
+                            // press during a move turns it from its current place.
+                            property real from: 0
+                            property real elapsed: duration
+                            readonly property real duration: 0.42
                             readonly property real stepWidth: 328
                             readonly property real activeExtra: 50
                             readonly property int near: Math.round(pos)
@@ -487,34 +489,30 @@ LazyLoader {
                                 return list;
                             }
 
+                            function place() {
+                                pos = target;
+                                from = target;
+                                elapsed = duration;
+                            }
+
+                            Component.onCompleted: place()
+
                             // Before the first press the place only follows the lists and the current wallpaper.
                             onTargetChanged: {
                                 if (!root.moved) {
-                                    pos = target;
-                                    speed = 0;
+                                    place();
+                                    return;
                                 }
+                                from = pos;
+                                elapsed = 0;
                             }
 
-                            // A critically damped spring, solved exactly for each frame's length, so it
-                            // never overshoots and looks the same at any frame rate.
                             FrameAnimation {
-                                running: carousel.pos !== carousel.target || carousel.speed !== 0
+                                running: carousel.elapsed < carousel.duration
                                 onTriggered: {
-                                    const w = carousel.stiffness;
-                                    const dt = root.frameStep(frameTime);
-                                    const x = carousel.pos - carousel.target;
-                                    const v = carousel.speed;
-                                    const e = Math.exp(-w * dt);
-                                    const a = (v + w * x) * dt;
-                                    const nx = (x + a) * e;
-                                    const nv = (v - w * a) * e;
-                                    if (Math.abs(nx) < 0.0005 && Math.abs(nv) < 0.01) {
-                                        carousel.speed = 0;
-                                        carousel.pos = carousel.target;
-                                    } else {
-                                        carousel.speed = nv;
-                                        carousel.pos = carousel.target + nx;
-                                    }
+                                    carousel.elapsed = Math.min(carousel.duration, carousel.elapsed + root.frameStep(frameTime));
+                                    const u = 1 - carousel.elapsed / carousel.duration;
+                                    carousel.pos = carousel.from + (carousel.target - carousel.from) * (1 - u * u * u);
                                 }
                             }
 
@@ -534,7 +532,6 @@ LazyLoader {
                                     readonly property real offset: slot - carousel.pos
                                     readonly property real nearness: Math.max(0, 1 - Math.abs(offset))
 
-                                    readonly property bool active: slot === carousel.target
                                     readonly property string title: path.split("/").pop().replace(/\.[^.]+$/, "").replace(/[-_]/g, " ")
                                     // Cards rise one after another, from the selected one outwards.
                                     property real appear: root.opening ? 0 : 1
@@ -614,7 +611,7 @@ LazyLoader {
                                     }
 
                                     // A later card lies over an earlier one where they meet, as in a list.
-                                    z: active ? 2 : 1 + slot / (deck.files.length + 1)
+                                    z: 1 + nearness + slot / (deck.files.length + 1) * 0.01
                                     // The card at the middle is wider. Its neighbours make room for it on both
                                     // sides, and both change gradually as the carousel moves.
                                     width: 340 + 100 * nearness
@@ -685,8 +682,9 @@ LazyLoader {
                                         anchors.fill: parent
                                         radius: 15
                                         color: "transparent"
-                                        border.width: card.active ? 3 : 1
-                                        border.color: card.active ? "white" : cardHover.containsMouse ? Qt.rgba(1, 1, 1, 0.6) : Qt.rgba(1, 1, 1, 0.14)
+                                        // The frame follows the card into the middle instead of jumping to it.
+                                        border.width: 1 + 2 * card.nearness
+                                        border.color: Qt.rgba(1, 1, 1, Math.max(card.nearness, cardHover.containsMouse ? 0.6 : 0.14))
                                     }
 
                                     Label {
