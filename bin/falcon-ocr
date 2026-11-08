@@ -6,7 +6,37 @@ _t() { "$HOME/.local/bin/falcon-tr" "$1"; }
 tell() { qs -c falcon ipc call desk toast "$@" >/dev/null 2>&1 || true; }
 
 langs="$(tesseract --list-langs 2>/dev/null | tail -n +2 | grep -v '^osd$' | paste -sd+ -)" || langs=""
+# With Russian among them, short Latin words such as "va" come out in Cyrillic. So a page that
+# the translator's script check finds Latin is read without the Cyrillic languages.
+script="$("$HOME/.local/bin/falcon-image-translate" --script "$1" 2>/dev/null)" || script=""
+if [[ "$script" == "Latin" ]]; then
+    latin="$(tr '+' '\n' <<<"$langs" | grep -vxE 'rus|ukr|bel|bul|srp|mkd|kaz|kir|tgk|mon|uzb_cyrl' | paste -sd+ -)"
+    [[ -n "$latin" ]] && langs="$latin"
+elif [[ "$script" == "Cyrillic" && "+$langs+" == *+rus+* ]]; then
+    # The first language leads: with English first a bold Russian title comes out as Latin letters.
+    langs="rus+$(tr '+' '\n' <<<"$langs" | grep -vx rus | paste -sd+ -)"
+    langs="${langs%+}"
+fi
 text="$(tesseract "$1" - -l "${langs:-eng}" 2>/dev/null | sed -e '/^[[:space:]]*$/d')" || text=""
+# Icons at the start of a line are read as a lone mark or a lone Latin letter before a Cyrillic
+# word ("© Обои", "B Панель"). Those go. Numbers stay, since they may be real.
+text="$(python3 -c '
+import re, sys
+for line in sys.stdin.read().splitlines():
+    line = line.strip()
+    while True:
+        m = re.match(r"(\S{1,2})\s+(\S.*)", line)
+        if not m:
+            break
+        head, rest = m.groups()
+        # Dashes, quotes and brackets open real text, such as dialogue.
+        mark = not any(c.isalnum() for c in head) and not re.search("[-\u2013\u2014\"\u00ab\u201c\u201e(\\[]", head)
+        stray = len(head) == 1 and head.isascii() and head.isalpha() and re.match(r"[\u2013\u2014-]?\s*[\u0400-\u04ff]", rest)
+        if not (mark or stray):
+            break
+        line = re.sub(r"^[\u2013\u2014-]\s+", "", rest) if stray else rest
+    print(line)
+' <<<"$text")"
 
 if [[ -z "$text" ]]; then
     tell "$(_t "No text found")" "$(_t "Try selecting another area")"

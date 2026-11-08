@@ -1037,9 +1037,19 @@ def draw_block(canvas, block, source, words, path, ink, heavy):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("input")
-    parser.add_argument("output")
+    parser.add_argument("output", nargs="?", default="")
     parser.add_argument("--to", default="")
+    parser.add_argument("--script", action="store_true", help="only print the script the text is in (Latin, Cyrillic, ...), for falcon-ocr")
     args = parser.parse_args()
+    if args.script:
+        try:
+            picture = Image.open(args.input).convert("L")
+        except OSError:
+            return 1
+        print(choose_model(picture) if (MODELS / "Latin.traineddata").exists() else "")
+        return 0
+    if not args.output:
+        parser.error("an output picture is needed")
     target = args.to or configured_target() or language()
 
     try:

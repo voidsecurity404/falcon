@@ -189,7 +189,7 @@ PanelWindow {
         if (windowMode)
             return windowRows();
         if (emojiMode)
-            return ranked(emojiRows, r => r.name, r => r.extra, commandRest.toLowerCase()).slice(0, 60);
+            return emojiRanked(commandRest.toLowerCase().trim()).slice(0, 60);
         if (fileMode)
             return ranked(fileRows, r => r.name, r => r.detail, commandRest.toLowerCase());
         if (commandMode)
@@ -211,6 +211,38 @@ PanelWindow {
                 })).filter(r => r.rank > 0).sort((a, b) => b.rank - a.rank || a.order - b.order);
         const exact = rows.some(r => r.rank >= 300);
         return rows.filter(r => !exact || r.rank >= 300).map(r => r.item);
+    }
+
+    // Emoji by how well a name fits, in both languages: the whole name, then a whole word of it,
+    // then the start of a word, then the keywords. Within each, the shorter name comes first,
+    // so the plain red heart leads the hearts.
+    function emojiRanked(q) {
+        if (q === "")
+            return emojiRows;
+        const qs = [q, Tools.swapLayout(q)];
+        const tierOf = row => {
+            let best = -1;
+            for (const name of [row.ru, row.en]) {
+                const n = name.toLowerCase();
+                const words = n.split(/[\s,:.\-]+/);
+                for (const w of qs) {
+                    if (n === w)
+                        best = Math.max(best, 4);
+                    else if (words.indexOf(w) >= 0)
+                        best = Math.max(best, 3);
+                    else if (words.some(x => x.startsWith(w)))
+                        best = Math.max(best, 2);
+                }
+            }
+            if (best < 0 && qs.some(w => row.keys.split(" ").some(k => k.startsWith(w))))
+                best = 1;
+            return best;
+        };
+        return emojiRows.map((row, order) => ({
+                    row: row,
+                    order: order,
+                    tier: tierOf(row)
+                })).filter(r => r.tier > 0).sort((a, b) => b.tier - a.tier || a.row.name.length - b.row.name.length || a.order - b.order).map(r => r.row);
     }
 
     function windowRows() {
@@ -237,6 +269,9 @@ PanelWindow {
                     name: russian ? e.ru : e.en,
                     detail: "",
                     extra: e.ru + " " + e.en + " " + e.k,
+                    ru: e.ru,
+                    en: e.en,
+                    keys: e.k.toLowerCase(),
                     run: () => {
                         Quickshell.clipboardText = e.e;
                         Toasts.show(Tr.t("Copied"), e.e, "check");
