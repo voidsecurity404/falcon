@@ -42,6 +42,8 @@ Singleton {
     property int pickerSelected: 0
     property int pickerFiles: 0
     property int pickerTab: 1
+    // The tab a closed picker opens on, from `desk wallpapersTab`. -1 opens on the current wallpaper.
+    property int pickerOpenTab: -1
     property real controlHeight: 0
     property bool recording: false
     property int recordSeconds: 0

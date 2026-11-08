@@ -91,8 +91,14 @@ ShellRoot {
             Ui.togglePopup("wallpapers");
         }
 
+        // Switches the open picker's tab, or opens the picker on that tab.
         function wallpapersTab(tab: int): void {
-            Ui.pickerTab = tab;
+            if (Ui.popup === "wallpapers") {
+                Ui.pickerTab = tab;
+            } else {
+                Ui.pickerOpenTab = tab;
+                Ui.popup = "wallpapers";
+            }
         }
         function dashboard(): void {
             Ui.togglePopup("dashboard");

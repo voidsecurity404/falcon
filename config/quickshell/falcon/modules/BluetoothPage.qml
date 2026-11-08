@@ -37,7 +37,8 @@ Column {
     }
 
     function setDiscovery(on) {
-        if (adapter && adapter.enabled)
+        // Asking for what is already so makes BlueZ answer "Operation already in progress".
+        if (adapter && adapter.enabled && adapter.discovering !== on)
             adapter.discovering = on;
     }
 
@@ -47,6 +48,25 @@ Column {
     onRadioOnChanged: setDiscovery(radioOn)
     Component.onCompleted: setDiscovery(true)
     Component.onDestruction: setDiscovery(false)
+
+    // Reopened quickly, the page asks to start while the last page's stop is still on its way:
+    // BlueZ refuses the start, then the stop lands and the search stays off. So while this
+    // page is open, a search that ends is started again.
+    Connections {
+        target: root.adapter
+        ignoreUnknownSignals: true
+
+        function onDiscoveringChanged() {
+            if (root.adapter && !root.adapter.discovering && root.radioOn)
+                rediscover.restart();
+        }
+    }
+    Timer {
+        id: rediscover
+
+        interval: 600
+        onTriggered: root.setDiscovery(true)
+    }
 
     Connections {
         target: root.pairing

@@ -62,6 +62,13 @@ LazyLoader {
         onTabChanged: Ui.pickerTab = tab
         Component.onCompleted: {
             startAtCurrent();
+            if (Ui.pickerOpenTab >= 0) {
+                placing = true;
+                tab = Math.min(1, Ui.pickerOpenTab);
+                moved = true;
+                placing = false;
+                Ui.pickerOpenTab = -1;
+            }
             Ui.pickerSelected = selected;
             Ui.pickerFiles = files.length;
             Ui.pickerTab = tab;
