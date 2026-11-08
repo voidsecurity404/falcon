@@ -49,6 +49,16 @@ Singleton {
             plate: true
         },
         {
+            type: "cookie",
+            title: Tr.t("Cookie clock"),
+            blurb: Tr.t("Hands on a wavy Material shape"),
+            icon: "clock",
+            group: "time",
+            forms: [{ name: "cookie", w: 240, h: 240 }, { name: "flower", w: 240, h: 240 }],
+            solid: true,
+            plate: false
+        },
+        {
             type: "matrix",
             title: Tr.t("Dot matrix clock"),
             blurb: Tr.t("Glowing digits made of dots"),
