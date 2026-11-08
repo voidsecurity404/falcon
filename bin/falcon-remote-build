@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Builds the Telegram remote control (remote/ in the repo, written in Go) into ~/.local/bin/falcon-remote
+# and restarts the service when it runs.
+set -euo pipefail
+repo="${FALCON_REPO:-$HOME/Downloads/falcon}"
+src="$repo/remote"
+out="$HOME/.local/bin/falcon-remote"
+if ! command -v go >/dev/null; then
+    echo "Go is not installed: sudo pacman -S go" >&2
+    exit 1
+fi
+[[ -f "$src/go.mod" ]] || { echo "Not found: $src" >&2; exit 1; }
+mkdir -p "$(dirname "$out")"
+tmp="$out.new"
+(cd "$src" && GOFLAGS=-mod=mod CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "$tmp" .)
+mv -f "$tmp" "$out"
+if systemctl --user is-active --quiet falcon-remote.service 2>/dev/null; then
+    systemctl --user restart falcon-remote.service
+fi
+echo "Built $out"

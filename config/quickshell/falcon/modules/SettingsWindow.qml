@@ -471,6 +471,39 @@ LazyLoader {
                 ]
             },
             {
+                title: Tr.t("Telegram bot"),
+                subtitle: Tr.t("Control this computer from the phone"),
+                icon: "send",
+                group: 3,
+                remote: true,
+                sections: [
+                    {
+                        title: Tr.t("Bot"),
+                        items: [
+                            { key: "remote.enabled", label: Tr.t("Remote control through Telegram"), hint: Tr.t("Starts with the computer, even before you log in"), type: "toggle" },
+                            { label: Tr.t("Bot token"), hint: Tr.t("From @BotFather. Kept in a file only you can read"), type: "secret", placeholder: Tr.t("Paste and press Enter"), width: 260, run: value => { if (value.trim() !== "") { Quickshell.execDetached({ command: ["falcon-remote", "token"], environment: { FALCON_TOKEN: value.trim() } }); Toasts.show(Tr.t("Token saved"), Tr.t("The bot restarts with it"), "check"); } } },
+                            { key: "remote.owner", label: Tr.t("Your Telegram ID"), hint: Tr.t("Only this account can use the bot. The bot tells you your ID"), type: "text", width: 160 }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Allowed from the phone"),
+                        items: [
+                            { key: "remote.terminalRoot", label: Tr.t("Terminal as root"), hint: Tr.t("The terminal asks for your password once, as sudo does"), type: "toggle" },
+                            { key: "remote.screen", label: Tr.t("Screenshots of the screen and windows"), type: "toggle" },
+                            { key: "remote.power", label: Tr.t("Sleep, restart and shut down"), type: "toggle" },
+                            { key: "remote.chatClipboard", label: Tr.t("Messages to the bot go to the clipboard"), hint: Tr.t("Text and pictures. Files are saved to Downloads"), type: "toggle" },
+                            { key: "remote.notifyBoot", label: Tr.t("Message when the computer starts"), type: "toggle" }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Token"),
+                        items: [
+                            { label: Tr.t("Forget the token"), hint: Tr.t("The bot stops until a new token is pasted"), type: "action", danger: true, text: Tr.t("Forget"), confirm: Tr.t("Press to confirm"), run: () => { Quickshell.execDetached(["falcon-remote", "token", "--clear"]); Toasts.show(Tr.t("Token removed"), "", "check"); } }
+                        ]
+                    }
+                ]
+            },
+            {
                 title: Tr.t("System"),
                 subtitle: Tr.t("Power, schedules, weather and reset"),
                 icon: "chip",
@@ -908,6 +941,11 @@ LazyLoader {
                         x: 28
                         width: scroller.width - 56
                         spacing: 16
+
+                        RemoteStatus {
+                            visible: win.filter === "" && !!win.pages[win.page].remote
+                            width: cards.width
+                        }
 
                         Repeater {
                             model: win.shown

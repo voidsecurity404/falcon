@@ -85,6 +85,18 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 "statusLine": { "type": "command", "command": "~/.local/bin/falcon-claude-status", "refreshInterval": 5 }
 ```
 
+## Phone remote control (Telegram)
+
+A Telegram bot with a mini app controls this computer from a phone. Settings → Telegram bot:
+
+1. In Telegram, open @BotFather, send `/newbot` and copy the token. Paste it into Bot token and press Enter. It is kept in `~/.config/falcon/remote-token`, readable only by you.
+2. Turn on Remote control, write `/start` to your bot: it answers with your Telegram ID. Put that ID into Your Telegram ID. From then on the bot answers only that account.
+3. Press the Computer button next to the message field.
+
+The mini app has five tabs: an overview like btop (processor, every core, memory, network, disks, temperature, battery, music and volume, lock, sleep, restart and shut down), a terminal (root through `sudo -i`, which asks your password once; it keeps running when the app closes and comes back where you left it), the screen (every open window with its icon, how long it has run and what it uses; a tap shows a picture of that window, even on another workspace, live if you want, and can bring it forward or close it), processes (search, sort, pause, end) and the clipboard (text or a picture from the phone lands on the computer's clipboard as if you pressed Ctrl+C; the computer's clipboard can be copied back). A message written to the bot goes to the clipboard too, a photo goes there as a picture, and a file is saved to Downloads. `/shot` sends a screenshot, `/lock` locks.
+
+How it works: `falcon-remote` (Go, `remote/` in the repo) is a user service that starts at boot, before login. It serves the mini app on `127.0.0.1` and opens a Cloudflare quick tunnel, because Telegram opens mini apps only over https; the address changes on every start and the bot moves its menu button to it. Every request carries the data Telegram signs when the app opens, and the computer checks that signature with the bot token and that it comes from your ID, so the address alone gives nobody access. Needs `cloudflared` and, to build, `go`. `falcon-remote-build` rebuilds it after a change.
+
 ## Things that look after themselves
 
 - **Battery charge limit:** Settings → Battery and power, or the tile in the control center. Needs one setup with your password (`falcon-charge setup`). Laptops whose firmware has no limit do not show it. Undo: `falcon-charge setup --undo`.

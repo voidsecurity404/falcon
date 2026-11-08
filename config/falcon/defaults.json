@@ -201,5 +201,14 @@
     "shortBreak": 5,
     "longBreak": 15
   },
-  "monitorConnect": "stay"
+  "monitorConnect": "stay",
+  "remote": {
+    "enabled": false,
+    "owner": "",
+    "terminalRoot": true,
+    "screen": true,
+    "power": true,
+    "chatClipboard": true,
+    "notifyBoot": true
+  }
 }

@@ -36,6 +36,7 @@ FILES = [
     ("config/falcon/i18n-ru.json", ".config/falcon/i18n-ru.json"),
     ("config/falcon/emoji.json", ".config/falcon/emoji.json"),
     ("config/falcon/tmux.conf", ".config/falcon/tmux.conf"),
+    ("config/systemd/falcon-remote.service", ".config/systemd/user/falcon-remote.service"),
 ]
 # These are read when the shell starts.
 RESTART = {".config/falcon/defaults.json", ".config/falcon/i18n-ru.json"}
@@ -63,6 +64,17 @@ def plan():
     return copy, remove
 
 
+def remote_stale():
+    """The Telegram bot is built from Go code in remote/, so it is rebuilt when that code is newer."""
+    binary = HOME / ".local/bin/falcon-remote"
+    if not shutil.which("go"):
+        return False
+    if not binary.exists():
+        return True
+    built = binary.stat().st_mtime
+    return any(p.stat().st_mtime > built for p in (REPO / "remote").rglob("*") if p.is_file())
+
+
 def main(args):
     if not (REPO / "install.sh").exists():
         print(tr("The repo was not found: {path}. Set FALCON_REPO.", path=REPO), file=sys.stderr)
@@ -74,15 +86,22 @@ def main(args):
         print(f"{source} -> ~/{target}")
     for path in remove:
         print(tr("remove: {path}", path=path))
+    rebuild = remote_stale()
+    if rebuild:
+        print("remote/ -> ~/.local/bin/falcon-remote (go build)")
     if "--check" in args:
-        return 1 if copy or remove else 0
+        return 1 if copy or remove or rebuild else 0
     for source, target in copy:
         live = HOME / target
         live.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO / source, live)
     for path in remove:
         path.unlink()
-    if not copy and not remove:
+    if rebuild:
+        subprocess.run([str(REPO / "bin/falcon-remote-build")], env={**os.environ, "FALCON_REPO": str(REPO)}, check=False)
+    if any(t.startswith(".config/systemd/") for _, t in copy):
+        subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
+    if not copy and not remove and not rebuild:
         print(tr("Everything is up to date"))
     if RESTART & {t for _, t in copy}:
         subprocess.run(["pkill", "-x", "qs"], check=False)

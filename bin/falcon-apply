@@ -448,6 +448,29 @@ def claude_theme(mode):
         tmp.unlink(missing_ok=True)
 
 
+def remote_service(s):
+    """Turns the Telegram bot service on or off with remote.enabled. Linger lets it start before login."""
+    unit = CONFIG / "systemd/user/falcon-remote.service"
+    if not unit.exists() or not shutil.which("systemctl"):
+        return
+    want = bool(s.get("remote", {}).get("enabled"))
+    on = subprocess.run(["systemctl", "--user", "is-enabled", "--quiet", "falcon-remote.service"], check=False).returncode == 0
+    flag = STATE / "remote-linger"
+    if want and not on:
+        run_quiet("systemctl", "--user", "enable", "--now", "falcon-remote.service")
+        linger = Path("/var/lib/systemd/linger") / os.environ.get("USER", "")
+        if not linger.exists():
+            run_quiet("loginctl", "enable-linger")
+            if linger.exists():
+                flag.touch()
+    elif not want and on:
+        run_quiet("systemctl", "--user", "disable", "--now", "falcon-remote.service")
+        # Linger goes only when this switch turned it on.
+        if flag.exists():
+            run_quiet("loginctl", "disable-linger")
+            flag.unlink()
+
+
 def theme_key(s):
     a = s["appearance"]
     return f"{a['mode']}|{a['scheme']}|{a['accent']}"
@@ -475,6 +498,7 @@ def main(argv):
     if write_if_changed(CONFIG / "kitty/falcon-user.conf", kitty_text):
         run_quiet("pkill", "-USR1", "-x", "kitty")
     write_if_changed(CONFIG / "qt6ct/qt6ct.conf", qt6ct_conf())
+    remote_service(s)
     key = STATE / "theme-key"
     if not key.exists() or not (CONFIG / "qt6ct/colors/falcon.conf").exists() or key.read_text() != theme_key(s):
         colors(s)

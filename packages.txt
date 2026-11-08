@@ -71,3 +71,6 @@ sudo
 iproute2
 libnotify
 dconf
+# Telegram orqali boshqaruv: Go dasturi va https tunnel
+go
+cloudflared

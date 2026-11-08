@@ -58,6 +58,7 @@ Item {
             calendar: "M4 6h16v14H4Z M4 10h16 M8 3v4 M16 3v4",
             note: "M6 3h9l4 4v14H6Z M9 10h7 M9 14h7 M9 18h4",
             close: "M6 6 L18 18 M18 6 L6 18",
+            send: "M21 3 L3 10.5 L10 13 L13 20 Z M10 13 L21 3",
             plus: "M12 5 V19 M5 12 H19",
             arrowDown: "M12 4 V20 M6 14 L12 20 L18 14",
             arrowUp: "M12 20 V4 M6 10 L12 4 L18 10",

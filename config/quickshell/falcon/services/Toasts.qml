@@ -327,6 +327,9 @@ Singleton {
     Connections {
         target: Niri
         function onScreenshotTaken(path) {
+            // Pictures the Telegram bot takes for the phone.
+            if (path.indexOf("/falcon-remote/") >= 0)
+                return;
             if (path === "") {
                 root.show(Tr.t("Screenshot taken"), Tr.t("Copied to the clipboard"), "check");
                 return;

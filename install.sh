@@ -98,6 +98,9 @@ targets=(
     .local/bin/falcon-translate-models
     .local/bin/falcon-translate-local
     .config/falcon/defaults.json
+    .local/bin/falcon-remote
+    .local/bin/falcon-remote-build
+    .config/systemd/user/falcon-remote.service
 )
 
 if ((uninstall)); then
@@ -238,6 +241,14 @@ if ! grep -q falcon_greeting "$fish_conf" 2>/dev/null; then
 fi
 do_it cp -a "$root/config/hypr/." "$HOME/.config/hypr/"
 do_it cp -a "$root/bin/." "$HOME/.local/bin/"
+# The Telegram remote control is a Go program, so it is built here. falcon-apply starts it once it is turned on.
+do_it mkdir -p "$HOME/.config/systemd/user"
+do_it cp "$root/config/systemd/falcon-remote.service" "$HOME/.config/systemd/user/"
+soft systemctl --user daemon-reload
+if command -v go >/dev/null; then
+    say "Building the Telegram bot"
+    soft env FALCON_REPO="$root" "$root/bin/falcon-remote-build"
+fi
 
 # Foydalanuvchi sozlamalari va fon rasmlari ustidan yozilmaydi.
 do_it mkdir -p "$HOME/.config/falcon" "$HOME/Pictures/Wallpapers" "$HOME/Pictures/Wallpapers/Live" "$HOME/.local/share/fonts/falcon"

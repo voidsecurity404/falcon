@@ -1,0 +1,11 @@
+[Unit]
+Description=Falcon remote control through a Telegram bot
+Documentation=https://github.com/voidsecurity404/falcon
+
+[Service]
+ExecStart=%h/.local/bin/falcon-remote run
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
