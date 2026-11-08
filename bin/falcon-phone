@@ -9,7 +9,6 @@ set -uo pipefail
 
 TITLE="Мой телефон"
 ADB="127.0.0.1:15555"
-SCRCPY_PORT=15556
 SERVICE="moy-telefon-link.service"
 STATE="$HOME/.local/state/moy-telefon/link.json"
 RUN="${XDG_RUNTIME_DIR:-/tmp}/falcon-phone"
@@ -47,7 +46,6 @@ open() {
         if timeout 8 adb -s "$ADB" shell true >/dev/null 2>&1; then
             tries=0
             scrcpy -s "$ADB" \
-                --tunnel-host=127.0.0.1 --tunnel-port="$SCRCPY_PORT" \
                 --window-title="$TITLE" --window-borderless --window-height=900 \
                 --max-size=1600 --video-bit-rate=4M --max-fps=60 \
                 --audio-buffer=80 --shortcut-mod=ralt \
