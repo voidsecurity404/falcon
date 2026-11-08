@@ -761,5 +761,15 @@
  "How much taller than the screen the wallpaper is drawn": "Насколько обои выше экрана",
  "A package update is running. Turning off now can break the system": "Идёт обновление пакетов. Выключение сейчас может сломать систему",
  "A download is not finished: {name}": "Загрузка не завершена: {name}",
- "A download is still running": "Ещё идёт загрузка"
+ "A download is still running": "Ещё идёт загрузка",
+ "Volume kept down": "Громкость ограничена",
+ "The maximum is {n}%": "Максимум — {n}%",
+ "Sudden volume jump stopped": "Резкий скачок громкости остановлен",
+ "Stayed at {n}%": "Осталось {n}%",
+ "Hearing protection": "Защита слуха",
+ "Stop sudden volume jumps": "Останавливать резкие скачки громкости",
+ "An app or a new device cannot make it much louder at once": "Программа или новое устройство не сделают звук сразу намного громче",
+ "Largest jump": "Наибольший скачок",
+ "The volume keys move by 5%": "Клавиши громкости меняют её на 5%",
+ "Maximum volume": "Максимальная громкость"
 }

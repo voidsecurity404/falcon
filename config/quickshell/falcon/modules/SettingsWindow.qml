@@ -404,7 +404,16 @@ LazyLoader {
                 icon: "volume",
                 group: 3,
                 sound: true,
-                sections: []
+                sections: [
+                    {
+                        title: Tr.t("Hearing protection"),
+                        items: [
+                            { key: "audio.protection", label: Tr.t("Stop sudden volume jumps"), hint: Tr.t("An app or a new device cannot make it much louder at once"), type: "toggle" },
+                            { key: "audio.maxStep", label: Tr.t("Largest jump"), hint: Tr.t("The volume keys move by 5%"), type: "slider", min: 0.05, max: 0.5, step: 0.05, unit: "percent" },
+                            { key: "audio.maxVolume", label: Tr.t("Maximum volume"), type: "slider", min: 0.3, max: 1, step: 0.05, unit: "percent" }
+                        ]
+                    }
+                ]
             },
             {
                 title: Tr.t("Battery and power"),
