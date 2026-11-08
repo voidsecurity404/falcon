@@ -10,7 +10,6 @@ import (
 	"image/jpeg"
 	_ "image/png"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -39,8 +38,7 @@ type Window struct {
 }
 
 func niri(args ...string) ([]byte, error) {
-	cmd := exec.Command("niri", append([]string{"msg"}, args...)...)
-	cmd.Env = sessionEnv()
+	cmd := timed(10*time.Second, "niri", append([]string{"msg"}, args...)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -323,8 +321,7 @@ func screenJPEG() ([]byte, error) {
 	if !hasSession() {
 		return nil, errors.New(tr("Nobody is logged in: the computer is at the login screen"))
 	}
-	cmd := exec.Command("grim", "-t", "jpeg", "-q", "80", "-")
-	cmd.Env = sessionEnv()
+	cmd := timed(15*time.Second, "grim", "-t", "jpeg", "-q", "80", "-")
 	out, err := cmd.Output()
 	if err != nil || len(out) == 0 {
 		return nil, errors.New(tr("The screen could not be captured"))

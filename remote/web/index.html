@@ -100,7 +100,7 @@
   <!-- Terminal -->
   <section id="tab-term" class="tab">
     <div class="termBar">
-      <span id="termBadge" class="badge"></span>
+      <div class="seg" id="termMode"><i class="segThumb"></i><button data-mode="user"><span class="segDot"></span><span id="userName">user</span></button><button data-mode="root"><span class="segDot"></span>root</button></div>
       <span class="grow"></span>
       <button id="termFont" class="pill">A±</button>
       <button id="termNew" class="pill" data-t="New session"></button>
@@ -204,6 +204,12 @@
       <button data-sig="KILL" class="secondary danger" data-t="Kill"></button>
     </div>
   </div>
+</div>
+
+<div id="zoom" class="zoom">
+  <img id="zImg" alt="">
+  <button class="round zClose" id="zClose"><svg viewBox="0 0 24 24"><path d="M6 6L18 18 M18 6L6 18"/></svg></button>
+  <div class="zHint" data-t="Pinch or double tap to zoom"></div>
 </div>
 
 <div id="toast"></div>

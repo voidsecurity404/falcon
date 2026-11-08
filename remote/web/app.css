@@ -161,8 +161,15 @@ canvas.mini { width: 100%; height: 54px; display: block; margin: -4px 0 8px; }
 /* Terminal */
 #tab-term.active { display: flex; flex-direction: column; height: calc(100vh - 80px - var(--safe-t) - var(--nav-h) - var(--safe-b) - 10px); height: calc(var(--tg-viewport-stable-height, 100vh) - 80px - var(--safe-t) - var(--nav-h) - var(--safe-b) - 10px); }
 .termBar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.badge { padding: 6px 11px; border-radius: 12px; font: 600 12px "Geist Mono", monospace; background: var(--card-hi); }
-.badge.root { background: color-mix(in srgb, var(--error) 18%, transparent); color: var(--error); }
+.seg { position: relative; display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: 14px; background: var(--card-hi); }
+.seg button { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 72px; height: 32px; padding: 0 12px; border-radius: 11px; font: 600 12.5px "Geist Mono", monospace; color: var(--muted); transition: color 0.25s; }
+.seg button.on { color: var(--accent-text); }
+.seg button[data-mode="root"].on { color: #fff; }
+.seg button[disabled] { opacity: 0.35; }
+.segThumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 11px; background: var(--accent); transition: transform 0.32s cubic-bezier(.2, .9, .2, 1), background 0.3s; }
+.seg.root .segThumb { transform: translateX(100%); background: color-mix(in srgb, var(--error) 75%, #b3261e); }
+.segDot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0; transition: opacity 0.2s; }
+.segDot.live { opacity: 0.9; }
 .pill { padding: 7px 13px; border-radius: 12px; background: var(--card-hi); font-size: 12.5px; }
 .pill:active { transform: scale(0.95); }
 #termBox { flex: 1; min-height: 160px; border-radius: 20px; overflow: hidden; background: color-mix(in srgb, var(--surface) 80%, black); border: 1px solid var(--line); padding: 10px 4px 6px 10px; }
@@ -297,3 +304,12 @@ textarea:focus { border-color: color-mix(in srgb, var(--accent) 60%, transparent
 .gate { position: fixed; inset: 0; z-index: 40; display: none; place-items: center; padding: 30px; background: var(--bg); }
 .gate.on { display: grid; }
 .gateCard { display: grid; justify-items: center; gap: 12px; text-align: center; max-width: 320px; }
+
+/* Zoomed picture */
+.shot.loading img { opacity: 0.82; transition: opacity 0.2s; }
+.shot img { cursor: zoom-in; }
+.zoom { position: fixed; inset: 0; z-index: 35; display: grid; place-items: center; overflow: hidden; background: rgba(0, 0, 0, 0.94); touch-action: none; opacity: 0; visibility: hidden; transition: opacity 0.25s, visibility 0s 0.25s; }
+.zoom.open { opacity: 1; visibility: visible; transition: opacity 0.25s; }
+.zoom img { max-width: 100vw; max-height: 100vh; transform-origin: center; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+.zClose { position: absolute; top: calc(14px + var(--safe-t)); right: 14px; background: rgba(255, 255, 255, 0.12); color: #fff; }
+.zHint { position: absolute; bottom: calc(18px + var(--safe-b)); left: 0; right: 0; text-align: center; font-size: 12px; color: rgba(255, 255, 255, 0.55); pointer-events: none; }

@@ -488,7 +488,7 @@ LazyLoader {
                     {
                         title: Tr.t("Allowed from the phone"),
                         items: [
-                            { key: "remote.terminalRoot", label: Tr.t("Terminal as root"), hint: Tr.t("The terminal asks for your password once, as sudo does"), type: "toggle" },
+                            { key: "remote.terminalRoot", label: Tr.t("Allow root in the terminal"), hint: Tr.t("The terminal switches between your user and root. Root asks your password once"), type: "toggle" },
                             { key: "remote.screen", label: Tr.t("Screenshots of the screen and windows"), type: "toggle" },
                             { key: "remote.power", label: Tr.t("Sleep, restart and shut down"), type: "toggle" },
                             { key: "remote.chatClipboard", label: Tr.t("Messages to the bot go to the clipboard"), hint: Tr.t("Text and pictures. Files are saved to Downloads"), type: "toggle" },

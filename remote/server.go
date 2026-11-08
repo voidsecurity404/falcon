@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -8,12 +9,12 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -145,9 +146,8 @@ func (a *App) routes() http.Handler {
 	})
 	api("GET /api/controls", a.controls)
 	api("POST /api/action/{name}", a.action)
-	api("POST /api/term/kill", func(w http.ResponseWriter, r *http.Request) (any, error) {
-		a.term.Kill()
-		return map[string]bool{"ok": true}, nil
+	api("GET /api/term/state", func(w http.ResponseWriter, r *http.Request) (any, error) {
+		return map[string]any{"running": a.term.Running(), "rootAllowed": a.config().TerminalRoot}, nil
 	})
 	mux.HandleFunc("GET /api/term", func(w http.ResponseWriter, r *http.Request) {
 		if !a.authorized(w, r) {
@@ -159,9 +159,64 @@ func (a *App) routes() http.Handler {
 		}
 		cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 		rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
-		a.term.Serve(c, cols, rows, r.URL.Query().Get("fresh") == "1")
+		a.term.Serve(c, r.URL.Query().Get("mode") == "root", cols, rows, r.URL.Query().Get("fresh") == "1")
 	})
-	return mux
+	return gzipped(mux)
+}
+
+type gzipWriter struct {
+	http.ResponseWriter
+	gz      *gzip.Writer
+	decided bool
+	on      bool
+}
+
+func (g *gzipWriter) decide() {
+	if g.decided {
+		return
+	}
+	g.decided = true
+	ct := g.Header().Get("Content-Type")
+	g.on = !strings.HasPrefix(ct, "image/") && g.Header().Get("Content-Encoding") == ""
+	if g.on {
+		g.Header().Set("Content-Encoding", "gzip")
+		g.Header().Del("Content-Length")
+		g.gz = gzip.NewWriter(g.ResponseWriter)
+	}
+}
+
+func (g *gzipWriter) WriteHeader(code int) {
+	g.decide()
+	g.ResponseWriter.WriteHeader(code)
+}
+
+func (g *gzipWriter) Write(b []byte) (int, error) {
+	if !g.decided {
+		if g.Header().Get("Content-Type") == "" {
+			g.Header().Set("Content-Type", http.DetectContentType(b))
+		}
+		g.decide()
+	}
+	if g.on {
+		return g.gz.Write(b)
+	}
+	return g.ResponseWriter.Write(b)
+}
+
+// gzipped shrinks text answers: the translations and scripts go through the tunnel on every opening.
+func gzipped(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") || r.Header.Get("Upgrade") != "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Add("Vary", "Accept-Encoding")
+		g := &gzipWriter{ResponseWriter: w}
+		next.ServeHTTP(g, r)
+		if g.gz != nil {
+			g.gz.Close()
+		}
+	})
 }
 
 func (a *App) authorized(w http.ResponseWriter, r *http.Request) bool {
@@ -277,8 +332,7 @@ func (a *App) signal(w http.ResponseWriter, r *http.Request) (any, error) {
 }
 
 func output(name string, args ...string) string {
-	cmd := exec.Command(name, args...)
-	cmd.Env = sessionEnv()
+	cmd := timed(5*time.Second, name, args...)
 	out, _ := cmd.Output()
 	return strings.TrimSpace(string(out))
 }
@@ -322,8 +376,7 @@ func (a *App) action(w http.ResponseWriter, r *http.Request) (any, error) {
 	if !ok {
 		return nil, errors.New("unknown action")
 	}
-	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Env = sessionEnv()
+	cmd := timed(15*time.Second, args[0], args[1:]...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		msg := strings.TrimSpace(string(out))
 		if msg == "" {

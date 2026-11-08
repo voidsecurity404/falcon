@@ -24,7 +24,7 @@ const (
 type TermHub struct {
 	app  *App
 	mu   sync.Mutex
-	sess *termSession
+	sess map[bool]*termSession // by root
 }
 
 type termSession struct {
@@ -40,32 +40,42 @@ type termSession struct {
 }
 
 func NewTermHub(app *App) *TermHub {
-	h := &TermHub{app: app}
+	h := &TermHub{app: app, sess: map[bool]*termSession{}}
 	go h.reaper()
 	return h
 }
 
 func (h *TermHub) reaper() {
 	for range time.Tick(time.Minute) {
-		h.mu.Lock()
-		s := h.sess
-		h.mu.Unlock()
-		if s == nil {
-			continue
-		}
-		s.mu.Lock()
-		idle := s.client == nil && time.Since(s.lastSeen) > idleKill
-		s.mu.Unlock()
-		if idle {
-			h.Kill()
+		for _, root := range []bool{false, true} {
+			h.mu.Lock()
+			s := h.sess[root]
+			h.mu.Unlock()
+			if s == nil {
+				continue
+			}
+			s.mu.Lock()
+			idle := s.client == nil && time.Since(s.lastSeen) > idleKill
+			s.mu.Unlock()
+			// A root shell also ends when root is no longer allowed.
+			if idle || (root && !h.app.config().TerminalRoot) {
+				h.Kill(root)
+			}
 		}
 	}
 }
 
-func (h *TermHub) Kill() {
+// Running says which shells are alive, so the app can show them.
+func (h *TermHub) Running() map[string]bool {
 	h.mu.Lock()
-	s := h.sess
-	h.sess = nil
+	defer h.mu.Unlock()
+	return map[string]bool{"user": h.sess[false] != nil, "root": h.sess[true] != nil}
+}
+
+func (h *TermHub) Kill(root bool) {
+	h.mu.Lock()
+	s := h.sess[root]
+	delete(h.sess, root)
 	h.mu.Unlock()
 	if s != nil {
 		syscall.Kill(-s.cmd.Process.Pid, syscall.SIGHUP)
@@ -114,8 +124,8 @@ func (h *TermHub) start(root bool, cols, rows int) (*termSession, error) {
 		cmd.Wait()
 		close(s.done)
 		h.mu.Lock()
-		if h.sess == s {
-			h.sess = nil
+		if h.sess[root] == s {
+			delete(h.sess, root)
 		}
 		h.mu.Unlock()
 	}()
@@ -129,10 +139,14 @@ type termMsg struct {
 	Rows int    `json:"r"`
 }
 
-// Serve attaches a websocket to the shell, starting one when none runs.
-func (h *TermHub) Serve(c *websocket.Conn, cols, rows int, fresh bool) {
+// Serve attaches a websocket to the user or the root shell, starting it when none runs.
+// Both can run at once, so switching between them keeps each where it was.
+func (h *TermHub) Serve(c *websocket.Conn, root bool, cols, rows int, fresh bool) {
 	defer c.Close()
-	root := h.app.config().TerminalRoot
+	if root && !h.app.config().TerminalRoot {
+		c.WriteMessage(websocket.TextMessage, []byte(`{"error":`+jsonString(tr("The root terminal is turned off in the settings."))+`}`))
+		return
+	}
 	if cols < 10 || cols > 500 {
 		cols = 80
 	}
@@ -140,16 +154,10 @@ func (h *TermHub) Serve(c *websocket.Conn, cols, rows int, fresh bool) {
 		rows = 24
 	}
 	if fresh {
-		h.Kill()
+		h.Kill(root)
 	}
 	h.mu.Lock()
-	s := h.sess
-	if s != nil && s.root != root {
-		h.mu.Unlock()
-		h.Kill()
-		h.mu.Lock()
-		s = nil
-	}
+	s := h.sess[root]
 	if s == nil {
 		var err error
 		s, err = h.start(root, cols, rows)
@@ -158,7 +166,7 @@ func (h *TermHub) Serve(c *websocket.Conn, cols, rows int, fresh bool) {
 			c.WriteMessage(websocket.TextMessage, []byte(`{"error":`+jsonString(err.Error())+`}`))
 			return
 		}
-		h.sess = s
+		h.sess[root] = s
 	}
 	h.mu.Unlock()
 

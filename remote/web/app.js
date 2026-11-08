@@ -48,12 +48,17 @@ async function api(path, opts = {}) {
     headers["Content-Type"] = "application/json";
   }
   let res;
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), opts.timeout || 25000);
   try {
-    res = await fetch(path, { method: opts.method || (body ? "POST" : "GET"), headers, body, cache: "no-store" });
+    res = await fetch(path, { method: opts.method || (body ? "POST" : "GET"), headers, body, cache: "no-store", signal: abort.signal });
   } catch (e) {
+    clearTimeout(timer);
+    if (abort.signal.aborted) throw new ApiError(t("The computer did not answer in time"));
     setOnline(false);
     throw new ApiError(t("No connection to the computer"));
   }
+  clearTimeout(timer);
   setOnline(true);
   if (res.status === 403) {
     const j = await res.json().catch(() => ({}));
@@ -364,7 +369,9 @@ $$("[data-act]").forEach((b) => b.addEventListener("click", async () => {
 
 /* ---------- Terminal ---------- */
 
-let term, fit, ws, termReady = false, termRetry = 0, termFontSize = 12;
+let term, fit, ws, termRetry = 0, termFontSize = 12, termStop = false;
+let termMode = "user";
+try { termMode = localStorage.getItem("termMode") === "root" ? "root" : "user"; } catch (_) {}
 const mods = { ctrl: false, alt: false };
 
 function openTerminal() {
@@ -392,6 +399,8 @@ function openTerminal() {
     term.onData((d) => sendKeys(d));
     new ResizeObserver(() => resizeTerm()).observe($("#termBox"));
   }
+  if (termMode === "root" && !hello.terminalRoot) termMode = "user";
+  showTermMode();
   setTimeout(() => { resizeTerm(); if (!ws || ws.readyState > 1) connectTerm(false); term.focus(); }, 60);
 }
 
@@ -408,7 +417,10 @@ function connectTerm(fresh) {
   url.searchParams.set("auth", initData);
   url.searchParams.set("cols", term.cols);
   url.searchParams.set("rows", term.rows);
+  url.searchParams.set("mode", termMode);
   if (fresh) url.searchParams.set("fresh", "1");
+  termStop = false;
+  showTermMode();
   const sock = new WebSocket(url);
   sock.binaryType = "arraybuffer";
   ws = sock;
@@ -418,22 +430,20 @@ function connectTerm(fresh) {
     if (typeof ev.data === "string") {
       const m = JSON.parse(ev.data);
       if ("root" in m) {
-        const badge = $("#termBadge");
-        badge.textContent = m.root ? "root" : (hello.user || t("user"));
-        badge.classList.toggle("root", m.root);
         if (first && !fresh) term.reset();
         first = false;
         termRetry = 0;
+        refreshTermState();
       }
-      if (m.exit) term.write("\r\n\x1b[2m" + t("[session ended, press New session]") + "\x1b[0m\r\n");
-      if (m.error) term.write("\r\n\x1b[31m" + m.error + "\x1b[0m\r\n");
+      if (m.exit) { termStop = true; term.write("\r\n\x1b[2m" + t("[session ended, press New session]") + "\x1b[0m\r\n"); refreshTermState(); }
+      if (m.error) { termStop = true; term.write("\r\n\x1b[31m" + m.error + "\x1b[0m\r\n"); }
       return;
     }
     term.write(new Uint8Array(ev.data));
   };
   sock.onclose = () => {
     if (ws !== sock) return;
-    if (current === "term" && !document.hidden && termRetry < 6) {
+    if (current === "term" && !document.hidden && !termStop && termRetry < 6) {
       termRetry++;
       setTimeout(() => current === "term" && ws === sock && connectTerm(false), 800 * termRetry);
     }
@@ -473,6 +483,36 @@ $$("#keys button").forEach((b) => {
     term && term.focus();
   });
 });
+
+function showTermMode() {
+  $("#termMode").classList.toggle("root", termMode === "root");
+  $$("#termMode button").forEach((b) => {
+    b.classList.toggle("on", b.dataset.mode === termMode);
+    if (b.dataset.mode === "root") b.disabled = !hello.terminalRoot;
+  });
+  $("#userName").textContent = hello.user || "user";
+}
+
+async function refreshTermState() {
+  const st = await api("/api/term/state").catch(() => null);
+  if (!st) return;
+  hello.terminalRoot = st.rootAllowed;
+  $$("#termMode button").forEach((b) => b.querySelector(".segDot").classList.toggle("live", !!st.running[b.dataset.mode]));
+  showTermMode();
+}
+
+$$("#termMode button").forEach((b) => b.addEventListener("click", () => {
+  const mode = b.dataset.mode;
+  if (mode === termMode) return;
+  if (mode === "root" && !hello.terminalRoot) { toast(t("The root terminal is turned off in the settings."), true); return; }
+  haptic("medium");
+  termMode = mode;
+  try { localStorage.setItem("termMode", mode); } catch (_) {}
+  termRetry = 0;
+  term.reset();
+  connectTerm(false);
+  term.focus();
+}));
 
 $("#termNew").addEventListener("click", async () => {
   if (!(await confirmBox(t("End this session and start a new one?")))) return;
@@ -569,6 +609,7 @@ function openSheet(id) {
   if (tg && tg.BackButton) tg.BackButton.show();
 }
 function closeSheets() {
+  if ($("#zoom").classList.contains("open")) { $("#zoom").classList.remove("open"); return; }
   $$(".sheet").forEach((s) => s.classList.remove("open"));
   stopLive();
   viewing = null;
@@ -599,18 +640,21 @@ async function loadShot() {
   if (!viewing) return;
   const target = viewing;
   $("#vSpin").classList.toggle("on", !$("#vImg").getAttribute("src"));
+  $("#vShot").classList.add("loading");
   $("#vErr").textContent = "";
   try {
     const blob = await api(target.id ? `/api/windows/${target.id}/shot` : "/api/screen", { blob: true });
     if (viewing !== target) return;
     const url = URL.createObjectURL(blob);
     $("#vImg").src = url;
+    if ($("#zoom").classList.contains("open")) $("#zImg").src = url;
     if (lastShot) URL.revokeObjectURL(lastShot);
     lastShot = url;
   } catch (e) {
     if (viewing === target) $("#vErr").textContent = e.message;
   }
   $("#vSpin").classList.remove("on");
+  $("#vShot").classList.remove("loading");
 }
 
 function stopLive() {
@@ -619,6 +663,89 @@ function stopLive() {
   $("#vLive").classList.remove("on");
 }
 
+/* Full screen picture with pinch, drag and double tap zoom. */
+const zoom = { scale: 1, x: 0, y: 0, pointers: new Map(), start: null, lastTap: 0 };
+
+function zoomApply(animate) {
+  const img = $("#zImg");
+  img.style.transition = animate ? "transform 0.28s cubic-bezier(.2,.9,.2,1)" : "none";
+  img.style.transform = `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})`;
+}
+
+function zoomClamp() {
+  const img = $("#zImg");
+  const w = img.clientWidth * zoom.scale, h = img.clientHeight * zoom.scale;
+  const W = window.innerWidth, H = window.innerHeight;
+  const mx = Math.max(0, (w - W) / 2), my = Math.max(0, (h - H) / 2);
+  zoom.x = Math.min(mx, Math.max(-mx, zoom.x));
+  zoom.y = Math.min(my, Math.max(-my, zoom.y));
+}
+
+function openZoom() {
+  const src = $("#vImg").getAttribute("src");
+  if (!src) return;
+  $("#zImg").src = src;
+  Object.assign(zoom, { scale: 1, x: 0, y: 0 });
+  zoomApply(false);
+  $("#zoom").classList.add("open");
+  haptic();
+}
+
+$("#vImg").addEventListener("click", openZoom);
+$("#zClose").addEventListener("click", () => $("#zoom").classList.remove("open"));
+
+const zoomArea = $("#zoom");
+zoomArea.addEventListener("pointerdown", (e) => {
+  if (e.target.closest("#zClose")) return;
+  zoomArea.setPointerCapture(e.pointerId);
+  zoom.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  zoom.start = { scale: zoom.scale, x: zoom.x, y: zoom.y, pts: [...zoom.pointers.values()].map((p) => ({ ...p })) };
+});
+zoomArea.addEventListener("pointermove", (e) => {
+  if (!zoom.pointers.has(e.pointerId)) return;
+  zoom.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const pts = [...zoom.pointers.values()], st = zoom.start;
+  if (pts.length >= 2 && st.pts.length >= 2) {
+    const d0 = Math.hypot(st.pts[0].x - st.pts[1].x, st.pts[0].y - st.pts[1].y) || 1;
+    const d1 = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    zoom.scale = Math.min(6, Math.max(1, st.scale * d1 / d0));
+    const c0 = { x: (st.pts[0].x + st.pts[1].x) / 2, y: (st.pts[0].y + st.pts[1].y) / 2 };
+    const c1 = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    zoom.x = st.x + (c1.x - c0.x);
+    zoom.y = st.y + (c1.y - c0.y);
+  } else if (pts.length === 1 && st.pts.length === 1) {
+    zoom.x = st.x + pts[0].x - st.pts[0].x;
+    zoom.y = st.y + pts[0].y - st.pts[0].y;
+  }
+  zoomClamp();
+  zoomApply(false);
+});
+function zoomUp(e) {
+  if (!zoom.pointers.has(e.pointerId)) return;
+  const st = zoom.start;
+  const p = zoom.pointers.get(e.pointerId);
+  zoom.pointers.delete(e.pointerId);
+  zoom.start = { scale: zoom.scale, x: zoom.x, y: zoom.y, pts: [...zoom.pointers.values()].map((q) => ({ ...q })) };
+  const moved = st && st.pts.length === 1 && Math.hypot(p.x - st.pts[0].x, p.y - st.pts[0].y) > 8;
+  if (zoom.pointers.size || moved) return;
+  const now = Date.now();
+  if (now - zoom.lastTap < 300) {
+    // Double tap: zoom in around the finger, or back out.
+    if (zoom.scale > 1.05) Object.assign(zoom, { scale: 1, x: 0, y: 0 });
+    else {
+      const k = 2.6;
+      zoom.x = (window.innerWidth / 2 - p.x) * (k - 1);
+      zoom.y = (window.innerHeight / 2 - p.y) * (k - 1);
+      zoom.scale = k;
+      zoomClamp();
+    }
+    zoomApply(true);
+    zoom.lastTap = 0;
+  } else zoom.lastTap = now;
+}
+zoomArea.addEventListener("pointerup", zoomUp);
+zoomArea.addEventListener("pointercancel", zoomUp);
+
 $("#vRefresh").addEventListener("click", () => { haptic(); loadShot(); });
 $("#vLive").addEventListener("click", () => {
   if (liveTimer) { stopLive(); return; }
@@ -626,7 +753,8 @@ $("#vLive").addEventListener("click", () => {
   const tick = async () => {
     if (!viewing || !$("#vLive").classList.contains("on")) return;
     await loadShot();
-    liveTimer = setTimeout(tick, 1500);
+    // A window picture goes through niri and the clipboard, so it is asked less often than the screen.
+    liveTimer = setTimeout(tick, viewing && viewing.id ? 2000 : 900);
   };
   liveTimer = setTimeout(tick, 0);
 });

@@ -963,7 +963,6 @@
  "TB": "ТБ",
  "Telegram bot": "Telegram-бот",
  "Telegram does not accept this token": "Telegram не принимает этот токен",
- "Terminal as root": "Терминал от root",
  "Text and pictures. Files are saved to Downloads": "Текст и картинки. Файлы сохраняются в Загрузки",
  "Text for the computer's clipboard": "Текст для буфера обмена компьютера",
  "Text from the computer's clipboard": "Текст из буфера обмена компьютера",
@@ -975,7 +974,6 @@
  "The file is on the clipboard, paste it in the file manager.": "Файл в буфере обмена, его можно вставить в файловом менеджере.",
  "The picture is on the computer's clipboard": "Картинка в буфере обмена компьютера",
  "The screen could not be captured": "Не удалось снять экран",
- "The terminal asks for your password once, as sudo does": "Терминал один раз спросит пароль, как sudo",
  "The terminal could not be loaded": "Не удалось загрузить терминал",
  "The window did not give a picture": "Окно не отдало картинку",
  "The window is in front": "Окно на переднем плане",
@@ -1009,5 +1007,11 @@
  "user": "пользователь",
  "{host} is on": "{host} включён",
  "{s} s": "{s} с",
- "{v}/s": "{v}/с"
+ "{v}/s": "{v}/с",
+ "Allow root in the terminal": "Разрешить root в терминале",
+ "The terminal switches between your user and root. Root asks your password once": "Терминал переключается между вашим пользователем и root. Root один раз спросит пароль",
+ "The clipboard could not be set": "Не удалось записать в буфер обмена",
+ "The root terminal is turned off in the settings.": "Терминал root выключен в настройках.",
+ "The computer did not answer in time": "Компьютер не ответил вовремя",
+ "Pinch or double tap to zoom": "Разведите пальцы или коснитесь дважды, чтобы увеличить"
 }

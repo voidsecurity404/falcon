@@ -1,26 +1,52 @@
 package main
 
 import (
-	"bytes"
+	"context"
 	"errors"
+	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
-func wl(name string, args ...string) *exec.Cmd {
-	cmd := exec.Command(name, args...)
+// timed runs a session program that gives up after a while: a frozen clipboard owner
+// or compositor must not hang the request, or the next ones waiting behind it.
+func timed(limit time.Duration, name string, args ...string) *exec.Cmd {
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
+	time.AfterFunc(limit+time.Second, cancel)
+	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Env = sessionEnv()
+	cmd.WaitDelay = time.Second
 	return cmd
 }
+
+func wl(name string, args ...string) *exec.Cmd { return timed(5*time.Second, name, args...) }
 
 func setClipboard(data []byte, mime string) error {
 	if !hasSession() {
 		return errors.New(tr("Nobody is logged in: the computer is at the login screen"))
 	}
-	cmd := wl("wl-copy", "--type", mime)
-	cmd.Stdin = bytes.NewReader(data)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return errors.New(strings.TrimSpace(string(out) + " " + err.Error()))
+	// wl-copy forks a child that keeps serving the clipboard. Its output must not be a pipe,
+	// or waiting for the command would last until something else is copied.
+	file, err := os.CreateTemp(runtimeDir(), "clip-*")
+	if err != nil {
+		os.MkdirAll(runtimeDir(), 0o700)
+		if file, err = os.CreateTemp(runtimeDir(), "clip-*"); err != nil {
+			return err
+		}
+	}
+	defer os.Remove(file.Name())
+	defer file.Close()
+	file.Write(data)
+	file.Seek(0, 0)
+	// In a scope of its own, so the clipboard outlives a restart of this service.
+	cmd := wl("systemd-run", "--user", "--scope", "--quiet", "--collect", "--", "wl-copy", "--type", mime)
+	if _, err := exec.LookPath("systemd-run"); err != nil {
+		cmd = wl("wl-copy", "--type", mime)
+	}
+	cmd.Stdin = file
+	if err := cmd.Run(); err != nil {
+		return errors.New(tr("The clipboard could not be set") + ": " + err.Error())
 	}
 	return nil
 }
@@ -88,6 +114,23 @@ func clipboardRestore(data []byte, mime string) {
 		return
 	}
 	setClipboard(data, mime)
+	// The history now holds the same row twice: drop the new copy, so it looks untouched.
+	time.Sleep(250 * time.Millisecond)
+	out, err := wl("cliphist", "list").Output()
+	if err != nil {
+		return
+	}
+	rows := strings.SplitN(string(out), "\n", 3)
+	if len(rows) < 2 {
+		return
+	}
+	_, first, _ := strings.Cut(rows[0], "\t")
+	_, second, _ := strings.Cut(rows[1], "\t")
+	if first != "" && first == second {
+		cmd := wl("cliphist", "delete")
+		cmd.Stdin = strings.NewReader(rows[0] + "\n")
+		cmd.Run()
+	}
 }
 
 // forgetNewestPicture removes the top cliphist row when it is a picture, the remote screenshot.

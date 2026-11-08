@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -46,7 +47,8 @@ func (a *App) tunnel() {
 func (a *App) runTunnel(bin string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cmd := exec.CommandContext(ctx, bin, "tunnel", "--no-autoupdate", "--protocol", "http2", "--url", fmt.Sprintf("http://127.0.0.1:%d", a.port))
+	metrics := freePort()
+	cmd := exec.CommandContext(ctx, bin, "tunnel", "--no-autoupdate", "--protocol", "http2", "--metrics", fmt.Sprintf("127.0.0.1:%d", metrics), "--url", fmt.Sprintf("http://127.0.0.1:%d", a.port))
 	// Without a config of its own, so a named tunnel in ~/.cloudflared is never picked up.
 	cmd.Dir = os.TempDir()
 	cmd.Env = append(os.Environ(), "TUNNEL_ORIGIN_CERT=/dev/null")
@@ -68,7 +70,8 @@ func (a *App) runTunnel(bin string) {
 				a.mu.Unlock()
 				if changed {
 					log.Printf("tunnel: %s", url)
-					go a.whenReachable(ctx, url, cancel)
+					a.writeStatus()
+					go a.whenReachable(ctx, metrics, cancel)
 				}
 			}
 		}
@@ -77,23 +80,40 @@ func (a *App) runTunnel(bin string) {
 	log.Print("tunnel closed")
 }
 
-// whenReachable announces the address once it answers, then restarts the tunnel if it stops answering.
-func (a *App) whenReachable(ctx context.Context, url string, restart context.CancelFunc) {
-	client := &http.Client{Timeout: 15 * time.Second}
-	ok := func() bool {
-		resp, err := client.Get(url + "/health")
+func freePort() int {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 20241
+	}
+	defer ln.Close()
+	return ln.Addr().(*net.TCPAddr).Port
+}
+
+// whenReachable announces the address once cloudflared has its connections to Cloudflare, then
+// restarts the tunnel if they stay lost. It asks cloudflared itself, not the public address: this
+// computer's resolver may remember the new name as missing for a long time after one early lookup.
+func (a *App) whenReachable(ctx context.Context, metrics int, restart context.CancelFunc) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	ready := func() bool {
+		resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/ready", metrics))
 		if err != nil {
 			return false
 		}
 		resp.Body.Close()
 		return resp.StatusCode == 200
 	}
-	for i := 0; i < 30 && !ok(); i++ {
+	for i := 0; i < 60 && !ready(); i++ {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(2 * time.Second):
+		case <-time.After(time.Second):
 		}
+	}
+	// Cloudflare needs a moment to publish the name after the connections are up.
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(3 * time.Second):
 	}
 	go a.announce(true)
 	failures := 0
@@ -101,12 +121,12 @@ func (a *App) whenReachable(ctx context.Context, url string, restart context.Can
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(time.Minute):
+		case <-time.After(30 * time.Second):
 		}
-		if ok() {
+		if ready() {
 			failures = 0
-		} else if failures++; failures >= 3 {
-			log.Print("tunnel stopped answering, opening a new one")
+		} else if failures++; failures >= 4 {
+			log.Print("the tunnel lost its connections, opening a new one")
 			restart()
 			return
 		}
