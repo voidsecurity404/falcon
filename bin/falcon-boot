@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# Puts Falcon on the boot screen: the falcon Plymouth splash, and "Falcon" instead of the
+# distribution name in the Limine menu. Asks for sudo. Safe to run again. Takes effect at the next boot.
+#   falcon-boot          set it up
+#   falcon-boot --undo   go back to the CachyOS splash and name
+set -euo pipefail
+
+repo="${FALCON_REPO:-$HOME/Downloads/falcon}"
+src="$repo/config/plymouth/falcon"
+theme=/usr/share/plymouth/themes/falcon
+name=Falcon
+defaults=/etc/default/limine
+undo=false
+[[ "${1:-}" == --undo ]] && undo=true
+[[ -f "$src/falcon.plymouth" ]] || { echo "Repo not found: $repo. Set FALCON_REPO." >&2; exit 1; }
+command -v plymouth-set-default-theme >/dev/null || { echo "Plymouth is not installed." >&2; exit 1; }
+
+# The distribution name Limine shows, from os-release, as limine-entry-tool names its entry.
+distro="$(. /etc/os-release; echo "${PRETTY_NAME:-$NAME}")"
+
+limine_conf=""
+for esp in /boot /efi /boot/efi /limine; do
+    if sudo test -f "$esp/limine.conf"; then limine_conf="$esp/limine.conf"; break; fi
+done
+
+if $undo; then
+    old=cachyos-bootanimation
+    [[ -d "/usr/share/plymouth/themes/$old" ]] || old=bgrt
+    sudo plymouth-set-default-theme "$old"
+    sudo rm -rf "$theme"
+    if [[ -n "$limine_conf" ]]; then
+        sudo sed -i -E "s|^(/\+?)$name\s*$|\1$distro|; /^interface_branding: $name$/d" "$limine_conf"
+    fi
+    [[ ! -f "$defaults" ]] || sudo sed -i "/^TARGET_OS_NAME=\"$name\"$/d" "$defaults"
+else
+    sudo rm -rf "$theme"
+    sudo install -d -m 755 "$theme"
+    sudo install -m 644 "$src"/*.png "$src/falcon.plymouth" "$theme/"
+    # Pictures for a password or message prompt come with Plymouth's own spinner theme.
+    for f in bullet entry lock capslock keyboard keymap-render; do
+        p="/usr/share/plymouth/themes/spinner/$f.png"
+        [[ ! -f "$p" ]] || sudo install -m 644 "$p" "$theme/"
+    done
+    sudo plymouth-set-default-theme falcon
+
+    if [[ -n "$limine_conf" ]]; then
+        sudo test -f "$limine_conf.falcon-backup" || sudo cp -a "$limine_conf" "$limine_conf.falcon-backup"
+        # Top level entries are "/Name" or "/+Name" (open by default). Snapshot entries start with "//".
+        sudo sed -i -E "s|^(/\+?)$distro\s*$|\1$name|" "$limine_conf"
+        if sudo grep -q '^interface_branding:' "$limine_conf"; then
+            sudo sed -i -E "s|^interface_branding:.*|interface_branding: $name|" "$limine_conf"
+        else
+            sudo sed -i "1i interface_branding: $name" "$limine_conf"
+        fi
+        # So kernel updates keep writing into the renamed entry instead of making a new one.
+        if [[ -f "$defaults" ]] && grep -q '^TARGET_OS_NAME=' "$defaults"; then
+            sudo sed -i -E "s|^TARGET_OS_NAME=.*|TARGET_OS_NAME=\"$name\"|" "$defaults"
+        else
+            echo "TARGET_OS_NAME=\"$name\"" | sudo tee -a "$defaults" >/dev/null
+        fi
+    fi
+fi
+
+# The splash is inside the initramfs, so it has to be built again.
+if command -v limine-mkinitcpio >/dev/null; then
+    sudo limine-mkinitcpio
+else
+    sudo mkinitcpio -P
+fi
+
+echo
+echo "Plymouth theme: $(plymouth-set-default-theme)"
+if [[ -n "$limine_conf" ]]; then
+    echo "Limine entries in $limine_conf:"
+    sudo grep -E '^(/|interface_branding)' "$limine_conf" | grep -v '^//' || true
+else
+    echo "limine.conf not found, the boot menu was left alone."
+fi
+echo "It takes effect at the next boot."

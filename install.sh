@@ -82,6 +82,7 @@ targets=(
     .local/bin/falcon-firefox
     .local/bin/falcon-app-colors
     .local/bin/falcon-login
+    .local/bin/falcon-boot
     .local/bin/falcon-sddm-colors
     .local/bin/falcon-sync
     .local/bin/falcon-doctor
@@ -120,6 +121,9 @@ if ((uninstall)); then
     do_it rm -rf "$HOME/.local/share/fonts/falcon"
     do_it rm -rf "$HOME/.local/share/falcon"
     if ((dry == 0)) && [[ -f "$HOME/.bashrc" ]]; then sed -i '/falcon\/shell\.bash/d' "$HOME/.bashrc"; fi
+    if [[ -d /usr/share/plymouth/themes/falcon ]]; then
+        do_it env FALCON_REPO="$root" "$root/bin/falcon-boot" --undo
+    fi
     if [[ -e "$state/login-manager" ]] && ((dry == 0)); then
         sudo systemctl disable sddm.service || true
         sudo systemctl set-default "$(cat "$state/login-manager")" || true
@@ -292,6 +296,12 @@ if ((packages && login)); then
         fi
         do_it env FALCON_REPO="$root" "$HOME/.local/bin/falcon-login"
     fi
+fi
+
+# Boot splash and boot menu name. Only where Plymouth is installed.
+if ((packages)) && command -v plymouth-set-default-theme >/dev/null; then
+    say "Putting Falcon on the boot screen"
+    do_it env FALCON_REPO="$root" "$HOME/.local/bin/falcon-boot"
 fi
 
 # Only asks for sudo on a laptop whose battery has a charge limit.

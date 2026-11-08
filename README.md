@@ -17,7 +17,7 @@ cd falcon
 sudo reboot
 ```
 
-The installer adds packages, GPU drivers (Intel and AMD), Claude Code when your repositories have it, and turns on NetworkManager, Bluetooth and audio. It sets up the SDDM login screen, unless another display manager is already enabled or you pass `--no-login-manager`. If the login screen does not start, press `Ctrl+Alt+F2`, log in and fix it from there. NVIDIA drivers are not installed for you: on CachyOS run `sudo chwd -a`.
+The installer adds packages, GPU drivers (Intel and AMD), Claude Code when your repositories have it, and turns on NetworkManager, Bluetooth and audio. It sets up the SDDM login screen, unless another display manager is already enabled or you pass `--no-login-manager`. Where Plymouth is installed, the boot screen shows the Falcon logo and the Limine boot menu says Falcon. If the login screen does not start, press `Ctrl+Alt+F2`, log in and fix it from there. NVIDIA drivers are not installed for you: on CachyOS run `sudo chwd -a`.
 
 Existing configs are saved to `~/.local/state/falcon/backup-*`. `./install.sh --uninstall` restores them, turns SDDM off and leaves packages installed. Your own binds from `user.kdl` are kept in `~/.local/state/falcon/user.kdl` and come back on the next install.
 
@@ -108,6 +108,7 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 - `falcon-doctor`: checks programs, running services, config and permissions, and says what to fix.
 - `falcon-sync [--check] [--pull]`: copies changed files from the repo to the live desktop, leaving generated files and user data alone.
 - `falcon-login`: sets up the SDDM login screen, it asks for sudo.
+- `falcon-boot`: puts the Falcon logo on the boot screen and Falcon in the Limine menu, it asks for sudo. `--undo` brings the CachyOS ones back.
 - Lock screen: Settings → System chooses hyprlock or the shell's own lock screen, where each typed character appears as a different Material shape and the field shakes on a wrong password. `qs -c Falcon ipc call desk lockPreview` shows the shell's one without locking, Esc closes it.
 - Password prompts: when an app asks for administrator rights, the shell itself shows the request in a glass card, with the same shapes for typed characters. Enter confirms, Esc cancels. If the shell cannot serve them, `hyprpolkitagent` takes over.
 - Screen capture: `Mod+Shift+S` and `Print` freeze the screen and let you select an area or click a window. Left click copies and saves, right click opens the editor. The toolbar switches between screenshot, Google search, text, translation and recording. Esc closes it.
