@@ -228,6 +228,9 @@ ShellRoot {
         function widgetsArrange(image: string): void {
             Widgets.arrange(image);
         }
+        function songrec(): void {
+            SongRec.recognize(false);
+        }
         function wallpaperShown(path: string, live: bool): void {
             Wallpapers.shownImage = path;
             Wallpapers.shownLive = live;

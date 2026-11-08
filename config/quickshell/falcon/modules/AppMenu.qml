@@ -139,6 +139,14 @@ PanelWindow {
             complete: "emoji "
         },
         {
+            id: "songrec",
+            icon: "music",
+            name: Tr.t("What song is this?"),
+            detail: SongRec.listening ? Tr.t("Listening…") : Tr.t("Listens to what plays for 10 seconds"),
+            keywords: "shazam song music recognize песня музыка узнать что играет",
+            run: () => SongRec.recognize(false)
+        },
+        {
             id: "wallpapers",
             icon: "wallpaper",
             name: Tr.t("Wallpapers"),

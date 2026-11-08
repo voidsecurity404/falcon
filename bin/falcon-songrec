@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Names the song that is playing. Records 10 seconds of what the computer plays (or of the
+# microphone with --mic), and songrec asks Shazam about that sample. Only a fingerprint of the
+# sound is sent. Prints one JSON line:
+#   {"title": ..., "artist": ..., "url": ..., "cover": ...}
+#   {"error": "missing" | "silent" | "unknown" | "failed"}
+set -u
+
+say() { printf '%s\n' "$1"; }
+
+command -v songrec >/dev/null || { say '{"error": "missing"}'; exit 3; }
+
+dir="${XDG_RUNTIME_DIR:-/tmp}/falcon-songrec"
+mkdir -p "$dir"
+raw="$dir/sample.raw"
+wav="$dir/sample.wav"
+trap 'rm -f "$raw" "$wav"' EXIT
+
+if [[ "${1:-}" == "--mic" ]]; then
+    device="$(pactl get-default-source)"
+else
+    device="$(pactl get-default-sink).monitor"
+fi
+
+timeout 10 parec -d "$device" --format=s16le --rate=44100 --channels=1 --raw >"$raw" 2>/dev/null
+ffmpeg -v error -y -f s16le -ar 44100 -ac 1 -i "$raw" "$wav" </dev/null || { say '{"error": "failed"}'; exit 1; }
+
+# Silence would only waste a request.
+peak="$(ffmpeg -hide_banner -nostats -i "$wav" -af volumedetect -f null - 2>&1 | sed -n 's/.*max_volume: \(-\?[0-9.]*\) dB.*/\1/p')"
+if [[ -z "$peak" ]] || awk -v p="$peak" 'BEGIN { exit !(p < -45) }'; then
+    say '{"error": "silent"}'
+    exit 0
+fi
+
+songrec recognize --json "$wav" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except ValueError:
+    print(json.dumps({"error": "failed"}))
+    sys.exit(0)
+track = data.get("track") if isinstance(data, dict) else None
+if not track:
+    print(json.dumps({"error": "unknown"}))
+    sys.exit(0)
+images = track.get("images") or {}
+print(json.dumps({
+    "title": track.get("title", ""),
+    "artist": track.get("subtitle", ""),
+    "url": track.get("url", ""),
+    "cover": images.get("coverarthq") or images.get("coverart") or "",
+}, ensure_ascii=False))
+'

@@ -771,5 +771,17 @@
  "An app or a new device cannot make it much louder at once": "Программа или новое устройство не сделают звук сразу намного громче",
  "Largest jump": "Наибольший скачок",
  "The volume keys move by 5%": "Клавиши громкости меняют её на 5%",
- "Maximum volume": "Максимальная громкость"
+ "Maximum volume": "Максимальная громкость",
+ "Listening…": "Слушаю…",
+ "Naming the song from the microphone": "Узнаю песню через микрофон",
+ "Naming the song that plays on the computer": "Узнаю песню, которая играет на компьютере",
+ "Song recognition needs songrec": "Для распознавания песен нужен songrec",
+ "Click to install it": "Нажмите, чтобы установить",
+ "Play the song and try again": "Включите песню и попробуйте снова",
+ "Song not found": "Песня не найдена",
+ "Shazam does not know it, or it was too quiet": "Shazam её не знает, или было слишком тихо",
+ "Could not name the song": "Не удалось узнать песню",
+ "Check the internet connection": "Проверьте подключение к интернету",
+ "What song is this?": "Что это за песня?",
+ "Listens to what plays for 10 seconds": "Слушает, что играет, 10 секунд"
 }

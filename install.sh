@@ -57,6 +57,7 @@ targets=(
     .local/bin/falcon-claude-status
     .local/bin/falcon-claude-usage
     .local/bin/falcon-spectrum
+    .local/bin/falcon-songrec
     .local/bin/falcon-fetch
     .local/bin/falcon-shot
     .local/bin/falcon-wallpaper
@@ -167,6 +168,10 @@ if ((packages)); then
     # Claude Code CachyOS omborida bor. Arch'da yo'q bo'lsa, oxirida ko'rsatma chiqadi.
     if ! command -v claude >/dev/null && pacman -Si claude-code >/dev/null 2>&1; then
         list+=(claude-code)
+    fi
+    # Song recognition. It is in CachyOS's repos, on plain Arch only in the AUR.
+    if pacman -Si songrec >/dev/null 2>&1; then
+        list+=(songrec)
     fi
     missing=()
     for p in "${list[@]}"; do

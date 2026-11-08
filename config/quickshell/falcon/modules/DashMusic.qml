@@ -305,67 +305,144 @@ Item {
             }
         }
 
-        Row {
-            spacing: 18
-            visible: !!root.player
+        // Player controls on the left, song recognition on the right.
+        Item {
+            width: parent.width
+            height: 68
 
-            Repeater {
-                model: [
-                    {
-                        icon: "previous",
-                        main: false,
-                        run: () => root.player.previous()
-                    },
-                    {
-                        icon: root.playing ? "pause" : "play",
-                        main: true,
-                        run: () => root.player.togglePlaying()
-                    },
-                    {
-                        icon: "next",
-                        main: false,
-                        run: () => root.player.next()
-                    }
-                ]
+            Row {
+                spacing: 18
+                visible: !!root.player
 
-                delegate: Rectangle {
-                    id: control
+                Repeater {
+                    model: [
+                        {
+                            icon: "previous",
+                            main: false,
+                            run: () => root.player.previous()
+                        },
+                        {
+                            icon: root.playing ? "pause" : "play",
+                            main: true,
+                            run: () => root.player.togglePlaying()
+                        },
+                        {
+                            icon: "next",
+                            main: false,
+                            run: () => root.player.next()
+                        }
+                    ]
 
-                    required property var modelData
+                    delegate: Rectangle {
+                        id: control
 
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: modelData.main ? 68 : 50
-                    height: width
-                    radius: modelData.main ? (controlArea.containsMouse ? 22 : 34) : 25
-                    color: modelData.main ? root.tint : Qt.alpha(Theme.text, controlArea.containsMouse ? 0.18 : 0.08)
-                    scale: controlArea.pressed ? 0.9 : 1
+                        required property var modelData
 
-                    Behavior on radius {
-                        NumberAnimation {
-                            duration: 240
-                            easing.type: Easing.OutCubic
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: modelData.main ? 68 : 50
+                        height: width
+                        radius: modelData.main ? (controlArea.containsMouse ? 22 : 34) : 25
+                        color: modelData.main ? root.tint : Qt.alpha(Theme.text, controlArea.containsMouse ? 0.18 : 0.08)
+                        scale: controlArea.pressed ? 0.9 : 1
+
+                        Behavior on radius {
+                            NumberAnimation {
+                                duration: 240
+                                easing.type: Easing.OutCubic
+                            }
+                        }
+                        Behavior on scale {
+                            NumberAnimation {
+                                duration: 120
+                            }
+                        }
+
+                        Icon {
+                            anchors.centerIn: parent
+                            name: control.modelData.icon
+                            size: control.modelData.main ? 26 : 19
+                            color: control.modelData.main ? Media.artAccentText : Theme.text
+                        }
+                        MouseArea {
+                            id: controlArea
+
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: control.modelData.run()
                         }
                     }
-                    Behavior on scale {
-                        NumberAnimation {
-                            duration: 120
-                        }
+                }
+            }
+            // Names the song that plays, through Shazam.
+            Rectangle {
+                id: recognize
+
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+                width: recognizeRow.implicitWidth + 30
+                height: 38
+                radius: 19
+                color: SongRec.listening ? Qt.alpha(root.tint, 0.22) : Qt.alpha(Theme.text, recognizeArea.containsMouse ? 0.16 : 0.08)
+                scale: recognizeArea.pressed ? 0.95 : 1
+
+                Behavior on color {
+                    ColorAnimation {
+                        duration: 180
                     }
+                }
+                Behavior on scale {
+                    NumberAnimation {
+                        duration: 120
+                    }
+                }
+
+                Row {
+                    id: recognizeRow
+
+                    anchors.centerIn: parent
+                    spacing: 8
 
                     Icon {
-                        anchors.centerIn: parent
-                        name: control.modelData.icon
-                        size: control.modelData.main ? 26 : 19
-                        color: control.modelData.main ? Media.artAccentText : Theme.text
-                    }
-                    MouseArea {
-                        id: controlArea
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "music"
+                        size: 16
+                        color: root.tint
 
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: control.modelData.run()
+                        SequentialAnimation on opacity {
+                            running: SongRec.listening
+                            loops: Animation.Infinite
+                            onRunningChanged: {
+                                if (!running)
+                                    parent.opacity = 1;
+                            }
+
+                            NumberAnimation {
+                                to: 0.25
+                                duration: 520
+                                easing.type: Easing.InOutSine
+                            }
+                            NumberAnimation {
+                                to: 1
+                                duration: 520
+                                easing.type: Easing.InOutSine
+                            }
+                        }
                     }
+                    Label {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: SongRec.listening ? Tr.t("Listening…") : Tr.t("What song is this?")
+                        size: 13
+                        font.weight: Font.Medium
+                    }
+                }
+                MouseArea {
+                    id: recognizeArea
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: SongRec.recognize(false)
                 }
             }
         }
