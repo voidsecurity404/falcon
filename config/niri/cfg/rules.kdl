@@ -135,6 +135,16 @@ layer-rule {
     place-within-backdrop true
 }
 
+// My phone (falcon-phone): floats in the bottom right corner, with the rounded corners of a phone screen.
+window-rule {
+    match app-id="^scrcpy$" title="^Мой телефон$"
+    open-floating true
+    open-focused true
+    geometry-corner-radius 34
+    clip-to-geometry true
+    default-floating-position x=24 y=24 relative-to="bottom-right"
+}
+
 // Menyu va panellar shisha: orqasidagi oyna ko'rinadi, faqat fon rasmi emas.
 layer-rule {
     match namespace="^falcon-menu$"

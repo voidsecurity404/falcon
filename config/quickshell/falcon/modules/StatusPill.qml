@@ -118,6 +118,39 @@ Rectangle {
             }
         }
 
+        // My phone: opens or closes the phone window. The dot shows the link: accent direct, muted relay, none offline.
+        Rectangle {
+            visible: Phone.installed && Settings.get("panel.phone", true)
+            width: 34
+            height: 34
+            radius: 9
+            color: phoneArea.containsMouse || Phone.windowOpen ? Qt.alpha(Theme.text, 0.08) : "transparent"
+
+            Icon {
+                anchors.centerIn: parent
+                name: "phone"
+                size: 17
+                opacity: Phone.reachable ? 1 : 0.45
+            }
+            Rectangle {
+                visible: Phone.reachable
+                x: 21
+                y: 8
+                width: 6
+                height: 6
+                radius: 3
+                color: Phone.state === "direct" ? Theme.accent : Theme.muted
+            }
+            MouseArea {
+                id: phoneArea
+
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: Phone.toggle()
+            }
+        }
+
         // Who is using the microphone or the camera. A click names the apps.
         Rectangle {
             visible: Privacy.mic.length > 0 || Privacy.camera.length > 0

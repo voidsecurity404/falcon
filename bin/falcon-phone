@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# My phone: the phone's screen in a window, over the internet tunnel of moy-telefon-link.service.
+#   falcon-phone open     open the window, or focus it when it is open
+#   falcon-phone close    close the window
+#   falcon-phone toggle   open or close
+#   falcon-phone status   print the tunnel state as JSON
+# The window comes back by itself when the link drops, until the user closes it.
+set -uo pipefail
+
+TITLE="Мой телефон"
+ADB="127.0.0.1:15555"
+SCRCPY_PORT=15556
+SERVICE="moy-telefon-link.service"
+STATE="$HOME/.local/state/moy-telefon/link.json"
+RUN="${XDG_RUNTIME_DIR:-/tmp}/falcon-phone"
+
+_t() { "$HOME/.local/bin/falcon-tr" "$1"; }
+tell() { qs -c falcon ipc call desk toast "$@" >/dev/null 2>&1 || true; }
+
+window_id() {
+    niri msg --json windows 2>/dev/null | jq -r --arg t "$TITLE" '[.[] | select(.title == $t)][0].id // empty'
+}
+
+running() {
+    [[ -e "$RUN.wanted" ]] || [[ -n "$(window_id)" ]]
+}
+
+open() {
+    local id
+    id="$(window_id)"
+    if [[ -n "$id" ]]; then
+        exec niri msg action focus-window --id "$id"
+    fi
+    exec 9>"$RUN.lock"
+    flock -n 9 || exit 0
+    touch "$RUN.wanted"
+    systemctl --user start "$SERVICE" 2>/dev/null
+
+    local tries=0 told=0 code
+    while [[ -e "$RUN.wanted" ]]; do
+        adb connect "$ADB" >/dev/null 2>&1
+        # adb can keep a dead transport after the tunnel restarts: ask the phone something small.
+        if ! timeout 8 adb -s "$ADB" shell true >/dev/null 2>&1; then
+            adb disconnect "$ADB" >/dev/null 2>&1
+            adb connect "$ADB" >/dev/null 2>&1
+        fi
+        if timeout 8 adb -s "$ADB" shell true >/dev/null 2>&1; then
+            tries=0
+            scrcpy -s "$ADB" \
+                --tunnel-host=127.0.0.1 --tunnel-port="$SCRCPY_PORT" \
+                --window-title="$TITLE" --window-borderless --window-height=900 \
+                --max-size=1600 --video-bit-rate=4M --max-fps=60 \
+                --audio-buffer=80 --shortcut-mod=ralt \
+                >"$RUN.log" 2>&1
+            code=$?
+            # 0 means the user closed the window.
+            [[ $code -eq 0 ]] && break
+            if (( told == 0 )); then
+                tell "$(_t "Phone connection lost")" "$(_t "Reconnecting…")"
+                told=1
+            fi
+        else
+            tries=$((tries + 1))
+            if (( tries == 8 )); then
+                tell "$(_t "Phone is not reachable")" "$(_t "Still trying. Check that the phone has internet.")"
+            fi
+            if (( tries >= 90 )); then
+                tell "$(_t "Phone is not reachable")" "$(_t "Gave up after 3 minutes")"
+                break
+            fi
+        fi
+        sleep 2
+    done
+    rm -f "$RUN.wanted"
+}
+
+close() {
+    rm -f "$RUN.wanted"
+    local id
+    id="$(window_id)"
+    [[ -n "$id" ]] && niri msg action close-window --id "$id"
+    return 0
+}
+
+case "${1:-toggle}" in
+    open) open ;;
+    close) close ;;
+    toggle) if running; then close; else open; fi ;;
+    status) cat "$STATE" 2>/dev/null || echo '{"state":"offline","rtt":0,"since":0}' ;;
+    *) echo "usage: falcon-phone [open|close|toggle|status]" >&2; exit 2 ;;
+esac

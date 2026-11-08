@@ -172,6 +172,7 @@ LazyLoader {
                             { key: "panel.hideEmpty", label: Tr.t("Hide empty workspaces"), type: "toggle" },
                             { key: "panel.tray", label: Tr.t("Tray"), type: "toggle" },
                             { key: "panel.claude", label: Tr.t("Claude icon"), type: "toggle" },
+                            { key: "panel.phone", label: Tr.t("Phone icon"), type: "toggle" },
                             { key: "panel.updates", label: Tr.t("Waiting updates"), type: "toggle" },
                             { key: "panel.privacy", label: Tr.t("Microphone and camera in use"), type: "toggle" },
                             { key: "panel.lang", label: Tr.t("Keyboard layout"), type: "toggle" },
