@@ -17,6 +17,8 @@ while niri msg version >/dev/null 2>&1; do
     fi
     if ((fails >= 5)); then
         notify-send -u critical "falcon" "$("$HOME/.local/bin/falcon-tr" "The panel keeps crashing: qs -c falcon log")" 9>&-
+        # The shell was the polkit agent: hand password prompts back to hyprpolkitagent.
+        systemctl --user start hyprpolkitagent.service 9>&-
         exit 1
     fi
     sleep 1

@@ -163,74 +163,12 @@ Item {
                         text = "";
                 }
             }
-            Item {
+            PasswordShapes {
                 anchors.fill: parent
                 anchors.margins: 12
-                clip: true
-
-                Row {
-                    id: shapes
-
-                    // Centered, and once it is too long the newest shapes stay in view.
-                    x: Math.min((parent.width - width) / 2, parent.width - width)
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 6
-                    opacity: root.checking ? 0.45 : 1
-
-                    Behavior on x {
-                        NumberAnimation {
-                            duration: 160
-                            easing.type: Easing.OutCubic
-                        }
-                    }
-                    Behavior on opacity {
-                        NumberAnimation {
-                            duration: 200
-                        }
-                    }
-
-                    Repeater {
-                        model: field.length
-
-                        delegate: MaterialShape {
-                            id: shape
-
-                            required property int index
-
-                            width: 16
-                            height: 16
-                            kind: kinds[index % kinds.length]
-                            color: root.error !== "" ? Theme.error : Theme.accent
-                            // Shapes pushed out past the left edge fade instead of being cut.
-                            opacity: x + shapes.x < 0 ? 0 : 1
-                            scale: 0
-                            rotation: -50
-                            Component.onCompleted: {
-                                scale = 1;
-                                rotation = 0;
-                            }
-
-                            Behavior on scale {
-                                NumberAnimation {
-                                    duration: 260
-                                    easing.type: Easing.OutBack
-                                    easing.overshoot: 2.4
-                                }
-                            }
-                            Behavior on opacity {
-                                NumberAnimation {
-                                    duration: 160
-                                }
-                            }
-                            Behavior on rotation {
-                                NumberAnimation {
-                                    duration: 320
-                                    easing.type: Easing.OutCubic
-                                }
-                            }
-                        }
-                    }
-                }
+                count: field.length
+                color: root.error !== "" ? Theme.error : Theme.accent
+                dim: root.checking
             }
             Label {
                 anchors.centerIn: parent

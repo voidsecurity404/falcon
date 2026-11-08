@@ -751,5 +751,7 @@
  "Alan Kay": "Алан Кей",
  "Kent Beck": "Кент Бек",
  "Cookie clock": "Часы-печенье",
- "Hands on a wavy Material shape": "Стрелки на волнистой фигуре Material"
+ "Hands on a wavy Material shape": "Стрелки на волнистой фигуре Material",
+ "Authentication required": "Требуется аутентификация",
+ "Authenticate": "Подтвердить"
 }

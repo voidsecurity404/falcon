@@ -43,6 +43,7 @@ ShellRoot {
     ClipboardMenu {}
     AppMenu {}
     PowerMenu {}
+    PolkitDialog {}
     WallpaperPicker {}
     SettingsWindow {}
     TranslateWindow {}

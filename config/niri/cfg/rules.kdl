@@ -139,6 +139,7 @@ layer-rule {
 layer-rule {
     match namespace="^falcon-menu$"
     match namespace="^falcon-power$"
+    match namespace="^falcon-polkit$"
     match namespace="^falcon-top$"
     match namespace="^falcon-dock$"
     background-effect {
