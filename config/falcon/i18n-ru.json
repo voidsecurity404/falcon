@@ -758,5 +758,8 @@
  "Parallax": "Параллакс",
  "The wallpaper slides a little as you move between workspaces": "Обои немного сдвигаются при переходе между рабочими столами",
  "Parallax strength": "Сила параллакса",
- "How much taller than the screen the wallpaper is drawn": "Насколько обои выше экрана"
+ "How much taller than the screen the wallpaper is drawn": "Насколько обои выше экрана",
+ "A package update is running. Turning off now can break the system": "Идёт обновление пакетов. Выключение сейчас может сломать систему",
+ "A download is not finished: {name}": "Загрузка не завершена: {name}",
+ "A download is still running": "Ещё идёт загрузка"
 }

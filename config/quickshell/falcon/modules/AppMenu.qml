@@ -824,7 +824,7 @@ PanelWindow {
                             Label {
                                 width: parent.width
                                 visible: text !== ""
-                                text: row.isArmed ? Tr.t("Press once more to proceed") : row.entry ? row.entry.detail : ""
+                                text: row.isArmed ? (Session.warning !== "" ? Session.warning : Tr.t("Press once more to proceed")) : row.entry ? row.entry.detail : ""
                                 size: 12
                                 color: row.isArmed ? Theme.pill : Theme.muted
                                 elide: Text.ElideRight

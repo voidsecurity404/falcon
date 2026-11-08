@@ -400,9 +400,12 @@ PanelWindow {
                 y: root.headerHeight + root.tileHeight + 14 - (1 - show) * 6
                 width: parent.width - root.cardPadding * 2
                 horizontalAlignment: Text.AlignHCenter
-                text: root.armed !== "" ? Tr.t("Press once more to proceed") : Tr.t("Arrows choose, Enter confirms, Esc closes")
+                // A warning replaces the hint, so it is read before the second press.
+                text: Session.warning !== "" ? Session.warning : root.armed !== "" ? Tr.t("Press once more to proceed") : Tr.t("Arrows choose, Enter confirms, Esc closes")
                 size: 13
-                color: root.armed !== "" ? Qt.lighter(Session.red, 1.35) : Theme.muted
+                font.weight: Session.warning !== "" ? Font.DemiBold : Font.Normal
+                elide: Text.ElideMiddle
+                color: Session.warning !== "" || root.armed !== "" ? Qt.lighter(Session.red, 1.35) : Theme.muted
                 opacity: show
             }
         }
