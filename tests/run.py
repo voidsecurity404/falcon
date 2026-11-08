@@ -1420,6 +1420,18 @@ def _():
     wait(lambda: st()["popup"] == "" and st()["controlPage"] == "", 3)
 
 
+@case("Yozish sahifasi ochiladi, kechiktirilgan yozish bekor qilinadi")
+def _():
+    ipc("controlPage", "record")
+    wait(lambda: st()["controlPage"] == "record", 3)
+    ipc("recordingCountdown", "5")
+    wait(lambda: st()["recordCountdown"] > 0, 3)
+    ipc("recordingCountdown", "0")
+    wait(lambda: st()["recordCountdown"] == 0 and not st()["recording"], 3)
+    ipc("close")
+    wait(lambda: st()["popup"] == "" and st()["controlPage"] == "", 3)
+
+
 @case("Ochiq panelda Mod+Q oynani yopmaydi, panel saqlanadi")
 def _():
     a = term("a")

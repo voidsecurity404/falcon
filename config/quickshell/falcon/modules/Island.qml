@@ -24,7 +24,7 @@ Item {
     readonly property bool showSeconds: Settings.get("panel.clockSeconds", false)
     readonly property bool showDate: Settings.get("panel.clockDate", false)
     readonly property bool clock24: Settings.get("panel.clock24", true)
-    readonly property int targetWidth: mode === "dashboard" ? 1160 : mode === "toast" ? 440 : (Ui.recording ? 232 : 186) + (Countdown.active ? timerPart.width + 10 : 0) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0) + (clock24 ? 0 : 26)
+    readonly property int targetWidth: mode === "dashboard" ? 1160 : mode === "toast" ? 440 : (Ui.recordBusy ? 232 : 186) + (Countdown.active ? timerPart.width + 10 : 0) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0) + (clock24 ? 0 : 26)
     readonly property int cornerRadius: mode === "dashboard" ? 32 : 18
     readonly property int targetHeight: mode === "dashboard" ? 580 : mode === "toast" ? 68 : 44
 
@@ -148,14 +148,14 @@ Item {
 
             Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
-                visible: Ui.recording
+                visible: Ui.recordBusy
                 width: 8
                 height: 8
                 radius: 4
                 color: Theme.error
 
                 SequentialAnimation on opacity {
-                    running: Ui.recording
+                    running: Ui.recordBusy
                     loops: Animation.Infinite
                     onRunningChanged: {
                         if (!running)
@@ -222,12 +222,23 @@ Item {
                     }
                 }
             }
+            // Recording time, or the seconds before a delayed one starts. A click stops it.
             Label {
-                visible: Ui.recording
-                text: Ui.pad(Math.floor(Ui.recordSeconds / 60)) + ":" + Ui.pad(Ui.recordSeconds % 60)
+                visible: Ui.recordBusy
+                text: Ui.recording ? Ui.pad(Math.floor(Ui.recordSeconds / 60)) + ":" + Ui.pad(Ui.recordSeconds % 60) : String(Ui.recordCountdown)
                 color: Theme.error
                 size: 15
                 font.weight: Font.Medium
+                font.features: {
+                    "tnum": 1
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    anchors.margins: -6
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Ui.toggleRecording()
+                }
             }
             Label {
                 anchors.verticalCenter: parent.verticalCenter

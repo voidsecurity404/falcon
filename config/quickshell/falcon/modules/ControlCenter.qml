@@ -90,7 +90,7 @@ Rectangle {
         width: root.panelWidth
         height: root.pageHeight
 
-        // Wi-Fi and Bluetooth lists open in place of the main page.
+        // Wi-Fi and Bluetooth lists and the recording choices open in place of the main page.
         Loader {
             id: pageLoader
 
@@ -98,7 +98,7 @@ Rectangle {
             y: root.padding
             width: parent.width - root.padding * 2
             active: Ui.controlPage !== ""
-            source: Ui.controlPage === "wifi" ? "WifiPage.qml" : Ui.controlPage === "bluetooth" ? "BluetoothPage.qml" : ""
+            source: Ui.controlPage === "wifi" ? "WifiPage.qml" : Ui.controlPage === "bluetooth" ? "BluetoothPage.qml" : Ui.controlPage === "record" ? "RecordPage.qml" : ""
             opacity: status === Loader.Ready ? 1 : 0
             transform: Translate {
                 x: pageLoader.status === Loader.Ready ? 0 : 28
@@ -335,10 +335,16 @@ Rectangle {
                         title: Tr.t("Translate")
                         onClicked: Ui.region("translate")
                     }
+                    // Opens the recording choices, or stops what is being recorded.
                     ToolButton {
                         icon: "record"
-                        title: Tr.t("Record")
-                        onClicked: Ui.region("record")
+                        title: Ui.recordBusy ? Tr.t("Stop") : Tr.t("Record")
+                        onClicked: {
+                            if (Ui.recordBusy)
+                                Ui.toggleRecording();
+                            else
+                                Ui.controlPage = "record";
+                        }
                     }
                     ToolButton {
                         icon: "color"

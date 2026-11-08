@@ -47,6 +47,9 @@ Singleton {
     property real controlHeight: 0
     property bool recording: false
     property int recordSeconds: 0
+    // Seconds left before a delayed recording starts, 0 when none waits.
+    property int recordCountdown: 0
+    readonly property bool recordBusy: recording || recordCountdown > 0
 
     readonly property bool topPanelOpen: popup === "dashboard" || popup === "control" || popup === "tray" || popup === "claude"
 
@@ -78,8 +81,8 @@ Singleton {
 
     // Opens the selector, or changes its action or closes it when it is already open.
     function region(action) {
-        if (action === "record" && recording) {
-            run("falcon-record");
+        if (action === "record" && recordBusy) {
+            run("falcon-record", "--stop");
             return;
         }
         if (regionPhase !== "") {
@@ -147,6 +150,35 @@ Singleton {
     function setRecording(on) {
         recording = on;
         recordSeconds = 0;
+        if (on)
+            recordCountdown = 0;
+    }
+
+    // The options on the record page, read by falcon-record from the saved toggles.
+    function recordOption(key, fallback) {
+        const value = (Saved.get("record", {}) || {})[key];
+        return value === undefined ? fallback : value;
+    }
+
+    function setRecordOption(key, value) {
+        const next = Object.assign({}, Saved.get("record", {}) || {});
+        next[key] = value;
+        Saved.set("record", next);
+    }
+
+    // Starts with the saved options, or stops what runs.
+    function toggleRecording() {
+        if (recordBusy) {
+            run("falcon-record", "--stop");
+            return;
+        }
+        if (recordOption("area", "region") === "screen") {
+            popup = "";
+            // The control center must be gone from the picture first.
+            recordStart.restart();
+        } else {
+            region("record");
+        }
     }
 
     function run(script, ...args) {
@@ -168,6 +200,20 @@ Singleton {
         repeat: true
         running: root.recording
         onTriggered: root.recordSeconds += 1
+    }
+
+    Timer {
+        interval: 1000
+        repeat: true
+        running: root.recordCountdown > 0
+        onTriggered: root.recordCountdown = Math.max(0, root.recordCountdown - 1)
+    }
+
+    Timer {
+        id: recordStart
+
+        interval: 300
+        onTriggered: root.run("falcon-record", "--screen")
     }
 
     // Focus mode writes "// zen" first in zen.kdl. The file also holds steps of its corner animation.

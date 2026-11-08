@@ -121,6 +121,8 @@ ShellRoot {
                 zen: Ui.zen,
                 settings: Ui.settingsOpen,
                 recording: Ui.recording,
+                recordCountdown: Ui.recordCountdown,
+                recordOptions: Saved.get("record", {}),
                 toast: Toasts.current ? Toasts.current.title : "",
                 toastSub: Toasts.current ? Toasts.current.sub : "",
                 queue: Toasts.queue.length,
@@ -188,6 +190,7 @@ ShellRoot {
             Ui.popup = "";
             Ui.settingsOpen = false;
             Ui.setRecording(false);
+            Ui.recordCountdown = 0;
             Toasts.current = null;
             Toasts.queue = [];
             Toasts.history = [];
@@ -203,7 +206,7 @@ ShellRoot {
         function controlPage(name: string): void {
             Ui.popup = "control";
             // An unknown name would show an empty panel, so it opens the main page.
-            Ui.controlPage = ["wifi", "bluetooth"].includes(name) ? name : "";
+            Ui.controlPage = ["wifi", "bluetooth", "record"].includes(name) ? name : "";
         }
         function dashboardTab(index: int): void {
             Ui.dashTab = Math.max(0, Math.min(2, index));
@@ -271,6 +274,13 @@ ShellRoot {
         }
         function recording(on: bool): void {
             Ui.setRecording(on);
+        }
+        function recordingCountdown(seconds: int): void {
+            Ui.recordCountdown = Math.max(0, seconds);
+        }
+        function recordSaved(path: string): void {
+            const name = path.split("/").pop();
+            Toasts.show(path.endsWith(".gif") ? Tr.t("GIF saved") : Tr.t("Video saved"), name + " · " + Tr.t("click to open"), "record", () => Quickshell.execDetached(["xdg-open", path]));
         }
         function toast(title: string, sub: string): void {
             Toasts.show(title, sub, "check");

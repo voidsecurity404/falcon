@@ -1,13 +1,14 @@
 import QtQuick
 import qs.services
 
-// Control center sub-page header: back arrow, title and an on/off switch.
+// Control center sub-page header: back arrow, title and an on/off switch unless hasSwitch is false.
 Item {
     id: root
 
     property string title: ""
     property bool on: false
     property bool switchEnabled: true
+    property bool hasSwitch: true
 
     signal back
     signal toggled
@@ -41,8 +42,8 @@ Item {
     Label {
         anchors.left: backButton.right
         anchors.leftMargin: 11
-        anchors.right: track.left
-        anchors.rightMargin: 11
+        anchors.right: root.hasSwitch ? track.left : parent.right
+        anchors.rightMargin: root.hasSwitch ? 11 : 0
         anchors.verticalCenter: parent.verticalCenter
         text: root.title
         size: 15
@@ -54,6 +55,7 @@ Item {
 
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
+        visible: root.hasSwitch
         width: 40
         height: 22
         radius: 11
