@@ -104,7 +104,7 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 - `falcon-doctor`: checks programs, running services, config and permissions, and says what to fix.
 - `falcon-sync [--check] [--pull]`: copies changed files from the repo to the live desktop, leaving generated files and user data alone.
 - `falcon-login`: sets up the SDDM login screen, it asks for sudo.
-- Lock screen: Settings → System chooses hyprlock or the shell's own lock screen. `qs -c Falcon ipc call desk lockPreview` shows the shell's one without locking, Esc closes it.
+- Lock screen: Settings → System chooses hyprlock or the shell's own lock screen, where each typed character appears as a different Material shape and the field shakes on a wrong password. `qs -c Falcon ipc call desk lockPreview` shows the shell's one without locking, Esc closes it.
 - Screen capture: `Mod+Shift+S` and `Print` freeze the screen and let you select an area or click a window. Left click copies and saves, right click opens the editor. The toolbar switches between screenshot, Google search, text, translation and recording. Esc closes it.
 - Google search: the browser posts the selected picture directly to Google Lens and shows the results.
 - Translation: `falcon-image-translate IMAGE OUT [--to LANG]` writes a copy of a picture with its text translated in place, and a window shows the result. The text goes to an online translation service (`translate-shell`).

@@ -103,7 +103,12 @@ Item {
             height: 28
         }
         Rectangle {
+            id: box
+
+            property real shake: 0
+
             anchors.horizontalCenter: parent.horizontalCenter
+            anchors.horizontalCenterOffset: shake
             width: 300
             height: 46
             radius: 14
@@ -111,6 +116,25 @@ Item {
             border.width: 1
             border.color: root.error !== "" ? Theme.error : field.activeFocus ? Theme.accent : Theme.panelEdge
 
+            SequentialAnimation {
+                id: shakeAnimation
+
+                NumberAnimation { target: box; property: "shake"; to: -12; duration: 50; easing.type: Easing.OutQuad }
+                NumberAnimation { target: box; property: "shake"; to: 10; duration: 70; easing.type: Easing.InOutQuad }
+                NumberAnimation { target: box; property: "shake"; to: -6; duration: 70; easing.type: Easing.InOutQuad }
+                NumberAnimation { target: box; property: "shake"; to: 3; duration: 60; easing.type: Easing.InOutQuad }
+                NumberAnimation { target: box; property: "shake"; to: 0; duration: 60; easing.type: Easing.OutQuad }
+            }
+            Connections {
+                target: root
+
+                function onErrorChanged() {
+                    if (root.error !== "")
+                        shakeAnimation.restart();
+                }
+            }
+
+            // The typed characters are hidden and each shown as a Material shape instead.
             TextInput {
                 id: field
 
@@ -119,7 +143,10 @@ Item {
                 verticalAlignment: TextInput.AlignVCenter
                 horizontalAlignment: TextInput.AlignHCenter
                 echoMode: TextInput.Password
-                color: Theme.text
+                color: "transparent"
+                selectionColor: "transparent"
+                selectedTextColor: "transparent"
+                cursorDelegate: Item {}
                 font.family: Theme.sans
                 font.pixelSize: 14
                 enabled: !root.checking
@@ -134,6 +161,75 @@ Item {
                         Lock.preview = false;
                     else
                         text = "";
+                }
+            }
+            Item {
+                anchors.fill: parent
+                anchors.margins: 12
+                clip: true
+
+                Row {
+                    id: shapes
+
+                    // Centered, and once it is too long the newest shapes stay in view.
+                    x: Math.min((parent.width - width) / 2, parent.width - width)
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 6
+                    opacity: root.checking ? 0.45 : 1
+
+                    Behavior on x {
+                        NumberAnimation {
+                            duration: 160
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: 200
+                        }
+                    }
+
+                    Repeater {
+                        model: field.length
+
+                        delegate: MaterialShape {
+                            id: shape
+
+                            required property int index
+
+                            width: 16
+                            height: 16
+                            kind: kinds[index % kinds.length]
+                            color: root.error !== "" ? Theme.error : Theme.accent
+                            // Shapes pushed out past the left edge fade instead of being cut.
+                            opacity: x + shapes.x < 0 ? 0 : 1
+                            scale: 0
+                            rotation: -50
+                            Component.onCompleted: {
+                                scale = 1;
+                                rotation = 0;
+                            }
+
+                            Behavior on scale {
+                                NumberAnimation {
+                                    duration: 260
+                                    easing.type: Easing.OutBack
+                                    easing.overshoot: 2.4
+                                }
+                            }
+                            Behavior on opacity {
+                                NumberAnimation {
+                                    duration: 160
+                                }
+                            }
+                            Behavior on rotation {
+                                NumberAnimation {
+                                    duration: 320
+                                    easing.type: Easing.OutCubic
+                                }
+                            }
+                        }
+                    }
                 }
             }
             Label {
