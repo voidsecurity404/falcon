@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 """Terminal greeting: fastfetch, then the logo keeps spinning in its place.
 
-fastfetch draws the logo once. This script prints fastfetch's output itself,
-finds where the logo landed, and leaves a small background process that redraws
-that spot with the logo turned around its vertical axis, like a coin.
+fastfetch draws the logo once. This script prints fastfetch's output itself
+and finds where the logo landed.
 
-The spinner stops by itself when:
+In kitty (not inside tmux) the text logo is replaced by an animated picture
+sent through kitty's graphics protocol. kitty plays it by itself, forever, and
+the picture belongs to those cells, so it keeps turning while commands run,
+while the output scrolls and in the scrollback. No process stays behind.
+Frames are cached in ~/.cache/falcon/fetch and kitty reads them from there.
+
+Elsewhere a small background process redraws that spot as text instead, and
+it stops by itself when:
   - `falcon-fetch --stop` runs (fish calls it before every command and on Ctrl+L),
   - the shell that started it exits,
   - the terminal changes size.
@@ -23,7 +29,10 @@ import termios
 import time
 import tty
 import fcntl
+import hashlib
+import random
 import struct
+import zlib
 
 FPS = 24
 TURN_SECONDS = 3.2          # one full turn
@@ -117,6 +126,114 @@ def frames(lines, width):
     return out
 
 
+VERSION = 1
+CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"),
+                     "falcon", "fetch")
+
+
+def kitty_ok():
+    return (os.environ.get("TERM") == "xterm-kitty" and os.environ.get("KITTY_WINDOW_ID")
+            and not os.environ.get("TMUX"))
+
+
+def font_file():
+    try:
+        out = subprocess.run(["fc-match", "-f", "%{file}", "Geist Mono:bold"],
+                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).stdout
+        return out.strip() or None
+    except OSError:
+        return None
+
+
+def picture_frames(cw, ch):
+    """Paths of zlib-compressed RGBA frames for one turn, made once per cell size."""
+    lines, width = load_logo()
+    font = font_file()
+    if not font:
+        return None, 0, 0
+    key = hashlib.sha1(repr((VERSION, lines, font, os.path.getmtime(font), cw, ch,
+                             FPS, TURN_SECONDS, FRONT, BACK)).encode()).hexdigest()[:16]
+    folder = os.path.join(CACHE, key)
+    count = round(FPS * TURN_SECONDS)
+    w, h = width * cw, len(lines) * ch
+    paths = [os.path.join(folder, f"{i:03}.z") for i in range(count)]
+    if all(os.path.exists(p) for p in paths):
+        return paths, w, h
+
+    from PIL import Image, ImageDraw, ImageFont
+    # A font size whose advance fills one cell, like kitty's own glyphs.
+    probe = ImageFont.truetype(font, 100)
+    size = 100 * cw / probe.getlength("M")
+    face = ImageFont.truetype(font, size)
+    try:
+        face.set_variation_by_axes([700])
+    except Exception:
+        pass
+    ascent, descent = face.getmetrics()
+    lift = (ch - ascent - descent) / 2
+    mask = Image.new("L", (w, h), 0)
+    draw = ImageDraw.Draw(mask)
+    for y, line in enumerate(lines):
+        for x, c in enumerate(line):
+            if c != " ":
+                draw.text((x * cw, y * ch + lift), c, fill=255, font=face)
+
+    os.makedirs(folder, exist_ok=True)
+    for i, path in enumerate(paths):
+        c = math.cos(2 * math.pi * i / count)
+        back = c < 0
+        light = 0.6 + 0.4 * abs(c)
+        color = tuple(round(v * light) for v in (BACK if back else FRONT))
+        narrow = max(1, round(w * max(abs(c), 0.04)))
+        face_mask = mask.resize((narrow, h), Image.LANCZOS)
+        if back:
+            face_mask = face_mask.transpose(Image.FLIP_LEFT_RIGHT)
+        alpha = Image.new("L", (w, h), 0)
+        alpha.paste(face_mask, ((w - narrow) // 2, 0))
+        frame = Image.new("RGBA", (w, h), color + (0,))
+        frame.putalpha(alpha)
+        tmp = path + ".tmp"
+        with open(tmp, "wb") as f:
+            f.write(zlib.compress(frame.tobytes(), 6))
+        os.replace(tmp, path)
+    return paths, w, h
+
+
+def gfx(keys, path=None):
+    data = ";" + __import__("base64").b64encode(path.encode()).decode() if path else ""
+    return f"\x1b_G{keys}{data}\x1b\\"
+
+
+def picture(fd, top):
+    """Swap the text logo for an animated picture kitty plays itself. True if done."""
+    rows, cols, xpx, ypx = struct.unpack("HHHH", fcntl.ioctl(fd, termios.TIOCGWINSZ, b"\0" * 8))
+    if not (rows and cols and xpx and ypx):
+        return False
+    cw, ch = xpx // cols, ypx // rows
+    try:
+        paths, w, h = picture_frames(cw, ch)
+    except Exception:
+        return False
+    if not paths:
+        return False
+    lines, width = load_logo()
+    ident = random.randint(1, 0xFFFFFF)
+    gap = round(1000 / FPS)
+    common = f"i={ident},f=32,s={w},v={h},o=z,t=f,q=2"
+    out = ["\x1b[?2026h\x1b7"]
+    for i in range(len(lines)):
+        out.append(f"\x1b[{top + i};{LOGO_COL}H" + " " * width)
+    out.append(f"\x1b[{top};{LOGO_COL}H")
+    out.append(gfx(f"a=T,{common},c={width},r={len(lines)},C=1", paths[0]))
+    for p in paths[1:]:
+        out.append(gfx(f"a=f,{common},z={gap}", p))
+    out.append(gfx(f"a=a,i={ident},r=1,z={gap},q=2"))
+    out.append(gfx(f"a=a,i={ident},s=3,v=1,q=2"))
+    out.append("\x1b8\x1b[?2026l")
+    os.write(fd, "".join(out).encode())
+    return True
+
+
 def spin(fd, top, shell):
     lines, width = load_logo()
     turn = frames(lines, width)
@@ -176,6 +293,8 @@ def main():
     if row is None or printed < LOGO_LINES:
         return
     top = row - printed
+    if top >= 1 and kitty_ok() and picture(fd, top):
+        return
     rows, _ = term_size(fd)
     # Too close to the bottom: the prompt would scroll the logo away.
     if top < 1 or row + 2 > rows:
