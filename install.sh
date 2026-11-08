@@ -52,6 +52,8 @@ targets=(
     .config/gtk-3.0/gtk.css
     .config/gtk-4.0/gtk.css
     .config/qt6ct
+    .config/kdeglobals
+    .local/share/color-schemes/Falcon.colors
     .local/bin/falcon-claude-status
     .local/bin/falcon-claude-usage
     .local/bin/falcon-spectrum
@@ -76,6 +78,7 @@ targets=(
     .local/bin/falcon-set
     .local/bin/falcon-raise
     .local/bin/falcon-firefox
+    .local/bin/falcon-app-colors
     .local/bin/falcon-login
     .local/bin/falcon-sddm-colors
     .local/bin/falcon-sync

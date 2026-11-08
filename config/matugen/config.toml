@@ -49,3 +49,13 @@ post_hook = "~/.local/bin/falcon-firefox"
 input_path = "~/.config/matugen/templates/sddm.conf"
 output_path = "~/.local/state/falcon/sddm-colors.conf"
 post_hook = "~/.local/bin/falcon-sddm-colors"
+
+[templates.kde]
+input_path = "~/.config/matugen/templates/kde.colors"
+output_path = "~/.local/state/falcon/kde.colors"
+post_hook = "~/.local/bin/falcon-app-colors kde"
+
+[templates.vscode]
+input_path = "~/.config/matugen/templates/vscode.json"
+output_path = "~/.local/state/falcon/vscode-theme.json"
+post_hook = "~/.local/bin/falcon-app-colors code"

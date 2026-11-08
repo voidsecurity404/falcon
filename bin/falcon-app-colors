@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+"""Puts the wallpaper colors into other apps. Run by matugen after it writes a template.
+
+  falcon-app-colors kde    KDE and Qt apps: ~/.config/kdeglobals and the Falcon color scheme
+  falcon-app-colors code   VS Code, VSCodium and editors built on them: a local "Falcon" theme
+"""
+
+import configparser
+import json
+import os
+import sys
+from pathlib import Path
+
+HOME = Path.home()
+STATE = Path(os.environ.get("XDG_STATE_HOME") or HOME / ".local/state") / "falcon"
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME") or HOME / ".config")
+DATA = Path(os.environ.get("XDG_DATA_HOME") or HOME / ".local/share")
+
+# Extension folders of editors that read VS Code themes. Only those that exist get the theme.
+EDITORS = [".vscode", ".vscode-oss", ".vscode-insiders", ".cursor", ".windsurf"]
+EXTENSION = "falcon.falcon-theme-1.0.0"
+
+
+def ini():
+    parser = configparser.ConfigParser(interpolation=None, strict=False, comment_prefixes=("#", ";"))
+    parser.optionxform = str
+    return parser
+
+
+def write_atomic(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".falcon-tmp")
+    tmp.write_text(text)
+    tmp.replace(path)
+
+
+def kde():
+    source = STATE / "kde.colors"
+    scheme = ini()
+    scheme.read(source)
+    if not scheme.has_section("Colors:Window"):
+        sys.exit(f"falcon-app-colors: no colors in {source}")
+    write_atomic(DATA / "color-schemes" / "Falcon.colors", source.read_text())
+
+    # Only the color sections of kdeglobals are replaced. Everything else in it stays.
+    target = CONFIG / "kdeglobals"
+    globals_ = ini()
+    if target.exists():
+        globals_.read(target)
+    for name in list(globals_.sections()):
+        if name.startswith("Colors:") or name == "WM":
+            globals_.remove_section(name)
+    for name in scheme.sections():
+        if name == "General":
+            continue
+        globals_[name] = dict(scheme[name])
+    if not globals_.has_section("General"):
+        globals_.add_section("General")
+    globals_["General"]["ColorScheme"] = "Falcon"
+    lines = []
+    for name in globals_.sections():
+        lines.append(f"[{name}]")
+        lines += [f"{key}={value}" for key, value in globals_[name].items()]
+        lines.append("")
+    write_atomic(target, "\n".join(lines))
+
+
+def code():
+    source = STATE / "vscode-theme.json"
+    text = source.read_text()
+    body = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("//"))
+    theme = json.loads(body)
+    kind = "vs-dark" if theme.get("type") == "dark" else "vs"
+    package = {
+        "name": "falcon-theme",
+        "displayName": "Falcon",
+        "description": "Colors from the Falcon wallpaper, rewritten on each wallpaper change.",
+        "publisher": "falcon",
+        "version": "1.0.0",
+        "engines": {"vscode": "^1.60.0"},
+        "categories": ["Themes"],
+        "contributes": {"themes": [{"label": "Falcon", "uiTheme": kind, "path": "./themes/falcon.json"}]},
+    }
+    for editor in EDITORS:
+        extensions = HOME / editor / "extensions"
+        if not extensions.is_dir():
+            continue
+        folder = extensions / EXTENSION
+        write_atomic(folder / "package.json", json.dumps(package, indent=2) + "\n")
+        write_atomic(folder / "themes" / "falcon.json", json.dumps(theme, indent=2) + "\n")
+
+
+def main():
+    what = sys.argv[1] if len(sys.argv) > 1 else ""
+    if what == "kde":
+        kde()
+    elif what == "code":
+        code()
+    else:
+        print(__doc__.strip())
+        sys.exit(0 if what in ("-h", "--help", "") else 1)
+
+
+if __name__ == "__main__":
+    main()

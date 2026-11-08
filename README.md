@@ -96,6 +96,7 @@ The Claude icon sits next to the keyboard layout. Click it for the 5-hour and we
 - **Clipboard pins:** `Ctrl+P` in `Mod+V` keeps up to 6 rows on top. They stay on disk until unpinned.
 - **Wallpaper by itself:** a slideshow, or one picture for the day and one for the night, in Settings → Wallpaper.
 - **Parallax:** the wallpaper is drawn a little taller than the screen and slides up as you go down the workspaces, so it feels deeper. Settings → Wallpaper → Depth turns it off or changes its strength. A live wallpaper does not move.
+- **Apps follow the wallpaper too:** besides GTK, Qt, kitty and Firefox, KDE apps get a Falcon color scheme in `~/.config/kdeglobals`, and VS Code, VSCodium, Cursor and Windsurf, when installed, get a theme named Falcon: choose it once in the editor, and it changes with each wallpaper.
 - **Displays keep their settings** by display, not by port. A new display gets a toast that opens its settings. Mirroring is not offered, because niri has no mirror mode.
 
 ## Helper commands
