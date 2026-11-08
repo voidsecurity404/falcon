@@ -49,8 +49,10 @@ Singleton {
 
     function chosen(path, live) {
         currentLive = live ? path : "";
-        if (!live)
+        if (!live) {
+            Saved.set("lastImage", path);
             currentImage = path;
+        }
         currentChanged();
     }
 
@@ -91,10 +93,17 @@ Singleton {
         stdout: StdioCollector {
             onStreamFinished: {
                 const paths = text.trim().split("\n");
-                const image = paths[0] || "";
                 const live = paths[1] || "";
+                // With a live wallpaper the link holds its first frame, which is not in the plain
+                // tab. That tab then opens on the last plain picture instead of the first one.
+                const onScreen = paths[0] || "";
+                let image = onScreen;
+                if (live === "" && image !== "")
+                    Saved.set("lastImage", image);
+                else if (live !== "")
+                    image = Saved.get("lastImage", image);
                 if (root.shownImage === "") {
-                    root.shownImage = image;
+                    root.shownImage = onScreen;
                     root.shownLive = live !== "";
                 }
                 if (image !== root.currentImage || live !== root.currentLive) {
@@ -139,9 +148,23 @@ Singleton {
         onExited: readThumbs.running = true
     }
 
-    // Holding the pictures here keeps them decoded, and the cards find them ready.
+    // Holding the pictures here keeps them decoded, and the cards find them ready. Only those
+    // around each tab's place are held, since every card of a large folder would take a lot of
+    // memory: the current wallpaper's neighbors while the picker is closed, then the ones around
+    // the selection as it moves, so the cards ahead are ready before they come into view.
+    readonly property int preloadSpan: 8
+    readonly property var preloaded: {
+        const around = (list, at) => list.slice(Math.max(0, at - preloadSpan), Math.max(0, at) + preloadSpan + 1);
+        const open = Ui.pickerAlive;
+        const liveAt = open && Ui.pickerTab === 0 ? Ui.pickerSelected : liveFiles.indexOf(currentLive);
+        const imageAt = open && Ui.pickerTab === 1 ? Ui.pickerSelected : imageFiles.indexOf(currentImage);
+        return around(liveFiles, liveAt).concat(around(imageFiles, imageAt));
+    }
+
     Instantiator {
-        model: root.liveFiles.concat(root.imageFiles)
+        model: ScriptModel {
+            values: root.preloaded
+        }
 
         delegate: Image {
             required property string modelData
