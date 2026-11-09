@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Installs uosc (mpv's modern controller) and thumbfast (frame previews over
+# the timeline) into ~/.config/mpv, from pinned sources checked by SHA-256.
+# No root needed. Safe to repeat: an installed matching version is kept.
+#   falcon-mpv-ui            install or update
+#   falcon-mpv-ui status     print installed, missing or old
+#   falcon-mpv-ui --undo     remove both and give mpv its own controller back
+set -euo pipefail
+
+UOSC_VERSION=5.13.0
+UOSC_URL="https://codeload.github.com/tomasklaen/uosc/tar.gz/refs/tags/$UOSC_VERSION"
+UOSC_SHA=18fb38bd7d3ff3ca03f394b4d57daaa5a3f68051dcc31fdbfff3fbc874468913
+THUMBFAST_COMMIT=0f711de3138c9bd6718209d819ac54022c23ded2
+THUMBFAST_URL="https://raw.githubusercontent.com/po5/thumbfast/$THUMBFAST_COMMIT/thumbfast.lua"
+THUMBFAST_SHA=a3d08e71eae8b892f6cd39f9593ea219768e709312d176bca883841b156448bf
+
+mpv_dir="${XDG_CONFIG_HOME:-$HOME/.config}/mpv"
+scripts="$mpv_dir/scripts"
+stamp="$scripts/uosc/.falcon-version"
+ui_conf="$mpv_dir/falcon-ui.conf"
+
+# mpv.conf includes this file: with uosc on, mpv's own controller and bar step aside.
+write_ui_conf() {
+    if [[ "$1" == on ]]; then
+        printf '%s\n' '# Written by falcon-mpv-ui: uosc draws the controller.' 'osc=no' 'osd-bar=no' >"$ui_conf"
+    else
+        printf '%s\n' '# Written by falcon-mpv-ui: uosc is not installed, mpv keeps its own controller.' >"$ui_conf"
+    fi
+}
+
+installed() { [[ -f "$stamp" && "$(cat "$stamp")" == "$UOSC_VERSION $THUMBFAST_COMMIT" && -f "$scripts/uosc/main.lua" ]]; }
+
+case "${1:-}" in
+    status)
+        if installed; then echo installed
+        elif [[ -d "$scripts/uosc" ]]; then echo old
+        else echo missing; fi
+        exit 0 ;;
+    --undo)
+        rm -rf "$scripts/uosc" "$scripts/thumbfast.lua" "$mpv_dir/fonts/uosc_icons.otf" "$mpv_dir/fonts/uosc_textures.ttf"
+        mkdir -p "$mpv_dir"
+        write_ui_conf off
+        echo "uosc removed"
+        exit 0 ;;
+    "") ;;
+    *) echo "usage: falcon-mpv-ui [status|--undo]" >&2; exit 2 ;;
+esac
+
+mkdir -p "$mpv_dir"
+if installed; then
+    write_ui_conf on
+    echo "uosc $UOSC_VERSION already installed"
+    exit 0
+fi
+
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+fetch() { # url sha file
+    curl -fsSL --retry 3 --retry-all-errors -o "$3" "$1"
+    echo "$2  $3" | sha256sum -c --quiet -
+}
+
+if ! fetch "$UOSC_URL" "$UOSC_SHA" "$work/uosc.tar.gz" || ! fetch "$THUMBFAST_URL" "$THUMBFAST_SHA" "$work/thumbfast.lua"; then
+    echo "falcon-mpv-ui: download failed, mpv keeps its own controller" >&2
+    [[ -f "$ui_conf" ]] || write_ui_conf off
+    exit 1
+fi
+
+mkdir -p "$work/src"
+tar xzf "$work/uosc.tar.gz" -C "$work/src" --strip-components=1
+
+# ziggy is uosc's helper for pasting addresses and searching subtitles online.
+# Without go the controller still works, only those two features do not.
+if command -v go >/dev/null; then
+    (cd "$work/src" && GOFLAGS="-trimpath -modcacherw" GOPATH="$work/go" GOCACHE="$work/gocache" \
+        go build -ldflags "-s -w" -o "$work/ziggy-linux" ./src/ziggy/ziggy.go) ||
+        echo "falcon-mpv-ui: ziggy did not build, pasting and subtitle search stay off" >&2
+fi
+
+mkdir -p "$scripts" "$mpv_dir/fonts"
+rm -rf "$scripts/uosc"
+cp -r "$work/src/src/uosc" "$scripts/uosc"
+if [[ -x "$work/ziggy-linux" ]]; then
+    mkdir -p "$scripts/uosc/bin"
+    install -m755 "$work/ziggy-linux" "$scripts/uosc/bin/ziggy-linux"
+fi
+install -m644 "$work/src/src/fonts/uosc_icons.otf" "$work/src/src/fonts/uosc_textures.ttf" "$mpv_dir/fonts/"
+install -m644 "$work/thumbfast.lua" "$scripts/thumbfast.lua"
+echo "$UOSC_VERSION $THUMBFAST_COMMIT" >"$stamp"
+write_ui_conf on
+echo "uosc $UOSC_VERSION and thumbfast installed"

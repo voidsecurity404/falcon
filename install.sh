@@ -96,6 +96,7 @@ targets=(
     .config/falcon/tmux.conf
     .config/falcon/emoji.json
     .local/bin/falcon-ocr-models
+    .local/bin/falcon-mpv-ui
     .local/bin/falcon-translate-models
     .local/bin/falcon-translate-local
     .config/falcon/defaults.json
@@ -260,6 +261,7 @@ do_it cp "$root/config/falcon/tmux.conf" "$root/config/falcon/defaults.json" "$r
 do_it cp -n "$root"/wallpapers/* "$HOME/Pictures/Wallpapers/"
 # The reading models of the picture translator. Without a network it fetches them at its first use.
 soft "$root/bin/falcon-ocr-models"
+soft "$root/bin/falcon-mpv-ui"
 # The translator for when Google cannot be used, about 4 GB.
 soft "$root/bin/falcon-translate-models"
 do_it cp -a "$root"/fonts/. "$HOME/.local/share/fonts/falcon/"

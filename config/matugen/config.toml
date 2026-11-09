@@ -75,3 +75,7 @@ output_path = "~/.config/mpv/script-opts/console.conf"
 [templates.mpvmenu]
 input_path = "~/.config/matugen/templates/mpv-menu.conf"
 output_path = "~/.config/mpv/script-opts/context_menu.conf"
+
+[templates.mpvuosc]
+input_path = "~/.config/matugen/templates/mpv-uosc.conf"
+output_path = "~/.config/mpv/script-opts/uosc.conf"
