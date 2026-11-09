@@ -7,9 +7,8 @@ import Quickshell.Io
 // Sticky oyna: workspace almashsa ham ko'rinib turadi. Video dars yoki qayd uchun qulay.
 // niri has no sticky windows: a window belongs to one workspace and slides with it. niri's own
 // switch animation always stays on. While any window is sticky, generated/sticky.kdl binds the
-// workspace keys to a line written into a FIFO this service reads, and a switch goes: StickyGhost,
-// which keeps a live copy of the screen ready, freezes it and shows the sticky windows' part in
-// their places, a window rule makes the real windows transparent, they move to the new workspace
+// workspace keys to a line written into a FIFO this service reads, and a switch goes: StickyGhost
+// pictures the sticky windows with grim and shows the pictures in their places, a window rule makes the real windows transparent, they move to the new workspace
 // and it is focused over niri's socket, niri slides the workspaces under the still pictures, and
 // when the slide ends the rule and the pictures go. The overview still goes through follow().
 Singleton {
@@ -217,7 +216,7 @@ Singleton {
                     h: w.layout.window_size[1]
                 }));
         ghostOutput = current.output;
-        // StickyGhost freezes its live copy and calls ghostReady() once it is drawn.
+        // StickyGhost pictures the windows and calls ghostReady() once the pictures are drawn.
         ghostShown = true;
         failsafe.restart();
     }
