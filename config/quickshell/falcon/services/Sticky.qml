@@ -7,11 +7,11 @@ import Quickshell.Io
 // Sticky oyna: workspace almashsa ham ko'rinib turadi. Video dars yoki qayd uchun qulay.
 // niri has no sticky windows: a window belongs to one workspace and slides with it. niri's own
 // switch animation always stays on. While any window is sticky, generated/sticky.kdl binds the
-// workspace keys to `desk stickySwitch`, and a switch goes: grim takes the screen, StickyGhost
-// shows the sticky windows' pictures in their places, a window rule makes the real windows
-// transparent, they move to the new workspace and it is focused over niri's socket, niri slides
-// the workspaces under the still pictures, and when the slide ends the rule and the pictures go.
-// The overview still goes through follow().
+// workspace keys to a line written into a FIFO this service reads, and a switch goes: StickyGhost,
+// which keeps a live copy of the screen ready, freezes it and shows the sticky windows' part in
+// their places, a window rule makes the real windows transparent, they move to the new workspace
+// and it is focused over niri's socket, niri slides the workspaces under the still pictures, and
+// when the slide ends the rule and the pictures go. The overview still goes through follow().
 Singleton {
     id: root
 
@@ -29,21 +29,13 @@ Singleton {
 
     // The still pictures shown by StickyGhost during a switch.
     property bool ghostShown: false
-    property string ghostPath: ""
     property string ghostOutput: ""
     property var ghostRects: []
-    // The part of the screen grim takes: the box around all ghostRects, smaller is faster.
-    property var ghostBox: ({
-            x: 0,
-            y: 0,
-            w: 0,
-            h: 0
-        })
+    readonly property string keyPipe: shotDir + "/keys"
     // While true, sticky.kdl also makes the windows in `hidden` fully transparent.
     property bool hiding: false
     property var hidden: []
     property bool busy: false
-    property int shotCount: 0
     property var pendingGoal: null
     property int lastWorkspace: -1
     property int previousWorkspace: -1
@@ -83,7 +75,9 @@ Singleton {
         // ids, not `active`: inside onIdsChanged that binding still holds its old value.
         if (ids.length === 0)
             return "";
-        const lines = keys.map(k => "    " + k[0] + " { spawn-sh \"qs -c falcon ipc call desk stickySwitch " + k[1] + " || niri msg action " + k[2] + "\"; }");
+        // A FIFO costs about a millisecond where `qs ipc` took 45. timeout and -p keep a dead shell
+        // from blocking the key or from turning the pipe into a plain file.
+        const lines = keys.map(k => "    " + k[0] + " { spawn-sh \"[ -p '" + keyPipe + "' ] && timeout 0.3 sh -c 'echo " + k[1] + " > \\\"$0\\\"' '" + keyPipe + "' || niri msg action " + k[2] + "\"; }");
         let text = "// sticky\nbinds {\n" + lines.join("\n") + "\n}\n";
         if (hiding)
             for (const w of hidden)
@@ -223,21 +217,9 @@ Singleton {
                     h: w.layout.window_size[1]
                 }));
         ghostOutput = current.output;
-        const left = Math.min(...ghostRects.map(r => r.x)), top = Math.min(...ghostRects.map(r => r.y));
-        const right = Math.max(...ghostRects.map(r => r.x + r.w)), bottom = Math.max(...ghostRects.map(r => r.y + r.h));
-        ghostBox = {
-            x: left,
-            y: top,
-            w: right - left,
-            h: bottom - top
-        };
-        // grim takes global coordinates, the rects are on the output.
-        const screen = Quickshell.screens.find(s => s.name === ghostOutput);
-        const ox = screen ? screen.x : 0, oy = screen ? screen.y : 0;
-        shotCount += 1;
-        shooter.path = shotDir + "/" + shotCount + ".ppm";
-        shooter.command = ["sh", "-c", 'mkdir -m 700 -p "$1" && rm -f "$1"/*.ppm && grim -t ppm -g "$2" "$3"', "sh", shotDir, `${ox + left},${oy + top} ${right - left}x${bottom - top}`, shooter.path];
-        shooter.running = true;
+        // StickyGhost freezes its live copy and calls ghostReady() once it is drawn.
+        ghostShown = true;
+        failsafe.restart();
     }
 
     // StickyGhost calls this once the pictures are on screen.
@@ -258,25 +240,22 @@ Singleton {
         writeConfig(() => unghost.restart());
     }
 
+    // Reads the workspace keys. One cat holds the FIFO open for reading and writing, so it never
+    // sees an end, and dies with the shell (pdeathsig): readers left by an earlier shell took keys
+    // and dropped them.
     Process {
-        id: shooter
-        property string path: ""
-        onExited: code => {
-            if (code === 0) {
-                root.ghostPath = path;
-                root.ghostShown = true;
-                failsafe.restart();
-            } else {
-                root.busy = false;
-                root.moveAndFocus(root.pendingGoal);
-            }
+        id: keyReader
+        running: root.loaded && root.active
+        command: ["sh", "-c", 'mkdir -m 700 -p "$(dirname "$1")" && { [ -p "$1" ] || { rm -f "$1"; mkfifo -m 600 "$1"; }; } && exec setpriv --pdeathsig KILL cat 0<>"$1"', "sh", root.keyPipe]
+        stdout: SplitParser {
+            onRead: line => root.switchTo(line.trim())
         }
     }
 
     // If the pictures never report ready, switch anyway rather than not at all.
     Timer {
         id: failsafe
-        interval: 300
+        interval: 150
         onTriggered: root.ghostReady()
     }
 

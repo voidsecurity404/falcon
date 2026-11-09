@@ -132,6 +132,7 @@ ShellRoot {
                 dnd: Toasts.doNotDisturb,
                 caffeine: Caffeine.enabled,
                 sticky: Sticky.ids,
+                stickyBusy: Sticky.busy || Sticky.ghostShown,
                 night: Night.enabled,
                 accent: String(Theme.accent),
                 pill: String(Theme.pill),

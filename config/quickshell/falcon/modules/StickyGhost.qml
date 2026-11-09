@@ -5,12 +5,13 @@ import Quickshell.Widgets
 import qs.services
 
 // Still pictures of the sticky windows, in their places, while niri slides the workspaces under
-// them. See services/Sticky.qml. Takes no input, and is mapped only during a switch.
+// them. See services/Sticky.qml. Mapped while any window is sticky, and keeps a live copy of the
+// screen, so a switch needs no capture: the copy is frozen and shown at once. Takes no input.
 PanelWindow {
     id: root
 
-    visible: Sticky.ghostShown
-    screen: Quickshell.screens.find(s => s.name === Sticky.ghostOutput) || Quickshell.screens[0]
+    visible: Sticky.active
+    screen: Quickshell.screens.find(s => s.name === (Sticky.ghostOutput || Niri.focusedOutput)) || Quickshell.screens[0]
     anchors {
         top: true
         left: true
@@ -24,12 +25,38 @@ PanelWindow {
     mask: Region {}
 
     readonly property real radius: Settings.get("windows.radius", 13)
-    property int loadedCount: 0
 
-    onVisibleChanged: loadedCount = 0
+    // Made once and never destroyed: making a new ScreencopyView after destroying one crashed
+    // Quickshell 0.3.2. Live only while nothing is shown, so the copy never contains the pictures,
+    // and screencopy waits for damage, so a still screen costs nothing.
+    // A hidden item is left out of ShaderEffectSource too, so the copy stays visible inside an
+    // empty clipped box: nothing of it shows on screen, and the sources below can still draw it.
+    Item {
+        width: 0
+        height: 0
+        clip: true
+
+        ScreencopyView {
+            id: copy
+            width: root.width
+            height: root.height
+            captureSource: root.screen
+            live: false
+            paintCursor: false
+        }
+    }
+
+    // A fresh copy ten times a second while nothing is shown: a live copy cost niri a third of a
+    // core during a video. A switch shows the newest one at once, at most 100 ms old.
+    Timer {
+        interval: 100
+        repeat: true
+        running: root.visible && !Sticky.ghostShown
+        onTriggered: copy.captureFrame()
+    }
 
     Repeater {
-        model: root.visible ? Sticky.ghostRects : []
+        model: Sticky.ghostShown ? Sticky.ghostRects : []
 
         ClippingRectangle {
             id: frame
@@ -41,35 +68,27 @@ PanelWindow {
             radius: root.radius
             color: "transparent"
 
-            // The picture of the box around all sticky windows, placed so only this window's part
-            // shows through the clip. sourceClipRect is not used: Qt ignores it for PPM.
-            Image {
-                x: frame.modelData ? Sticky.ghostBox.x - frame.modelData.x : 0
-                y: frame.modelData ? Sticky.ghostBox.y - frame.modelData.y : 0
-                width: Sticky.ghostBox.w
-                height: Sticky.ghostBox.h
-                source: Sticky.ghostPath ? "file://" + Sticky.ghostPath : ""
-                cache: false
-                smooth: false
-                property bool counted: false
-                function check() {
-                    if (counted || status !== Image.Ready)
-                        return;
-                    counted = true;
-                    root.loadedCount += 1;
-                    if (root.loadedCount >= Sticky.ghostRects.length)
-                        painted.restart();
-                }
-                onStatusChanged: check()
-                Component.onCompleted: check()
+            ShaderEffectSource {
+                anchors.fill: parent
+                sourceItem: copy
+                sourceRect: frame.modelData ? Qt.rect(frame.modelData.x, frame.modelData.y, frame.modelData.w, frame.modelData.h) : Qt.rect(0, 0, 0, 0)
+                live: false
             }
         }
     }
 
-    // One frame after the pictures are ready they are on screen, and the windows may go.
+    // The pictures are drawn on the next frame, and only then may the windows go.
+    Connections {
+        target: Sticky
+        function onGhostShownChanged() {
+            if (Sticky.ghostShown)
+                drawn.restart();
+        }
+    }
+
     Timer {
-        id: painted
-        interval: 16
+        id: drawn
+        interval: 17
         onTriggered: Sticky.ghostReady()
     }
 }
