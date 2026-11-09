@@ -4,9 +4,11 @@ import QtQuick
 import Quickshell
 
 // Sticky oyna: workspace almashsa ham ko'rinib turadi. Video dars yoki qayd uchun qulay.
-// niri has no sticky windows, so the window is moved to each workspace that gets focus. A window
-// belongs to its workspace and would slide away and back with it, so while any window is sticky
-// generated/sticky.kdl turns the workspace switch animation off, and the window seems to stay put.
+// niri has no sticky windows, so the window is moved to each workspace that gets focus. Moved after
+// the switch, it would ride the old workspace out and pop onto the new one. So while any window is
+// sticky, generated/sticky.kdl binds the workspace keys to falcon-sticky-switch, which moves the
+// windows first and then switches: they arrive with the workspace sliding in, and niri's switch
+// animation stays on. Other ways of switching (overview, Mod+Tab) still go through follow().
 Singleton {
     id: root
 
@@ -16,14 +18,17 @@ Singleton {
     property var ids: []
     property bool checked: false
     property bool loaded: false
-    // What sticky.kdl holds now: -1 not written by this shell yet, 0 animation on, 1 off.
-    property int written: -1
+    // What sticky.kdl holds now, null until this shell wrote it.
+    property var written: null
+    readonly property string script: Quickshell.env("HOME") + "/.local/bin/falcon-sticky-switch"
 
     readonly property bool active: ids.length > 0
 
     // The first value of ids also lands here, and it must not overwrite the saved list.
-    onIdsChanged: save()
-    onActiveChanged: writeConfig()
+    onIdsChanged: {
+        save();
+        writeConfig();
+    }
 
     function save() {
         if (loaded)
@@ -33,11 +38,24 @@ Singleton {
             });
     }
 
+    // The same keys as in cfg/binds.kdl, which this file overrides while it is not empty.
+    readonly property var keys: [["Mod+J", "down"], ["Mod+K", "up"], ["Mod+Down", "down"], ["Mod+Up", "up"], ["Mod+WheelScrollDown cooldown-ms=150", "down"], ["Mod+WheelScrollUp cooldown-ms=150", "up"], ["Mod+1", "1"], ["Mod+2", "2"], ["Mod+3", "3"], ["Mod+4", "4"], ["Mod+5", "5"], ["Mod+6", "6"], ["Mod+7", "7"], ["Mod+8", "8"], ["Mod+9", "9"]]
+
+    function configText() {
+        if (!active)
+            return "";
+        const ids = root.ids.map(id => " \"" + id + "\"").join("");
+        const lines = keys.map(k => "    " + k[0] + " { spawn \"" + script + "\" \"" + k[1] + "\"" + ids + "; }");
+        return "// sticky\nbinds {\n" + lines.join("\n") + "\n}\n";
+    }
+
     function writeConfig() {
-        if (!loaded || written === (active ? 1 : 0))
+        if (!loaded)
             return;
-        written = active ? 1 : 0;
-        const text = active ? "// sticky\nanimations {\n    workspace-switch {\n        off\n    }\n}\n" : "";
+        const text = configText();
+        if (written === text)
+            return;
+        written = text;
         // niri notices the file itself only about half a second later.
         Quickshell.execDetached(["sh", "-c", "printf '%s' \"$1\" > \"$2\" && niri msg action load-config-file", "sh", text, configFile]);
     }
@@ -72,6 +90,11 @@ Singleton {
     function add(id) {
         if (ids.indexOf(id) < 0)
             ids = ids.concat([id]);
+    }
+
+    // The panel's workspace numbers, so the window comes along the same way as with the keys.
+    function switchTo(index) {
+        Quickshell.execDetached([script, String(index), ...ids.map(String)]);
     }
 
     function follow(workspace) {

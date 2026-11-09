@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""Switch workspace while sticky windows are on, keeping niri's slide.
+
+niri has no sticky windows, so the shell moves them to each workspace that
+gets focus. Moved after the switch, a window would ride the old workspace out
+and pop onto the new one. Moved first, it is already on the workspace that
+slides in. While any window is sticky, generated/sticky.kdl binds the
+workspace keys to this script, and the panel's workspace numbers use it too.
+
+    falcon-sticky-switch TARGET WINDOW_ID...
+TARGET is a workspace number on the focused output, `up` or `down`.
+"""
+import json
+import os
+import socket
+import sys
+
+
+def ask(request):
+    with socket.socket(socket.AF_UNIX) as s:
+        s.connect(os.environ["NIRI_SOCKET"])
+        s.sendall((json.dumps(request) + "\n").encode())
+        data = b""
+        while not data.endswith(b"\n"):
+            chunk = s.recv(65536)
+            if not chunk:
+                break
+            data += chunk
+    reply = json.loads(data)
+    return reply.get("Ok")
+
+
+def action(name, **fields):
+    ask({"Action": {name: fields}})
+
+
+def main():
+    if len(sys.argv) < 2:
+        sys.exit("usage: falcon-sticky-switch TARGET WINDOW_ID...")
+    target = sys.argv[1]
+    ids = {int(x) for x in sys.argv[2:] if x.isdigit()}
+
+    spaces = ask("Workspaces")["Workspaces"]
+    current = next((w for w in spaces if w["is_focused"]), None)
+    if current is None:
+        return
+    mine = sorted((w for w in spaces if w["output"] == current["output"]), key=lambda w: w["idx"])
+    if target == "up":
+        goal = next((w for w in reversed(mine) if w["idx"] < current["idx"]), None)
+    elif target == "down":
+        goal = next((w for w in mine if w["idx"] > current["idx"]), None)
+    elif target.isdigit():
+        # niri goes to the last workspace when the number is past the end.
+        goal = next((w for w in mine if w["idx"] == int(target)), mine[-1] if mine else None)
+    else:
+        sys.exit(f"falcon-sticky-switch: unknown target {target}")
+    if goal is None or goal["id"] == current["id"]:
+        return
+
+    windows = ask("Windows")["Windows"]
+    for w in windows:
+        if w["id"] in ids and w["workspace_id"] != goal["id"]:
+            action("MoveWindowToWorkspace", window_id=w["id"], reference={"Id": goal["id"]}, focus=False)
+    action("FocusWorkspace", reference={"Id": goal["id"]})
+
+
+if __name__ == "__main__":
+    main()

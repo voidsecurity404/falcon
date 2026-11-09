@@ -97,6 +97,7 @@ targets=(
     .config/falcon/emoji.json
     .local/bin/falcon-ocr-models
     .local/bin/falcon-mpv-ui
+    .local/bin/falcon-sticky-switch
     .local/bin/falcon-translate-models
     .local/bin/falcon-translate-local
     .config/falcon/defaults.json
