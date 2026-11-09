@@ -147,6 +147,20 @@ Singleton {
         requests.flush();
     }
 
+    // Same socket as moveWindowToWorkspaceId, so a move sent first is done first.
+    function focusWorkspaceId(workspaceId) {
+        requests.write(JSON.stringify({
+            Action: {
+                FocusWorkspace: {
+                    reference: {
+                        Id: workspaceId
+                    }
+                }
+            }
+        }) + "\n");
+        requests.flush();
+    }
+
     function focusWorkspace(index) {
         action("focus-workspace", String(index));
     }
