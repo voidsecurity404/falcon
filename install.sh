@@ -43,6 +43,7 @@ targets=(
     .config/fastfetch/config.jsonc
     .config/fastfetch/brand.txt
     .config/fish/conf.d/falcon-fetch.fish
+    .config/mpv
     .config/kitty/kitty.conf
     .config/kitty/falcon-colors.conf
     .config/kitty/falcon-user.conf
@@ -230,6 +231,8 @@ do_it cp -a "$root/config/kitty/." "$HOME/.config/kitty/"
 do_it mkdir -p "$HOME/.config/fastfetch"
 do_it cp "$root/config/fastfetch/config.jsonc" "$HOME/.config/fastfetch/config.jsonc"
 do_it cp "$root/config/fastfetch/brand.txt" "$HOME/.config/fastfetch/brand.txt"
+do_it mkdir -p "$HOME/.config/mpv"
+do_it cp "$root/config/mpv/mpv.conf" "$root/config/mpv/input.conf" "$HOME/.config/mpv/"
 do_it mkdir -p "$HOME/.config/fish/conf.d"
 do_it cp "$root/config/fish/conf.d/falcon-fetch.fish" "$HOME/.config/fish/conf.d/falcon-fetch.fish"
 # CachyOS config.fish o'z fish_greeting'ini conf.d dan keyin yozadi, shuning uchun

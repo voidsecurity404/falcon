@@ -32,6 +32,8 @@ FILES = [
     ("config/fastfetch/config.jsonc", ".config/fastfetch/config.jsonc"),
     ("config/fastfetch/brand.txt", ".config/fastfetch/brand.txt"),
     ("config/fish/conf.d/falcon-fetch.fish", ".config/fish/conf.d/falcon-fetch.fish"),
+    ("config/mpv/mpv.conf", ".config/mpv/mpv.conf"),
+    ("config/mpv/input.conf", ".config/mpv/input.conf"),
     ("config/falcon/defaults.json", ".config/falcon/defaults.json"),
     ("config/falcon/i18n-ru.json", ".config/falcon/i18n-ru.json"),
     ("config/falcon/emoji.json", ".config/falcon/emoji.json"),

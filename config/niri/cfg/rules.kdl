@@ -48,6 +48,12 @@ window-rule {
     default-window-height { fixed 420; }
 }
 
+// Video o'ynatgich ekran kengligida ochilsin.
+window-rule {
+    match app-id="^mpv$"
+    open-maximized true
+}
+
 // Rasm ko'rish oynalari to'liq ekranda ochilsin.
 window-rule {
     match app-id=r#"org\.telegram\.desktop$"# title="^Media viewer$"

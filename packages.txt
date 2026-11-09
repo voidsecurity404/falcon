@@ -15,6 +15,7 @@ btop
 satty
 # Fon va ranglar
 awww
+mpv
 mpvpaper
 ffmpeg
 matugen

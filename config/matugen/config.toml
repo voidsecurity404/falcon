@@ -59,3 +59,19 @@ post_hook = "~/.local/bin/falcon-app-colors kde"
 input_path = "~/.config/matugen/templates/vscode.json"
 output_path = "~/.local/state/falcon/vscode-theme.json"
 post_hook = "~/.local/bin/falcon-app-colors code"
+
+[templates.mpv]
+input_path = "~/.config/matugen/templates/mpv-colors.conf"
+output_path = "~/.config/mpv/falcon-colors.conf"
+
+[templates.mpvosc]
+input_path = "~/.config/matugen/templates/mpv-osc.conf"
+output_path = "~/.config/mpv/script-opts/osc.conf"
+
+[templates.mpvconsole]
+input_path = "~/.config/matugen/templates/mpv-console.conf"
+output_path = "~/.config/mpv/script-opts/console.conf"
+
+[templates.mpvmenu]
+input_path = "~/.config/matugen/templates/mpv-menu.conf"
+output_path = "~/.config/mpv/script-opts/context_menu.conf"
