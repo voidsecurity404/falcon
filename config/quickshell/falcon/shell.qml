@@ -54,6 +54,7 @@ ShellRoot {
     SettingsWindow {}
     TranslateWindow {}
     WindowSwitcher {}
+    StickyGhost {}
 
     // niri bindlari shu funksiyalarni chaqiradi: qs -c falcon ipc call desk <nom>
     IpcHandler {
@@ -268,6 +269,10 @@ ShellRoot {
         }
         function sticky(): void {
             Sticky.toggle();
+        }
+        // Workspace keys while a window is sticky: a number, up, down or previous.
+        function stickySwitch(target: string): void {
+            Sticky.switchTo(target);
         }
         function brightness(step: string): void {
             Brightness.step(step);
