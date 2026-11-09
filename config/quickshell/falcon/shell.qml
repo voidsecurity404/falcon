@@ -54,7 +54,7 @@ ShellRoot {
     SettingsWindow {}
     TranslateWindow {}
     WindowSwitcher {}
-    StickySlide {}
+    StickyGhost {}
 
     // niri bindlari shu funksiyalarni chaqiradi: qs -c falcon ipc call desk <nom>
     IpcHandler {

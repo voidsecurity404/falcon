@@ -10,6 +10,13 @@ while niri msg version >/dev/null 2>&1; do
     started=$SECONDS
     # Panel GPU'da qoladi: dasturiy render faqat VM'dagi oynalar uchun.
     env -u LIBGL_ALWAYS_SOFTWARE qs -c falcon 9>&-
+    # A shell that died in the middle of a sticky switch may have left its sticky windows
+    # transparent. The next shell writes the file again from its own state.
+    sticky="$HOME/.config/niri/generated/sticky.kdl"
+    if [[ -s "$sticky" ]]; then
+        : >"$sticky"
+        niri msg action load-config-file >/dev/null 2>&1 9>&-
+    fi
     if ((SECONDS - started < 10)); then
         fails=$((fails + 1))
     else

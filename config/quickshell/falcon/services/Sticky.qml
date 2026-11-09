@@ -2,21 +2,23 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import Quickshell.Io
 
 // Sticky oyna: workspace almashsa ham ko'rinib turadi. Video dars yoki qayd uchun qulay.
-// niri has no sticky windows: a window belongs to one workspace, and niri's switch slides it with
-// the workspace. A still picture over it froze the video, so while any window is sticky,
-// generated/sticky.kdl turns niri's switch animation off and binds the workspace keys to
-// `desk stickySwitch`. A switch then goes: StickySlide grabs the screen into memory, shows that
-// picture with holes where the sticky windows are, the windows move to the new workspace and it is
-// focused at once, and the picture of the old workspace drifts away and fades. The sticky windows
-// stay live and never move. The overview still goes through follow().
+// niri has no sticky windows: a window belongs to one workspace and slides with it. niri's own
+// switch animation always stays on. While any window is sticky, generated/sticky.kdl binds the
+// workspace keys to `desk stickySwitch`, and a switch goes: grim takes the screen, StickyGhost
+// shows the sticky windows' pictures in their places, a window rule makes the real windows
+// transparent, they move to the new workspace and it is focused over niri's socket, niri slides
+// the workspaces under the still pictures, and when the slide ends the rule and the pictures go.
+// The overview still goes through follow().
 Singleton {
     id: root
 
     // Window ids mean something only within one niri session, so they are saved with its socket.
     readonly property string session: Quickshell.env("NIRI_SOCKET") || ""
     readonly property string configFile: Quickshell.env("HOME") + "/.config/niri/generated/sticky.kdl"
+    readonly property string shotDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/falcon-sticky"
     property var ids: []
     property bool checked: false
     property bool loaded: false
@@ -25,23 +27,31 @@ Singleton {
 
     readonly property bool active: ids.length > 0
 
-    // A switch in progress, read by StickySlide.
-    property bool switching: false
+    // The still pictures shown by StickyGhost during a switch.
+    property bool ghostShown: false
+    property string ghostPath: ""
+    property string ghostOutput: ""
+    property var ghostRects: []
+    // The part of the screen grim takes: the box around all ghostRects, smaller is faster.
+    property var ghostBox: ({
+            x: 0,
+            y: 0,
+            w: 0,
+            h: 0
+        })
+    // While true, sticky.kdl also makes the windows in `hidden` fully transparent.
+    property bool hiding: false
+    property var hidden: []
+    property bool busy: false
+    property int shotCount: 0
     property var pendingGoal: null
-    // 1 when the new workspace is below the old one, -1 above.
-    property int direction: 1
-    property var holes: []
-    property string output: ""
     property int lastWorkspace: -1
     property int previousWorkspace: -1
-
-    // StickySlide takes a picture on this and calls captured() once it is on screen.
-    signal captureRequested
 
     // The first value of ids also lands here, and it must not overwrite the saved list.
     onIdsChanged: {
         save();
-        writeConfig();
+        writeConfig(null);
     }
 
     function save() {
@@ -53,25 +63,72 @@ Singleton {
     }
 
     // The same keys as in cfg/binds.kdl, which this file overrides while it is not empty. The last
-    // field is the plain niri action, used if the shell does not answer.
+    // field is the plain niri action, used when the shell does not answer.
     readonly property var keys: [["Mod+Tab", "previous", "focus-workspace-previous"], ["Mod+J", "down", "focus-workspace-down"], ["Mod+K", "up", "focus-workspace-up"], ["Mod+Down", "down", "focus-workspace-down"], ["Mod+Up", "up", "focus-workspace-up"], ["Mod+WheelScrollDown cooldown-ms=150", "down", "focus-workspace-down"], ["Mod+WheelScrollUp cooldown-ms=150", "up", "focus-workspace-up"], ["Mod+1", "1", "focus-workspace 1"], ["Mod+2", "2", "focus-workspace 2"], ["Mod+3", "3", "focus-workspace 3"], ["Mod+4", "4", "focus-workspace 4"], ["Mod+5", "5", "focus-workspace 5"], ["Mod+6", "6", "focus-workspace 6"], ["Mod+7", "7", "focus-workspace 7"], ["Mod+8", "8", "focus-workspace 8"], ["Mod+9", "9", "focus-workspace 9"]]
 
-    function configText() {
-        if (!active)
-            return "";
-        const lines = keys.map(k => "    " + k[0] + " { spawn-sh \"qs -c falcon ipc call desk stickySwitch " + k[1] + " || niri msg action " + k[2] + "\"; }");
-        return "// sticky\nanimations {\n    workspace-switch {\n        off\n    }\n}\nbinds {\n" + lines.join("\n") + "\n}\n";
+    function pattern(text) {
+        return "^" + text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$";
     }
 
-    function writeConfig() {
+    // niri rules cannot match a window id, so a hidden window is matched by app id and title.
+    function hideRule(w) {
+        let match = "match is-floating=true app-id=r#\"" + pattern(w.app_id || "") + "\"#";
+        const title = pattern(w.title || "");
+        if (title.indexOf("\"#") < 0)
+            match += " title=r#\"" + title + "\"#";
+        return "window-rule {\n    " + match + "\n    opacity 0.0\n}\n";
+    }
+
+    function configText() {
+        // ids, not `active`: inside onIdsChanged that binding still holds its old value.
+        if (ids.length === 0)
+            return "";
+        const lines = keys.map(k => "    " + k[0] + " { spawn-sh \"qs -c falcon ipc call desk stickySwitch " + k[1] + " || niri msg action " + k[2] + "\"; }");
+        let text = "// sticky\nbinds {\n" + lines.join("\n") + "\n}\n";
+        if (hiding)
+            for (const w of hidden)
+                text += hideRule(w);
+        return text;
+    }
+
+    // Writes run one at a time, and `then` runs once niri has loaded that text.
+    property var writeQueue: []
+
+    function writeConfig(then) {
         if (!loaded)
             return;
         const text = configText();
-        if (written === text)
+        if (written === text && !then)
             return;
         written = text;
-        // niri notices the file itself only about half a second later.
-        Quickshell.execDetached(["sh", "-c", "printf '%s' \"$1\" > \"$2\" && niri msg action load-config-file", "sh", text, configFile]);
+        writeQueue = writeQueue.concat([{
+                text: text,
+                then: then
+            }]);
+        if (!writer.running)
+            nextWrite();
+    }
+
+    function nextWrite() {
+        if (writeQueue.length === 0)
+            return;
+        const job = writeQueue[0];
+        writeQueue = writeQueue.slice(1);
+        writer.then = job.then;
+        writer.command = ["sh", "-c", "printf '%s' \"$1\" > \"$2\" && niri msg action load-config-file", "sh", job.text, configFile];
+        writer.running = true;
+    }
+
+    Process {
+        id: writer
+        property var then: null
+        onExited: {
+            const then = writer.then;
+            writer.then = null;
+            if (then)
+                then();
+            root.nextWrite();
+        }
     }
 
     Component.onCompleted: {
@@ -80,7 +137,7 @@ Singleton {
             ids = saved.ids || [];
         }
         loaded = true;
-        writeConfig();
+        writeConfig(null);
     }
 
     function toggle() {
@@ -123,7 +180,7 @@ Singleton {
         return goal && goal.id !== current.id ? goal : null;
     }
 
-    // Moves first, on the same socket, so the windows are there when the workspace shows.
+    // Moves first, on the same socket, so the windows are on the workspace when it shows.
     function moveAndFocus(goal) {
         for (const id of ids) {
             const w = Niri.windows[id];
@@ -138,45 +195,105 @@ Singleton {
         const goal = goalFor(String(target));
         if (!goal)
             return;
-        // Pressed again while the old picture still fades: go on at once.
-        if (switching) {
-            moveAndFocus(goal);
+        if (busy) {
+            pendingGoal = goal;
+            // Pressed again during a slide: the pictures are still up, so just go on.
+            if (hiding) {
+                moveAndFocus(goal);
+                settle.restart();
+            }
             return;
         }
         const current = Niri.workspaces.find(w => w.is_focused);
-        holes = ids.map(id => Niri.windows[id]).filter(w => w && w.is_floating && w.layout && w.layout.tile_pos_in_workspace_view && w.workspace_id === current.id).map(w => ({
+        const shown = ids.map(id => Niri.windows[id]).filter(w => w && w.is_floating && w.layout && w.layout.tile_pos_in_workspace_view && current && w.workspace_id === current.id);
+        if (shown.length === 0) {
+            moveAndFocus(goal);
+            return;
+        }
+        busy = true;
+        pendingGoal = goal;
+        hidden = shown.map(w => ({
+                    app_id: w.app_id,
+                    title: w.title
+                }));
+        ghostRects = shown.map(w => ({
                     x: w.layout.tile_pos_in_workspace_view[0] + w.layout.window_offset_in_tile[0],
                     y: w.layout.tile_pos_in_workspace_view[1] + w.layout.window_offset_in_tile[1],
                     w: w.layout.window_size[0],
                     h: w.layout.window_size[1]
                 }));
-        direction = goal.idx > current.idx ? 1 : -1;
-        output = current.output;
-        pendingGoal = goal;
-        switching = true;
-        failsafe.restart();
-        captureRequested();
+        ghostOutput = current.output;
+        const left = Math.min(...ghostRects.map(r => r.x)), top = Math.min(...ghostRects.map(r => r.y));
+        const right = Math.max(...ghostRects.map(r => r.x + r.w)), bottom = Math.max(...ghostRects.map(r => r.y + r.h));
+        ghostBox = {
+            x: left,
+            y: top,
+            w: right - left,
+            h: bottom - top
+        };
+        // grim takes global coordinates, the rects are on the output.
+        const screen = Quickshell.screens.find(s => s.name === ghostOutput);
+        const ox = screen ? screen.x : 0, oy = screen ? screen.y : 0;
+        shotCount += 1;
+        shooter.path = shotDir + "/" + shotCount + ".ppm";
+        shooter.command = ["sh", "-c", 'mkdir -m 700 -p "$1" && rm -f "$1"/*.ppm && grim -t ppm -g "$2" "$3"', "sh", shotDir, `${ox + left},${oy + top} ${right - left}x${bottom - top}`, shooter.path];
+        shooter.running = true;
     }
 
-    // StickySlide shows the picture of the old workspace, so the switch can happen under it.
-    function captured() {
+    // StickyGhost calls this once the pictures are on screen.
+    function ghostReady() {
         failsafe.stop();
-        if (pendingGoal)
-            moveAndFocus(pendingGoal);
-        pendingGoal = null;
+        if (!busy || hiding)
+            return;
+        hiding = true;
+        writeConfig(() => {
+            if (root.pendingGoal)
+                root.moveAndFocus(root.pendingGoal);
+            settle.restart();
+        });
     }
 
-    function finished() {
-        switching = false;
+    function endSwitch() {
+        hiding = false;
+        writeConfig(() => unghost.restart());
     }
 
-    // If no picture comes, switch anyway rather than not at all.
+    Process {
+        id: shooter
+        property string path: ""
+        onExited: code => {
+            if (code === 0) {
+                root.ghostPath = path;
+                root.ghostShown = true;
+                failsafe.restart();
+            } else {
+                root.busy = false;
+                root.moveAndFocus(root.pendingGoal);
+            }
+        }
+    }
+
+    // If the pictures never report ready, switch anyway rather than not at all.
     Timer {
         id: failsafe
-        interval: 250
+        interval: 300
+        onTriggered: root.ghostReady()
+    }
+
+    // niri's switch spring (stiffness 800, critically damped) is still by then.
+    Timer {
+        id: settle
+        interval: 420
+        onTriggered: root.endSwitch()
+    }
+
+    // The real windows are drawn again by now, so the pictures can go without a gap.
+    Timer {
+        id: unghost
+        interval: 50
         onTriggered: {
-            root.captured();
-            root.switching = false;
+            root.ghostShown = false;
+            root.busy = false;
         }
     }
 

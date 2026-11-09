@@ -41,7 +41,7 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | `Mod+O` | Overview (or move the pointer to the top left corner of the screen) |
 | `Mod+,` | Settings |
 | `` Mod+` `` | Scratchpad terminal (the session survives closing) |
-| `Mod+S` | Sticky window: visible on every workspace, it stays in place and keeps playing while the old workspace fades away under it. Press again to put it back among the columns |
+| `Mod+S` | Sticky window: visible on every workspace, it stays in place while the workspaces slide under it (a video in it holds its frame for the slide). Press again to put it back among the columns |
 | `Alt+Tab` | Recent windows spread like cards, each showing how the window last looked |
 | `Mod+B` / `Mod+E` / `Mod+N` | Browser, files, notes: focus if open, otherwise launch |
 | `Mod+X` | Lock screen |
