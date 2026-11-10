@@ -5,11 +5,53 @@ import qs.components
 import qs.services
 
 // Settings: sidebar with grouped pages, each page made of titled cards. Changes apply at once.
+// The window is built once at shell start and only shown, so it opens without a stall and its
+// entrance plays smoothly; open() resets what a fresh window would have, leave() plays it out.
+// A window closed by niri (Mod+Q) cannot be shown again, so the loader then builds a new one.
 LazyLoader {
-    active: Ui.settingsOpen
+    id: holder
+
+    active: true
 
     FloatingWindow {
         id: win
+
+        Connections {
+            target: Ui
+            function onSettingsOpenChanged() {
+                if (Ui.settingsOpen)
+                    win.open();
+                else
+                    win.leave();
+            }
+        }
+
+        // Fired each time the window appears, so every part replays its entrance.
+        signal entered
+
+        function open() {
+            exit.stop();
+            search.text = "";
+            filter = "";
+            scroller.contentY = 0;
+            outputsReader.running = true;
+            pageArea.opacity = 0;
+            pageShift.y = 18;
+            sidebarShift.x = -22;
+            sidebar.opacity = 0;
+            visible = true;
+            ensureTabVisible();
+            search.forceActiveFocus();
+            entrance.restart();
+            entered();
+        }
+
+        function leave() {
+            if (!visible)
+                return;
+            entrance.stop();
+            exit.restart();
+        }
 
         readonly property int page: Math.max(0, Math.min(pages.length - 1, Ui.settingsPage))
         property string filter: ""
@@ -47,8 +89,9 @@ LazyLoader {
         }
 
         Process {
+            id: outputsReader
+
             command: ["niri", "msg", "--json", "outputs"]
-            running: true
             stdout: StdioCollector {
                 onStreamFinished: {
                     try {
@@ -644,10 +687,102 @@ LazyLoader {
         // The window is see-through: niri blurs what is behind it (cfg/rules.kdl), and the glass
         // below keeps a dark enough floor that text reads over a white window too.
         color: "transparent"
-        visible: true
+        visible: false
+        // Closed by niri (Mod+Q) rather than through Ui: build a fresh window for next time.
         onVisibleChanged: {
-            if (!visible)
+            if (!visible && Ui.settingsOpen) {
                 Ui.settingsOpen = false;
+                Qt.callLater(() => {
+                    holder.active = false;
+                    holder.active = true;
+                });
+            }
+        }
+
+        // Opening: niri grows the window with its glass already in place (a fade here would
+        // show a bare blur box), then a light blooms from the top, the sidebar slides in and the
+        // page rises. The tabs, header and cards add their own steps through entered().
+        ParallelAnimation {
+            id: entrance
+
+            NumberAnimation {
+                target: wash
+                property: "bloom"
+                from: 0
+                to: 1
+                duration: 900
+                easing.type: Easing.OutCubic
+            }
+            SequentialAnimation {
+                ParallelAnimation {
+                    NumberAnimation {
+                        target: sidebar
+                        property: "opacity"
+                        to: 1
+                        duration: 320
+                        easing.type: Easing.OutCubic
+                    }
+                    NumberAnimation {
+                        target: sidebarShift
+                        property: "x"
+                        to: 0
+                        duration: 560
+                        easing.type: Easing.OutQuint
+                    }
+                }
+            }
+            SequentialAnimation {
+                PauseAnimation {
+                    duration: 30
+                }
+                ParallelAnimation {
+                    NumberAnimation {
+                        target: pageArea
+                        property: "opacity"
+                        to: 1
+                        duration: 300
+                        easing.type: Easing.OutCubic
+                    }
+                    NumberAnimation {
+                        target: pageShift
+                        property: "y"
+                        to: 0
+                        duration: 620
+                        easing.type: Easing.OutQuint
+                    }
+                }
+            }
+        }
+
+        // Closing: the page sinks and fades, then niri fades the glass away.
+        SequentialAnimation {
+            id: exit
+
+            ParallelAnimation {
+                NumberAnimation {
+                    targets: [pageArea, sidebar]
+                    property: "opacity"
+                    to: 0
+                    duration: 180
+                    easing.type: Easing.OutQuad
+                }
+                NumberAnimation {
+                    target: pageShift
+                    property: "y"
+                    to: 10
+                    duration: 180
+                    easing.type: Easing.OutQuad
+                }
+                NumberAnimation {
+                    target: wash
+                    property: "bloom"
+                    to: 0
+                    duration: 180
+                }
+            }
+            ScriptAction {
+                script: win.visible = false
+            }
         }
 
         readonly property real glassFloor: Math.max(0.56, Theme.glassOpacity)
@@ -658,20 +793,17 @@ LazyLoader {
 
             anchors.fill: parent
             color: Qt.alpha(Theme.glassBase, win.glassFloor)
-            opacity: 0
-            Component.onCompleted: opacity = 1
 
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: 320
-                    easing.type: Easing.OutCubic
-                }
-            }
-
-            // A soft wash of the theme color from the top, and a fainter one rising from the bottom.
+            // A soft wash of the theme color from the top, blooming down as the window opens,
+            // and a fainter one rising from the bottom.
             Rectangle {
+                id: wash
+
+                property real bloom: 1
+
                 width: parent.width
-                height: 260
+                height: 90 + 170 * bloom
+                opacity: 0.25 + 0.75 * bloom
                 gradient: Gradient {
                     GradientStop {
                         position: 0
@@ -710,50 +842,22 @@ LazyLoader {
             id: body
 
             anchors.fill: parent
-            opacity: 0
-            scale: 0.965
-            transform: Translate {
-                id: bodyShift
 
-                y: 14
-            }
-            Component.onCompleted: {
-                opacity = 1;
-                scale = 1;
-            }
-
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: 280
-                    easing.type: Easing.OutCubic
-                }
-            }
-            Behavior on scale {
-                NumberAnimation {
-                    duration: 520
-                    easing.type: Easing.BezierSpline
-                    easing.bezierCurve: [0.2, 1.2, 0.3, 1, 1, 1]
-                }
-            }
-
-            NumberAnimation {
-                target: bodyShift
-                property: "y"
-                from: 14
-                to: 0
-                duration: 520
-                easing.type: Easing.BezierSpline
-                easing.bezierCurve: [0.2, 1.2, 0.3, 1, 1, 1]
-                running: true
-            }
-
-            // Sidebar: a darker strip of the same glass.
+            // Sidebar: a darker strip of the same glass. The strip stays put from the first frame,
+            // only what is on it slides in.
             Rectangle {
-                id: sidebar
-
-                width: 248
+                width: sidebar.width
                 height: parent.height
                 color: Qt.alpha(Theme.glassBase, 0.28)
+            }
+            Item {
+                id: sidebar
+
+                transform: Translate {
+                    id: sidebarShift
+                }
+                width: 248
+                height: parent.height
 
                 Rectangle {
                     anchors.right: parent.right
@@ -941,11 +1045,20 @@ LazyLoader {
                                         x: -18
                                     }
 
+                                    Connections {
+                                        target: win
+                                        function onEntered() {
+                                            tab.opacity = 0;
+                                            tabShift.x = -18;
+                                            tabEntrance.restart();
+                                        }
+                                    }
+
                                     SequentialAnimation {
-                                        running: true
+                                        id: tabEntrance
 
                                         PauseAnimation {
-                                            duration: 60 + tab.index * 22
+                                            duration: 40 + tab.index * 22
                                         }
                                         ParallelAnimation {
                                             NumberAnimation {
@@ -1062,6 +1175,11 @@ LazyLoader {
 
             // Content
             Item {
+                id: pageArea
+
+                transform: Translate {
+                    id: pageShift
+                }
                 x: sidebar.width
                 width: parent.width - sidebar.width
                 height: parent.height
@@ -1075,6 +1193,13 @@ LazyLoader {
                     y: 22
                     spacing: 14
                     onKeyChanged: headerAnimation.restart()
+
+                    Connections {
+                        target: win
+                        function onEntered() {
+                            headerAnimation.restart();
+                        }
+                    }
                     transform: Translate {
                         id: headerShift
                     }
@@ -1203,6 +1328,13 @@ LazyLoader {
                                 width: cards.width
                                 animate: win.filter === ""
                                 delay: 40 + Math.min(index, 6) * 55
+
+                                Connections {
+                                    target: win
+                                    function onEntered() {
+                                        section.play();
+                                    }
+                                }
 
                                 Column {
                                     width: parent.width
