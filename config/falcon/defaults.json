@@ -18,6 +18,8 @@
   "terminal": {
     "cursorShape": "block",
     "cursorBlink": true,
+    "cursorTrail": true,
+    "trailLength": 300,
     "padding": 14,
     "lineHeight": 120,
     "scrollback": 2000

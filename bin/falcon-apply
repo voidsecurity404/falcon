@@ -343,6 +343,18 @@ def idle_conf(s):
     return "\n".join(out) + "\n"
 
 
+def trail_conf(t):
+    """Smooth cursor: kitty's trail follows every move, one typed letter too."""
+    if not t.get("cursorTrail"):
+        return ["cursor_trail 0"]
+    slow = number(t, "trailLength", 50, 1000) / 1000
+    return [
+        "cursor_trail 1",
+        f"cursor_trail_decay {round(slow * 0.35, 3)} {round(slow, 3)}",
+        "cursor_trail_start_threshold 0",
+    ]
+
+
 def kitty_conf(s):
     a, t = s["appearance"], s["terminal"]
     padding = int(number(t, "padding", 0, 60))
@@ -353,6 +365,7 @@ def kitty_conf(s):
         f"background_opacity {number(a, 'terminalOpacity', 0.1, 1)}",
         f"cursor_shape {choice(t, 'cursorShape', ['block', 'beam', 'underline'])}",
         f"cursor_blink_interval {-1 if t['cursorBlink'] else 0}",
+        *trail_conf(t),
         f"window_padding_width {padding} {padding + 2}",
         f"adjust_line_height {int(number(t, 'lineHeight', 80, 200))}%",
         f"scrollback_lines {int(number(t, 'scrollback', 0, 200000))}",

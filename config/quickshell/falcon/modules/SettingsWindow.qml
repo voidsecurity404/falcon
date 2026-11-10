@@ -471,7 +471,9 @@ LazyLoader {
                         title: Tr.t("Cursor"),
                         items: [
                             { key: "terminal.cursorShape", label: Tr.t("Cursor shape"), type: "choice", options: ["block", "beam", "underline"], names: [Tr.t("Block"), Tr.t("Beam"), Tr.t("Underline")] },
-                            { key: "terminal.cursorBlink", label: Tr.t("Blinking cursor"), type: "toggle" }
+                            { key: "terminal.cursorBlink", label: Tr.t("Blinking cursor"), type: "toggle" },
+                            { key: "terminal.cursorTrail", label: Tr.t("Smooth cursor"), hint: Tr.t("The cursor glides to its new place when you type or press Enter"), type: "toggle" },
+                            { key: "terminal.trailLength", label: Tr.t("Glide length"), hint: Tr.t("Shorter is quicker"), type: "slider", min: 50, max: 800, step: 25, unit: "ms" }
                         ]
                     },
                     {
