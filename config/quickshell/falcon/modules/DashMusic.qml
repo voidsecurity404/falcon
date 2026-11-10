@@ -13,6 +13,7 @@ Item {
     readonly property color tint: Media.artAccent
     readonly property int coverSize: Math.max(100, Math.min(height - 40, 370))
     property real dragShare: -1
+    readonly property bool lyricsOn: Lyrics.shown && !!player
 
     function clock(seconds) {
         const s = Math.max(0, Math.floor(seconds || 0));
@@ -193,18 +194,147 @@ Item {
             Label {
                 width: parent.width
                 text: root.player ? Media.title : Tr.t("No music")
-                size: 38
+                size: root.lyricsOn ? 24 : 38
                 font.weight: Font.DemiBold
-                font.letterSpacing: -0.6
+                font.letterSpacing: root.lyricsOn ? -0.3 : -0.6
                 wrapMode: Text.Wrap
-                maximumLineCount: 2
+                elide: Text.ElideRight
+                maximumLineCount: root.lyricsOn ? 1 : 2
                 lineHeight: 1.05
             }
             Label {
                 width: parent.width
                 text: root.player ? root.player.trackArtist : Tr.t("Nothing is playing")
-                size: 18
+                size: root.lyricsOn ? 15 : 18
+                elide: Text.ElideRight
                 color: Theme.muted
+            }
+        }
+
+        // Lyrics: timed lines scroll with the song, the sung one lit in the cover's color.
+        Item {
+            id: lyricsBox
+
+            width: parent.width
+            height: root.lyricsOn ? Math.max(120, root.height - 310) : 0
+            visible: height > 0
+            opacity: root.lyricsOn ? 1 : 0
+            clip: true
+
+            Behavior on height {
+                NumberAnimation {
+                    duration: 360
+                    easing.type: Easing.OutCubic
+                }
+            }
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 260
+                }
+            }
+
+            Label {
+                anchors.centerIn: parent
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                visible: Lyrics.status !== "synced" && Lyrics.status !== "plain"
+                text: Lyrics.status === "loading" ? Tr.t("Looking for lyrics…") : Lyrics.status === "instrumental" ? Tr.t("Instrumental, no words") : Lyrics.status === "offline" ? Tr.t("Lyrics need the internet") : Tr.t("No lyrics found for this song")
+                size: 15
+                color: Theme.muted
+                wrapMode: Text.Wrap
+            }
+
+            ListView {
+                id: lyricsList
+
+                readonly property bool synced: Lyrics.status === "synced"
+                // The sung line stands a little above the middle.
+                readonly property real focusY: height * 0.36
+
+                anchors.fill: parent
+                visible: synced || Lyrics.status === "plain"
+                model: visible ? Lyrics.lines : []
+                spacing: 10
+                interactive: !synced
+                boundsBehavior: Flickable.StopAtBounds
+                currentIndex: synced ? Lyrics.current : -1
+                highlightFollowsCurrentItem: false
+                topMargin: synced ? focusY : 4
+                bottomMargin: synced ? height - focusY : 4
+
+                onCurrentIndexChanged: follow()
+                onModelChanged: positionViewAtBeginning()
+                function follow() {
+                    if (!synced)
+                        return;
+                    const item = currentIndex >= 0 ? itemAtIndex(currentIndex) : null;
+                    if (currentIndex >= 0 && !item) {
+                        positionViewAtIndex(currentIndex, ListView.Center);
+                        return;
+                    }
+                    const target = item ? item.y + item.height / 2 - focusY : -topMargin;
+                    scroll.to = Math.max(-topMargin, target);
+                    scroll.restart();
+                }
+
+                NumberAnimation {
+                    id: scroll
+
+                    target: lyricsList
+                    property: "contentY"
+                    duration: 520
+                    easing.type: Easing.OutCubic
+                }
+
+                delegate: Item {
+                    id: lyricLine
+
+                    required property var modelData
+                    required property int index
+                    readonly property bool sung: lyricsList.synced && index === Lyrics.current
+                    readonly property real distance: Math.abs(y + height / 2 - lyricsList.contentY - lyricsList.focusY)
+
+                    width: lyricsList.width
+                    height: lineLabel.implicitHeight
+                    opacity: lyricsList.synced ? (sung ? 1 : Math.max(0.1, 0.55 - distance / (lyricsList.height * 1.1))) : 0.85
+
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: 300
+                        }
+                    }
+
+                    Label {
+                        id: lineLabel
+
+                        width: parent.width
+                        text: lyricLine.modelData[1] === "" ? "♪" : lyricLine.modelData[1]
+                        size: lyricsList.synced ? 21 : 17
+                        font.weight: lyricsList.synced ? Font.DemiBold : Font.Normal
+                        color: lyricLine.sung ? root.tint : Theme.text
+                        wrapMode: Text.Wrap
+                        transformOrigin: Item.Left
+                        scale: lyricLine.sung ? 1.04 : 1
+
+                        Behavior on scale {
+                            NumberAnimation {
+                                duration: 300
+                                easing.type: Easing.OutCubic
+                            }
+                        }
+                        Behavior on color {
+                            ColorAnimation {
+                                duration: 300
+                            }
+                        }
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: lyricsList.synced
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Lyrics.seekTo(lyricLine.index)
+                    }
+                }
             }
         }
 
@@ -374,12 +504,63 @@ Item {
                     }
                 }
             }
+            // Shows or hides the lyrics.
+            Rectangle {
+                anchors.right: recognize.left
+                anchors.rightMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                visible: !!root.player
+                width: lyricsRow.implicitWidth + 30
+                height: 38
+                radius: 19
+                color: Lyrics.shown ? Qt.alpha(root.tint, lyricsArea.containsMouse ? 0.32 : 0.22) : Qt.alpha(Theme.text, lyricsArea.containsMouse ? 0.16 : 0.08)
+                scale: lyricsArea.pressed ? 0.95 : 1
+
+                Behavior on color {
+                    ColorAnimation {
+                        duration: 180
+                    }
+                }
+                Behavior on scale {
+                    NumberAnimation {
+                        duration: 120
+                    }
+                }
+
+                Row {
+                    id: lyricsRow
+
+                    anchors.centerIn: parent
+                    spacing: 8
+
+                    Icon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "lyrics"
+                        size: 16
+                        color: root.tint
+                    }
+                    Label {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Tr.t("Lyrics")
+                        size: 13
+                        font.weight: Font.Medium
+                    }
+                }
+                MouseArea {
+                    id: lyricsArea
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Lyrics.setShown(!Lyrics.shown)
+                }
+            }
             // Names the song that plays, through Shazam.
             Rectangle {
                 id: recognize
 
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
                 width: recognizeRow.implicitWidth + 30
                 height: 38
                 radius: 19

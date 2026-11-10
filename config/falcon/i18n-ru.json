@@ -1059,5 +1059,10 @@
  "Bounce": "Прыжок",
  "Assemble": "Сборка",
  "Decode": "Расшифровка",
- "Aurora": "Сияние"
+ "Aurora": "Сияние",
+ "Lyrics": "Текст",
+ "Looking for lyrics…": "Ищу текст песни…",
+ "Instrumental, no words": "Инструментал, без слов",
+ "Lyrics need the internet": "Для текста нужен интернет",
+ "No lyrics found for this song": "Текст этой песни не найден"
 }
