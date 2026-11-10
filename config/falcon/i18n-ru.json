@@ -1084,5 +1084,17 @@
  "On battery it would only drain it faster": "От батареи он только быстрее её разрядит",
  "Everything is back as it was": "Всё вернулось как было",
  "The charger was unplugged": "Зарядку отключили",
- "No animations, full power, notifications wait": "Без анимаций, полная мощность, уведомления ждут"
+ "No animations, full power, notifications wait": "Без анимаций, полная мощность, уведомления ждут",
+ "Random picks another one each time": "«Случайно» выбирает каждый раз другой",
+ "Dissolve": "Растворение",
+ "Pixels": "Пиксели",
+ "Blocks": "Блоки",
+ "Shatter": "Осколки",
+ "Glitch": "Глитч",
+ "Melt": "Таяние",
+ "Ripple": "Рябь",
+ "Zoom": "Приближение",
+ "Swirl": "Вихрь",
+ "Blinds": "Жалюзи",
+ "Push": "Сдвиг"
 }

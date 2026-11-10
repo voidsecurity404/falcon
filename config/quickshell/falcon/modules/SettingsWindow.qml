@@ -131,7 +131,7 @@ LazyLoader {
                     {
                         title: Tr.t("Transition"),
                         items: [
-                            { key: "wallpaper.transition", label: Tr.t("Effect"), type: "choice", options: ["grow", "fade", "wipe", "wave", "none"], names: [Tr.t("Grow"), Tr.t("Fade"), Tr.t("Wipe"), Tr.t("Wave"), Tr.t("None")] },
+                            { key: "wallpaper.transition", label: Tr.t("Effect"), hint: Tr.t("Random picks another one each time"), type: "choice", layout: "chips", options: ["random", "grow", "fade", "wipe", "wave", "dissolve", "pixels", "blocks", "shatter", "glitch", "melt", "ripple", "zoom", "swirl", "blinds", "push", "none"], names: [Tr.t("Random"), Tr.t("Grow"), Tr.t("Fade"), Tr.t("Wipe"), Tr.t("Wave"), Tr.t("Dissolve"), Tr.t("Pixels"), Tr.t("Blocks"), Tr.t("Shatter"), Tr.t("Glitch"), Tr.t("Melt"), Tr.t("Ripple"), Tr.t("Zoom"), Tr.t("Swirl"), Tr.t("Blinds"), Tr.t("Push"), Tr.t("None")] },
                             { key: "wallpaper.duration", label: Tr.t("Duration"), type: "slider", min: 0.2, max: 4, step: 0.2, unit: "sec" }
                         ]
                     },

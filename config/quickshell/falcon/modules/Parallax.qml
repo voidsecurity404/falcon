@@ -6,8 +6,9 @@ import qs.services
 
 // The wallpaper drawn by the shell, a little taller than the screen, sliding up as you go
 // down the workspaces. It lies in the backdrop over awww's copy and under the widgets. A new
-// picture comes in with the same effect as awww's (grow, fade, wipe). With a live wallpaper
-// it stays transparent, so the video and its first frame show through.
+// picture comes in through shaders/wallpaper.frag with the effect chosen in the settings, or a
+// random one. With a live wallpaper it stays transparent, so the video and its first frame show
+// through.
 PanelWindow {
     id: root
 
@@ -23,6 +24,10 @@ PanelWindow {
     property string coming: ""
     property real arrival: 1
     readonly property string effect: Settings.get("wallpaper.transition", "grow")
+    // Effects of the shader, in its order. "random" picks one of them for each change.
+    readonly property var effects: ["fade", "grow", "wipe", "wave", "dissolve", "pixels", "blocks", "shatter", "glitch", "melt", "ripple", "zoom", "swirl", "blinds", "push"]
+    property int effectIndex: 1
+    property real seed: 0
 
     function receive(path) {
         if (!path || path === shown || path === coming)
@@ -36,6 +41,8 @@ PanelWindow {
         arrive.stop();
         if (coming !== "")
             shown = coming;
+        effectIndex = effect === "random" ? Math.floor(Math.random() * effects.length) : Math.max(0, effects.indexOf(effect));
+        seed = Math.random();
         arrival = 0;
         coming = path;
     }
@@ -117,44 +124,37 @@ PanelWindow {
             asynchronous: true
         }
 
-        // The new picture, revealed by the chosen effect once it has loaded.
-        ClippingRectangle {
-            id: reveal
+        // The new picture, hidden: the shader below draws both while it arrives.
+        Image {
+            id: over
 
-            readonly property bool growing: root.effect === "grow" || root.effect === "wave"
-            readonly property bool wiping: root.effect === "wipe"
-            // Grow opens a circle from the middle of the bottom edge, as awww does.
-            readonly property real reach: Math.sqrt(Math.pow(root.width / 2, 2) + Math.pow(root.height, 2)) + 2
-            readonly property real r: reach * root.arrival
+            anchors.fill: parent
+            visible: false
+            source: root.coming ? "file://" + root.coming : ""
+            sourceSize: Qt.size(root.width, root.tall)
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            onStatusChanged: {
+                if (status === Image.Ready && root.coming !== "")
+                    arrive.restart();
+                else if (status === Image.Error)
+                    root.coming = "";
+            }
+        }
+        ShaderEffect {
+            // Grow opens from the middle of the bottom edge of the screen, as awww does.
             readonly property real openFromY: root.height + root.place * (root.tall - root.height)
 
-            visible: root.coming !== ""
-            color: "transparent"
-            x: growing ? root.width / 2 - r : 0
-            y: growing ? openFromY - r : 0
-            width: growing ? r * 2 : wiping ? root.width * root.arrival : root.width
-            height: growing ? r * 2 : root.tall
-            radius: growing ? r : 0
-            opacity: growing || wiping ? 1 : root.arrival
-
-            Image {
-                id: over
-
-                x: -reveal.x
-                y: -reveal.y
-                width: root.width
-                height: root.tall
-                source: root.coming ? "file://" + root.coming : ""
-                sourceSize: Qt.size(root.width, root.tall)
-                fillMode: Image.PreserveAspectCrop
-                asynchronous: true
-                onStatusChanged: {
-                    if (status === Image.Ready && root.coming !== "")
-                        arrive.restart();
-                    else if (status === Image.Error)
-                        root.coming = "";
-                }
-            }
+            anchors.fill: parent
+            visible: root.coming !== "" && over.status === Image.Ready
+            property variant from: under
+            property variant to: over
+            property real progress: root.arrival
+            property real effect: root.effectIndex
+            property real seed: root.seed
+            property vector2d size: Qt.vector2d(width, height)
+            property vector2d origin: Qt.vector2d(0.5, openFromY / Math.max(1, root.tall))
+            fragmentShader: Qt.resolvedUrl("../shaders/wallpaper.frag.qsb")
         }
     }
 }

@@ -64,7 +64,11 @@ for name in ("defaults.json", "settings.json"):
         out.update(json.load(open(os.path.join(base, name))).get("wallpaper", {}))
     except (OSError, ValueError):
         pass
-print(out["transition"], out["duration"])
+# awww draws only its own kinds; the shell's parallax copy plays the others over it.
+kind = out["transition"]
+if kind not in ("grow", "fade", "wipe", "wave", "none"):
+    kind = "fade"
+print(kind, out["duration"])
 PY
 }
 
