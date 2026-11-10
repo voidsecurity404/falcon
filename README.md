@@ -102,7 +102,7 @@ How it works: `falcon-remote` (Go, `remote/` in the repo) is a user service that
 - **Battery charge limit:** Settings → Battery and power, or the tile in the control center. Needs one setup with your password (`falcon-charge setup`). Laptops whose firmware has no limit do not show it. Undo: `falcon-charge setup --undo`.
 - **Power mode follows the charger.** A mode you choose by hand stays until the charger changes.
 - **System updates:** the panel shows how many wait. A click opens a terminal with the update, which asks before installing. Checking downloads no packages.
-- **Terminal greeting:** a new fish terminal shows fastfetch with the logo moving in place, in the theme's accent color. In kitty it keeps moving while you run commands and scroll, and moves with the text. Settings → Fastfetch picks one of 10 styles and 6 animations (spin, pulse, shine, wave, glitch, scan) with a live preview of each, the length of one loop, or turns the greeting off.
+- **Terminal greeting:** a new fish terminal shows fastfetch with the logo moving in place, in the theme's accent color. In kitty it keeps moving while you run commands and scroll, and moves with the text. Settings → Fastfetch picks one of 11 logos, 10 styles and 6 animations (spin, pulse, shine, wave, glitch, scan) with a live preview of each, the length of one loop, or turns the greeting off.
 - **Timer:** `>timer 25`, `>timer 1:30`, `>timer 90s`, or `>pomodoro` in the app menu. Click it in the island to pause, right click to stop. It survives a restart and sleep, but it cannot wake the laptop.
 - **Microphone and camera:** an icon on the panel while an app uses them. A click names the apps.
 - **Clipboard pins:** `Ctrl+P` in `Mod+V` keeps up to 6 rows on top. They stay on disk until unpinned.

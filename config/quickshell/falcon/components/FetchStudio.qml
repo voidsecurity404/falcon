@@ -4,7 +4,7 @@ import Quickshell.Io
 import qs.components
 import qs.services
 
-// Top of the Fastfetch page: a live terminal preview, the ten styles and the six animations.
+// Top of the Fastfetch page: a live terminal preview, the logos, the ten styles and the six animations.
 // Everything comes from bin/falcon-fetch, the same code that draws the greeting:
 // --preview-text gives the chosen style's lines, --previews an animated WebP per animation.
 Column {
@@ -13,6 +13,7 @@ Column {
     readonly property string style: Settings.get("fetch.style", "classic")
     readonly property string animation: Settings.get("fetch.animation", "spin")
     readonly property real seconds: Settings.get("fetch.seconds", 3.2)
+    readonly property string logo: Settings.get("fetch.logo", "brand")
     readonly property bool live: visible && Ui.settingsOpen
 
     readonly property var styles: [
@@ -26,6 +27,19 @@ Column {
         { id: "palette", name: Tr.t("Palette"), sub: Tr.t("User name and the colors") },
         { id: "arrows", name: Tr.t("Arrows"), sub: Tr.t("Name, arrow, value") },
         { id: "quiet", name: Tr.t("Quiet"), sub: Tr.t("Values only") }
+    ]
+    readonly property var logos: [
+        { id: "brand", name: Tr.t("Brand") },
+        { id: "falcon", name: Tr.t("Falcon bird") },
+        { id: "sword", name: Tr.t("Sword") },
+        { id: "skull", name: Tr.t("Skull") },
+        { id: "moon", name: Tr.t("Moon") },
+        { id: "mountain", name: Tr.t("Mountains") },
+        { id: "flame", name: Tr.t("Flame") },
+        { id: "eye", name: Tr.t("Eye") },
+        { id: "crystal", name: Tr.t("Crystal") },
+        { id: "bolt", name: Tr.t("Lightning") },
+        { id: "planet", name: Tr.t("Planet") }
     ]
     readonly property var animations: [
         { id: "spin", name: Tr.t("Spin") },
@@ -68,6 +82,7 @@ Column {
     }
     onStyleChanged: refreshText()
     onSecondsChanged: clipsAgain.restart()
+    onLogoChanged: clipsAgain.restart()
 
     Connections {
         target: Theme
@@ -213,6 +228,85 @@ Column {
                 anchors.centerIn: parent
                 text: Tr.t("Preparing the animations…")
                 color: Qt.alpha(root.sample.foreground, 0.7)
+            }
+        }
+    }
+
+    // ------------------------------------------------ logos
+    Column {
+        width: root.width
+        spacing: 7
+
+        Label {
+            x: 6
+            text: Tr.t("Logo")
+            color: Theme.muted
+            size: 12
+            font.weight: Font.Medium
+        }
+
+        Grid {
+            id: logoGrid
+
+            columns: 6
+            spacing: 8
+            width: root.width
+
+            Repeater {
+                model: root.logos
+
+                delegate: Rectangle {
+                    id: logoCard
+
+                    required property var modelData
+                    readonly property bool chosen: root.logo === modelData.id
+                    readonly property string picture: root.clips.logos && root.clips.logos[modelData.id] ? root.clips.logos[modelData.id] : ""
+
+                    width: (logoGrid.width - logoGrid.spacing * (logoGrid.columns - 1)) / logoGrid.columns
+                    height: 124
+                    radius: 16
+                    color: root.sample.background
+                    border.width: chosen ? 2 : 1
+                    border.color: chosen ? Theme.accent : logoMouse.containsMouse ? Qt.alpha(Theme.text, 0.25) : Qt.alpha(Theme.text, 0.08)
+
+                    Image {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        y: 10
+                        height: 82
+                        width: Math.round(216 * height / 266)
+                        source: logoCard.picture ? "file://" + logoCard.picture : ""
+                        smooth: true
+                        mipmap: true
+                        fillMode: Image.PreserveAspectFit
+                    }
+                    Label {
+                        visible: !logoCard.picture
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        y: 40
+                        text: "…"
+                        color: Qt.alpha(root.sample.foreground, 0.6)
+                    }
+                    Label {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        y: parent.height - 26
+                        width: parent.width - 12
+                        horizontalAlignment: Text.AlignHCenter
+                        text: logoCard.modelData.name
+                        color: logoCard.chosen ? Theme.accent : Theme.text
+                        size: 12
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                    }
+
+                    MouseArea {
+                        id: logoMouse
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Settings.set("fetch.logo", logoCard.modelData.id)
+                    }
+                }
             }
         }
     }

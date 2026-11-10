@@ -26,7 +26,8 @@
     "enabled": true,
     "style": "classic",
     "animation": "spin",
-    "seconds": 3.2
+    "seconds": 3.2,
+    "logo": "brand"
   },
   "windows": {
     "gaps": 14,

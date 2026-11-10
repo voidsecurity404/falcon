@@ -53,6 +53,8 @@ FPS = 24
 LOGO_LINES = 14
 LOGO_COL = 2                # padding.left 1 in the config
 BRAND = os.path.expanduser("~/.config/fastfetch/brand.txt")
+LOGO_DIR = os.path.expanduser("~/.config/fastfetch/logos")
+LOGO_WIDTH = 22
 CONFIG = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
 STATE = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
 CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"),
@@ -63,7 +65,12 @@ FALLBACK_ACCENT = (255, 52, 58)
 VERSION = 2
 
 ANIMATIONS = ["spin", "pulse", "shine", "wave", "glitch", "scan"]
-DEFAULTS = {"enabled": True, "style": "classic", "animation": "spin", "seconds": 3.2}
+# "brand" is brand.txt, the others are logos/<name>.txt. Each fits 22 columns and 14 rows.
+LOGOS = ["brand", "falcon", "sword", "skull", "moon", "mountain", "flame", "eye", "crystal",
+         "bolt", "planet"]
+DEFAULTS = {"enabled": True, "style": "classic", "animation": "spin", "seconds": 3.2,
+            "logo": "brand"}
+LOGO = "brand"              # the logo load_logo() reads, set from the settings
 
 
 # ---------------------------------------------------------------- settings
@@ -94,6 +101,10 @@ def settings():
         out["style"] = DEFAULTS["style"]
     if out["animation"] not in ANIMATIONS:
         out["animation"] = DEFAULTS["animation"]
+    if out["logo"] not in LOGOS or not os.path.exists(logo_source(out["logo"])):
+        out["logo"] = DEFAULTS["logo"]
+    global LOGO
+    LOGO = out["logo"]
     try:
         out["seconds"] = min(8.0, max(1.5, float(out["seconds"])))
     except (TypeError, ValueError):
@@ -274,7 +285,8 @@ def config_file(style, logo=True):
     display = {"separator": "  ", "key": {"width": 10}, "color": {"keys": "blue"}}
     display = merge(display, extra)
     data = {
-        "logo": ({"type": "file-raw", "source": BRAND, "width": 22, "height": LOGO_LINES,
+        "logo": ({"type": "file-raw", "source": logo_file(), "width": LOGO_WIDTH,
+                  "height": LOGO_LINES,
                   "padding": {"left": LOGO_COL - 1, "right": 3}} if logo else {"type": "none"}),
         "display": display,
         "modules": modules,
@@ -343,11 +355,37 @@ def term_size(fd):
     return rows, cols
 
 
-def load_logo():
-    with open(BRAND) as f:
-        lines = [ANSI.sub("", l.rstrip("\n")) for l in f]
-    width = max(len(l) for l in lines)
-    return [l.ljust(width) for l in lines], width
+def logo_source(name):
+    return BRAND if name == "brand" else os.path.join(LOGO_DIR, name + ".txt")
+
+
+def load_logo(name=None):
+    """The logo as LOGO_LINES rows of LOGO_WIDTH characters, centered up and down."""
+    with open(logo_source(name or LOGO)) as f:
+        lines = [ANSI.sub("", l.rstrip("\n")).rstrip() for l in f]
+    while lines and not lines[-1]:
+        lines.pop()
+    lines = [l[:LOGO_WIDTH] for l in lines[:LOGO_LINES]]
+    top = (LOGO_LINES - len(lines)) // 2
+    lines = [""] * top + lines + [""] * (LOGO_LINES - len(lines) - top)
+    return [l.ljust(LOGO_WIDTH) for l in lines], LOGO_WIDTH
+
+
+def logo_file():
+    """The chosen logo padded and colored for fastfetch, in the runtime folder."""
+    lines, _ = load_logo()
+    text = "".join(f"\x1b[1;34m{l}\x1b[0m\n" for l in lines)
+    path = os.path.join(runtime_dir(), f"logo-{LOGO}.txt")
+    try:
+        with open(path) as f:
+            same = f.read() == text
+    except OSError:
+        same = False
+    if not same:
+        with open(path + ".tmp", "w") as f:
+            f.write(text)
+        os.replace(path + ".tmp", path)
+    return path
 
 
 # ---------------------------------------------------------------- text frames
@@ -764,7 +802,7 @@ def previews(seconds):
     cw, ch = 9, 19
     count = max(2, round(FPS * seconds))
     key = hashlib.sha1(repr((VERSION, "preview", font, count, color,
-                             os.path.getmtime(BRAND))).encode()).hexdigest()[:16]
+                             load_logo())).encode()).hexdigest()[:16]
     folder = os.path.join(CACHE, "preview-" + key)
     out = {}
     mask = None
@@ -782,7 +820,32 @@ def previews(seconds):
                            method=0)
             os.replace(path + ".tmp.webp", path)
         out[anim] = path
+    out["logos"] = logo_pictures(font, color)
     prune()
+    return out
+
+
+def logo_pictures(font, color):
+    """A still PNG of every logo, for the logo cards of the Settings page."""
+    from PIL import Image
+    cw, ch = 9, 19
+    shapes = {name: load_logo(name)[0] for name in LOGOS if os.path.exists(logo_source(name))}
+    key = hashlib.sha1(repr((VERSION, "logos", font, color, shapes)).encode()).hexdigest()[:16]
+    folder = os.path.join(CACHE, "logos-" + key)
+    os.makedirs(folder, exist_ok=True)
+    os.utime(folder)
+    global LOGO
+    chosen, out = LOGO, {}
+    try:
+        for name in shapes:
+            path = os.path.join(folder, name + ".png")
+            if not os.path.exists(path):
+                LOGO = name
+                mask, _ = logo_mask(cw, ch, font)
+                Image.fromarray(to_rgba(mask, solid(color, mask.shape)), "RGBA").save(path)
+            out[name] = path
+    finally:
+        LOGO = chosen
     return out
 
 

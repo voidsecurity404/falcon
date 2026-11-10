@@ -20,7 +20,8 @@ from falcon_tr import tr
 HOME = Path.home()
 REPO = Path(os.environ.get("FALCON_REPO", HOME / "Downloads/falcon"))
 # Whole folders, where a file missing from the repo is removed from the live copy too.
-TREES = [("config/quickshell/falcon", ".config/quickshell/falcon"), ("config/matugen", ".config/matugen")]
+TREES = [("config/quickshell/falcon", ".config/quickshell/falcon"), ("config/matugen", ".config/matugen"),
+         ("config/fastfetch/logos", ".config/fastfetch/logos")]
 FILES = [
     ("config/niri/config.kdl", ".config/niri/config.kdl"),
     ("config/niri/cfg/layout.kdl", ".config/niri/cfg/layout.kdl"),

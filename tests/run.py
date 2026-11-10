@@ -4925,7 +4925,8 @@ def _():
 def _():
     clips = json.loads(sh([str(LBIN / "falcon-fetch"), "--previews"], check=True, timeout=120).stdout)
     ok(sorted(clips) == sorted(["spin", "pulse", "shine", "wave", "glitch", "scan"]), clips)
-    ok(all(Path(p).stat().st_size > 1000 for p in clips.values()), clips)
+    ok(all(Path(p).stat().st_size > 1000 for k, p in clips.items() if k != "logos"), clips)
+    ok(len(clips["logos"]) == 11 and all(Path(p).exists() for p in clips["logos"].values()), clips["logos"])
 
 
 feature("songrec", "Qo'shiqni aniqlash")
