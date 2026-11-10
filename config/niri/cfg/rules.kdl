@@ -85,6 +85,9 @@ window-rule {
     open-floating true
     default-column-width { fixed 1000; }
     default-window-height { fixed 720; }
+    background-effect {
+        blur true
+    }
 }
 
 // The window with a translated picture sets its own size to fit the picture.

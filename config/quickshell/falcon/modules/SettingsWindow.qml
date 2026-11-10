@@ -639,26 +639,68 @@ LazyLoader {
         title: "falcon settings"
         implicitWidth: 1000
         implicitHeight: 720
-        color: Theme.pill
+        // The window is see-through: niri blurs what is behind it (cfg/rules.kdl), and the glass
+        // below keeps a dark enough floor that text reads over a white window too.
+        color: "transparent"
         visible: true
         onVisibleChanged: {
             if (!visible)
                 Ui.settingsOpen = false;
         }
 
-        // A soft wash of the theme color from the top.
+        readonly property real glassFloor: Math.max(0.56, Theme.glassOpacity)
+
+        // Glass floor of the whole window.
         Rectangle {
-            width: parent.width
-            height: 220
-            gradient: Gradient {
-                GradientStop {
-                    position: 0
-                    color: Qt.alpha(Theme.accent, 0.1)
+            id: glass
+
+            anchors.fill: parent
+            color: Qt.alpha(Theme.glassBase, win.glassFloor)
+            opacity: 0
+            Component.onCompleted: opacity = 1
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 320
+                    easing.type: Easing.OutCubic
                 }
-                GradientStop {
-                    position: 1
-                    color: "transparent"
+            }
+
+            // A soft wash of the theme color from the top, and a fainter one rising from the bottom.
+            Rectangle {
+                width: parent.width
+                height: 260
+                gradient: Gradient {
+                    GradientStop {
+                        position: 0
+                        color: Qt.alpha(Theme.accent, 0.14)
+                    }
+                    GradientStop {
+                        position: 1
+                        color: "transparent"
+                    }
                 }
+            }
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: 200
+                gradient: Gradient {
+                    GradientStop {
+                        position: 0
+                        color: "transparent"
+                    }
+                    GradientStop {
+                        position: 1
+                        color: Qt.alpha(Theme.hueShift(Theme.accent, 0.12), 0.06)
+                    }
+                }
+            }
+            // A light edge along the top, as on the panels.
+            Rectangle {
+                width: parent.width
+                height: 1
+                color: Qt.alpha(Theme.text, 0.12)
             }
         }
 
@@ -667,7 +709,12 @@ LazyLoader {
 
             anchors.fill: parent
             opacity: 0
-            scale: 0.98
+            scale: 0.965
+            transform: Translate {
+                id: bodyShift
+
+                y: 14
+            }
             Component.onCompleted: {
                 opacity = 1;
                 scale = 1;
@@ -675,24 +722,36 @@ LazyLoader {
 
             Behavior on opacity {
                 NumberAnimation {
-                    duration: 240
+                    duration: 280
+                    easing.type: Easing.OutCubic
                 }
             }
             Behavior on scale {
                 NumberAnimation {
-                    duration: 420
+                    duration: 520
                     easing.type: Easing.BezierSpline
-                    easing.bezierCurve: [0.25, 1.3, 0.35, 1, 1, 1]
+                    easing.bezierCurve: [0.2, 1.2, 0.3, 1, 1, 1]
                 }
             }
 
-            // Sidebar
+            NumberAnimation {
+                target: bodyShift
+                property: "y"
+                from: 14
+                to: 0
+                duration: 520
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: [0.2, 1.2, 0.3, 1, 1, 1]
+                running: true
+            }
+
+            // Sidebar: a darker strip of the same glass.
             Rectangle {
                 id: sidebar
 
                 width: 248
                 height: parent.height
-                color: Qt.alpha(Theme.text, 0.03)
+                color: Qt.alpha(Theme.glassBase, 0.28)
 
                 Rectangle {
                     anchors.right: parent.right
@@ -737,8 +796,21 @@ LazyLoader {
                     y: 66
                     width: parent.width - 28
                     height: 36
-                    radius: 11
-                    color: Qt.alpha(Theme.text, search.activeFocus ? 0.1 : 0.07)
+                    radius: 12
+                    color: Qt.alpha(Theme.text, search.activeFocus ? 0.1 : 0.065)
+                    border.width: 1
+                    border.color: search.activeFocus && search.text !== "" ? Qt.alpha(Theme.accent, 0.55) : Qt.alpha(Theme.text, 0.07)
+
+                    Behavior on color {
+                        ColorAnimation {
+                            duration: 160
+                        }
+                    }
+                    Behavior on border.color {
+                        ColorAnimation {
+                            duration: 200
+                        }
+                    }
 
                     Icon {
                         x: 11
@@ -791,20 +863,50 @@ LazyLoader {
                         width: parent.width
                         height: win.pages.length * win.tabHeight + win.groups.length * win.groupHeight
 
-                        // The highlight slides between pages.
+                        // The highlight slides between pages and stretches on the way: its leading edge
+                        // runs ahead and the trailing one catches up.
                         Rectangle {
-                            y: win.page * win.tabHeight + (win.pages[win.page].group + 1) * win.groupHeight
+                            id: highlight
+
+                            readonly property real goal: win.page * win.tabHeight + (win.pages[win.page].group + 1) * win.groupHeight
+                            property real headY: goal
+                            property real tailY: goal
+                            property bool down: true
+
+                            onGoalChanged: {
+                                down = goal > Math.min(headY, tailY);
+                                headY = goal;
+                                tailY = goal;
+                            }
+
+                            y: Math.min(headY, tailY)
                             width: parent.width
-                            height: win.tabHeight - 2
+                            height: Math.abs(headY - tailY) + win.tabHeight - 2
                             radius: 11
-                            color: Theme.accent
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop {
+                                    position: 0
+                                    color: Theme.accent
+                                }
+                                GradientStop {
+                                    position: 1
+                                    color: Qt.tint(Theme.accent, Qt.alpha(Theme.hueShift(Theme.accent, 0.08), 0.35))
+                                }
+                            }
                             opacity: win.filter === "" ? 1 : 0
 
-                            Behavior on y {
+                            Behavior on headY {
                                 NumberAnimation {
-                                    duration: 420
+                                    duration: 300
+                                    easing.type: Easing.OutCubic
+                                }
+                            }
+                            Behavior on tailY {
+                                NumberAnimation {
+                                    duration: 520
                                     easing.type: Easing.BezierSpline
-                                    easing.bezierCurve: [0.3, 1.25, 0.4, 1, 1, 1]
+                                    easing.bezierCurve: [0.3, 1.15, 0.4, 1, 1, 1]
                                 }
                             }
                             Behavior on opacity {
@@ -830,6 +932,37 @@ LazyLoader {
                                     readonly property bool opensGroup: index === 0 || win.pages[index - 1].group !== modelData.group
 
                                     width: parent.width
+                                    opacity: 0
+                                    transform: Translate {
+                                        id: tabShift
+
+                                        x: -18
+                                    }
+
+                                    SequentialAnimation {
+                                        running: true
+
+                                        PauseAnimation {
+                                            duration: 60 + tab.index * 22
+                                        }
+                                        ParallelAnimation {
+                                            NumberAnimation {
+                                                target: tab
+                                                property: "opacity"
+                                                to: 1
+                                                duration: 260
+                                                easing.type: Easing.OutCubic
+                                            }
+                                            NumberAnimation {
+                                                target: tabShift
+                                                property: "x"
+                                                to: 0
+                                                duration: 460
+                                                easing.type: Easing.BezierSpline
+                                                easing.bezierCurve: [0.2, 1.3, 0.3, 1, 1, 1]
+                                            }
+                                        }
+                                    }
 
                                     Item {
                                         visible: tab.opensGroup
@@ -876,6 +1009,21 @@ LazyLoader {
                                                 name: tab.modelData.icon
                                                 size: 16
                                                 color: tab.current ? Theme.accentText : Theme.text
+                                                rotation: tab.current ? 0 : -8
+                                                scale: tab.current ? 1.12 : 1
+
+                                                Behavior on scale {
+                                                    NumberAnimation {
+                                                        duration: 380
+                                                        easing.type: Easing.OutBack
+                                                    }
+                                                }
+                                                Behavior on rotation {
+                                                    NumberAnimation {
+                                                        duration: 380
+                                                        easing.type: Easing.OutBack
+                                                    }
+                                                }
                                             }
                                             Label {
                                                 anchors.verticalCenter: parent.verticalCenter
@@ -919,15 +1067,75 @@ LazyLoader {
                 Row {
                     id: pageHeader
 
+                    readonly property string key: win.filter === "" ? String(win.page) : "search"
+
                     x: 28
                     y: 22
                     spacing: 14
+                    onKeyChanged: headerAnimation.restart()
+                    transform: Translate {
+                        id: headerShift
+                    }
+
+                    SequentialAnimation {
+                        id: headerAnimation
+
+                        ParallelAnimation {
+                            NumberAnimation {
+                                target: pageHeader
+                                property: "opacity"
+                                from: 0
+                                to: 1
+                                duration: 240
+                                easing.type: Easing.OutCubic
+                            }
+                            NumberAnimation {
+                                target: headerShift
+                                property: "x"
+                                from: 16
+                                to: 0
+                                duration: 460
+                                easing.type: Easing.BezierSpline
+                                easing.bezierCurve: [0.2, 1.25, 0.3, 1, 1, 1]
+                            }
+                            NumberAnimation {
+                                target: headerBadge
+                                property: "scale"
+                                from: 0.6
+                                to: 1
+                                duration: 520
+                                easing.type: Easing.OutBack
+                                easing.overshoot: 2.2
+                            }
+                            NumberAnimation {
+                                target: headerBadge
+                                property: "rotation"
+                                from: -24
+                                to: 0
+                                duration: 560
+                                easing.type: Easing.OutBack
+                            }
+                        }
+                    }
 
                     Rectangle {
+                        id: headerBadge
+
                         width: 46
                         height: 46
                         radius: 15
-                        color: Qt.alpha(Theme.accent, 0.18)
+                        gradient: Gradient {
+                            GradientStop {
+                                position: 0
+                                color: Qt.alpha(Theme.accent, 0.3)
+                            }
+                            GradientStop {
+                                position: 1
+                                color: Qt.alpha(Theme.accent, 0.12)
+                            }
+                        }
+                        border.width: 1
+                        border.color: Qt.alpha(Theme.accent, 0.25)
 
                         Icon {
                             anchors.centerIn: parent
@@ -992,7 +1200,7 @@ LazyLoader {
 
                                 width: cards.width
                                 animate: win.filter === ""
-                                delay: Math.min(index, 5) * 40
+                                delay: 40 + Math.min(index, 6) * 55
 
                                 Column {
                                     width: parent.width
@@ -1009,9 +1217,31 @@ LazyLoader {
                                         width: parent.width
                                         height: rows.implicitHeight + 8
                                         radius: 18
-                                        color: Qt.alpha(Theme.text, 0.045)
+                                        color: Qt.tint(Qt.alpha(Theme.glassBase, 0.3), Qt.alpha(Theme.text, 0.045))
                                         border.width: 1
-                                        border.color: Qt.alpha(Theme.text, 0.06)
+                                        border.color: Qt.alpha(Theme.text, 0.08)
+
+                                        // Light catching the top edge of the glass.
+                                        Rectangle {
+                                            x: 18
+                                            width: parent.width - 36
+                                            height: 1
+                                            gradient: Gradient {
+                                                orientation: Gradient.Horizontal
+                                                GradientStop {
+                                                    position: 0
+                                                    color: "transparent"
+                                                }
+                                                GradientStop {
+                                                    position: 0.5
+                                                    color: Qt.alpha(Theme.text, 0.16)
+                                                }
+                                                GradientStop {
+                                                    position: 1
+                                                    color: "transparent"
+                                                }
+                                            }
+                                        }
 
                                         Column {
                                             id: rows
