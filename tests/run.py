@@ -5070,6 +5070,112 @@ def _():
     ok(not bad, bad[:10])
 
 
+feature("lyrics", "Qo'shiq matni")
+
+
+@case("falcon-lyrics ma'lum qo'shiqning vaqtli matnini topadi")
+def _():
+    out = sh([str(LBIN / "falcon-lyrics"), "Daft Punk", "Get Lucky", "248"], timeout=30).stdout.strip()
+    answer = json.loads(out.splitlines()[-1])
+    if answer.get("error") == "offline":
+        raise Skip("internet yo'q")
+    ok(answer.get("synced") and answer["synced"][0][0] > 0, out[:200])
+
+
+@case("YouTube nomidan ijrochi va nomni ajratadi")
+def _():
+    out = sh([str(LBIN / "falcon-lyrics"), "", "Daft Punk - Get Lucky (Official Video)", "369"], timeout=30).stdout.strip()
+    answer = json.loads(out.splitlines()[-1])
+    if answer.get("error") == "offline":
+        raise Skip("internet yo'q")
+    ok("synced" in answer or "plain" in answer, out[:200])
+
+
+feature("websearch", "Internetdan qidirish")
+
+
+@case("? bang bilan sayt tanlaydi, yolg'iz ? saytlar ro'yxatini beradi")
+def _():
+    ipc("menu")
+    wait(lambda: st()["popup"] == "menu", 3, "menyu ochilmadi")
+    ipc("launcherQuery", "?")
+    wait(lambda: "YouTube" in st()["rows"] and "Wikipedia" in st()["rows"], 3, "saytlar yo'q")
+    ipc("launcherQuery", "?lofi girl !yt")
+    wait(lambda: st()["rows"][:1] == ["lofi girl"], 3, "qidiruv qatori yo'q")
+    ipc("launcherQuery", ",!не")
+    wait(lambda: st()["rows"] == ["YouTube"], 3, "ruscha tugmalardagi bang topilmadi")
+    ipc("close")
+
+
+feature("pins", "Ekranga mahkamlash")
+
+
+@case("Pin tanlangan joyda karta ochadi, pinsClear yopadi")
+def _():
+    ipc("region", "pin")
+    wait(lambda: st()["region"] == "select", 4, "tanlash ochilmadi")
+    ipc("regionPick", "200", "150", "300", "200", "true")
+    wait(lambda: "falcon-pin" in layers(), 5, "karta chiqmadi")
+    ipc("pinsClear")
+    wait(lambda: "falcon-pin" not in layers(), 3, "karta yopilmadi")
+
+
+feature("gamemode", "O'yin rejimi")
+
+
+@case("Yoqilganda niri animatsiyasi o'chadi, o'chirilganda qaytadi")
+def _():
+    if sh("cat /sys/class/power_supply/*/online 2>/dev/null | grep -q 1").returncode != 0 and Path("/sys/class/power_supply/BAT0").exists():
+        raise Skip("batareyada")
+    game = str(LBIN / "falcon-game")
+    ipc("gameMode")
+    wait(lambda: sh([game, "status"]).returncode == 0, 4, "game.kdl yozilmadi")
+    ipc("gameMode")
+    wait(lambda: sh([game, "status"]).returncode != 0, 4, "game.kdl tozalanmadi")
+
+
+feature("wallget", "Fon yuklab olish")
+
+
+@case("desk wallget oynani ochadi, close yopadi")
+def _():
+    ipc("wallget")
+    wait(lambda: "falcon-wallget" in layers(), 4, "oyna ochilmadi")
+    ipc("close")
+    wait(lambda: "falcon-wallget" not in layers(), 3, "oyna yopilmadi")
+
+
+@case("falcon-wallget Wallhaven'dan natija beradi")
+def _():
+    out = sh([str(LBIN / "falcon-wallget"), "search", "wallhaven", "mountains"], timeout=60).stdout.strip().splitlines()
+    rows = [json.loads(l) for l in out]
+    if rows and rows[-1].get("error") == "offline":
+        raise Skip("internet yo'q")
+    ok(any("thumb" in r and Path(r["thumb"]).exists() for r in rows), out[-1:] if out else "bo'sh")
+
+
+feature("newlooks", "Spektr, effekt, tovush, chuqurlik")
+
+
+@case("Yangi spektr ko'rinishlari va fon effektlari xatosiz yuklanadi")
+def _():
+    for look in ["ribbon", "segments", "aura", "ring", "orb"]:
+        settings(waves__style=look)
+    for fx in ["shatter", "random"]:
+        settings(wallpaper__transition=fx)
+    settings(waves__style="bars", wallpaper__transition="grow")
+    log = sh(["qs", "log", "-c", "falcon"]).stdout
+    ok("spectrum.frag" not in log and "wallpaper.frag" not in log, "shader xatosi")
+
+
+@case("falcon-keysounds va falcon-depth holatini JSON qilib beradi")
+def _():
+    keys = json.loads(sh([str(LBIN / "falcon-keysounds"), "status"], check=True).stdout)
+    ok("ready" in keys and "packs" in keys and len(keys["packs"]) == 7, keys)
+    depth = json.loads(sh([str(LBIN / "falcon-depth"), "status"], check=True).stdout)
+    ok("installed" in depth, depth)
+
+
 def main():
     global GOOD
     args = sys.argv[1:]
