@@ -17,6 +17,8 @@ Singleton {
     property var thumbs: ({})
     property string currentLive: ""
     property string currentImage: ""
+    // The last live wallpaper chosen, so the live tab opens there while a picture is on.
+    property string lastLive: ""
     // The picture on screen now (a live wallpaper's first frame) and whether a video plays over it.
     // falcon-wallpaper reports each change through `desk wallpaperShown`, as its transition starts.
     property string shownImage: ""
@@ -49,14 +51,20 @@ Singleton {
 
     function chosen(path, live) {
         currentLive = live ? path : "";
-        if (!live) {
+        if (live) {
+            Saved.set("lastLive", path);
+            lastLive = path;
+        } else {
             Saved.set("lastImage", path);
             currentImage = path;
         }
         currentChanged();
     }
 
-    Component.onCompleted: refresh()
+    Component.onCompleted: {
+        lastLive = Saved.get("lastLive", "");
+        refresh();
+    }
 
     Process {
         id: findLive
@@ -102,6 +110,10 @@ Singleton {
                     Saved.set("lastImage", image);
                 else if (live !== "")
                     image = Saved.get("lastImage", image);
+                if (live !== "" && live !== root.lastLive) {
+                    Saved.set("lastLive", live);
+                    root.lastLive = live;
+                }
                 if (root.shownImage === "") {
                     root.shownImage = onScreen;
                     root.shownLive = live !== "";
@@ -156,7 +168,7 @@ Singleton {
     readonly property var preloaded: {
         const around = (list, at) => list.slice(Math.max(0, at - preloadSpan), Math.max(0, at) + preloadSpan + 1);
         const open = Ui.pickerAlive;
-        const liveAt = open && Ui.pickerTab === 0 ? Ui.pickerSelected : liveFiles.indexOf(currentLive);
+        const liveAt = open && Ui.pickerTab === 0 ? Ui.pickerSelected : liveFiles.indexOf(currentLive || lastLive);
         const imageAt = open && Ui.pickerTab === 1 ? Ui.pickerSelected : imageFiles.indexOf(currentImage);
         return around(liveFiles, liveAt).concat(around(imageFiles, imageAt));
     }

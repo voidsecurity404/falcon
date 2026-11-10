@@ -65,12 +65,13 @@ PanelWindow {
     }
 
     // Turned on later, it opens above the widgets, so they are opened again on top.
-    onVisibleChanged: {
-        if (visible)
+    readonly property bool wanted: Settings.get("wallpaper.parallax", true)
+    onWantedChanged: {
+        if (wanted)
             Widgets.restack();
     }
 
-    visible: Settings.get("wallpaper.parallax", true)
+    visible: wanted && !Widgets.restackingBack
     anchors {
         top: true
         left: true
@@ -90,7 +91,9 @@ PanelWindow {
         width: root.width
         height: root.tall
         y: -root.place * (root.tall - root.height)
-        opacity: Wallpapers.shownLive ? 0 : 1
+        // A new live wallpaper's first frame arrives like any picture, and only then gives way to the
+        // video, which starts on that same frame.
+        opacity: Wallpapers.shownLive && root.coming === "" ? 0 : 1
 
         Behavior on y {
             NumberAnimation {

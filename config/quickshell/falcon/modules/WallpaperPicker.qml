@@ -152,9 +152,10 @@ LazyLoader {
         // Starts on the tab of the current wallpaper, at that wallpaper.
         function startAtCurrent() {
             const live = Wallpapers.liveFiles.indexOf(Wallpapers.currentLive);
+            const lastLive = Wallpapers.liveFiles.indexOf(Wallpapers.lastLive);
             const image = Wallpapers.imageFiles.indexOf(Wallpapers.currentImage);
             placing = true;
-            marks = [Math.max(0, live), Math.max(0, image)];
+            marks = [Math.max(0, live >= 0 ? live : lastLive), Math.max(0, image)];
             tab = live >= 0 ? 0 : 1;
             placing = false;
         }

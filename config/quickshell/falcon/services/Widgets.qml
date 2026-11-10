@@ -369,6 +369,8 @@ Singleton {
     property var ids: []
     property bool loaded: false
     property bool restacking: false
+    // The shell's wallpaper copy is opened again first, then the widgets above it.
+    property bool restackingBack: false
     property bool editMode: false
     // The gallery that adds widgets, opened from edit mode. Its previews are live.
     property bool galleryOpen: false
@@ -659,16 +661,26 @@ Singleton {
             }
         }
     }
-    // Keyin ochilgan jonli fon vidjetlarni yopib qo'yadi: ko'rinadigan qatlamni qayta ochib, ustiga chiqaramiz.
+    // A layer opened later covers the earlier ones in niri's backdrop: a live wallpaper's player, or
+    // awww started again. The shell's wallpaper copy and the widgets are opened again above it, in
+    // that order, so the copy never lies over the widgets.
     function restack() {
         restacking = true;
+        restackingBack = true;
         restackTimer.restart();
     }
     Timer {
         id: restackTimer
 
         interval: 120
-        onTriggered: root.restacking = false
+        onTriggered: {
+            if (root.restackingBack) {
+                root.restackingBack = false;
+                restart();
+            } else {
+                root.restacking = false;
+            }
+        }
     }
 
     property string lastActive: ""

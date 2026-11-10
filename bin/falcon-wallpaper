@@ -19,13 +19,38 @@ colors() {
     "$HOME/.local/bin/falcon-apply" --colors "$1"
 }
 
+# awww-daemon is started by niri at login, but if it ever exits nothing brings it back, and
+# every later change would fail without a word. So a missing daemon is started here.
 wait_daemon() {
+    awww query >/dev/null 2>&1 && return 0
+    pgrep -x awww-daemon >/dev/null || setsid -f awww-daemon >>"$state/awww-daemon.log" 2>&1 </dev/null 9>&-
     for _ in $(seq 1 50); do
-        awww query >/dev/null 2>&1 && return 0
+        if awww query >/dev/null 2>&1; then
+            # Its new layer covers the shell's wallpaper copy and the widgets.
+            qs -c falcon ipc call desk widgetsRestack >/dev/null 2>&1 || true
+            return 0
+        fi
         sleep 0.1
     done
     echo "awww-daemon did not respond" >&2
+    toast "Wallpaper could not be set" "awww-daemon"
     return 1
+}
+
+# One change at a time, and only the newest waits: picking several wallpapers quickly must not
+# leave two players running, or a video started late playing over the picture chosen after it.
+take_turn() {
+    local ticket="$state/.wallpaper-ticket"
+    echo "$$" >"$ticket"
+    exec 9>"$state/.wallpaper-lock"
+    flock 9
+    superseded && exit 0
+    return 0
+}
+
+# A newer change is waiting for its turn.
+superseded() {
+    [[ "$(cat "$state/.wallpaper-ticket" 2>/dev/null)" != "$$" ]]
 }
 
 # Prints the wallpaper section of the settings as: type duration
@@ -77,7 +102,7 @@ stop_live() {
 
 # Ovozsiz, aylanib, ekranni to'ldirib o'ynaydi; ko'rinmaganda to'xtaydi.
 play() {
-    setsid -f mpvpaper -p -o "no-audio loop panscan=1.0 hwdec=auto" '*' "$1" >/dev/null 2>&1
+    setsid -f mpvpaper -p -o "no-audio loop panscan=1.0 hwdec=auto" '*' "$1" >/dev/null 2>&1 9>&-
     # Video keyin ochilgani uchun vidjetlarni yopadi: ularni yana ustiga chiqaramiz.
     for _ in $(seq 1 50); do
         niri msg -j layers 2>/dev/null | grep -q '"mpvpaper"' && break
@@ -107,13 +132,16 @@ set_live() {
     # Kadr ochilmasa joriy fon va ranglar o'zgarishsiz qoladi.
     stop_live
     show "$image" true
-    arrange "$image"
     colors "$image"
     ln -sfn "$image" "$link"
     ln -sfn "$video" "$live_link"
     # Avval kadrga o'tish tugasin, video xuddi shu kadrdan boshlanadi.
     sleep "$seconds"
+    superseded && return 0
     play "$video"
+    # The player's layer covers the widgets until they are opened above it again, so they move
+    # to their new places only after that, in one piece.
+    arrange "$image"
 }
 
 case "${1:-}" in
@@ -135,6 +163,7 @@ case "${1:-}" in
         done
         ;;
     --restore)
+        take_turn
         video="$(readlink -f "$live_link" 2>/dev/null || true)"
         if [[ -f "$video" ]] && command -v mpvpaper >/dev/null; then
             image="$(poster "$video")"
@@ -153,6 +182,7 @@ case "${1:-}" in
         [[ -f "$state/colors.json" ]] || colors "$image"
         ;;
     --reshow)
+        take_turn
         image="$(readlink -f "$link" 2>/dev/null || true)"
         [[ -f "$image" ]] || exit 0
         wait_daemon
@@ -164,6 +194,7 @@ case "${1:-}" in
         fi
         ;;
     --colors)
+        take_turn
         image="$(readlink -f "$2")"
         ln -sfn "$image" "$link"
         colors "$image"
@@ -174,6 +205,7 @@ case "${1:-}" in
     *)
         image="$(readlink -f "$1")"
         [[ -f "$image" ]] || { echo "File not found: $1" >&2; exit 1; }
+        take_turn
         # The wallpaper already on: colors, widgets and everything else stay as they are.
         # A live one is set again only if its player has died.
         if is_video "$image"; then
