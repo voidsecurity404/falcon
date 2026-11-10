@@ -312,31 +312,36 @@ Rectangle {
 
                 Grid {
                     width: parent.width
-                    columns: 4
+                    columns: 5
                     rowSpacing: 10
 
                     ToolButton {
+                        columns: 5
                         icon: "screenshot"
                         title: Tr.t("Screenshot")
                         onClicked: Ui.region("copy")
                     }
                     ToolButton {
+                        columns: 5
                         icon: "google"
                         title: Tr.t("Google")
                         onClicked: Ui.region("search")
                     }
                     ToolButton {
+                        columns: 5
                         icon: "ocr"
                         title: Tr.t("Text")
                         onClicked: Ui.region("ocr")
                     }
                     ToolButton {
+                        columns: 5
                         icon: "translate"
                         title: Tr.t("Translate")
                         onClicked: Ui.region("translate")
                     }
                     // Opens the recording choices, or stops what is being recorded.
                     ToolButton {
+                        columns: 5
                         icon: "record"
                         title: Ui.recordBusy ? Tr.t("Stop") : Tr.t("Record")
                         onClicked: {
@@ -347,19 +352,35 @@ Rectangle {
                         }
                     }
                     ToolButton {
+                        columns: 5
                         icon: "color"
                         title: Tr.t("Color")
                         onClicked: root.tool("falcon-color")
                     }
                     ToolButton {
+                        columns: 5
                         icon: "wallpaper"
                         title: Tr.t("Wallpaper")
                         onClicked: Ui.popup = "wallpapers"
                     }
                     ToolButton {
+                        columns: 5
                         icon: "focus"
                         title: Tr.t("Focus")
                         onClicked: root.tool("falcon-zen")
+                    }
+                    ToolButton {
+                        columns: 5
+                        icon: "pin"
+                        title: Tr.t("Pin")
+                        onClicked: Ui.region("pin")
+                    }
+                    ToolButton {
+                        columns: 5
+                        icon: "game"
+                        title: Tr.t("Game")
+                        on: GameMode.enabled
+                        onClicked: GameMode.toggle()
                     }
                 }
             }

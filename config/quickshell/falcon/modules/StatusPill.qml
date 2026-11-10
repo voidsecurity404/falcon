@@ -272,11 +272,17 @@ Rectangle {
                     color: Theme.accent
                     visible: Caffeine.enabled
                 }
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "game"
+                    color: Theme.accent
+                    visible: GameMode.enabled
+                }
                 // Hech narsa ko'rinmaydigan qurilmada ham tugma bosiladigan bo'lsin.
                 Icon {
                     anchors.verticalCenter: parent.verticalCenter
                     name: "sun"
-                    visible: !root.showNetwork && !(Audio.available && Settings.get("panel.volume", true)) && !(Sys.hasBattery && Settings.get("panel.battery", true)) && Toasts.unread === 0 && !Caffeine.enabled
+                    visible: !root.showNetwork && !(Audio.available && Settings.get("panel.volume", true)) && !(Sys.hasBattery && Settings.get("panel.battery", true)) && Toasts.unread === 0 && !Caffeine.enabled && !GameMode.enabled
                 }
             }
 

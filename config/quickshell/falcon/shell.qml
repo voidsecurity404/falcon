@@ -84,6 +84,9 @@ ShellRoot {
         function pin(path: string, x: real, y: real, w: real, h: real): void {
             Pins.add(path, x, y, w, h);
         }
+        function gameMode(): void {
+            GameMode.toggle();
+        }
         function pinsClear(): void {
             Pins.clear();
         }

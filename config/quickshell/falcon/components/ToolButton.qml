@@ -6,6 +6,8 @@ Column {
 
     property string icon: ""
     property string title: ""
+    // A switch that is on: the circle is filled with the accent.
+    property bool on: false
 
     property int columns: 4
 
@@ -19,7 +21,7 @@ Column {
         width: 46
         height: 46
         radius: toolArea.containsMouse ? 23 : 16
-        color: toolArea.containsMouse ? Qt.alpha(Theme.accent, 0.24) : Qt.alpha(Theme.text, 0.06)
+        color: tool.on ? Theme.accent : toolArea.containsMouse ? Qt.alpha(Theme.accent, 0.24) : Qt.alpha(Theme.text, 0.06)
         scale: toolArea.pressed ? 0.9 : toolArea.containsMouse ? 1.06 : 1
 
         Behavior on radius {
@@ -45,7 +47,7 @@ Column {
             anchors.centerIn: parent
             name: tool.icon
             size: 19
-            color: toolArea.containsMouse ? Theme.accent : Theme.text
+            color: tool.on ? Theme.accentText : toolArea.containsMouse ? Theme.accent : Theme.text
         }
         MouseArea {
             id: toolArea

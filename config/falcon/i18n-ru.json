@@ -1074,5 +1074,15 @@
  "Keep the picture on top of the windows": "Оставить снимок поверх окон",
  "Pin an area of the screen": "Закрепить область экрана",
  "The pinned picture is in the clipboard": "Закреплённый снимок скопирован",
- "opacity": "прозрачность"
+ "opacity": "прозрачность",
+ "Game": "Игра",
+ "Game mode": "Игровой режим",
+ "Turn off game mode": "Выключить игровой режим",
+ "Game mode on": "Игровой режим включён",
+ "Game mode off": "Игровой режим выключен",
+ "Game mode needs the charger": "Игровому режиму нужна зарядка",
+ "On battery it would only drain it faster": "От батареи он только быстрее её разрядит",
+ "Everything is back as it was": "Всё вернулось как было",
+ "The charger was unplugged": "Зарядку отключили",
+ "No animations, full power, notifications wait": "Без анимаций, полная мощность, уведомления ждут"
 }

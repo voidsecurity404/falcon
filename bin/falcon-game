@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Game mode, the compositor's part: niri's animations and window shadows go off, so frames reach
+# the screen without extra work. services/GameMode.qml does the rest (performance power mode,
+# Silent, idle lock) and calls this.
+#   falcon-game on|off|status
+set -euo pipefail
+
+file="${XDG_CONFIG_HOME:-$HOME/.config}/niri/generated/game.kdl"
+
+reload() {
+    niri msg action load-config-file >/dev/null 2>&1 || true
+}
+
+case "${1:-status}" in
+on)
+    mkdir -p "$(dirname "$file")"
+    printf '// game\nanimations {\n    off\n}\nlayout {\n    shadow {\n        off\n    }\n}\n' >"$file.tmp"
+    mv "$file.tmp" "$file"
+    reload
+    ;;
+off)
+    if [[ -s "$file" ]]; then
+        : >"$file"
+        reload
+    fi
+    ;;
+status)
+    if grep -q '^// game' "$file" 2>/dev/null; then
+        echo on
+    else
+        echo off
+        exit 1
+    fi
+    ;;
+*)
+    echo "Usage: falcon-game on|off|status" >&2
+    exit 2
+    ;;
+esac

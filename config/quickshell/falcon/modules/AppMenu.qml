@@ -153,6 +153,14 @@ PanelWindow {
             fill: "?"
         },
         {
+            id: "game",
+            icon: "game",
+            name: GameMode.enabled ? Tr.t("Turn off game mode") : Tr.t("Game mode"),
+            detail: Tr.t("No animations, full power, notifications wait"),
+            keywords: "game gaming игра игровой режим steam",
+            run: () => GameMode.toggle()
+        },
+        {
             id: "songrec",
             icon: "music",
             name: Tr.t("What song is this?"),
