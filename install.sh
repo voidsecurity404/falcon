@@ -101,6 +101,7 @@ targets=(
     .config/falcon/tmux.conf
     .config/falcon/emoji.json
     .local/bin/falcon-ocr-models
+    .local/bin/falcon-ocr-read
     .local/bin/falcon-mpv-ui
     .local/bin/falcon-translate-models
     .local/bin/falcon-translate-local
@@ -266,7 +267,8 @@ do_it mkdir -p "$HOME/.config/falcon" "$HOME/Pictures/Wallpapers" "$HOME/Picture
 do_it cp "$root/config/falcon/tmux.conf" "$root/config/falcon/defaults.json" "$root/config/falcon/i18n-ru.json" "$root/config/falcon/emoji.json" "$HOME/.config/falcon/"
 [[ -e "$HOME/.config/falcon/settings.json" ]] || do_it cp "$root/config/falcon/settings.json" "$HOME/.config/falcon/settings.json"
 do_it cp -n "$root"/wallpapers/* "$HOME/Pictures/Wallpapers/"
-# The reading models of the picture translator. Without a network it fetches them at its first use.
+# The text readers of the picture translator, PaddleOCR and Tesseract's models. Without a network it
+# fetches them at its first use.
 soft "$root/bin/falcon-ocr-models"
 soft "$root/bin/falcon-mpv-ui"
 # The translator for when Google cannot be used, about 4 GB.

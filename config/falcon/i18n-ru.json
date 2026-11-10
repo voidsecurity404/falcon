@@ -483,7 +483,6 @@
  "Close": "Закрыть",
  "Check the internet": "Проверьте интернет",
  "Nothing to translate": "Нечего переводить",
- "The text is already in this language. Change it in Settings → System": "Текст уже на этом языке. Язык меняется в Настройки → Система",
  "No internet, or the free service is limiting requests. Try again in a few minutes": "Нет интернета, или бесплатный сервис ограничил запросы. Попробуйте через несколько минут",
  "Set up": "Настроить",
  "This computer has no battery, so nothing here applies.": "У этого компьютера нет батареи, поэтому здесь ничего не действует.",
@@ -591,7 +590,6 @@
  "Run: falcon-ocr-models": "Выполните: falcon-ocr-models",
  "Translating on this computer…": "Перевожу на этом компьютере…",
  "Translated on this computer": "Переведено на этом компьютере",
- "The translator on this computer is not ready yet. Run falcon-translate-models": "Локальный переводчик ещё не готов. Выполните falcon-translate-models",
  "Offline translator: {parts}": "Локальный переводчик: {parts}",
  "Run: falcon-translate-models": "Выполните: falcon-translate-models",
  "Style": "Стиль",
@@ -1131,5 +1129,9 @@
  "Wallhaven and MotionBGs": "Wallhaven и MotionBGs",
  "Pictures": "Картинки",
  "Save": "Сохранить",
- "Looking…": "Ищу…"
+ "Looking…": "Ищу…",
+ "The text is already in this language": "Текст уже на этом языке",
+ "No internet, and the translator on this computer is not installed. Run falcon-translate-models": "Нет интернета, а локальный переводчик не установлен. Выполните falcon-translate-models",
+ "The translator on this computer failed": "Локальный переводчик не сработал",
+ "Could not translate the text": "Не удалось перевести текст"
 }

@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Writes a copy of a picture with the text on it translated, in place.
 
-Reads the text with tesseract, translates it online, or on this computer when that does not work,
+Reads the text with PaddleOCR (falcon-ocr-read), or with tesseract for the scripts it does not know,
+translates it online, or on this computer when that does not work,
 paints over the old words with the colors around them and draws the translation in their place.
 Prints one JSON object per line as it goes: stage is read, translate, draw, then done, same (already in that language), empty or error.
 
-Usage: falcon-image-translate INPUT OUTPUT [--to LANGUAGE]
+Usage: falcon-image-translate INPUT OUTPUT [--to LANGUAGE] [--keep FILE]
+With --keep the text read is kept in FILE, and a later run with the same FILE translates it into
+another language without reading the picture again.
 """
 import argparse
 import csv
@@ -13,6 +16,7 @@ import functools
 import io
 import json
 import os
+import pickle
 import re
 import statistics
 import subprocess
@@ -57,6 +61,14 @@ SAMPLE_HEIGHT = 130
 SURE_SCRIPT = 55
 SCRIPT_MARGIN = 12
 TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single"
+# PaddleOCR, from falcon-ocr-models, in its own Python. Far surer than tesseract on screen text.
+OCR_FOLDER = MODELS.parent / "ocr"
+# The script each of its models reads, as tesseract names it.
+PADDLE_SCRIPTS = {"cyrillic": "Cyrillic", "korean": "Hangul", "arabic": "Arabic", "devanagari": "Devanagari", "el": "Greek", "th": "Thai", "ta": "Tamil"}
+# A model other than the usual one this unsure of the page is checked by tesseract, which knows
+# scripts PaddleOCR does not, such as Hebrew, which its Thai model reads as Thai.
+PADDLE_DOUBT = 0.9
+PADDLE_TIMEOUT = 120
 BANDS = 4
 BAND_OVERLAP = 90
 DRAW_SCALE = 4
@@ -68,7 +80,8 @@ DEEP_LETTERS = set("gjpqyруфдцщ()[],;")
 
 def is_unspaced(ch):
     """Writing that has no spaces between its words."""
-    return "\u3040" <= ch <= "\u30ff" or "\u3400" <= ch <= "\u9fff" or "\uf900" <= ch <= "\ufaff" or "\u0e00" <= ch <= "\u0e7f"
+    # Their own marks too, such as ， and 「.
+    return "\u3000" <= ch <= "\u30ff" or "\uff00" <= ch <= "\uffef" or "\u3400" <= ch <= "\u9fff" or "\uf900" <= ch <= "\ufaff" or "\u0e00" <= ch <= "\u0e7f"
 
 
 def is_rtl(text):
@@ -87,6 +100,9 @@ class Word:
     conf: float
     # Which line the reader put it on, when its idea of the page is the one used.
     group: tuple = None
+    # PaddleOCR's line, and the font size found for the whole line.
+    row: int = None
+    size: float = 0.0
 
     @property
     def right(self):
@@ -99,6 +115,8 @@ class Word:
     @property
     def em(self):
         """The font size. A word's box shows only the part of the font's height its letters reach."""
+        if self.size:
+            return self.size
         if any(is_unspaced(c) or "\uac00" <= c <= "\ud7a3" for c in self.text):
             return self.h / 0.92
         if self.group:
@@ -127,12 +145,16 @@ class Line:
             gap = max(word.x - before.right, before.x - word.right)
             # The reader gives one sign at a time in these: only a real gap between them is a space.
             joined = is_unspaced(before.text[-1]) and is_unspaced(word.text[0])
-            hangul = "\uac00" <= before.text[-1] <= "\ud7a3" and "\uac00" <= word.text[0] <= "\ud7a3" and gap < 0.5 * self.em
+            # PaddleOCR's words keep their real gaps, so Latin beside Chinese is joined as written.
+            joined = joined or (word.size and (is_unspaced(before.text[-1]) or is_unspaced(word.text[0])) and gap < 0.3 * self.em)
+            hangul = not word.size and "\uac00" <= before.text[-1] <= "\ud7a3" and "\uac00" <= word.text[0] <= "\ud7a3" and gap < 0.5 * self.em
             out += ("" if joined or hangul else " ") + word.text
         return out
 
     @property
     def em(self):
+        if self.words[0].size:
+            return self.words[0].size
         if self.words[0].group and not any(is_unspaced(w.text[0]) or "\uac00" <= w.text[0] <= "\ud7a3" for w in self.words):
             # Marks above and below belong to the writing here, and a whole line shows them all.
             top, bottom = min(w.y for w in self.words), max(w.bottom for w in self.words)
@@ -364,6 +386,178 @@ def read_by_lines(views, model, factor):
     return [word for line in kept for word in line]
 
 
+def paddle_ready():
+    return (OCR_FOLDER / "venv/bin/python").exists() and (OCR_FOLDER / "models/det.onnx").exists() and (OCR_FOLDER / "models/rec-multi.onnx").exists()
+
+
+def read_with_paddle(path, image):
+    """PaddleOCR's lines, which finds the script itself, or None when it failed or does not know the
+    script, so that tesseract reads instead."""
+    try:
+        done = subprocess.run([str(OCR_FOLDER / "venv/bin/python"), str(Path(__file__).with_name("falcon-ocr-read")), path],
+                              stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=PADDLE_TIMEOUT)
+        found = json.loads(done.stdout.strip().splitlines()[-1])
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+        return None
+    if not isinstance(found, dict) or "lines" not in found:
+        return None
+    lines, model = found["lines"], found.get("model")
+    if model in PADDLE_SCRIPTS and lines and statistics.median(line["score"] for line in lines) < PADDLE_DOUBT \
+            and (MODELS / "Latin.traineddata").exists() and choose_model(image.convert("L")) != PADDLE_SCRIPTS[model]:
+        return None
+    return lines
+
+
+def ink_rows(source, y0, y1, spans):
+    """The top and bottom of the letters in a line's box, looking only at its words, so that an icon
+    beside them does not count. The reader's boxes are drawn with a margin, which can take in the
+    descenders of the line above or the accents of the line below."""
+    area = np.concatenate([source[y0:y1, a:b] for a, b in spans if b > a] or [source[y0:y1, 0:0]], axis=1).astype(np.int16)
+    if area.size == 0:
+        return y0, y1
+    bins, counts = np.unique(area.reshape(-1, 3) >> 4, axis=0, return_counts=True)
+    behind = bins[np.argmax(counts)] * 16 + 8
+    rows = (np.abs(area - behind).sum(axis=2) > 90).sum(axis=1) > 0
+    runs, start = [], None
+    for index, inked in enumerate(list(rows) + [False]):
+        if inked and start is None:
+            start = index
+        elif not inked and start is not None:
+            runs.append((start, index))
+            start = None
+    if not runs:
+        return y0, y1
+    main = max(runs, key=lambda run: run[1] - run[0])
+    top, bottom = main
+    gap = max(2, round((bottom - top) * 0.15))
+    for start, end in sorted(runs):
+        # Marks above or below the letters, but not bits of other lines cut by the box's edge.
+        if end <= top and top - end <= gap and start > 0:
+            top = start
+    for start, end in sorted(runs):
+        if start >= bottom and start - bottom <= gap and end < len(rows):
+            bottom = end
+    return y0 + top, y0 + bottom
+
+
+def size_of_line(text, height):
+    """The font size from the height of a line's ink and which letters reach up or down."""
+    if any(is_unspaced(c) or "\uac00" <= c <= "\ud7a3" for c in text):
+        return height / 0.9
+    letters = [c for c in text if c.isalpha()]
+    # Scripts with capitals have a clear line of letters with parts above and below it.
+    if letters and all(unicodedata.category(c) in ("Ll", "Lu") for c in letters):
+        tall = any(c.isupper() or c.isdigit() or c in TALL_LETTERS for c in text)
+        deep = any(c in DEEP_LETTERS for c in text)
+        return height / (0.94 if tall and deep else 0.72 if tall else 0.70 if deep else 0.52)
+    # Writing with marks above and below its letters.
+    return height / 1.15
+
+
+LATIN_TWINS = "aceopxyABCEHKMOPTX"
+CYRILLIC_TWINS = "асеорхуАВСЕНКМОРТХ"
+TO_LATIN = str.maketrans(CYRILLIC_TWINS, LATIN_TWINS)
+TO_CYRILLIC = str.maketrans(LATIN_TWINS, CYRILLIC_TWINS)
+
+
+def one_script(texts):
+    """A Cyrillic reader writes the Latin words on a page with Cyrillic letters that look the same,
+    and the other way round. Each word takes the script of its own unmistakable letters, or of its neighbors."""
+    def counts(text):
+        latin = sum(c.isascii() and c.isalpha() and c not in LATIN_TWINS for c in text)
+        cyrillic = sum("\u0400" <= c <= "\u04ff" and c not in CYRILLIC_TWINS for c in text)
+        return latin, cyrillic
+
+    found = [counts(text) for text in texts]
+    total = [sum(pair) for pair in zip(*found)] or [0, 0]
+    fixed = []
+    for index, text in enumerate(texts):
+        latin, cyrillic = found[index]
+        if not latin and not cyrillic:
+            # The nearest words that tell, as in "the арр at" among Russian words, else the whole line.
+            near = [found[i] for i in (index - 1, index + 1) if 0 <= i < len(found) and any(found[i])]
+            latin, cyrillic = [sum(pair) for pair in zip(*near)] if near else total
+        if latin > cyrillic:
+            text = text.translate(TO_LATIN)
+            # A capital I read inside a word in small letters is an l.
+            text = re.sub(r"(?<=[a-z])I(?=[a-z])", "l", text)
+        elif cyrillic > latin:
+            text = text.translate(TO_CYRILLIC)
+        fixed.append(text)
+    return fixed
+
+
+def word_pieces(line):
+    """The reader's words, from its line text. Lines with Chinese or Japanese come one sign at a time,
+    and those signs are put back into words here, along the line's own spaces."""
+    words = [w for w in line["words"] if w[0].strip()]
+    if not words:
+        return []
+    if is_rtl(line["text"]):
+        # Its words come in the order they are seen, with their letters reversed. The line's text is
+        # the right one, and its words stand from right to left.
+        tokens = line["text"].split()
+        if len(tokens) == len(words):
+            return [[token, word[1], word[2]] for token, word in zip(tokens, sorted(words, key=lambda w: -w[2][0]))]
+        return [[line["text"], line["score"], line["box"]]]
+    if not all(len(w[0]) == 1 for w in words) or len(words) == 1:
+        return words
+    pieces, at = [], 0
+    for token in line["text"].split():
+        signs = words[at:at + len(token)]
+        at += len(token)
+        if not signs:
+            break
+        group = [signs[0]]
+        for sign in signs[1:]:
+            # Chinese signs stay single, they are joined without spaces anyway.
+            if is_unspaced(sign[0]) or is_unspaced(group[-1][0][-1]):
+                pieces.append(group)
+                group = [sign]
+            else:
+                group.append(sign)
+        pieces.append(group)
+    out = []
+    for group in pieces:
+        text = "".join(w[0] for w in group)
+        box = [min(w[2][0] for w in group), min(w[2][1] for w in group), max(w[2][2] for w in group), max(w[2][3] for w in group)]
+        out.append([text, min(w[1] for w in group), box])
+    return out
+
+
+def paddle_words(lines, source):
+    """PaddleOCR's lines as words, with boxes fitted to the ink and each line cut where a wide gap
+    shows that it holds two things side by side, as a row of buttons."""
+    height, width = source.shape[:2]
+    words, row = [], 0
+    for line in lines:
+        pieces = word_pieces(line)
+        if not pieces:
+            continue
+        x0, y0, x1, y1 = line["box"]
+        x0, y0, x1, y1 = max(0, x0), max(0, y0), min(width, x1), min(height, y1)
+        if x1 - x0 < 2 or y1 - y0 < 2:
+            continue
+        # Short marks such as a radio button read as O are left out, when there are real words.
+        measured = [p for p in pieces if len(p[0]) > 2 or is_unspaced(p[0][0])] or pieces
+        top, bottom = ink_rows(source, y0, y1, [(max(x0, p[2][0]), min(x1, p[2][2])) for p in measured])
+        texts = one_script([piece[0] for piece in pieces])
+        size = size_of_line(" ".join(texts), max(3, bottom - top))
+        found = []
+        for text, sure, box in zip(texts, (p[1] for p in pieces), (p[2] for p in pieces)):
+            left, right = max(0, box[0]), min(width, box[2])
+            found.append(Word(text, left, top, max(1, right - left), max(1, bottom - top), sure * 100, row=row, size=size))
+        found.sort(key=lambda w: w.x)
+        for before, word in zip(found, found[1:]):
+            gap = word.x - before.right
+            # Chinese and Japanese have no spaces, so a gap there is two things side by side, as tabs are.
+            apart = gap > 1.5 * size or (is_unspaced(before.text[-1]) and is_unspaced(word.text[0]) and gap > 0.5 * size)
+            word.row = row = row + 1 if apart else row
+        words += found
+        row += 1
+    return words
+
+
 def without_tall_boxes(words):
     """On a button a word's box can take in the whole button. It gets the height of the words beside it."""
     for word in words:
@@ -378,7 +572,20 @@ def without_tall_boxes(words):
     return words
 
 
-def read_words(image):
+def read_words(image, path=None):
+    """PaddleOCR when it is there and knows the script, and tesseract otherwise."""
+    if path and paddle_ready():
+        lines = read_with_paddle(path, image)
+        if lines is not None:
+            return paddle_words(lines, np.asarray(image))
+    elif path:
+        # Fetched for the next time, as the models of tesseract are.
+        subprocess.Popen([str(Path(__file__).with_name("falcon-ocr-models"))], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+    return read_with_tesseract(image)
+
+
+def read_with_tesseract(image):
     """Reads two views of the picture side by side and keeps the surest reading of each place.
 
     The real reading starts on Latin, the most common case, while the script is being found out, and
@@ -446,6 +653,10 @@ def same_ground(source, left, right):
 def make_lines(words, source):
     lines = []
     grouped = {}
+    if words and words[0].row is not None:
+        for word in words:
+            grouped.setdefault(word.row, []).append(word)
+        return [Line(found) for found in grouped.values()]
     for word in words:
         if word.group:
             grouped.setdefault(word.group, []).append(word)
@@ -492,7 +703,8 @@ def without_strays(line, source):
     """A lone sign set apart from its neighbors, or lying on another background than they do, is the
     edge of a button read as a letter. It also joins what is on either side of it, so the line ends there."""
     words = sorted(line.words, key=lambda w: w.x)
-    if not words or words[0].group:
+    # PaddleOCR does not read the edges of buttons as letters.
+    if not words or words[0].group or words[0].size:
         return [line]
     parts = [[]]
     for index, word in enumerate(words):
@@ -547,10 +759,17 @@ def worth_translating(line):
     if line.words[0].group:
         # The reader has already judged these lines, and one sign can be a word.
         return letters >= 1
+    sign = next((ch for ch in text if ch.isalpha()), "")
+    if letters == 1 and (is_unspaced(sign) or "\uac00" <= sign <= "\ud7a3") and min(w.conf for w in line.words) >= 90:
+        # One Chinese or Korean sign is a word.
+        return True
     if letters < 2 or is_code(text):
         return False
     if len(line.words) == 1 and (letters < 3 or line.words[0].conf < 70):
         return False
+    # A sentence full of numbers and sizes is still a sentence.
+    if letters >= 6 and len(line.words) >= 3:
+        return letters / max(1, len(text)) >= 0.25
     return letters / max(1, len(text)) >= 0.5
 
 
@@ -687,7 +906,11 @@ def request_lines(part, target):
     request = urllib.request.Request(TRANSLATE_URL, data=body.encode(), headers={"User-Agent": "Mozilla/5.0"})
     try:
         with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as answer:
-            return aligned_lines(json.load(answer)[0], len(part))
+            found = json.load(answer)
+            # The language Google took the text for, shown beside the translation.
+            if isinstance(found[2], str) and not DETECTED:
+                DETECTED.append(found[2])
+            return aligned_lines(found[0], len(part))
     except urllib.error.HTTPError as error:
         if error.code == 429:
             RESTING.touch()
@@ -697,6 +920,49 @@ def request_lines(part, target):
         if isinstance(error, ValueError):
             RESTING.touch()
         raise ServiceDown(str(error)) from error
+
+
+DETECTED = []
+# Languages of each script, the first being the one assumed when Google names one of another script.
+# Google sometimes names English for a page of Chinese with a few Latin words on it.
+SCRIPT_LANGUAGES = {
+    "han": ["zh-cn", "zh-tw", "zh", "ja"], "kana": ["ja"], "hangul": ["ko"], "arabic": ["ar", "fa", "ur", "ps", "ug", "ku"],
+    "hebrew": ["iw", "he", "yi"], "devanagari": ["hi", "mr", "ne", "sa"], "thai": ["th"], "greek": ["el"],
+    "cyrillic": ["ru", "uk", "be", "bg", "sr", "mk", "kk", "ky", "tg", "mn", "uz", "tt", "ba"],
+    "georgian": ["ka"], "armenian": ["hy"], "bengali": ["bn"], "tamil": ["ta"],
+}
+
+
+def script_name(ch):
+    if "\u3040" <= ch <= "\u30ff":
+        return "kana"
+    if "\u3400" <= ch <= "\u9fff" or "\uf900" <= ch <= "\ufaff":
+        return "han"
+    ranges = [("\uac00", "\ud7a3", "hangul"), ("\u0600", "\u06ff", "arabic"), ("\u0590", "\u05ff", "hebrew"), ("\u0900", "\u097f", "devanagari"),
+              ("\u0e00", "\u0e7f", "thai"), ("\u0370", "\u03ff", "greek"), ("\u0400", "\u04ff", "cyrillic"), ("\u10a0", "\u10ff", "georgian"),
+              ("\u0530", "\u058f", "armenian"), ("\u0980", "\u09ff", "bengali"), ("\u0b80", "\u0bff", "tamil")]
+    return next((name for low, high, name in ranges if low <= ch <= high), "latin")
+
+
+def source_language(texts, named):
+    """The language of the text: Google's word for it when that fits the script most letters are in."""
+    counts = {}
+    for ch in "".join(texts):
+        if ch.isalpha():
+            name = script_name(ch)
+            # One Chinese, Japanese or Korean sign says about as much as a few letters.
+            counts[name] = counts.get(name, 0) + (3 if name in ("han", "kana", "hangul") else 1)
+    if not counts:
+        return named
+    if counts.get("kana"):
+        # Japanese is written with Chinese signs and kana together.
+        counts["kana"] += counts.pop("han", 0)
+    script = max(counts, key=counts.get)
+    named = (named or "").lower()
+    if script == "latin":
+        return named if named and not any(named in langs for langs in SCRIPT_LANGUAGES.values()) else ""
+    langs = SCRIPT_LANGUAGES[script]
+    return named if named in langs else langs[0]
 
 
 def translate_here(texts, target):
@@ -729,7 +995,8 @@ def translate_lines(texts, target):
     say("translate", engine="local")
     answer = translate_here(texts, target)
     if answer is None:
-        raise TranslationFailed("no translator")
+        python = MODELS.parent / "translate/venv/bin/python"
+        raise TranslationFailed("offline" if not python.exists() else "local")
     return answer
 
 
@@ -1039,6 +1306,7 @@ def main():
     parser.add_argument("input")
     parser.add_argument("output", nargs="?", default="")
     parser.add_argument("--to", default="")
+    parser.add_argument("--keep", default="", help="keep the text read in this file, or take it from there")
     parser.add_argument("--script", action="store_true", help="only print the script the text is in (Latin, Cyrillic, ...), for falcon-ocr")
     args = parser.parse_args()
     if args.script:
@@ -1058,34 +1326,52 @@ def main():
         say("error", message=str(error))
         return 1
 
-    say("read")
-    words = read_words(image)
-    source = np.asarray(image)
-    lines = [line for found in make_lines(words, source) for line in map(without_icons, without_strays(found, source)) if worth_translating(line)]
-    blocks = make_blocks(lines, np.asarray(image))
-    if not blocks:
-        say("empty")
-        return 0
-    settle_sizes(blocks)
+    kept = None
+    if args.keep:
+        try:
+            with open(args.keep, "rb") as handle:
+                kept = pickle.load(handle)
+        except (OSError, pickle.PickleError, EOFError, AttributeError, ValueError):
+            kept = None
+    if kept:
+        words, blocks = kept
+    else:
+        say("read")
+        words = read_words(image, args.input)
+        source = np.asarray(image)
+        lines = [line for found in make_lines(words, source) for line in map(without_icons, without_strays(found, source)) if worth_translating(line)]
+        blocks = make_blocks(lines, np.asarray(image))
+        if not blocks:
+            say("empty")
+            return 0
+        settle_sizes(blocks)
+        if args.keep:
+            try:
+                with open(args.keep, "wb") as handle:
+                    pickle.dump((words, blocks), handle)
+            except OSError:
+                pass
 
     say("translate", blocks=len(blocks))
     try:
         results = translate_lines([block.text for block in blocks], target)
     except (OSError, subprocess.SubprocessError, TranslationFailed) as error:
-        say("error", message=str(error))
+        say("error", message=str(error), reason=str(error) if isinstance(error, TranslationFailed) else "failed")
         return 1
     for block, result in zip(blocks, results):
         # Marks of Chinese and Japanese that a Latin or Cyrillic font does not have.
         block.translation = result if target[:2] in ("zh", "ja", "ko") else result.translate(FOREIGN_MARKS)
     if not any(block.translation for block in blocks):
-        say("error", message="no translation")
+        say("error", message="no translation", reason="failed")
         return 1
+    source_code = source_language([block.text for block in blocks], DETECTED[0] if DETECTED else "")
+    found = {"source": source_code} if source_code else {}
 
     say("draw")
     source = np.asarray(image).copy()
     changed = [b for b in blocks if b.translation and b.translation.casefold() != b.text.casefold() and not on_photo(source, b)]
     if not changed:
-        say("same", language=target)
+        say("same", language=target, **found)
         return 0
     styles = {id(b): style_of(source, b) for b in changed}
     pixels = source.copy()
@@ -1098,7 +1384,7 @@ def main():
         ink, heavy = styles[id(block)]
         draw_block(canvas, block, source, words, path, ink, heavy)
     canvas.save(args.output)
-    say("done", output=args.output, original="\n".join(b.text for b in blocks), text="\n".join(b.translation or b.text for b in blocks))
+    say("done", output=args.output, language=target, original="\n".join(b.text for b in blocks), text="\n".join(b.translation or b.text for b in blocks), **found)
     return 0
 
 

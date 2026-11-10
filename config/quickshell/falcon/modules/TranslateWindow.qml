@@ -6,7 +6,8 @@ import qs.services
 
 // Shows a selected area with its text translated on the picture itself. While the work goes on, a
 // scanner's light passes over the original, and its last pass lays the translation down behind it.
-// Reading and drawing are done by falcon-image-translate.
+// Reading and drawing are done by falcon-image-translate. The language can be changed in the window:
+// the text read is kept in a file, so another language needs no second reading.
 LazyLoader {
     active: Ui.translateSource !== ""
 
@@ -15,6 +16,23 @@ LazyLoader {
 
         readonly property string source: Ui.translateSource
         readonly property string result: source + ".translated.png"
+        readonly property string keep: source + ".keep"
+        // Names of languages in themselves, so each one finds its own. Codes are Google's.
+        readonly property var languages: [
+            ["ru", "Русский"], ["uz", "Oʻzbekcha"], ["en", "English"], ["tr", "Türkçe"], ["kk", "Қазақша"], ["ky", "Кыргызча"],
+            ["tg", "Тоҷикӣ"], ["az", "Azərbaycanca"], ["uk", "Українська"], ["de", "Deutsch"], ["fr", "Français"], ["es", "Español"],
+            ["it", "Italiano"], ["pt", "Português"], ["pl", "Polski"], ["nl", "Nederlands"], ["ar", "العربية"], ["fa", "فارسی"],
+            ["hi", "हिन्दी"], ["zh-CN", "中文"], ["ja", "日本語"], ["ko", "한국어"]
+        ]
+        // The language asked for in this window, "" for the one in Settings.
+        property string target: ""
+        // What the translation is in, and what Google took the text for, from the script.
+        property string shownLanguage: ""
+        property string sourceLanguage: ""
+        property bool picking: false
+        // A translation has been on screen, so a failed new one keeps the window open.
+        property bool translatedOnce: false
+        property string problem: ""
         readonly property var output: Quickshell.screens.find(s => s.name === Niri.focusedOutput) || Quickshell.screens[0]
         readonly property int barHeight: 62
         readonly property int margin: 14
@@ -22,7 +40,7 @@ LazyLoader {
         readonly property real startScale: Math.min(1, (output.width * 0.85 - margin * 2) / Ui.translateWidth, (output.height * 0.82 - barHeight - margin) / Ui.translateHeight)
         readonly property real pictureScale: Math.min(1, pictureArea.width / Math.max(1, original.implicitWidth), pictureArea.height / Math.max(1, original.implicitHeight))
 
-        // read, translate, draw, done
+        // read, translate, draw, done, same, failed
         property string stage: "read"
         property string translatedText: ""
         // Google could not be used, so this computer translated it.
@@ -43,6 +61,30 @@ LazyLoader {
 
         function close() {
             Ui.translateClose();
+        }
+
+        function languageName(code) {
+            const found = languages.find(l => l[0].toLowerCase() === String(code).toLowerCase() || l[0].split("-")[0] === String(code).split("-")[0].toLowerCase());
+            return found ? found[1] : String(code).toUpperCase();
+        }
+
+        // Translates the text already read into another language, and keeps it as the usual one.
+        function translateInto(code) {
+            picking = false;
+            if (worker.running || code === shownLanguage && stage === "done")
+                return;
+            target = code;
+            Settings.set("translate.to", code);
+            problem = "";
+            showOriginal = false;
+            revealed = false;
+            laying = false;
+            lastPass.stop();
+            scanAt = 0;
+            scanLight = 1;
+            scanning.restart();
+            stage = "translate";
+            worker.running = true;
         }
 
         function finishScan() {
@@ -134,7 +176,7 @@ LazyLoader {
 
         title: "falcon translate"
         color: Theme.surface
-        readonly property int startWidth: Math.max(620, Math.round(Ui.translateWidth * startScale) + margin * 2)
+        readonly property int startWidth: Math.max(720, Math.round(Ui.translateWidth * startScale) + margin * 2)
         readonly property int startHeight: Math.max(220, Math.round(Ui.translateHeight * startScale) + margin + barHeight)
         implicitWidth: startWidth
         implicitHeight: startHeight
@@ -151,8 +193,10 @@ LazyLoader {
         }
 
         Process {
+            id: worker
+
             running: true
-            command: [Ui.binDir + "falcon-image-translate", win.source, win.result]
+            command: [Ui.binDir + "falcon-image-translate", win.source, win.result, "--keep", win.keep].concat(win.target ? ["--to", win.target] : [])
             stdout: SplitParser {
                 onRead: line => {
                     let message;
@@ -161,20 +205,35 @@ LazyLoader {
                     } catch (e) {
                         return;
                     }
+                    if (message.source)
+                        win.sourceLanguage = message.source;
+                    if (message.language)
+                        win.shownLanguage = message.language;
                     if (message.stage === "empty") {
                         Toasts.show(Tr.t("No text found"), Tr.t("Try selecting another area"), "alert");
                         win.close();
                     } else if (message.stage === "same") {
-                        Toasts.show(Tr.t("Nothing to translate"), Tr.t("The text is already in this language. Change it in Settings → System"), "alert");
-                        win.close();
+                        // The original stays on screen, and another language is one click away.
+                        translated.source = "";
+                        win.stage = "same";
+                        win.finishScan();
                     } else if (message.stage === "error") {
-                        Toasts.show(Tr.t("Translation failed"), Tr.t("The translator on this computer is not ready yet. Run falcon-translate-models"), "alert");
-                        win.close();
+                        const why = message.reason === "offline" ? Tr.t("No internet, and the translator on this computer is not installed. Run falcon-translate-models") : message.reason === "local" ? Tr.t("The translator on this computer failed") : Tr.t("Could not translate the text");
+                        if (!win.translatedOnce) {
+                            Toasts.show(Tr.t("Translation failed"), why, "alert");
+                            win.close();
+                            return;
+                        }
+                        win.problem = why;
+                        translated.source = "";
+                        win.stage = "failed";
+                        win.finishScan();
                     } else {
-                        if (message.engine === "local")
-                            win.translatedHere = true;
+                        win.translatedHere = message.engine === "local" || (message.stage !== "translate" && win.translatedHere);
                         if (message.stage === "done") {
                             win.translatedText = message.text;
+                            win.translatedOnce = true;
+                            translated.source = "";
                             translated.source = "file://" + win.result;
                         }
                         win.stage = message.stage;
@@ -187,7 +246,10 @@ LazyLoader {
             anchors.fill: parent
             focus: true
             Keys.onPressed: event => {
-                if (event.key === Qt.Key_Escape) {
+                if (event.key === Qt.Key_Escape && win.picking) {
+                    win.picking = false;
+                    event.accepted = true;
+                } else if (event.key === Qt.Key_Escape) {
                     win.close();
                     event.accepted = true;
                 }
@@ -342,31 +404,100 @@ LazyLoader {
             height: win.barHeight
 
             Row {
+                id: statusRow
+
                 anchors.left: parent.left
                 anchors.leftMargin: win.margin + 4
                 anchors.verticalCenter: parent.verticalCenter
+                width: buttons.x - x - 12
                 spacing: 9
 
                 Icon {
                     anchors.verticalCenter: parent.verticalCenter
-                    name: "translate"
+                    name: win.stage === "failed" ? "alert" : "translate"
                     size: 18
-                    color: Theme.accent
+                    color: win.stage === "failed" ? Theme.error : Theme.accent
                 }
                 Label {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: win.showOriginal ? Tr.t("Original") : win.stage === "read" ? Tr.t("Reading the text…") : win.stage === "translate" ? (win.translatedHere ? Tr.t("Translating on this computer…") : Tr.t("Translating…")) : win.stage === "draw" ? Tr.t("Drawing…") : win.translatedHere ? Tr.t("Translated on this computer") : Tr.t("Translated")
-                    color: Theme.muted
+                    width: parent.width - 27
+                    text: win.showOriginal ? Tr.t("Original") : win.stage === "read" ? Tr.t("Reading the text…") : win.stage === "translate" ? (win.translatedHere ? Tr.t("Translating on this computer…") : Tr.t("Translating…")) : win.stage === "draw" ? Tr.t("Drawing…") : win.stage === "same" ? Tr.t("The text is already in this language") : win.stage === "failed" ? win.problem : win.translatedHere ? Tr.t("Translated on this computer") : Tr.t("Translated")
+                    color: win.stage === "failed" ? Theme.error : Theme.muted
                     size: 13
                 }
             }
 
             Row {
+                id: buttons
+
                 anchors.right: parent.right
                 anchors.rightMargin: win.margin
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 6
 
+                // From what into what. A click opens the list of languages.
+                Rectangle {
+                    id: languageButton
+
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: languageRow.implicitWidth + 26
+                    height: 40
+                    radius: 20
+                    color: win.picking ? Theme.accent : languageArea.containsMouse ? Qt.alpha(Theme.text, 0.12) : Qt.alpha(Theme.text, 0.05)
+                    opacity: worker.running && win.stage === "read" ? 0.35 : 1
+
+                    Behavior on color {
+                        ColorAnimation {
+                            duration: 140
+                        }
+                    }
+
+                    Row {
+                        id: languageRow
+
+                        anchors.centerIn: parent
+                        spacing: 7
+
+                        Label {
+                            visible: win.sourceLanguage !== ""
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: win.languageName(win.sourceLanguage)
+                            color: win.picking ? Theme.accentText : Theme.muted
+                            size: 13
+                        }
+                        Icon {
+                            visible: win.sourceLanguage !== ""
+                            anchors.verticalCenter: parent.verticalCenter
+                            name: "forward"
+                            size: 13
+                            color: win.picking ? Theme.accentText : Theme.muted
+                        }
+                        Label {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: win.shownLanguage ? win.languageName(win.target || win.shownLanguage) : win.target ? win.languageName(win.target) : Tr.t("Language")
+                            color: win.picking ? Theme.accentText : Theme.text
+                            size: 13
+                            font.weight: Font.DemiBold
+                        }
+                        Icon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            name: "arrowDown"
+                            size: 13
+                            color: win.picking ? Theme.accentText : Theme.text
+                        }
+                    }
+                    MouseArea {
+                        id: languageArea
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (!(worker.running && win.stage === "read"))
+                                win.picking = !win.picking;
+                        }
+                    }
+                }
                 TranslateButton {
                     icon: "translate"
                     tip: win.showOriginal ? Tr.t("Show translation") : Tr.t("Show original")
@@ -402,6 +533,85 @@ LazyLoader {
                     icon: "close"
                     tip: Tr.t("Close")
                     onClicked: win.close()
+                }
+            }
+        }
+
+        // A click anywhere outside the list closes it.
+        MouseArea {
+            anchors.fill: parent
+            visible: win.picking
+            onClicked: win.picking = false
+        }
+
+        // The list of languages, opening upward from its button.
+        Rectangle {
+            id: picker
+
+            property real shown: win.picking ? 1 : 0
+
+            x: Math.max(win.margin, Math.min(parent.width - width - win.margin, buttons.x + languageButton.x + languageButton.width - width))
+            y: parent.height - win.barHeight - height - 4 + (1 - shown) * 10
+            width: Math.min(parent.width - win.margin * 2, 420)
+            height: languageFlow.implicitHeight + 24
+            radius: 18
+            color: Theme.pill
+            border.width: 1
+            border.color: Qt.alpha(Theme.text, 0.08)
+            opacity: shown
+            visible: opacity > 0
+
+            Behavior on shown {
+                NumberAnimation {
+                    duration: 180
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            // Clicks on the list itself stay in it.
+            MouseArea {
+                anchors.fill: parent
+            }
+
+            Flow {
+                id: languageFlow
+
+                x: 12
+                y: 12
+                width: parent.width - 24
+                spacing: 6
+
+                Repeater {
+                    model: win.languages
+
+                    delegate: Rectangle {
+                        id: chip
+
+                        required property var modelData
+                        readonly property bool current: modelData[0] === (win.target || win.shownLanguage)
+
+                        width: chipLabel.implicitWidth + 24
+                        height: 32
+                        radius: 16
+                        color: current ? Theme.accent : chipArea.containsMouse ? Qt.alpha(Theme.text, 0.12) : Qt.alpha(Theme.text, 0.05)
+
+                        Label {
+                            id: chipLabel
+
+                            anchors.centerIn: parent
+                            text: chip.modelData[1]
+                            color: chip.current ? Theme.accentText : Theme.text
+                            size: 13
+                        }
+                        MouseArea {
+                            id: chipArea
+
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: win.translateInto(chip.modelData[0])
+                        }
+                    }
                 }
             }
         }

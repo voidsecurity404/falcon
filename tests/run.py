@@ -3311,6 +3311,28 @@ def _():
     ok(":ru" in Path("/tmp/nd-trans.args").read_text())
 
 
+@case("PaddleOCR yozuvni o'qiydi va yozuvni o'zi tanlaydi")
+def _():
+    text_picture()
+    run = sh(f"{HOME}/.local/share/falcon/ocr/venv/bin/python {LBIN}/falcon-ocr-read {TRANSLATE_PIC}", timeout=60)
+    found = json.loads(run.stdout.splitlines()[-1])
+    ok(found.get("model") == "multi", found)
+    ok(any("HELLO" in line["text"] for line in found["lines"]), found)
+
+
+@case("Saqlangan matn boshqa tilga qayta o'qilmasdan tarjima qilinadi")
+def _():
+    text_picture()
+    keep = Path("/tmp/nd-translate.keep")
+    keep.unlink(missing_ok=True)
+    first, _ = translate_cli(TRANSLATE_PIC, "--keep", str(keep), "--to", "ru")
+    ok(any(s["stage"] == "read" for s in first) and keep.exists(), first)
+    second, _ = translate_cli(TRANSLATE_PIC, "--keep", str(keep), "--to", "uz")
+    ok(not any(s["stage"] == "read" for s in second), second)
+    ok(second[-1].get("language") == "uz", second)
+    keep.unlink(missing_ok=True)
+
+
 @case("Mod+Alt+P tanlash ekranini ochadi, Esc yopadi")
 def _():
     key("mod", "alt", "p")

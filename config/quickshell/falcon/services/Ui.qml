@@ -144,7 +144,7 @@ Singleton {
     }
 
     function removeTranslateFiles(path) {
-        Quickshell.execDetached(["rm", "-f", path, path + ".translated.png"]);
+        Quickshell.execDetached(["rm", "-f", path, path + ".translated.png", path + ".keep"]);
     }
 
     function setRecording(on) {

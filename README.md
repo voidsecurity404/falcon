@@ -133,7 +133,7 @@ How it works: `falcon-remote` (Go, `remote/` in the repo) is a user service that
 - Screen capture: `Mod+Shift+S` and `Print` freeze the screen and let you select an area or click a window. Left click copies and saves, right click opens the editor. The toolbar switches between screenshot, Google search, text, translation and recording. Esc closes it.
 - Screen recording: Record in the control center opens its choices: video only, video with the computer's sound, or video with the sound and the microphone, an area or the whole screen, a 3, 5 or 10 s delay, and MP4 or GIF. `Mod+Shift+R` uses the same choices and stops the recording, as does a click on the time beside the clock. The saved video opens from its notification.
 - Google search: the browser posts the selected picture directly to Google Lens and shows the results.
-- Translation: `falcon-image-translate IMAGE OUT [--to LANG]` writes a copy of a picture with its text translated in place, and a window shows the result. The text goes to an online translation service (`translate-shell`).
+- Translation: the translation tool of the area selector (`Mod+Alt+P`) reads the text with PaddleOCR, which finds the script by itself (Latin languages, Chinese, Japanese, Korean, Cyrillic, Arabic, Devanagari, Greek, Thai, Tamil; Tesseract reads the others), translates it with Google, or on this computer when Google cannot be reached, and draws the translation over the original in a window. The window shows the language found, and its language button translates the same text into another language in a second or two, without reading it again; the choice is kept as the usual one. `falcon-image-translate IMAGE OUT [--to LANG] [--keep FILE]` does the same from a terminal. The text goes to Google's translation service.
 
 ## Configuration
 
@@ -176,7 +176,7 @@ fonts/              Geist, Geist Mono and Unbounded (SIL OFL 1.1)
 
 No code was copied from these projects, the ideas were rewritten.
 
-Picture translation reads text with the `tessdata_fast` script models of the Tesseract project (Apache-2.0). `falcon-ocr-models` downloads them, about 200 MB.
+Picture translation reads text with PaddleOCR's PP-OCRv6 and PP-OCRv5 models through RapidOCR and onnxruntime (Apache-2.0), in a Python of its own, and with the `tessdata_fast` script models of the Tesseract project (Apache-2.0). `falcon-ocr-models` downloads them, about 650 MB with the packages.
 
 ## Status
 

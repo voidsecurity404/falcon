@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+"""Reads the text on a picture with PaddleOCR. Runs in the reader's own Python, from falcon-ocr-models,
+and is started by falcon-image-translate.
+
+Usage: falcon-ocr-read IMAGE [MODEL]
+MODEL is multi (Latin languages, Chinese, Japanese), cyrillic, korean, arabic, devanagari, el, th or ta.
+Without it the reader finds the script itself: every model reads a few of the lines, and the one
+surest of them reads the rest.
+
+Prints one JSON object: {"model", "lines": [{"text", "score", "box": [x0, y0, x1, y1], "words":
+[[text, score, [x0, y0, x1, y1]]]}]} in the picture's pixels, or {"error": "missing"} when the models
+are not there, or {"error": "unknown"} when no model can read the script (Hebrew, Georgian and others).
+"""
+import json
+import os
+import statistics
+import sys
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+FOLDER = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "falcon/ocr/models"
+MODELS = ["multi", "cyrillic", "korean", "arabic", "devanagari", "el", "th", "ta"]
+# Lines the reader itself doubts are mostly pictures taken for letters.
+MIN_SCORE = 0.7
+# A line cut by the edge of the picture reads as nonsense, which its score shows only a little.
+MIN_SCORE_AT_EDGE = 0.85
+PARTS = 3
+# The lines read to find out the script, cut to a few words each.
+SAMPLE_LINES = 8
+SAMPLE_WIDTH = 10
+# The model for Latin, Chinese and Japanese is taken at once when it is this sure of the sample.
+SURE = 0.95
+# Below this no model knows the script.
+KNOWN = 0.75
+# Another model is taken over the first one only when it is this much surer, and when most letters
+# it reads are of its own script: each one also knows Latin, and any of them reads Hebrew as something.
+MARGIN = 0.0
+OWN_SHARE = 0.7
+SCRIPTS = {
+    "cyrillic": [("\u0400", "\u04ff")], "korean": [("\uac00", "\ud7a3"), ("\u1100", "\u11ff"), ("\u3130", "\u318f")],
+    "arabic": [("\u0600", "\u06ff"), ("\u0750", "\u077f")], "devanagari": [("\u0900", "\u097f")],
+    "el": [("\u0370", "\u03ff"), ("\u1f00", "\u1fff")], "th": [("\u0e00", "\u0e7f")], "ta": [("\u0b80", "\u0bff")],
+}
+# A small picture gets a margin around it, which the reader needs at the edges, and a very small one
+# is also enlarged.
+SMALL = 500
+TINY = 200
+
+
+def rectangle(points, factor=1, margin=0):
+    """A box in the picture's own pixels, before it was enlarged."""
+    xs = [(p[0] - margin) / factor for p in points]
+    ys = [(p[1] - margin) / factor for p in points]
+    return [int(min(xs)), int(min(ys)), int(round(max(xs))), int(round(max(ys)))]
+
+
+def reader(engine, model, threads):
+    from rapidocr import LangRec, OCRVersion
+    from rapidocr.ch_ppocr_rec import TextRecognizer
+
+    config = engine.cfg.Rec.copy()
+    config.model_path = str(FOLDER / f"rec-{model}.onnx")
+    config.lang_type = LangRec("ch" if model == "multi" else model)
+    config.ocr_version = OCRVersion("PP-OCRv6" if model == "multi" else "PP-OCRv5")
+    config.engine_cfg = engine.cfg.EngineConfig["onnxruntime"].copy()
+    config.engine_cfg.intra_op_num_threads = threads
+    config.engine_cfg.inter_op_num_threads = 1
+    config.model_root_dir = None
+    config.font_path = None
+    return TextRecognizer(config)
+
+
+def sample(crops):
+    """Lines of the usual height, the widest first, cut to a few words."""
+    heights = sorted(c.shape[0] for c in crops)
+    usual = heights[len(heights) // 2]
+    fitting = [c for c in crops if 0.6 * usual <= c.shape[0] <= 2 * usual] or list(crops)
+    chosen = sorted(fitting, key=lambda c: -c.shape[1])[:SAMPLE_LINES]
+    return [c[:, : c.shape[0] * SAMPLE_WIDTH] for c in chosen]
+
+
+def own_share(model, texts):
+    letters = [ch for text in texts for ch in text if ch.isalpha()]
+    own = sum(any(low <= ch <= high for low, high in SCRIPTS[model]) for ch in letters)
+    return own / max(1, len(letters))
+
+
+def choose(engine, crops):
+    """The model surest of a sample of the lines, and that model, already loaded."""
+    from rapidocr.ch_ppocr_rec import TextRecInput
+
+    lines = sample(crops)
+    present = [m for m in MODELS if (FOLDER / f"rec-{m}.onnx").exists()]
+    cores = os.cpu_count() or 4
+
+    def score(model, threads):
+        loaded = reader(engine, model, threads)
+        read = loaded(TextRecInput(img=lines))
+        return loaded, statistics.mean(read.scores), read.txts
+
+    first, sure, _ = score("multi", cores)
+    if sure >= SURE:
+        return "multi", first
+    with ThreadPoolExecutor(len(present) - 1 or 1) as pool:
+        others = dict(zip(present[1:], pool.map(lambda m: score(m, max(1, cores // len(present))), present[1:])))
+    print({m: (round(f[1], 3), round(own_share(m, f[2]), 2)) for m, f in others.items()}, "multi", round(sure, 3), file=sys.stderr) if os.environ.get("FALCON_OCR_DEBUG") else None
+    fitting = {m: found for m, found in others.items() if found[1] >= max(KNOWN, sure + MARGIN) and own_share(m, found[2]) >= OWN_SHARE}
+    if fitting:
+        best = max(fitting, key=lambda m: fitting[m][1])
+        return best, fitting[best][0]
+    return ("multi", first) if sure >= KNOWN else (None, None)
+
+
+def recognize(engine, model, first, crops):
+    """Reads the lines in a few parts side by side, each with its own copy of the model, because one
+    copy uses only part of the processor on the small pictures of single lines."""
+    from rapidocr.ch_ppocr_rec import TextRecInput, TextRecOutput
+
+    count = min(PARTS, max(1, len(crops) // 8))
+    threads = max(1, (os.cpu_count() or 4) // count)
+    readers = [first] + [reader(engine, model, threads) for _ in range(count - 1)]
+    # Lines of every length in each part, so that all parts take as long.
+    order = sorted(range(len(crops)), key=lambda i: crops[i].shape[1] / max(1, crops[i].shape[0]))
+    parts = [order[n::count] for n in range(count)]
+    with ThreadPoolExecutor(count) as pool:
+        results = list(pool.map(lambda pair: pair[0](TextRecInput(img=[crops[i] for i in pair[1]], return_word_box=True)), zip(readers, parts)))
+    txts, scores, words = [""] * len(crops), [0.0] * len(crops), [()] * len(crops)
+    for part, result in zip(parts, results):
+        for place, index in enumerate(part):
+            txts[index] = result.txts[place]
+            scores[index] = result.scores[place]
+            words[index] = result.word_results[place]
+    return TextRecOutput(imgs=crops, txts=tuple(txts), scores=scores, word_results=tuple(words), elapse=0.0)
+
+
+def main():
+    path = sys.argv[1]
+    wanted = sys.argv[2] if len(sys.argv) > 2 else ""
+    if not (FOLDER / "det.onnx").exists() or not (FOLDER / "rec-multi.onnx").exists() or (wanted and not (FOLDER / f"rec-{wanted}.onnx").exists()):
+        print(json.dumps({"error": "missing"}))
+        return 1
+    from rapidocr import LangDet, LangRec, OCRVersion, RapidOCR
+    from rapidocr.ch_ppocr_cls import TextClsOutput
+    from rapidocr.ch_ppocr_det import TextDetOutput
+
+    engine = RapidOCR(params={
+        "Global.use_cls": False,
+        "Global.log_level": "critical",
+        "Det.model_path": str(FOLDER / "det.onnx"),
+        "Det.ocr_version": OCRVersion("PP-OCRv6"),
+        "Det.lang_type": LangDet("ch"),
+        "Rec.model_path": str(FOLDER / "rec-multi.onnx"),
+        "Rec.ocr_version": OCRVersion("PP-OCRv6"),
+        "Rec.lang_type": LangRec("ch"),
+        "Rec.rec_batch_num": 6,
+        # Half the threads, one for each real core, finds the text fastest.
+        "EngineConfig.onnxruntime.intra_op_num_threads": max(1, (os.cpu_count() or 4) // 2),
+        "EngineConfig.onnxruntime.inter_op_num_threads": 1,
+    })
+    engine.update_params(use_det=True, use_cls=False, use_rec=True, return_word_box=True)
+    # The steps of RapidOCR's own call, with the choice of the reading model between them.
+    picture = engine.load_img(path)
+    import cv2
+    import numpy as np
+
+    height, width = picture.shape[:2]
+    factor, margin = 1, 0
+    if max(height, width) < SMALL:
+        factor, margin = (3 if max(height, width) < TINY else 1), 20
+        corner = [int(v) for v in picture[0, 0]]
+        bigger = cv2.resize(picture, (width * factor, height * factor), interpolation=cv2.INTER_LINEAR)
+        picture = cv2.copyMakeBorder(bigger, margin, margin, margin, margin, cv2.BORDER_CONSTANT, value=corner)
+    prepared, record = engine.preprocess_img(picture)
+    try:
+        crops, found_boxes = engine.detect_and_crop(prepared, record)
+    except Exception:  # noqa: BLE001 - RapidOCR raises its own error when there is no text at all
+        crops, found_boxes = [], TextDetOutput()
+    if not crops:
+        print(json.dumps({"model": wanted or "multi", "lines": []}))
+        return 0
+    if wanted:
+        model, first = wanted, reader(engine, wanted, max(1, (os.cpu_count() or 4) // PARTS))
+    else:
+        model, first = choose(engine, crops)
+        if model is None:
+            print(json.dumps({"error": "unknown"}))
+            return 0
+    read = recognize(engine, model, first, crops)
+    found = engine.build_final_output(picture, found_boxes, TextClsOutput(), read, crops, record)
+    lines = []
+    for box, text, score, words in zip(found.boxes if found.boxes is not None else [], found.txts or [], found.scores or [], found.word_results or []):
+        text = text.strip()
+        place = rectangle(box, factor, margin)
+        at_edge = place[1] <= 1 or place[3] >= height - 1 or place[0] <= 1 or place[2] >= width - 1
+        if not text or score < (MIN_SCORE_AT_EDGE if at_edge else MIN_SCORE):
+            continue
+        lines.append({
+            "text": text,
+            "score": round(float(score), 4),
+            "box": place,
+            "words": [[word, round(float(sure), 4), rectangle(points, factor, margin)] for word, sure, points in (words or []) if word.strip()],
+        })
+    print(json.dumps({"model": model, "lines": lines}, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

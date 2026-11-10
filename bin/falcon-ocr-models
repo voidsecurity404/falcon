@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
-"""Downloads the text reading models of the picture translator, one for each kind of script, about
-200 MB, and checks them. It needs no root and is safe to run again.
+"""Downloads the text readers of the picture translator and checks them. It needs no root and is safe
+to run again.
+
+The main reader is PaddleOCR (PP-OCRv6, through RapidOCR and onnxruntime) in its own Python, about
+400 MB with its packages, far surer than Tesseract on screen text and on Chinese, Japanese, Korean
+and Arabic. Tesseract's models, one per script, about 200 MB, find out the script of a picture and
+read the scripts PaddleOCR does not know.
 
   falcon-ocr-models           downloads what is missing
   falcon-ocr-models status    says how many are there
@@ -8,6 +13,8 @@
 import fcntl
 import hashlib
 import os
+import shutil
+import subprocess
 import sys
 import urllib.request
 from pathlib import Path
@@ -33,6 +40,46 @@ MODELS = {
     "Tamil": "6857e222c6977986915bd073f669c2cde33039dedde26603ed6be87b0a8d62bb",
     "Thai": "d9e34be94556ddb65fd7e04892ff606e1a5b696d0eb422b5a7efc6859943702d",
 }
+
+OCR = FOLDER.parent / "ocr"
+PACKAGES = ["rapidocr==3.10.0", "onnxruntime==1.31.1", "opencv-python-headless==5.0.0.93", "python-bidi==0.6.12"]
+PADDLE_BASE = "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/"
+# File name here: (path under PADDLE_BASE, SHA-256). Apache-2.0, from RapidOCR's own list.
+PADDLE = {
+    "det.onnx": ("PP-OCRv6/det/PP-OCRv6_det_small.onnx", "090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f"),
+    # Latin languages, Chinese and Japanese in one.
+    "rec-multi.onnx": ("PP-OCRv6/rec/PP-OCRv6_rec_small.onnx", "6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884"),
+    "rec-cyrillic.onnx": ("PP-OCRv5/rec/cyrillic_PP-OCRv5_rec_mobile.onnx", "90f761b4bfcce0c8c561c0cb5c887b0971d3ec01c32164bdf7374a35b0982711"),
+    "rec-korean.onnx": ("PP-OCRv5/rec/korean_PP-OCRv5_rec_mobile.onnx", "cd6e2ea50f6943ca7271eb8c56a877a5a90720b7047fe9c41a2e541a25773c9b"),
+    "rec-arabic.onnx": ("PP-OCRv5/rec/arabic_PP-OCRv5_rec_mobile.onnx", "c1192e632d0baa9146ae5b756a0e635e3dc63c1733737ebfd1629e87144e9295"),
+    "rec-devanagari.onnx": ("PP-OCRv5/rec/devanagari_PP-OCRv5_rec_mobile.onnx", "d6f0a906580e3fa6b324a318718f1f31f268b6ea8ef985f91c2012a37f52c91e"),
+    "rec-el.onnx": ("PP-OCRv5/rec/el_PP-OCRv5_rec_mobile.onnx", "b4368bccd557123c702b7549fee6cd1e94b581337d1c9b65310f109131542b7f"),
+    "rec-th.onnx": ("PP-OCRv5/rec/th_PP-OCRv5_rec_mobile.onnx", "de541dd83161c241ff426f7ecfd602a0ba77d686cf3ab9a6c255ea82fd08006e"),
+    "rec-ta.onnx": ("PP-OCRv5/rec/ta_PP-OCRv5_rec_mobile.onnx", "a42448808b7dea87597336f12438935f40353f1949e8360acd9e06b4da21bfe1"),
+}
+
+
+def paddle_engine_ready():
+    python = OCR / "venv/bin/python"
+    return python.exists() and subprocess.run([str(python), "-c", "import rapidocr, onnxruntime, bidi"], capture_output=True).returncode == 0
+
+
+def paddle_present():
+    return [name for name in PADDLE if (OCR / "models" / name).exists()]
+
+
+def fetch_paddle(name):
+    path, wanted = PADDLE[name]
+    target = OCR / "models" / name
+    partial = target.with_suffix(".part")
+    request = urllib.request.Request(PADDLE_BASE + path, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(request, timeout=120) as answer, open(partial, "wb") as out:
+        while piece := answer.read(1 << 20):
+            out.write(piece)
+    if digest(partial) != wanted:
+        partial.unlink()
+        raise OSError(f"{name}: checksum does not match")
+    partial.replace(target)
 
 
 def digest(path):
@@ -61,7 +108,8 @@ def fetch(name):
 
 def main(argv):
     if argv[1:] == ["status"]:
-        print(f"{len(present())}/{len(MODELS)}")
+        done = len(present()) + len(paddle_present()) + paddle_engine_ready()
+        print(f"{done}/{len(MODELS) + len(PADDLE) + 1}")
         return 0
     FOLDER.mkdir(parents=True, exist_ok=True)
     with open(FOLDER / ".lock", "w") as lock:
@@ -76,6 +124,25 @@ def main(argv):
             print(name, flush=True)
             try:
                 fetch(name)
+            except OSError as error:
+                print(error, file=sys.stderr)
+                failed += 1
+        (OCR / "models").mkdir(parents=True, exist_ok=True)
+        if not paddle_engine_ready():
+            print("engine", flush=True)
+            try:
+                shutil.rmtree(OCR / "venv", ignore_errors=True)
+                subprocess.run([sys.executable, "-m", "venv", str(OCR / "venv")], check=True)
+                subprocess.run([str(OCR / "venv/bin/pip"), "install", "--quiet", "--disable-pip-version-check", *PACKAGES], check=True)
+            except (OSError, subprocess.CalledProcessError) as error:
+                print(f"engine: {error}", file=sys.stderr)
+                failed += 1
+        for name in PADDLE:
+            if name in paddle_present():
+                continue
+            print(name, flush=True)
+            try:
+                fetch_paddle(name)
             except OSError as error:
                 print(error, file=sys.stderr)
                 failed += 1
