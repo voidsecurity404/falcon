@@ -139,7 +139,8 @@ LazyLoader {
                         title: Tr.t("Depth"),
                         items: [
                             { key: "wallpaper.parallax", label: Tr.t("Parallax"), hint: Tr.t("The wallpaper slides a little as you move between workspaces"), type: "toggle" },
-                            { key: "wallpaper.parallaxAmount", label: Tr.t("Parallax strength"), hint: Tr.t("How much taller than the screen the wallpaper is drawn"), type: "slider", min: 0.02, max: 0.2, step: 0.01, unit: "percent" }
+                            { key: "wallpaper.parallaxAmount", label: Tr.t("Parallax strength"), hint: Tr.t("How much taller than the screen the wallpaper is drawn"), type: "slider", min: 0.02, max: 0.2, step: 0.01, unit: "percent" },
+                            { key: "wallpaper.depth", label: Tr.t("Widgets behind the subject"), hint: Depth.installing ? Tr.t("Getting ready for depth") : Depth.cutting ? Tr.t("Cutting out the subject of this wallpaper…") : Tr.t("The main thing of the picture is cut out once and drawn over the widgets. The first time downloads about 400 MB"), type: "toggle" }
                         ]
                     }
                 ]

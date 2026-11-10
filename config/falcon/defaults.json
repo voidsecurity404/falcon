@@ -185,6 +185,7 @@
     "duration": 1.0,
     "parallax": true,
     "parallaxAmount": 0.06,
+    "depth": false,
     "auto": "off",
     "slideshowEvery": 3600,
     "slideshowOrder": "random",

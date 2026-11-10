@@ -64,6 +64,7 @@ targets=(
     .local/bin/falcon-game
     .local/bin/falcon-keysounds
     .local/bin/falcon-wallget
+    .local/bin/falcon-depth
     .local/bin/falcon-keys
     .local/bin/falcon-fetch
     .local/bin/falcon-shot
