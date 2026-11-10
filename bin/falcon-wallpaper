@@ -105,8 +105,10 @@ stop_live() {
 }
 
 # Ovozsiz, aylanib, ekranni to'ldirib o'ynaydi; ko'rinmaganda to'xtaydi.
+# mpvpaper reads ~/.config/mpv, so uosc and the OSD are turned off here: otherwise the
+# player's timeline and messages are drawn along the bottom of the wallpaper.
 play() {
-    setsid -f mpvpaper -p -o "no-audio loop panscan=1.0 hwdec=auto" '*' "$1" >/dev/null 2>&1 9>&-
+    setsid -f mpvpaper -p -o "no-audio loop panscan=1.0 hwdec=auto load-scripts=no osc=no osd-level=0 osd-bar=no" '*' "$1" >/dev/null 2>&1 9>&-
     # Video keyin ochilgani uchun vidjetlarni yopadi: ularni yana ustiga chiqaramiz.
     for _ in $(seq 1 50); do
         niri msg -j layers 2>/dev/null | grep -q '"mpvpaper"' && break

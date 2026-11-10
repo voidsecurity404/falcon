@@ -10,6 +10,9 @@ import qs.services
 // (namespace falcon-pin). It starts exactly where the area was cut, so the picture seems to lift
 // off the screen. Drag moves it, the wheel resizes it around the pointer, Ctrl with the wheel
 // changes its opacity, a middle click closes it. Copy, save and close show on hover.
+// The window covers its whole screen and stays still, and only the card moves inside it, with
+// input only on the card. A window moved by its margins answered pointer events from where it
+// was before the move had reached the screen, so a drag counted each step twice and flew off.
 Scope {
     Variants {
         model: Pins.items
@@ -18,8 +21,6 @@ Scope {
             id: pin
 
             required property var modelData
-            // Room for the shadow around the card. Only the card takes input.
-            readonly property int pad: 26
             readonly property var area: screen
             property real px: 0
             property real py: 0
@@ -52,13 +53,9 @@ Scope {
             anchors {
                 top: true
                 left: true
+                right: true
+                bottom: true
             }
-            margins {
-                left: Math.round(px - area.x - pad)
-                top: Math.round(py - area.y - pad)
-            }
-            implicitWidth: cardW + pad * 2
-            implicitHeight: cardH + pad * 2
             exclusionMode: ExclusionMode.Ignore
             color: "transparent"
             WlrLayershell.layer: WlrLayer.Top
@@ -77,8 +74,8 @@ Scope {
             Item {
                 id: card
 
-                x: pin.pad
-                y: pin.pad
+                x: Math.round(pin.px - pin.area.x)
+                y: Math.round(pin.py - pin.area.y)
                 width: pin.cardW
                 height: pin.cardH
                 opacity: pin.cardOpacity
@@ -139,8 +136,11 @@ Scope {
                 MouseArea {
                     id: dragArea
 
+                    // Pointer and card at the press, in window coordinates, which do not move.
                     property real pressX: 0
                     property real pressY: 0
+                    property real startX: 0
+                    property real startY: 0
 
                     anchors.fill: parent
                     acceptedButtons: Qt.LeftButton | Qt.MiddleButton
@@ -150,12 +150,14 @@ Scope {
                             Pins.remove(pin.modelData.id);
                             return;
                         }
-                        pressX = mouse.x;
-                        pressY = mouse.y;
+                        pressX = card.x + mouse.x;
+                        pressY = card.y + mouse.y;
+                        startX = pin.px;
+                        startY = pin.py;
                     }
                     onPositionChanged: mouse => {
                         if (pressed)
-                            pin.place(pin.px + mouse.x - pressX, pin.py + mouse.y - pressY);
+                            pin.place(startX + card.x + mouse.x - pressX, startY + card.y + mouse.y - pressY);
                     }
                     onDoubleClicked: pin.zoomAt(1 / pin.zoom, pin.cardW / 2, pin.cardH / 2)
                     onWheel: wheel => {
