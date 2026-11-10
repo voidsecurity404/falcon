@@ -103,6 +103,7 @@ How it works: `falcon-remote` (Go, `remote/` in the repo) is a user service that
 - **Power mode follows the charger.** A mode you choose by hand stays until the charger changes.
 - **System updates:** the panel shows how many wait. A click opens a terminal with the update, which asks before installing. Checking downloads no packages.
 - **Terminal greeting:** a new fish terminal shows fastfetch with the logo moving in place, in the theme's accent color. In kitty it keeps moving while you run commands and scroll, and moves with the text. Settings → Fastfetch picks one of 11 logos, 10 styles and 7 animations (spin, flip, swing, bounce, assemble, decode, aurora) with a live preview of each, the length of one loop, or turns the greeting off.
+- **Web search:** `?` in the app menu (`,` on the Russian layout) searches Google. A bang picks the site, before or after the words: `!yt` YouTube, `!w` Wikipedia, `!gh` GitHub, `!aw` ArchWiki, `!aur`, `!tr` Translate, `!maps` and more; `?` alone lists them. A typed address opens directly, and DuckDuckGo's instant answer shows under the search when it has one.
 - **Timer:** `>timer 25`, `>timer 1:30`, `>timer 90s`, or `>pomodoro` in the app menu. Click it in the island to pause, right click to stop. It survives a restart and sleep, but it cannot wake the laptop.
 - **Microphone and camera:** an icon on the panel while an app uses them. A click names the apps.
 - **Clipboard pins:** `Ctrl+P` in `Mod+V` keeps up to 6 rows on top. They stay on disk until unpinned.

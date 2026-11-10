@@ -1064,5 +1064,10 @@
  "Looking for lyrics…": "Ищу текст песни…",
  "Instrumental, no words": "Инструментал, без слов",
  "Lyrics need the internet": "Для текста нужен интернет",
- "No lyrics found for this song": "Текст этой песни не найден"
+ "No lyrics found for this song": "Текст этой песни не найден",
+ "Search the web": "Поиск в интернете",
+ "Type ? and the words, !yt for YouTube": "Введите ? и слова, !yt для YouTube",
+ "Search in {site}": "Искать в {site}",
+ "Open {site}": "Открыть {site}",
+ "Open the address": "Открыть адрес"
 }

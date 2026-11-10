@@ -42,11 +42,17 @@ PanelWindow {
     readonly property bool emojiMode: commandMode && wordIs(["emoji", "эмодзи"]) && commandText.length > commandWord.length
     readonly property bool fileMode: commandMode && wordIs(["file", "файл"]) && commandText.length > commandWord.length
     readonly property bool timerMode: commandMode && wordIs(["timer", "таймер"]) && commandText.length > commandWord.length
-    readonly property string mode: timerMode ? "timer" : calcMode ? "calc" : schemeMode ? "scheme" : windowMode ? "windows" : emojiMode ? "emoji" : fileMode ? "files" : commandMode ? "commands" : "apps"
+    // "?" searches the web. "," is the same key on the Russian layout.
+    readonly property bool webMode: query[0] === "?" || query[0] === ","
+    readonly property string webText: webMode ? query.slice(1) : ""
+    readonly property var webParts: Tools.webParts(webText)
+    readonly property string mode: webMode ? "web" : timerMode ? "timer" : calcMode ? "calc" : schemeMode ? "scheme" : windowMode ? "windows" : emojiMode ? "emoji" : fileMode ? "files" : commandMode ? "commands" : "apps"
 
     property var emojiRows: []
     property bool emojiWanted: false
     property var fileRows: []
+    // DuckDuckGo's instant answer for the words in `forText`: { forText, heading, text, url }.
+    property var webAnswer: null
 
     // What is on screen follows the text. A change of mode first fades the old content away.
     property string shownMode: "apps"
@@ -139,6 +145,14 @@ PanelWindow {
             complete: "emoji "
         },
         {
+            id: "web",
+            icon: "globe",
+            name: Tr.t("Search the web"),
+            detail: Tr.t("Type ? and the words, !yt for YouTube"),
+            keywords: "web google search internet bang интернет поиск гугл",
+            fill: "?"
+        },
+        {
             id: "songrec",
             icon: "music",
             name: Tr.t("What song is this?"),
@@ -180,6 +194,8 @@ PanelWindow {
             }))
 
     readonly property var results: {
+        if (webMode)
+            return webRows();
         if (timerMode)
             return timerRows();
         if (calcMode)
@@ -243,6 +259,76 @@ PanelWindow {
                     order: order,
                     tier: tierOf(row)
                 })).filter(r => r.tier > 0).sort((a, b) => b.tier - a.tier || a.row.name.length - b.row.name.length || a.order - b.order).map(r => r.row);
+    }
+
+    // Opens a page and brings the browser forward, since niri leaves focus where it was.
+    function openWeb(url) {
+        Quickshell.execDetached(["sh", "-c", 'xdg-open "$1" >/dev/null 2>&1; sleep 0.5; "$HOME/.local/bin/falcon-raise" "firefox|chrom|brave|zen|helium" true >/dev/null 2>&1', "sh", url]);
+    }
+
+    function webRows() {
+        const parts = webParts;
+        const lang = Tr.language === "ru" ? "ru" : "en";
+        const bangRow = b => ({
+                id: "bang:" + b.id,
+                icon: b.id === "g" ? "google" : "globe",
+                name: b.name,
+                detail: "!" + b.id,
+                fill: "?!" + b.id + " "
+            });
+        // A bang being typed, or nothing typed yet: the list of sites.
+        if (parts.partial !== null)
+            return Tools.BANGS.filter(b => b.id.startsWith(parts.partial) || b.id.startsWith(Tools.swapLayout(parts.partial))).map(bangRow);
+        if (webText.trim() === "")
+            return Tools.BANGS.map(bangRow);
+
+        const site = parts.bang || Tools.BANGS[0];
+        const rows = [
+            {
+                id: "web:search",
+                icon: site.id === "g" ? "google" : "globe",
+                name: parts.query !== "" ? parts.query : site.name,
+                detail: parts.query !== "" ? Tr.t("Search in {site}").replace("{site}", site.name) : Tr.t("Open {site}").replace("{site}", site.name),
+                run: () => root.openWeb(Tools.bangUrl(site, parts.query, lang))
+            }
+        ];
+        const address = parts.bang ? "" : Tools.asAddress(parts.query);
+        if (address !== "") {
+            const open = {
+                id: "web:open",
+                icon: "link",
+                name: address.replace(/^https?:\/\//, ""),
+                detail: Tr.t("Open the address"),
+                run: () => root.openWeb(address)
+            };
+            // Typed with its scheme, the address is surely meant.
+            if (/^\s*https?:/i.test(parts.query))
+                rows.unshift(open);
+            else
+                rows.push(open);
+        }
+        const answer = webAnswer;
+        if (!parts.bang && answer && !answer.empty && answer.forText === parts.query.trim())
+            rows.push({
+                id: "web:answer",
+                icon: "note",
+                name: answer.heading,
+                detail: answer.text,
+                run: () => root.openWeb(answer.url)
+            });
+        return rows;
+    }
+
+    function askAnswer() {
+        const text = webMode && !webParts.bang && webParts.partial === null ? webParts.query.trim() : "";
+        if (text.length < 3 || Tools.asAddress(text) !== "") {
+            answerSearch.running = false;
+            return;
+        }
+        if (webAnswer && webAnswer.forText === text)
+            return;
+        answerSearch.forText = text;
+        answerSearch.exec(["curl", "-sf", "--max-time", "5", "-A", "falcon", "https://api.duckduckgo.com/?format=json&no_html=1&skip_disambig=1&no_redirect=1&t=falcon&q=" + encodeURIComponent(text)]);
     }
 
     function windowRows() {
@@ -377,6 +463,10 @@ PanelWindow {
             input.text = ">" + item.complete;
             return;
         }
+        if (item.fill) {
+            input.text = item.fill;
+            return;
+        }
         if (item.stay)
             return;
         // A click or Enter in the list counts the same as a session button.
@@ -434,6 +524,8 @@ PanelWindow {
     function clearForNextTime() {
         modeSwap.stop();
         fileTimer.stop();
+        answerTimer.stop();
+        answerSearch.running = false;
         input.text = "";
         armed = "";
         pointerStart = null;
@@ -463,6 +555,7 @@ PanelWindow {
         armed = "";
         // Runs on every change: here the file mode binding may still hold its old value.
         fileTimer.restart();
+        answerTimer.restart();
     }
     onEmojiModeChanged: {
         if (emojiMode)
@@ -481,6 +574,41 @@ PanelWindow {
         path: root.emojiWanted ? Quickshell.env("HOME") + "/.config/falcon/emoji.json" : ""
         printErrors: false
         onLoaded: root.loadEmoji(text())
+    }
+
+    Timer {
+        id: answerTimer
+
+        interval: 450
+        onTriggered: root.askAnswer()
+    }
+    Process {
+        id: answerSearch
+
+        property string forText: ""
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let data = null;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    return;
+                }
+                const answer = data.Answer && typeof data.Answer === "string" ? data.Answer : "";
+                const summary = answer || data.AbstractText || data.Definition || "";
+                if (summary === "") {
+                    root.webAnswer = { forText: answerSearch.forText, heading: "", text: "", url: "", empty: true };
+                    return;
+                }
+                root.webAnswer = {
+                    forText: answerSearch.forText,
+                    heading: data.Heading || answerSearch.forText,
+                    text: summary + (data.AbstractSource ? " — " + data.AbstractSource : ""),
+                    url: data.AbstractURL || data.DefinitionURL || ("https://duckduckgo.com/?q=" + encodeURIComponent(answerSearch.forText))
+                };
+            }
+        }
     }
 
     Timer {
@@ -935,9 +1063,37 @@ PanelWindow {
                     name: "search"
                     size: 17
                     color: Theme.muted
-                    opacity: root.commandMode ? 0 : 1
-                    rotation: root.commandMode ? 90 : 0
-                    scale: root.commandMode ? 0.6 : 1
+                    opacity: root.commandMode || root.webMode ? 0 : 1
+                    rotation: root.commandMode || root.webMode ? 90 : 0
+                    scale: root.commandMode || root.webMode ? 0.6 : 1
+
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: 160
+                        }
+                    }
+                    Behavior on rotation {
+                        NumberAnimation {
+                            duration: 260
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                    Behavior on scale {
+                        NumberAnimation {
+                            duration: 260
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                }
+                Icon {
+                    x: 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "globe"
+                    size: 17
+                    color: Theme.accent
+                    opacity: root.webMode ? 1 : 0
+                    rotation: root.webMode ? 0 : -90
+                    scale: root.webMode ? 1 : 0.6
 
                     Behavior on opacity {
                         NumberAnimation {
