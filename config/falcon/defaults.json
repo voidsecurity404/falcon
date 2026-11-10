@@ -22,6 +22,12 @@
     "lineHeight": 120,
     "scrollback": 2000
   },
+  "fetch": {
+    "enabled": true,
+    "style": "classic",
+    "animation": "spin",
+    "seconds": 3.2
+  },
   "windows": {
     "gaps": 14,
     "radius": 13,

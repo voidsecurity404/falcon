@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
-"""Terminal greeting: fastfetch, then the logo keeps spinning in its place.
+"""Terminal greeting: fastfetch, then the logo keeps moving in its place.
 
-fastfetch draws the logo once. This script prints fastfetch's output itself
-and finds where the logo landed.
+The look comes from the `fetch` settings (Settings, Fastfetch page):
+  fetch.enabled    show the greeting at all
+  fetch.style      one of STYLES: which lines fastfetch prints and how
+  fetch.animation  one of ANIMATIONS: how the logo moves
+  fetch.seconds    length of one loop of the animation
+The logo takes the theme's accent from colors.json, so it follows the wallpaper.
+
+fastfetch draws the logo once. This script writes a config for the chosen
+style, prints fastfetch's output itself and finds where the logo landed.
 
 In kitty (not inside tmux) the text logo is replaced by an animated picture
 sent through kitty's graphics protocol. kitty plays it by itself, forever, and
-the picture belongs to those cells, so it keeps turning while commands run,
+the picture belongs to those cells, so it keeps moving while commands run,
 while the output scrolls and in the scrollback. No process stays behind.
 Frames are cached in ~/.cache/falcon/fetch and kitty reads them from there.
 
@@ -17,38 +24,285 @@ it stops by itself when:
   - the terminal changes size.
 It writes each frame as one write between a cursor save and restore, so the
 prompt and what the user types stay where they are.
+
+For the Settings page:
+  --previews           makes an animated WebP of every animation, prints {name: path}
+  --preview-text STYLE prints {"html", "background", "foreground"}: that style's
+                       lines as rich text in the terminal's colors
 """
+import colorsys
+import fcntl
+import hashlib
+import json
 import math
 import os
+import random
 import re
 import select
+import shutil
 import signal
+import struct
 import subprocess
 import sys
 import termios
 import time
 import tty
-import fcntl
-import hashlib
-import random
-import struct
 import zlib
 
 FPS = 24
-TURN_SECONDS = 3.2          # one full turn
 LOGO_LINES = 14
-LOGO_COL = 2                # padding.left 1 in config.jsonc
-FRONT = (255, 52, 58)       # brand.txt color
-BACK = (190, 38, 44)        # deeper red for the reverse side
+LOGO_COL = 2                # padding.left 1 in the config
 BRAND = os.path.expanduser("~/.config/fastfetch/brand.txt")
+CONFIG = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+STATE = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"),
+                     "falcon", "fetch")
 MIRROR = str.maketrans("/\\()[]{}<>", "\\/)(][}{><")
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+FALLBACK_ACCENT = (255, 52, 58)
+VERSION = 2
+
+ANIMATIONS = ["spin", "pulse", "shine", "wave", "glitch", "scan"]
+DEFAULTS = {"enabled": True, "style": "classic", "animation": "spin", "seconds": 3.2}
+
+
+# ---------------------------------------------------------------- settings
+
+def merge(base, over):
+    out = dict(base)
+    for key, value in over.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+def settings():
+    merged = {}
+    for name in ("defaults.json", "settings.json"):
+        try:
+            with open(os.path.join(CONFIG, "falcon", name)) as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                merged = merge(merged, data)
+        except (OSError, ValueError):
+            pass
+    fetch = merged.get("fetch") if isinstance(merged.get("fetch"), dict) else {}
+    out = dict(DEFAULTS, **fetch)
+    if out["style"] not in STYLES:
+        out["style"] = DEFAULTS["style"]
+    if out["animation"] not in ANIMATIONS:
+        out["animation"] = DEFAULTS["animation"]
+    try:
+        out["seconds"] = min(8.0, max(1.5, float(out["seconds"])))
+    except (TypeError, ValueError):
+        out["seconds"] = DEFAULTS["seconds"]
+    return out
+
+
+def accent():
+    try:
+        with open(os.path.join(STATE, "falcon", "colors.json")) as f:
+            value = json.load(f)["accent"].lstrip("#")
+        return tuple(int(value[i:i + 2], 16) for i in (0, 2, 4))
+    except (OSError, ValueError, KeyError, TypeError):
+        return FALLBACK_ACCENT
+
+
+def scaled(color, k):
+    return tuple(max(0, min(255, round(v * k))) for v in color)
+
+
+def mixed(a, b, k):
+    return tuple(round(x + (y - x) * k) for x, y in zip(a, b))
+
+
+def hue_turn(color, turn):
+    h, l, s = colorsys.rgb_to_hls(*(v / 255 for v in color))
+    r, g, b = colorsys.hls_to_rgb((h + turn) % 1, min(0.75, max(0.5, l)), max(0.6, s))
+    return (round(r * 255), round(g * 255), round(b * 255))
+
+
+WHITE = (255, 255, 255)
+
+
+# ---------------------------------------------------------------- styles
+
+SHELL = ("n=\"${FALCON_SHELL:-$(ps -o comm= -p $(ps -o ppid= -p $PPID) 2>/dev/null)}\"; "
+         "echo \"${n:-$(basename \"$SHELL\")}\"")
+MODULES = {
+    "os": {"type": "os", "format": "{name}"},
+    "host": {"type": "host", "format": "{name}"},
+    "kernel": {"type": "kernel", "format": "{release}"},
+    "uptime": {"type": "uptime"},
+    "packages": {"type": "packages", "format": "{all}"},
+    "shell": {"type": "command", "text": SHELL},
+    "desktop": {"type": "custom", "format": "Falcon"},
+    "wm": {"type": "wm", "format": "{pretty-name}"},
+    "terminal": {"type": "terminal", "format": "{pretty-name}"},
+    "display": {"type": "display", "format": "{width}x{height} {refresh-rate} Hz"},
+    "cpu": {"type": "cpu", "format": "{name}"},
+    "gpu": {"type": "gpu", "format": "{name}"},
+    "memory": {"type": "memory", "format": "{used} / {total}"},
+    "swap": {"type": "swap", "format": "{used} / {total}"},
+    "disk": {"type": "disk", "folders": "/", "format": "{size-used} / {size-total}"},
+    "battery": {"type": "battery", "format": "{capacity} {status}"},
+}
+BARS = {
+    "memory": "{percentage-bar} {percentage}",
+    "swap": "{percentage-bar} {percentage}",
+    "disk": "{size-percentage-bar} {size-percentage}",
+    "battery": "{capacity-bar} {capacity}",
+}
+ICONS = {
+    "os": "", "kernel": "", "uptime": "\U000f0150", "packages": "\U000f03d6",
+    "shell": "", "wm": "", "terminal": "", "display": "\U000f0379",
+    "cpu": "\U000f0ee0", "gpu": "\U000f08ae", "memory": "\U000f035b", "disk": "\U000f02ca",
+    "battery": "\U000f0079",
+}
+
+
+def mod(name, key=None, **extra):
+    out = dict(MODULES[name])
+    out["key"] = name if key is None else key
+    out.update(extra)
+    return out
+
+
+def head(text):
+    return {"type": "custom", "format": "{#1;34}" + text + "{#}"}
+
+
+def line(text):
+    return {"type": "custom", "format": "{#34}" + text + "{#}"}
+
+
+def style_classic():
+    names = ["os", "host", "kernel", "uptime", "packages", "shell", "desktop", "wm", "terminal",
+             "display", "cpu", "gpu", "memory", "swap", "disk", "battery"]
+    return {}, [mod(n) for n in names]
+
+
+def style_minimal():
+    names = ["os", "kernel", "uptime", "wm", "shell", "memory"]
+    return {"key": {"width": 9}}, [mod(n) for n in names]
+
+
+def style_boxed():
+    names = ["os", "kernel", "uptime", "packages", "shell", "wm", "terminal", "cpu", "gpu",
+             "memory", "disk", "battery"]
+    rows = [line("╭─ falcon ─────────────────────")]
+    rows += [mod(n, "│ " + n) for n in names]
+    rows.append(line("╰──────────────────────────────"))
+    return {"key": {"width": 12}}, rows
+
+
+def style_tree():
+    groups = [("system", ["os", "kernel", "uptime", "packages"]),
+              ("desktop", ["wm", "shell", "terminal"]),
+              ("hardware", ["cpu", "gpu", "memory", "disk"])]
+    rows = []
+    for title, names in groups:
+        rows.append(head(title))
+        for i, n in enumerate(names):
+            rows.append(mod(n, ("└─ " if i == len(names) - 1 else "├─ ") + n))
+    return {"key": {"width": 13}}, rows
+
+
+def style_icons():
+    names = ["os", "kernel", "uptime", "packages", "shell", "wm", "terminal", "display", "cpu",
+             "gpu", "memory", "disk", "battery"]
+    return {"key": {"width": 12}}, [mod(n, ICONS[n] + "  " + n) for n in names]
+
+
+def style_hardware():
+    names = ["host", "cpu", "gpu", "display", "memory", "swap", "disk", "battery", "kernel"]
+    return {}, [head("hardware"), line("────────")] + [mod(n) for n in names]
+
+
+def style_bars():
+    rows = [mod(n) for n in ["os", "kernel", "uptime", "wm", "packages"]]
+    rows.append(line(""))
+    rows += [mod(n, format=BARS[n]) for n in ["memory", "swap", "disk", "battery"]]
+    extra = {"bar": {"char": {"elapsed": "■", "total": "·"}, "width": 14,
+                     "border": {"left": "", "right": ""}},
+             "percent": {"type": 11, "color": {"green": "blue", "yellow": "blue", "red": "blue"}}}
+    return extra, rows
+
+
+def style_palette():
+    rows = [{"type": "title", "format": "{#1;34}{user-name}{#}@{#1;34}{host-name}{#}"},
+            {"type": "separator", "string": "─"}]
+    rows += [mod(n) for n in ["os", "kernel", "uptime", "packages", "wm", "shell", "terminal",
+                              "memory"]]
+    rows += ["break", {"type": "colors", "symbol": "circle"}]
+    return {}, rows
+
+
+def style_arrows():
+    names = ["os", "kernel", "uptime", "packages", "shell", "wm", "terminal", "cpu", "memory",
+             "disk", "battery"]
+    return {"separator": " ➜  ", "key": {"width": 0}}, [mod(n) for n in names]
+
+
+def style_quiet():
+    names = ["os", "kernel", "uptime", "wm", "shell", "terminal", "cpu", "memory", "disk"]
+    rows = []
+    for n in names:
+        value = MODULES[n].get("format", "{1}")
+        if n == "uptime":
+            value = "{?days}{days}d {?}{hours}h {minutes}m"
+        rows.append(mod(n, " ", format="{#34}·{#} " + value))
+    return {}, rows
+
+
+STYLES = {
+    "classic": style_classic, "minimal": style_minimal, "boxed": style_boxed,
+    "tree": style_tree, "icons": style_icons, "hardware": style_hardware, "bars": style_bars,
+    "palette": style_palette, "arrows": style_arrows, "quiet": style_quiet,
+}
+
+
+def config_file(style, logo=True):
+    """Writes the fastfetch config of a style to the runtime folder, returns its path."""
+    extra, modules = STYLES[style]()
+    if not logo:
+        # The preview runs under the shell, not a terminal: name the one the greeting runs in.
+        modules = [dict(m, type="custom", format=m["format"].replace("{pretty-name}", "kitty"))
+                   if isinstance(m, dict) and m.get("type") == "terminal" else m for m in modules]
+    display = {"separator": "  ", "key": {"width": 10}, "color": {"keys": "blue"}}
+    display = merge(display, extra)
+    data = {
+        "logo": ({"type": "file-raw", "source": BRAND, "width": 22, "height": LOGO_LINES,
+                  "padding": {"left": LOGO_COL - 1, "right": 3}} if logo else {"type": "none"}),
+        "display": display,
+        "modules": modules,
+    }
+    folder = runtime_dir()
+    path = os.path.join(folder, f"style-{style}{'' if logo else '-bare'}.jsonc")
+    text = json.dumps(data, ensure_ascii=False, indent=1)
+    try:
+        with open(path) as f:
+            same = f.read() == text
+    except OSError:
+        same = False
+    if not same:
+        with open(path + ".tmp", "w") as f:
+            f.write(text)
+        os.replace(path + ".tmp", path)
+    return path
+
+
+def runtime_dir():
+    base = os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/falcon-{os.getuid()}"
+    path = os.path.join(base, "falcon-fetch")
+    os.makedirs(path, exist_ok=True)
+    return path
 
 
 def pid_file(shell):
-    base = os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/falcon-{os.getuid()}"
-    os.makedirs(os.path.join(base, "falcon-fetch"), exist_ok=True)
-    return os.path.join(base, "falcon-fetch", str(shell))
+    return os.path.join(runtime_dir(), str(shell))
 
 
 def stop(shell):
@@ -96,40 +350,130 @@ def load_logo():
     return [l.ljust(width) for l in lines], width
 
 
-def frames(lines, width):
-    """Every frame of one turn, as ready-to-write rows."""
-    count = round(FPS * TURN_SECONDS)
+# ---------------------------------------------------------------- text frames
+# Each frame is a grid of (character, color or None) for the text fallback.
+
+def glitch_frames(count):
+    """Frame numbers inside the three short bursts of the glitch animation."""
+    out = set()
+    for start, length in ((0.10, 0.07), (0.46, 0.05), (0.74, 0.09)):
+        a = int(start * count)
+        out.update(range(a, a + max(2, int(length * count))))
+    return out
+
+
+def scan_reveal(t):
+    """Share of the logo shown by the scan animation, and the place of its bright line."""
+    if t < 0.45:
+        p = t / 0.45
+        return p, p
+    if t < 0.85:
+        return 1.0, None
+    return 1.0 - (t - 0.85) / 0.15, None
+
+
+def text_grid(anim, lines, width, color, i, count):
+    t = i / count
+    h = len(lines)
     mid = (width - 1) / 2
-    out = []
-    for i in range(count):
-        angle = 2 * math.pi * i / count
-        c = math.cos(angle)
+    grid = [[(ch, color) if ch != " " else (" ", None) for ch in row] for row in lines]
+    if anim == "spin":
+        c = math.cos(2 * math.pi * t)
         squeeze = max(abs(c), 0.06)
         back = c < 0
-        # Light falls on the face turned to the viewer, edges go darker.
-        base = BACK if back else FRONT
-        light = 0.6 + 0.4 * abs(c)
-        color = tuple(round(v * light) for v in base)
-        sgr = "\x1b[1;38;2;%d;%d;%dm" % color
-        rows = []
-        for line in lines:
+        tone = scaled(scaled(color, 0.72) if back else color, 0.6 + 0.4 * abs(c))
+        out = []
+        for row in lines:
             cells = []
             for x in range(width):
                 u = (x - mid) / squeeze
                 if back:
                     u = -u
                 src = round(mid + u)
-                ch = line[src] if 0 <= src < width else " "
-                cells.append(ch.translate(MIRROR) if back else ch)
-            rows.append(sgr + "".join(cells) + "\x1b[0m")
+                ch = row[src] if 0 <= src < width else " "
+                ch = ch.translate(MIRROR) if back else ch
+                cells.append((ch, tone))
+            out.append(cells)
+        return out
+    if anim == "pulse":
+        s = 0.5 - 0.5 * math.cos(2 * math.pi * t)
+        tone = mixed(scaled(color, 0.55), mixed(color, WHITE, 0.3), s)
+        return [[(ch, tone if c else None) for ch, c in row] for row in grid]
+    if anim == "shine":
+        p = -0.35 + 1.7 * t / 0.6 if t < 0.6 else 9
+        out = []
+        for y, row in enumerate(grid):
+            cells = []
+            for x, (ch, c) in enumerate(row):
+                d = x / width * 0.8 + y / h * 0.35
+                k = math.exp(-((d - p) / 0.09) ** 2)
+                cells.append((ch, mixed(scaled(color, 0.82), WHITE, 0.8 * k) if c else None))
+            out.append(cells)
+        return out
+    if anim == "wave":
+        out = []
+        for y, row in enumerate(lines):
+            phase = 2 * math.pi * (y / h * 1.1 - t)
+            dx = round(math.sin(phase) * 1.2)
+            tone = scaled(color, 0.82 + 0.18 * math.sin(phase))
+            shifted = (" " * max(dx, 0) + row + " " * max(-dx, 0))[max(-dx, 0):][:width]
+            out.append([(ch, tone if ch != " " else None) for ch in shifted.ljust(width)])
+        return out
+    if anim == "glitch":
+        if i not in glitch_frames(count):
+            return grid
+        rnd = random.Random(i * 7919)
+        other = hue_turn(color, 0.42)
+        out = []
+        for row in lines:
+            dx = rnd.choice((0, 0, 0, 1, -1, 2, -2))
+            shifted = (" " * max(dx, 0) + row + " " * max(-dx, 0))[max(-dx, 0):][:width].ljust(width)
+            cells = []
+            for ch in shifted:
+                if ch != " " and rnd.random() < 0.12:
+                    cells.append((rnd.choice("#%@$&*+"), other))
+                else:
+                    cells.append((ch, (other if dx else color) if ch != " " else None))
+            out.append(cells)
+        return out
+    if anim == "scan":
+        shown, edge = scan_reveal(t)
+        out = []
+        for y, row in enumerate(grid):
+            pos = (y + 0.5) / h
+            if edge is not None:
+                if pos > shown:
+                    out.append([(" ", None)] * width)
+                    continue
+                tone = mixed(color, WHITE, 0.7) if shown - pos < 1.2 / h else color
+                out.append([(ch, tone if c else None) for ch, c in row])
+            else:
+                tone = scaled(color, shown)
+                out.append([(ch, tone if c and shown > 0.05 else None) for ch, c in row])
+        return out
+    return grid
+
+
+def text_frames(anim, seconds, color):
+    """Every frame of one loop, as ready-to-write rows."""
+    lines, width = load_logo()
+    count = max(2, round(FPS * seconds))
+    out = []
+    for i in range(count):
+        rows = []
+        for cells in text_grid(anim, lines, width, color, i, count):
+            text, last = [], "none"
+            for ch, c in cells:
+                if c is not None and c != last:
+                    text.append("\x1b[1;38;2;%d;%d;%dm" % c)
+                    last = c
+                text.append(ch)
+            rows.append("".join(text) + "\x1b[0m")
         out.append(rows)
     return out
 
 
-VERSION = 1
-CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"),
-                     "falcon", "fetch")
-
+# ---------------------------------------------------------------- picture frames
 
 def kitty_ok():
     return (os.environ.get("TERM") == "xterm-kitty" and os.environ.get("KITTY_WINDOW_ID")
@@ -145,23 +489,11 @@ def font_file():
         return None
 
 
-def picture_frames(cw, ch):
-    """Paths of zlib-compressed RGBA frames for one turn, made once per cell size."""
-    lines, width = load_logo()
-    font = font_file()
-    if not font:
-        return None, 0, 0
-    key = hashlib.sha1(repr((VERSION, lines, font, os.path.getmtime(font), cw, ch,
-                             FPS, TURN_SECONDS, FRONT, BACK)).encode()).hexdigest()[:16]
-    folder = os.path.join(CACHE, key)
-    count = round(FPS * TURN_SECONDS)
-    w, h = width * cw, len(lines) * ch
-    paths = [os.path.join(folder, f"{i:03}.z") for i in range(count)]
-    if all(os.path.exists(p) for p in paths):
-        return paths, w, h
-
+def logo_mask(cw, ch, font):
+    """The logo as a float array (0 to 1), one column of margin on each side."""
+    import numpy as np
     from PIL import Image, ImageDraw, ImageFont
-    # A font size whose advance fills one cell, like kitty's own glyphs.
+    lines, width = load_logo()
     probe = ImageFont.truetype(font, 100)
     size = 100 * cw / probe.getlength("M")
     face = ImageFont.truetype(font, size)
@@ -171,31 +503,174 @@ def picture_frames(cw, ch):
         pass
     ascent, descent = face.getmetrics()
     lift = (ch - ascent - descent) / 2
+    w, h = (width + 2) * cw, len(lines) * ch
     mask = Image.new("L", (w, h), 0)
     draw = ImageDraw.Draw(mask)
-    for y, line in enumerate(lines):
-        for x, c in enumerate(line):
+    for y, row in enumerate(lines):
+        for x, c in enumerate(row):
             if c != " ":
-                draw.text((x * cw, y * ch + lift), c, fill=255, font=face)
+                draw.text(((x + 1) * cw, y * ch + lift), c, fill=255, font=face)
+    return np.asarray(mask, dtype=np.float32) / 255, width
 
+
+def shift_x(a, dx):
+    import numpy as np
+    dx = int(round(dx))
+    out = np.zeros_like(a)
+    if dx > 0:
+        out[:, dx:] = a[:, :-dx]
+    elif dx < 0:
+        out[:, :dx] = a[:, -dx:]
+    else:
+        out[:] = a
+    return out
+
+
+def blur(a, radius):
+    import numpy as np
+    from PIL import Image, ImageFilter
+    img = Image.fromarray((np.clip(a, 0, 1) * 255).astype("uint8"), "L")
+    return np.asarray(img.filter(ImageFilter.GaussianBlur(radius)), dtype=np.float32) / 255
+
+
+def solid(color, shape):
+    import numpy as np
+    out = np.empty(shape + (3,), dtype=np.float32)
+    out[:] = color
+    return out
+
+
+def over(top_a, top_c, low_a, low_c):
+    """Paints one layer over another. Colors are (h, w, 3) arrays, alphas (h, w)."""
+    import numpy as np
+    a = top_a + low_a * (1 - top_a)
+    safe = np.where(a > 0, a, 1)[..., None]
+    c = (top_c * top_a[..., None] + low_c * (low_a * (1 - top_a))[..., None]) / safe
+    return a, c
+
+
+def picture_frame(anim, mask, cw, ch, color, i, count):
+    """One frame as (alpha, rgb) float arrays."""
+    import numpy as np
+    from PIL import Image
+    t = i / count
+    h, w = mask.shape
+    if anim == "spin":
+        c = math.cos(2 * math.pi * t)
+        back = c < 0
+        tone = scaled(scaled(color, 0.72) if back else color, 0.6 + 0.4 * abs(c))
+        narrow = max(1, round(w * max(abs(c), 0.04)))
+        img = Image.fromarray((mask * 255).astype("uint8"), "L").resize((narrow, h), Image.LANCZOS)
+        if back:
+            img = img.transpose(Image.FLIP_LEFT_RIGHT)
+        a = np.zeros_like(mask)
+        left = (w - narrow) // 2
+        a[:, left:left + narrow] = np.asarray(img, dtype=np.float32) / 255
+        return a, solid(tone, mask.shape)
+    if anim == "pulse":
+        s = 0.5 - 0.5 * math.cos(2 * math.pi * t)
+        k = 0.94 + 0.06 * s
+        nw, nh = max(1, round(w * k)), max(1, round(h * k))
+        img = Image.fromarray((mask * 255).astype("uint8"), "L").resize((nw, nh), Image.LANCZOS)
+        a = np.zeros_like(mask)
+        x0, y0 = (w - nw) // 2, (h - nh) // 2
+        a[y0:y0 + nh, x0:x0 + nw] = np.asarray(img, dtype=np.float32) / 255
+        glow = np.clip(blur(a, cw * 0.9) * 1.8, 0, 1) * (0.15 + 0.75 * s)
+        tone = mixed(scaled(color, 0.6), mixed(color, WHITE, 0.3), s)
+        return over(a, solid(tone, mask.shape), glow, solid(color, mask.shape))
+    if anim == "shine":
+        p = -0.35 + 1.7 * t / 0.6 if t < 0.6 else 9
+        ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
+        d = xs / w * 0.8 + ys / h * 0.35
+        k = np.exp(-((d - p) / 0.07) ** 2)[..., None]
+        base = solid(scaled(color, 0.82), mask.shape)
+        rgb = base + (np.array(WHITE, dtype=np.float32) - base) * 0.85 * k
+        glow = blur(mask, cw * 0.5) * k[..., 0] * 0.9
+        return over(mask, rgb, glow, solid(mixed(color, WHITE, 0.5), mask.shape))
+    if anim == "wave":
+        a = np.zeros_like(mask)
+        rgb = np.zeros(mask.shape + (3,), dtype=np.float32)
+        for y in range(h):
+            phase = 2 * math.pi * (y / h * 1.1 - t)
+            a[y] = shift_x(mask[y:y + 1], math.sin(phase) * cw * 0.8)[0]
+            rgb[y] = scaled(color, 0.8 + 0.2 * math.sin(phase))
+        return a, rgb
+    if anim == "glitch":
+        base = solid(color, mask.shape)
+        if i not in glitch_frames(count):
+            return mask, base
+        rnd = random.Random(i * 7919)
+        a = mask.copy()
+        y = 0
+        while y < h:
+            band = rnd.randint(ch // 3, ch * 2)
+            if rnd.random() < 0.5:
+                a[y:y + band] = shift_x(mask[y:y + band], rnd.uniform(-1.0, 1.0) * cw)
+            y += band
+        left = shift_x(a, -cw * 0.35) * 0.75
+        right = shift_x(a, cw * 0.35) * 0.75
+        la, lc = over(left, solid(hue_turn(color, 0.42), mask.shape),
+                      right, solid(hue_turn(color, -0.3), mask.shape))
+        return over(a, base, la, lc)
+    if anim == "scan":
+        shown, edge = scan_reveal(t)
+        ys = (np.arange(h, dtype=np.float32) + 0.5) / h
+        if edge is not None:
+            keep = (ys <= shown).astype(np.float32)[:, None]
+            a = mask * keep
+            near = np.exp(-((ys - shown) * h / (ch * 0.6)) ** 2)[:, None]
+            rgb = solid(color, mask.shape)
+            rgb = rgb + (np.array(WHITE, dtype=np.float32) - rgb) * 0.75 * near[..., None]
+            beam = np.repeat(near * 0.55 * (shown < 1), w, axis=1).astype(np.float32)
+            return over(a, rgb, beam, solid(mixed(color, WHITE, 0.4), mask.shape))
+        return mask * shown, solid(color, mask.shape)
+    return mask, solid(color, mask.shape)
+
+
+def to_rgba(a, rgb):
+    import numpy as np
+    out = np.empty(a.shape + (4,), dtype=np.uint8)
+    out[..., :3] = np.clip(rgb, 0, 255).astype(np.uint8)
+    out[..., 3] = (np.clip(a, 0, 1) * 255).astype(np.uint8)
+    return out
+
+
+def prune():
+    """Keeps the 24 most recently used frame folders."""
+    try:
+        names = [os.path.join(CACHE, n) for n in os.listdir(CACHE)]
+    except OSError:
+        return
+    folders = sorted((p for p in names if os.path.isdir(p)), key=os.path.getmtime, reverse=True)
+    for old in folders[24:]:
+        shutil.rmtree(old, ignore_errors=True)
+
+
+def picture_frames(anim, seconds, color, cw, ch):
+    """Paths of zlib-compressed RGBA frames for one loop, made once per look and cell size."""
+    lines, width = load_logo()
+    font = font_file()
+    if not font:
+        return None, 0, 0
+    count = max(2, round(FPS * seconds))
+    key = hashlib.sha1(repr((VERSION, anim, lines, font, os.path.getmtime(font), cw, ch,
+                             count, color)).encode()).hexdigest()[:16]
+    folder = os.path.join(CACHE, key)
+    w, h = (width + 2) * cw, len(lines) * ch
+    paths = [os.path.join(folder, f"{i:03}.z") for i in range(count)]
+    if all(os.path.exists(p) for p in paths):
+        os.utime(folder)
+        return paths, w, h
+
+    mask, _ = logo_mask(cw, ch, font)
     os.makedirs(folder, exist_ok=True)
     for i, path in enumerate(paths):
-        c = math.cos(2 * math.pi * i / count)
-        back = c < 0
-        light = 0.6 + 0.4 * abs(c)
-        color = tuple(round(v * light) for v in (BACK if back else FRONT))
-        narrow = max(1, round(w * max(abs(c), 0.04)))
-        face_mask = mask.resize((narrow, h), Image.LANCZOS)
-        if back:
-            face_mask = face_mask.transpose(Image.FLIP_LEFT_RIGHT)
-        alpha = Image.new("L", (w, h), 0)
-        alpha.paste(face_mask, ((w - narrow) // 2, 0))
-        frame = Image.new("RGBA", (w, h), color + (0,))
-        frame.putalpha(alpha)
+        frame = to_rgba(*picture_frame(anim, mask, cw, ch, color, i, count))
         tmp = path + ".tmp"
         with open(tmp, "wb") as f:
             f.write(zlib.compress(frame.tobytes(), 6))
         os.replace(tmp, path)
+    prune()
     return paths, w, h
 
 
@@ -204,27 +679,28 @@ def gfx(keys, path=None):
     return f"\x1b_G{keys}{data}\x1b\\"
 
 
-def picture(fd, top):
+def picture(fd, top, look):
     """Swap the text logo for an animated picture kitty plays itself. True if done."""
     rows, cols, xpx, ypx = struct.unpack("HHHH", fcntl.ioctl(fd, termios.TIOCGWINSZ, b"\0" * 8))
     if not (rows and cols and xpx and ypx):
         return False
     cw, ch = xpx // cols, ypx // rows
     try:
-        paths, w, h = picture_frames(cw, ch)
+        paths, w, h = picture_frames(look["animation"], look["seconds"], accent(), cw, ch)
     except Exception:
         return False
     if not paths:
         return False
     lines, width = load_logo()
     ident = random.randint(1, 0xFFFFFF)
-    gap = round(1000 / FPS)
+    gap = round(1000 * look["seconds"] / len(paths))
     common = f"i={ident},f=32,s={w},v={h},o=z,t=f,q=2"
     out = ["\x1b[?2026h\x1b7"]
     for i in range(len(lines)):
         out.append(f"\x1b[{top + i};{LOGO_COL}H" + " " * width)
-    out.append(f"\x1b[{top};{LOGO_COL}H")
-    out.append(gfx(f"a=T,{common},c={width},r={len(lines)},C=1", paths[0]))
+    # The picture has a spare column on each side, so it starts one column to the left.
+    out.append(f"\x1b[{top};{LOGO_COL - 1}H")
+    out.append(gfx(f"a=T,{common},c={width + 2},r={len(lines)},C=1", paths[0]))
     for p in paths[1:]:
         out.append(gfx(f"a=f,{common},z={gap}", p))
     out.append(gfx(f"a=a,i={ident},r=1,z={gap},q=2"))
@@ -234,24 +710,29 @@ def picture(fd, top):
     return True
 
 
-def spin(fd, top, shell):
-    lines, width = load_logo()
-    turn = frames(lines, width)
+def spin(fd, top, shell, look):
+    color = accent()
+    frames = text_frames(look["animation"], look["seconds"], color)
     rendered = []
-    for rows in turn:
+    for rows in frames:
         moves = "".join(f"\x1b[{top + i};{LOGO_COL}H{r}" for i, r in enumerate(rows))
         rendered.append(("\x1b[?2026h\x1b7" + moves + "\x1b8\x1b[?2026l").encode())
+    lines, _ = load_logo()
+    still = "".join(f"\x1b[{top + i};{LOGO_COL}H\x1b[1;38;2;%d;%d;%dm{r}\x1b[0m" % color
+                    for i, r in enumerate(lines))
+    still = ("\x1b[?2026h\x1b7" + still + "\x1b8\x1b[?2026l").encode()
+
     def rest(*_):
-        # Leave the logo facing the viewer, not caught halfway through a turn.
+        # Leave the whole logo in place, not caught halfway through a move.
         try:
-            os.write(fd, rendered[0])
+            os.write(fd, still)
         except OSError:
             pass
         os._exit(0)
 
     signal.signal(signal.SIGTERM, rest)
     size = term_size(fd)
-    step = 1 / FPS
+    step = look["seconds"] / len(rendered)
     start = time.monotonic()
     n = 0
     while True:
@@ -271,8 +752,151 @@ def spin(fd, top, shell):
             time.sleep(delay)
 
 
+# ---------------------------------------------------------------- previews
+
+def previews(seconds):
+    """Animated WebP of every animation, for the cards of the Settings page."""
+    from PIL import Image
+    font = font_file()
+    if not font:
+        return {}
+    color = accent()
+    cw, ch = 9, 19
+    count = max(2, round(FPS * seconds))
+    key = hashlib.sha1(repr((VERSION, "preview", font, count, color,
+                             os.path.getmtime(BRAND))).encode()).hexdigest()[:16]
+    folder = os.path.join(CACHE, "preview-" + key)
+    out = {}
+    mask = None
+    os.makedirs(folder, exist_ok=True)
+    os.utime(folder)
+    for anim in ANIMATIONS:
+        path = os.path.join(folder, anim + ".webp")
+        if not os.path.exists(path):
+            if mask is None:
+                mask, _ = logo_mask(cw, ch, font)
+            frames = [Image.fromarray(to_rgba(*picture_frame(anim, mask, cw, ch, color, i, count)),
+                                      "RGBA") for i in range(count)]
+            frames[0].save(path + ".tmp.webp", save_all=True, append_images=frames[1:],
+                           duration=round(1000 * seconds / count), loop=0, quality=85,
+                           method=0)
+            os.replace(path + ".tmp.webp", path)
+        out[anim] = path
+    prune()
+    return out
+
+
+def kitty_palette():
+    colors = {"foreground": "#dddddd", "background": "#000000"}
+    base = ["#000000", "#cc0403", "#19cb00", "#cecb00", "#0d73cc", "#cb1ed1", "#0dcdcd", "#dddddd",
+            "#767676", "#f2201f", "#23fd00", "#fffd00", "#1a8fff", "#fd28ff", "#14ffff", "#ffffff"]
+    for i, c in enumerate(base):
+        colors[f"color{i}"] = c
+    for name in ("kitty.conf", "falcon-colors.conf"):
+        try:
+            with open(os.path.join(CONFIG, "kitty", name)) as f:
+                for raw in f:
+                    parts = raw.split()
+                    if len(parts) == 2 and (parts[0] in colors) and parts[1].startswith("#"):
+                        colors[parts[0]] = parts[1]
+        except OSError:
+            pass
+    return colors
+
+
+def to_html(text, palette):
+    """fastfetch's colored output as rich text with the terminal's colors."""
+    def esc(s):
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace(" ", "&nbsp;")
+
+    out_lines = []
+    fg = bg = None
+    bold = False
+    for raw in text.split("\n"):
+        parts, col = [], 0
+        for m in re.finditer(r"\x1b\[([0-9;]*)([A-Za-z])|([^\x1b]+)", raw):
+            if m.group(3):
+                chunk = m.group(3)
+                style = []
+                if fg:
+                    style.append(f"color:{fg}")
+                if bg:
+                    style.append(f"background-color:{bg}")
+                body = esc(chunk)
+                if bold:
+                    body = f"<b>{body}</b>"
+                parts.append(f"<span style=\"{';'.join(style)}\">{body}</span>" if style else body)
+                col += len(chunk)
+                continue
+            args, kind = m.group(1), m.group(2)
+            if kind == "G":
+                want = int(args or 1) - 1
+                if want > col:
+                    parts.append("&nbsp;" * (want - col))
+                    col = want
+                continue
+            if kind != "m":
+                continue
+            nums = [int(n) for n in args.split(";") if n] or [0]
+            k = 0
+            while k < len(nums):
+                n = nums[k]
+                if n == 0:
+                    fg = bg = None
+                    bold = False
+                elif n == 1:
+                    bold = True
+                elif n == 22:
+                    bold = False
+                elif 30 <= n <= 37:
+                    fg = palette[f"color{n - 30}"]
+                elif 90 <= n <= 97:
+                    fg = palette[f"color{n - 82}"]
+                elif 40 <= n <= 47:
+                    bg = palette[f"color{n - 40}"]
+                elif 100 <= n <= 107:
+                    bg = palette[f"color{n - 92}"]
+                elif n == 39:
+                    fg = None
+                elif n == 49:
+                    bg = None
+                elif n in (38, 48) and k + 4 < len(nums) and nums[k + 1] == 2:
+                    value = "#%02x%02x%02x" % tuple(nums[k + 2:k + 5])
+                    if n == 38:
+                        fg = value
+                    else:
+                        bg = value
+                    k += 4
+                k += 1
+        out_lines.append("".join(parts))
+    while out_lines and out_lines[-1] == "":
+        out_lines.pop()
+    return "<br>".join(out_lines)
+
+
+def preview_text(style):
+    if style not in STYLES:
+        style = DEFAULTS["style"]
+    env = dict(os.environ, FALCON_SHELL="fish")
+    out = subprocess.run(["fastfetch", "-c", config_file(style, logo=False), "--pipe", "false"],
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env,
+                         text=True).stdout
+    palette = kitty_palette()
+    return {"html": to_html(out, palette), "background": palette["background"],
+            "foreground": palette["foreground"], "lines": out.rstrip("\n").count("\n") + 1}
+
+
+# ---------------------------------------------------------------- main
+
 def main():
     args = sys.argv[1:]
+    if "--previews" in args:
+        print(json.dumps(previews(settings()["seconds"])))
+        return
+    if "--preview-text" in args:
+        rest = args[args.index("--preview-text") + 1:]
+        print(json.dumps(preview_text(rest[0] if rest else settings()["style"]), ensure_ascii=False))
+        return
     shell = os.getppid()
     if "--shell" in args:
         shell = int(args[args.index("--shell") + 1])
@@ -280,6 +904,9 @@ def main():
         stop(shell)
         return
     stop(shell)
+    look = settings()
+    if not look["enabled"]:
+        return
 
     # fastfetch names the shell after its parent, which would be this script, so the shell that
     # started it is passed on and shown by the "shell" line of the config.
@@ -289,7 +916,8 @@ def main():
     except OSError:
         parent = ""
     env = dict(os.environ, FALCON_SHELL=parent) if parent else None
-    out = subprocess.run(["fastfetch", "--pipe", "false"], stdout=subprocess.PIPE, env=env).stdout
+    out = subprocess.run(["fastfetch", "-c", config_file(look["style"]), "--pipe", "false"],
+                         stdout=subprocess.PIPE, env=env).stdout
     try:
         fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
     except OSError:
@@ -301,7 +929,7 @@ def main():
     if row is None or printed < LOGO_LINES:
         return
     top = row - printed
-    if top >= 1 and kitty_ok() and picture(fd, top):
+    if top >= 1 and kitty_ok() and picture(fd, top, look):
         return
     rows, _ = term_size(fd)
     # Too close to the bottom: the prompt would scroll the logo away.
@@ -320,7 +948,7 @@ def main():
     for n in (0, 1, 2):
         os.dup2(devnull, n)
     try:
-        spin(fd, top, shell)
+        spin(fd, top, shell, look)
     finally:
         try:
             if open(pid_file(shell)).read().strip() == str(os.getpid()):

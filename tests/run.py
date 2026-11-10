@@ -4911,6 +4911,23 @@ def _():
     ok(volume() <= 0.51, f"oshib ketdi: {volume()}")
 
 
+feature("fetch", "Fastfetch uslublari va animatsiyalari")
+
+
+@case("10 uslubning hammasi fastfetch'da matn beradi")
+def _():
+    for style in ["classic", "minimal", "boxed", "tree", "icons", "hardware", "bars", "palette", "arrows", "quiet"]:
+        data = json.loads(sh([str(LBIN / "falcon-fetch"), "--preview-text", style], check=True, timeout=30).stdout)
+        ok(data["lines"] >= 6 and "<span" in data["html"], (style, data["html"][:200]))
+
+
+@case("6 animatsiyaning WebP ko'rinishi yasaladi")
+def _():
+    clips = json.loads(sh([str(LBIN / "falcon-fetch"), "--previews"], check=True, timeout=120).stdout)
+    ok(sorted(clips) == sorted(["spin", "pulse", "shine", "wave", "glitch", "scan"]), clips)
+    ok(all(Path(p).stat().st_size > 1000 for p in clips.values()), clips)
+
+
 feature("songrec", "Qo'shiqni aniqlash")
 
 

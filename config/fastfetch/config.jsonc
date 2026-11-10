@@ -1,4 +1,5 @@
-// Salomlashuv: chapda Berserk qurbonlik tamg'asi, o'ngda tizim ma'lumoti.
+// Plain fastfetch: the Brand of Sacrifice in the theme's blue slot, system info on the right.
+// The greeting itself (falcon-fetch) writes its own config from the fetch settings.
 {
   "logo": { "type": "file-raw", "source": "~/.config/fastfetch/brand.txt", "width": 22, "height": 14, "padding": { "left": 1, "right": 3 } },
   "display": { "separator": "  ", "key": { "width": 10 }, "color": { "keys": "blue" } },

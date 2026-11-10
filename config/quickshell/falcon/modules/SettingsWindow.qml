@@ -471,6 +471,22 @@ LazyLoader {
                 ]
             },
             {
+                title: Tr.t("Fastfetch"),
+                subtitle: Tr.t("The greeting of a new terminal. Applies to new windows"),
+                icon: "sparkle",
+                group: 3,
+                fetch: true,
+                sections: [
+                    {
+                        title: Tr.t("Greeting"),
+                        items: [
+                            { key: "fetch.enabled", label: Tr.t("Show fastfetch in new terminals"), type: "toggle" },
+                            { key: "fetch.seconds", label: Tr.t("Length of one loop"), hint: Tr.t("Lower is faster"), type: "slider", min: 1.5, max: 8, step: 0.1, unit: "sec" }
+                        ]
+                    }
+                ]
+            },
+            {
                 title: Tr.t("Telegram bot"),
                 subtitle: Tr.t("Control this computer from the phone"),
                 icon: "send",
@@ -944,6 +960,11 @@ LazyLoader {
 
                         RemoteStatus {
                             visible: win.filter === "" && !!win.pages[win.page].remote
+                            width: cards.width
+                        }
+
+                        FetchStudio {
+                            visible: win.filter === "" && !!win.pages[win.page].fetch
                             width: cards.width
                         }
 
