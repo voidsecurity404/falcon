@@ -118,7 +118,38 @@ PanelWindow {
         gain: Settings.get("waves.gain", 1)
         smoothing: Settings.get("waves.smoothing", 70)
         opacity: Niri.overview ? 0 : 1
-        visible: Widgets.wavesEnabled && opacity > 0
+        visible: Widgets.wavesEnabled && !field.drawsIt && opacity > 0
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 180
+            }
+        }
+    }
+    // The looks drawn by a shader: ribbon and segments in the same strip, aura along all the
+    // edges of the screen, ring and orb in the middle, sized by the height setting.
+    SpectrumField {
+        id: field
+
+        readonly property bool drawsIt: looks.indexOf(Widgets.wavesStyle) >= 0
+        readonly property bool strip: Widgets.wavesStyle === "ribbon" || Widgets.wavesStyle === "segments"
+        readonly property bool round: Widgets.wavesStyle === "ring" || Widgets.wavesStyle === "orb"
+        readonly property real side: Math.min(parent.width, parent.height) * Math.min(0.9, 0.35 + Widgets.wavesHeight / 600)
+
+        x: round ? (parent.width - side) / 2 : 0
+        y: strip ? parent.height - height - (Settings.bottom ? 56 : 0) : round ? (parent.height - side) / 2 : 0
+        width: round ? side : parent.width
+        height: strip ? Widgets.wavesHeight : round ? side : parent.height
+        active: root.wavesSeen && drawsIt
+        style: Widgets.wavesStyle
+        color: Settings.get("waves.fromCover", false) && !!Media.player ? Media.artAccent : (Settings.get("waves.color", "") || Theme.accent)
+        alpha: root.behindGlass ? 1 : Settings.get("waves.opacity", 0.8)
+        bars: Widgets.wavesStyle === "ring" ? 64 : (({ thick: 40, medium: 72, thin: 120 })[Settings.get("waves.thickness", "medium")] || 72)
+        mirrored: Settings.get("waves.mirror", true)
+        gain: Settings.get("waves.gain", 1)
+        smoothing: Settings.get("waves.smoothing", 70)
+        opacity: Niri.overview ? 0 : 1
+        visible: Widgets.wavesEnabled && drawsIt && opacity > 0
 
         Behavior on opacity {
             NumberAnimation {

@@ -599,7 +599,6 @@
  "Line": "Линия",
  "Dots": "Точки",
  "Height": "Высота",
- "Widgets stay above it": "Виджеты остаются выше",
  "Sensitivity": "Чувствительность",
  "Higher moves more at the same sound": "Чем больше, тем сильнее движение при том же звуке",
  "Smoothness": "Плавность",
@@ -1096,5 +1095,12 @@
  "Zoom": "Приближение",
  "Swirl": "Вихрь",
  "Blinds": "Жалюзи",
- "Push": "Сдвиг"
+ "Push": "Сдвиг",
+ "Aura glows along the edges of the screen, ring and orb sit in the middle": "Аура светится по краям экрана, кольцо и сфера стоят в центре",
+ "Ribbon": "Лента",
+ "Segments": "Сегменты",
+ "Aura": "Аура",
+ "Ring": "Кольцо",
+ "Orb": "Сфера",
+ "Widgets stay above it. For ring and orb, their size": "Виджеты остаются выше. Для кольца и сферы это их размер"
 }

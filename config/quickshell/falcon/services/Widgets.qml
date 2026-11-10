@@ -392,7 +392,10 @@ Singleton {
     readonly property bool wavesEnabled: Settings.get("waves.enabled", true)
     readonly property int wavesHeight: Math.max(60, Math.min(320, Number(Settings.get("waves.height", 140)) || 140))
     readonly property int topInset: Settings.bottom ? 16 : 56
-    readonly property int bottomInset: (Settings.bottom ? 56 : 16) + (wavesEnabled ? wavesHeight : 0)
+    // Looks drawn along the bottom; aura, ring and orb take no strip of their own.
+    readonly property string wavesStyle: Settings.get("waves.style", "bars")
+    readonly property bool wavesStrip: wavesEnabled && ["aura", "ring", "orb"].indexOf(wavesStyle) < 0
+    readonly property int bottomInset: (Settings.bottom ? 56 : 16) + (wavesStrip ? wavesHeight : 0)
     readonly property real glass: Settings.get("widgets.opacity", 0.5)
     // What a new wallpaper changes: "full" place and form, "place" only the place, "off" nothing.
     readonly property string follow: Settings.get("widgets.followWallpaper", "full")

@@ -215,8 +215,8 @@ LazyLoader {
                         title: Tr.t("Music"),
                         items: [
                             { key: "waves.enabled", label: Tr.t("Sound waves on the desktop"), hint: Tr.t("Along the bottom of the screen while music plays"), type: "toggle" },
-                            { key: "waves.style", label: Tr.t("Style"), type: "choice", options: ["bars", "wave", "line", "dots"], names: [Tr.t("Bars"), Tr.t("Wave"), Tr.t("Line"), Tr.t("Dots")] },
-                            { key: "waves.height", label: Tr.t("Height"), hint: Tr.t("Widgets stay above it"), type: "slider", min: 60, max: 320, step: 10, unit: "px" },
+                            { key: "waves.style", label: Tr.t("Style"), hint: Tr.t("Aura glows along the edges of the screen, ring and orb sit in the middle"), type: "choice", layout: "chips", options: ["bars", "wave", "line", "dots", "ribbon", "segments", "aura", "ring", "orb"], names: [Tr.t("Bars"), Tr.t("Wave"), Tr.t("Line"), Tr.t("Dots"), Tr.t("Ribbon"), Tr.t("Segments"), Tr.t("Aura"), Tr.t("Ring"), Tr.t("Orb")] },
+                            { key: "waves.height", label: Tr.t("Height"), hint: Tr.t("Widgets stay above it. For ring and orb, their size"), type: "slider", min: 60, max: 320, step: 10, unit: "px" },
                             { key: "waves.opacity", label: Tr.t("Brightness"), type: "slider", min: 0.2, max: 1, step: 0.05, unit: "percent" },
                             { key: "waves.gain", label: Tr.t("Sensitivity"), hint: Tr.t("Higher moves more at the same sound"), type: "slider", min: 0.5, max: 2, step: 0.1, unit: "percent" },
                             { key: "waves.smoothing", label: Tr.t("Smoothness"), hint: Tr.t("Lower follows each beat more sharply"), type: "slider", min: 20, max: 300, step: 10, unit: "ms" },
