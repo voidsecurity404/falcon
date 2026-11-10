@@ -75,3 +75,6 @@ dconf
 # Telegram orqali boshqaruv: Go dasturi va https tunnel
 go
 cloudflared
+# Key sounds (falcon-keysounds)
+python-evdev
+libcanberra

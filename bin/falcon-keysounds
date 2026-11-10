@@ -1,0 +1,408 @@
+#!/usr/bin/env python3
+"""Key press sounds of a mechanical keyboard.
+
+  falcon-keysounds status            prints the state as JSON: setup, running helper, profiles
+  falcon-keysounds prepare           downloads the switch recordings and cuts them (no root)
+  falcon-keysounds setup             one time setup of the key helper, asks for sudo, safe to repeat
+  falcon-keysounds setup --undo      removes the helper
+  falcon-keysounds run PROFILE VOL   plays a sound on each press until stopped (VOL 0 to 1)
+  falcon-keysounds test PROFILE VOL  plays a few presses
+
+Reading the keyboard needs root, and putting the user in the `input` group would let any program
+read every key. So the setup installs a small root service, falcon-keytap, that reads the keyboards
+only while this player is connected and sends it the kind of each press (a key, space, enter,
+backspace, or a release), never which key it was. The player plays it through libcanberra, whose
+samples the sound server caches, so a press costs one small request.
+
+The recordings are Mechvibes packs (MIT, github.com/hainguyents13/mechvibes), pinned to a commit
+and checked by SHA-256, cut into ~/.local/share/falcon/keysounds/<profile>/.
+"""
+import ctypes
+import hashlib
+import json
+import os
+import random
+import re
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:
+    from falcon_tr import tr
+except ImportError:  # pragma: no cover
+    def tr(text):
+        return text
+
+DATA = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share") / "falcon" / "keysounds"
+SOCKET = os.environ.get("FALCON_KEYTAP_SOCKET", "/run/falcon-keytap/socket")
+HELPER = "/usr/local/libexec/falcon-keytap"
+UNIT = "/etc/systemd/system/falcon-keytap.service"
+
+COMMIT = "56d7135bcdf6ceb7fe2f4e06f8ca0903277a9e68"
+SOURCE = f"https://raw.githubusercontent.com/hainguyents13/mechvibes/{COMMIT}/soundpacks/keyboard/"
+# profile: (audio file, sha256 of config.json, sha256 of the audio file)
+PACKS = {
+    "cherrymx-blue-pbt": ("sound.ogg", "8f06f895bc2ee4c3c620589c3f198c212fcf7a1da870d6e235e77752cf44f1d2", "68d46de5a091e4d6daf468327c87e3e75494e645dacc8d55418d5151aaf84349"),
+    "cherrymx-brown-pbt": ("sound.ogg", "9b5014751f85cb40ac3effa57a8d5d05227d7d86bb4d5696a7792e82a95a95d2", "10390a4325fe218b005c509cac28c90bdd21c16bfcc303fe57d51d2588efd047"),
+    "cherrymx-black-pbt": ("sound.ogg", "2a1af240f42f542b90604e6f77cecb0d56ea8a8d480f4696f882ec55eaa56a2d", "29f3ce7f6b700db7076831ceb2ef8b616652538195690707763563b4a8805b37"),
+    "cherrymx-red-abs": ("sound.ogg", "d5fbd9b5a38961fbc68d11cb9724eda971b051a9e291cdec4983391c24648df1", "330f91fc14f5a5232594f17058f02603ea67226fafd362fcf94e90463dbdcb40"),
+    "topre-purple-hybrid-pbt": ("sound.ogg", "6de7ff110010b0b62807d96e778352386c514be5f5749acbd05e27b54837a90a", "af073650844bced0050df018bf872b16307a1143c8f356be5ea75340e6dc0298"),
+    "eg-crystal-purple": ("purple.ogg", "92f3c08d939f2cf02885027e7e5ccbb35ae7b6feb11d0fbe5d2fb13fc97dd2ba", "8f5da33383bcbc610fb510e04571c65d07ef6bd214d82fbc39738ee1810b5d84"),
+    "eg-oreo": ("oreo.ogg", "0cee46ce3a72573818f19b78b4b71974871b1df744bad4e098371d4dbb626e05", "6e40d3e8acaf32b0b19b777fb628c0f563a7d29dc4b6b652c1dadff31c828a98"),
+}
+# Plain presses come from these keys, spread over the board so a run never repeats one sound.
+LETTERS = ["KeyA", "KeyS", "KeyD", "KeyF", "KeyJ", "KeyK", "KeyE", "KeyR", "KeyU", "KeyI"]
+ROLES = {"space": "Space", "enter": "Enter", "backspace": "Backspace"}
+PEAK_DB = -3.0
+# What falcon-keytap sends: one byte per press or release.
+CODES = {b"d": "down", b"s": "space", b"e": "enter", b"b": "backspace", b"u": "up"}
+
+
+# ---------- recordings ----------
+
+def fetch(url, digest):
+    data = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "falcon-keysounds"}), timeout=60).read()
+    if hashlib.sha256(data).hexdigest() != digest:
+        raise ValueError(f"checksum mismatch: {url}")
+    return data
+
+
+def cut(source, target, start_ms, end_ms):
+    """A slice at 48 kHz mono with its peak at PEAK_DB, so every pack plays at one volume."""
+    span = ["-ss", f"{start_ms / 1000:.3f}", "-t", f"{max(10.0, end_ms - start_ms) / 1000:.3f}"]
+    probe = subprocess.run(["ffmpeg", "-nostdin", "-v", "info", *span, "-i", str(source), "-af", "volumedetect", "-f", "null", "-"],
+                           capture_output=True, text=True)
+    found = re.search(r"max_volume: (-?[\d.]+) dB", probe.stderr)
+    gain = PEAK_DB - float(found.group(1)) if found else 0.0
+    subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", *span, "-i", str(source), "-af", f"volume={gain:.2f}dB",
+                    "-ac", "1", "-ar", "48000", "-sample_fmt", "s16", str(target)], check=True)
+
+
+def prepare_one(name):
+    audio, config_sum, audio_sum = PACKS[name]
+    out = DATA / name
+    if (out / "done").exists():
+        return False
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        config = json.loads(fetch(SOURCE + f"{name}/config.json", config_sum))
+        source = tmp / audio
+        source.write_bytes(fetch(SOURCE + f"{name}/{audio}", audio_sum))
+        work = tmp / "out"
+        work.mkdir()
+        keys = config.get("definitions", {})
+
+        def timing(key, which):
+            spans = (keys.get(key) or {}).get("timing") or []
+            return spans[which] if len(spans) > which else None
+
+        n = 0
+        for key in LETTERS:
+            down, up = timing(key, 0), timing(key, 1)
+            if down:
+                n += 1
+                cut(source, work / f"down-{n}.wav", *down)
+                if up:
+                    cut(source, work / f"up-{n}.wav", *up)
+        if n == 0:
+            raise ValueError(f"{name}: no presses in the pack")
+        for role, key in ROLES.items():
+            down, up = timing(key, 0), timing(key, 1)
+            if down:
+                cut(source, work / f"{role}-1.wav", *down)
+            if up:
+                cut(source, work / f"{role}-up-1.wav", *up)
+        (work / "README").write_text(f"{config.get('name', name)}\nFrom Mechvibes (MIT), {SOURCE}{name}/\n")
+        (work / "done").write_text("")
+        if out.exists():
+            shutil.rmtree(out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(work), str(out))
+    return True
+
+
+def prepare():
+    if not shutil.which("ffmpeg"):
+        print(json.dumps({"ok": False, "reason": "ffmpeg"}))
+        return 1
+    failed = []
+    for name in PACKS:
+        try:
+            if prepare_one(name):
+                print(json.dumps({"made": name}), flush=True)
+        except (OSError, ValueError, subprocess.CalledProcessError) as error:
+            failed.append(name)
+            print(f"{name}: {error}", file=sys.stderr)
+    print(json.dumps({"ok": not failed, "failed": failed}))
+    return 1 if failed else 0
+
+
+def profiles():
+    return sorted(p.name for p in DATA.glob("*") if (p / "done").exists())
+
+
+# ---------- the root helper ----------
+
+HELPER_TEXT = r'''#!/usr/bin/python3
+# Written by falcon-keysounds setup. Reads the keyboards only while a player is connected, and
+# sends it one byte per press: d a key, s space, e enter, b backspace, u a release. Never which key.
+import os, select, socket, sys, time
+import evdev
+from evdev import ecodes
+
+PATH = "{socket}"
+OWNER = {uid}
+ROLE = {{ecodes.KEY_SPACE: b"s", ecodes.KEY_ENTER: b"e", ecodes.KEY_KPENTER: b"e", ecodes.KEY_BACKSPACE: b"b"}}
+
+def keyboards():
+    found = {{}}
+    for path in evdev.list_devices():
+        try:
+            dev = evdev.InputDevice(path)
+            keys = dev.capabilities().get(ecodes.EV_KEY, [])
+            if ecodes.KEY_A in keys and ecodes.KEY_SPACE in keys and "falcon" not in dev.name.lower():
+                found[dev.fd] = dev
+            else:
+                dev.close()
+        except OSError:
+            pass
+    return found
+
+os.makedirs(os.path.dirname(PATH), exist_ok=True)
+os.chown(os.path.dirname(PATH), OWNER, -1)
+os.chmod(os.path.dirname(PATH), 0o700)
+try:
+    os.unlink(PATH)
+except FileNotFoundError:
+    pass
+server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+server.bind(PATH)
+os.chown(PATH, OWNER, -1)
+os.chmod(PATH, 0o600)
+server.listen(4)
+clients = []
+devices = {{}}
+scanned = 0.0
+while True:
+    if clients and time.monotonic() - scanned > 3:
+        known = {{d.path for d in devices.values()}}
+        for fd, dev in keyboards().items():
+            if dev.path in known:
+                dev.close()
+            else:
+                devices[fd] = dev
+        scanned = time.monotonic()
+    if not clients and devices:
+        for dev in devices.values():
+            dev.close()
+        devices = {{}}
+        scanned = 0.0
+    ready, _, _ = select.select([server] + clients + list(devices), [], [], 3)
+    for item in ready:
+        if item is server:
+            conn, _ = server.accept()
+            if conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)[4:8] != OWNER.to_bytes(4, sys.byteorder):
+                conn.close()
+                continue
+            clients.append(conn)
+            scanned = 0.0
+        elif item in clients:
+            if not item.recv(64):
+                clients.remove(item)
+                item.close()
+        else:
+            dev = devices.get(item)
+            try:
+                events = dev.read()
+            except OSError:
+                # Unplugged.
+                devices.pop(item, None)
+                try:
+                    dev.close()
+                except OSError:
+                    pass
+                continue
+            out = b""
+            for ev in events:
+                if ev.type == ecodes.EV_KEY and ev.value in (0, 1):
+                    out += ROLE.get(ev.code, b"d") if ev.value == 1 else b"u"
+            if out:
+                for conn in list(clients):
+                    try:
+                        conn.sendall(out)
+                    except OSError:
+                        clients.remove(conn)
+'''
+
+UNIT_TEXT = f"""[Unit]
+Description=falcon key press helper for key sounds
+
+[Service]
+ExecStart={HELPER}
+Restart=on-failure
+RestartSec=2
+ProtectSystem=strict
+ProtectHome=true
+PrivateNetwork=true
+NoNewPrivileges=true
+RuntimeDirectory=falcon-keytap
+RuntimeDirectoryMode=0700
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+
+def sudo(*cmd):
+    return subprocess.run(["sudo", *cmd], check=False).returncode == 0
+
+
+def setup():
+    try:
+        import evdev  # noqa: F401
+    except ImportError:
+        print(tr("Key sounds need python-evdev: sudo pacman -S python-evdev"))
+        return 1
+    uid = os.getuid()
+    with tempfile.TemporaryDirectory() as tmp:
+        helper = Path(tmp) / "helper"
+        unit = Path(tmp) / "unit"
+        helper.write_text(HELPER_TEXT.format(socket=SOCKET, uid=uid))
+        unit.write_text(UNIT_TEXT)
+        done = (sudo("install", "-D", "-m", "755", str(helper), HELPER)
+                and sudo("install", "-m", "644", str(unit), UNIT)
+                and sudo("systemctl", "daemon-reload")
+                and sudo("systemctl", "enable", "falcon-keytap.service")
+                and sudo("systemctl", "restart", "falcon-keytap.service"))
+    for _ in range(20):
+        if os.path.exists(SOCKET):
+            break
+        time.sleep(0.1)
+    if done and os.path.exists(SOCKET):
+        print(tr("Done. Key sounds can now be turned on in Settings."))
+        return 0
+    print(tr("Setup did not finish."), file=sys.stderr)
+    return 1
+
+
+def undo():
+    sudo("systemctl", "disable", "--now", "falcon-keytap.service")
+    sudo("rm", "-f", UNIT, HELPER)
+    sudo("systemctl", "daemon-reload")
+    print(tr("Removed."))
+    return 0
+
+
+def status():
+    print(json.dumps({"setup": os.path.exists(HELPER), "ready": os.path.exists(SOCKET), "profiles": profiles(), "packs": list(PACKS)}))
+    return 0
+
+
+# ---------- the player ----------
+
+class Player:
+    """libcanberra through ctypes: samples go to the sound server's cache once."""
+
+    def __init__(self, folder, volume):
+        lib = ctypes.CDLL("libcanberra.so.0")
+        self.lib = lib
+        self.ctx = ctypes.c_void_p()
+        if lib.ca_context_create(ctypes.byref(self.ctx)) != 0:
+            raise OSError("libcanberra")
+        lib.ca_context_change_props(self.ctx, b"application.name", b"falcon key sounds", b"application.id", b"falcon.keysounds", None)
+        # Volume in dB, as libcanberra wants it. 1 is the recording's level.
+        self.db = b"%.1f" % (20 * __import__("math").log10(max(0.01, min(1.0, volume))))
+        # Each sample has its own event id: with it the server plays its cached copy in about 2 ms,
+        # without it libcanberra decodes and streams the file again, about 30 ms.
+        self.sounds = {}
+        for path in sorted(folder.glob("*.wav")):
+            role = re.sub(r"-\d+$", "", path.stem)
+            event = f"falcon-keysounds-{folder.name}-{path.stem}".encode()
+            self.sounds.setdefault(role, []).append((event, str(path).encode()))
+        self.next_id = 1
+
+    def play(self, role):
+        files = self.sounds.get(role) or (self.sounds.get("down") if role in ROLES else None)
+        if not files:
+            return
+        event, path = random.choice(files)
+        self.next_id += 1
+        self.lib.ca_context_play(self.ctx, ctypes.c_uint32(self.next_id),
+                                 b"event.id", event,
+                                 b"media.filename", path,
+                                 b"canberra.volume", self.db,
+                                 b"canberra.cache-control", b"permanent",
+                                 b"media.role", b"event",
+                                 None)
+
+
+def run(profile, volume):
+    folder = DATA / profile
+    if not (folder / "done").exists():
+        print(f"no profile {profile}", file=sys.stderr)
+        return 2
+    player = Player(folder, volume)
+    last = {"role": "down"}
+    while True:
+        try:
+            conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            conn.connect(SOCKET)
+        except OSError:
+            time.sleep(2)
+            continue
+        print(json.dumps({"state": "listening"}), flush=True)
+        while True:
+            data = conn.recv(256)
+            if not data:
+                break
+            for byte in data:
+                role = CODES.get(bytes([byte]))
+                if role == "up":
+                    # A release sounds like the release of what was pressed last.
+                    player.play(last["role"] + "-up" if last["role"] in ROLES else "up")
+                elif role:
+                    last["role"] = role
+                    player.play(role)
+        conn.close()
+        time.sleep(1)
+
+
+def test(profile, volume):
+    folder = DATA / profile
+    if not (folder / "done").exists():
+        return 2
+    player = Player(folder, volume)
+    for role in ["down", "down", "down", "space", "down", "down", "enter"]:
+        player.play(role)
+        time.sleep(0.09)
+        player.play(role + "-up" if role in ROLES else "up")
+        time.sleep(0.07)
+    time.sleep(0.4)
+    return 0
+
+
+def main():
+    args = sys.argv[1:]
+    command = args[0] if args else "status"
+    if command == "status":
+        return status()
+    if command == "prepare":
+        return prepare()
+    if command == "setup":
+        return undo() if "--undo" in args else setup()
+    if command in ("run", "test") and len(args) >= 2:
+        volume = float(args[2]) if len(args) > 2 else 0.6
+        return (run if command == "run" else test)(args[1], volume)
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

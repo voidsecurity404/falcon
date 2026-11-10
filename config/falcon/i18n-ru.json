@@ -1102,5 +1102,20 @@
  "Aura": "Аура",
  "Ring": "Кольцо",
  "Orb": "Сфера",
- "Widgets stay above it. For ring and orb, their size": "Виджеты остаются выше. Для кольца и сферы это их размер"
+ "Widgets stay above it. For ring and orb, their size": "Виджеты остаются выше. Для кольца и сферы это их размер",
+ "Key sounds": "Звуки клавиш",
+ "Sound of a mechanical keyboard": "Звук механической клавиатуры",
+ "Recordings of real switches on every press": "Записи настоящих переключателей при каждом нажатии",
+ "Switch": "Переключатель",
+ "Listen": "Послушать",
+ "Play": "Играть",
+ "One-time setup": "Однократная настройка",
+ "Only a small system service can hear the keys. It tells the kind of press, never which key": "Слышать клавиши может только небольшая системная служба. Она сообщает вид нажатия, но не саму клавишу",
+ "Key sounds need a one-time setup": "Звукам клавиш нужна однократная настройка",
+ "Click to set it up, it asks for your password": "Нажмите, чтобы настроить, потребуется пароль",
+ "Getting key sounds": "Загружаю звуки клавиш",
+ "Recordings of real switches, about 15 MB": "Записи настоящих переключателей, около 15 МБ",
+ "Key sounds could not be downloaded": "Не удалось загрузить звуки клавиш",
+ "Done. Key sounds can now be turned on in Settings.": "Готово. Звуки клавиш теперь можно включить в настройках.",
+ "Key sounds need python-evdev: sudo pacman -S python-evdev": "Звукам клавиш нужен python-evdev: sudo pacman -S python-evdev"
 }

@@ -163,6 +163,11 @@
     "opacity": 0.5,
     "followWallpaper": "full"
   },
+  "keysounds": {
+    "enabled": false,
+    "profile": "cherrymx-blue-pbt",
+    "volume": 0.6
+  },
   "waves": {
     "enabled": true,
     "style": "bars",

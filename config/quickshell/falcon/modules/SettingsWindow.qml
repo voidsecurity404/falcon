@@ -316,6 +316,17 @@ LazyLoader {
                             { key: "keyboard.repeatRate", label: Tr.t("Repeat rate"), type: "slider", min: 10, max: 80, step: 1 },
                             { key: "keyboard.numlock", label: Tr.t("NumLock on"), type: "toggle" }
                         ]
+                    },
+                    {
+                        title: Tr.t("Key sounds"),
+                        items: [
+                            { key: "keysounds.enabled", label: Tr.t("Sound of a mechanical keyboard"), hint: Tr.t("Recordings of real switches on every press"), type: "toggle" },
+                            { key: "keysounds.profile", label: Tr.t("Switch"), type: "choice", layout: "chips", options: KeySounds.ids, names: KeySounds.ids.map(id => KeySounds.names[id]) },
+                            { key: "keysounds.volume", label: Tr.t("Volume"), type: "slider", min: 0.05, max: 1, step: 0.05, unit: "percent" },
+                            { label: Tr.t("Listen"), hint: KeySounds.preparing ? Tr.t("Getting key sounds") : "", type: "action", text: Tr.t("Play"), run: () => KeySounds.preview() }
+                        ].concat(KeySounds.ready ? [] : [
+                            { label: Tr.t("One-time setup"), hint: Tr.t("Only a small system service can hear the keys. It tells the kind of press, never which key"), type: "action", text: Tr.t("Set up"), run: () => KeySounds.openSetup() }
+                        ])
                     }
                 ]
             },
