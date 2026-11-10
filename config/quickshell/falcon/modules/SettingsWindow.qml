@@ -393,7 +393,8 @@ LazyLoader {
                             win.bind("screenshot", Tr.t("Screenshot")),
                             win.bind("record", Tr.t("Record screen")),
                             win.bind("ocr", Tr.t("Copy text from screen")),
-                            win.bind("translate", Tr.t("Translate from screen"))
+                            win.bind("translate", Tr.t("Translate from screen")),
+                            win.bind("pin", Tr.t("Pin an area of the screen"))
                         ]
                     }
                 ]

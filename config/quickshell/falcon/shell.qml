@@ -55,6 +55,7 @@ ShellRoot {
     TranslateWindow {}
     WindowSwitcher {}
     StickyGhost {}
+    PinnedShots {}
 
     // niri bindlari shu funksiyalarni chaqiradi: qs -c falcon ipc call desk <nom>
     IpcHandler {
@@ -78,6 +79,13 @@ ShellRoot {
         }
         function screenshotTaken(path: string): void {
             Niri.screenshotTaken(path);
+        }
+        // Pins a picture over the screen at X Y (logical, global), W x H on the screen.
+        function pin(path: string, x: real, y: real, w: real, h: real): void {
+            Pins.add(path, x, y, w, h);
+        }
+        function pinsClear(): void {
+            Pins.clear();
         }
         function translateImage(path: string, width: int, height: int): void {
             Ui.translateImage(path, width, height);

@@ -58,6 +58,7 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | `Mod+Shift+R` | Record screen |
 | `Mod+P` | Copy text from screen |
 | `Mod+Alt+P` | Translate a screen area |
+| `Mod+Alt+S` | Pin a screen area: the picture stays above the windows. Drag moves it, the wheel resizes, Ctrl+wheel changes its opacity, double click returns its size, middle click closes; copy, save and close show on hover |
 
 ## Dashboard
 

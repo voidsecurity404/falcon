@@ -141,6 +141,7 @@
     "record": "Mod+Shift+R",
     "ocr": "Mod+P",
     "translate": "Mod+Alt+P",
+    "pin": "Mod+Alt+S",
     "widgets": "Mod+Shift+W"
   },
   "session": {

@@ -48,6 +48,7 @@ PanelWindow {
         { id: "search", icon: "google", name: Tr.t("Google"), hint: Tr.t("Search on Google") },
         { id: "ocr", icon: "ocr", name: Tr.t("Text"), hint: Tr.t("Copy the text") },
         { id: "translate", icon: "translate", name: Tr.t("Translate"), hint: Tr.t("Translate the text on the picture") },
+        { id: "pin", icon: "pin", name: Tr.t("Pin"), hint: Tr.t("Keep the picture on top of the windows") },
         { id: "record", icon: "record", name: Tr.t("Record"), hint: Tr.t("Record this area") }
     ]
     readonly property var currentAction: actions.find(a => a.id === Ui.regionAction) || actions[0]

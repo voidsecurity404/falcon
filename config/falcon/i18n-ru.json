@@ -1069,5 +1069,10 @@
  "Type ? and the words, !yt for YouTube": "Введите ? и слова, !yt для YouTube",
  "Search in {site}": "Искать в {site}",
  "Open {site}": "Открыть {site}",
- "Open the address": "Открыть адрес"
+ "Open the address": "Открыть адрес",
+ "Pin": "Закрепить",
+ "Keep the picture on top of the windows": "Оставить снимок поверх окон",
+ "Pin an area of the screen": "Закрепить область экрана",
+ "The pinned picture is in the clipboard": "Закреплённый снимок скопирован",
+ "opacity": "прозрачность"
 }

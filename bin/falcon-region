@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs what was chosen on the area selected in the shell's RegionSelector.
-# Usage: falcon-region copy|edit|search|ocr|translate|record IMAGE X Y W H GEOMETRY
+# Usage: falcon-region copy|edit|search|ocr|translate|pin|record IMAGE X Y W H GEOMETRY
 #        falcon-region save FILE
 # IMAGE is the frozen picture of the output, X Y W H are its pixels, GEOMETRY is in screen coordinates.
 set -euo pipefail
@@ -58,6 +58,15 @@ search)
     ;;
 ocr)
     "$HOME/.local/bin/falcon-ocr" "$crop"
+    ;;
+pin)
+    # The card keeps the file until it is closed. GEOMETRY gives its place on the screen.
+    pins="${XDG_RUNTIME_DIR:-/tmp}/falcon-pins"
+    mkdir -p "$pins"
+    kept="$(mktemp --tmpdir="$pins" pin.XXXXXX.png)"
+    cp "$crop" "$kept"
+    read -r gx gy gw gh <<<"$(sed -E 's/^(-?[0-9]+),(-?[0-9]+) ([0-9]+)x([0-9]+)$/\1 \2 \3 \4/' <<<"$geometry")"
+    qs -c falcon ipc call desk pin "$kept" "$gx" "$gy" "$gw" "$gh" >/dev/null || rm -f "$kept"
     ;;
 translate)
     # The window keeps its own copy, because this script ends at once.

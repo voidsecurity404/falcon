@@ -266,6 +266,7 @@ ACTIONS = {
     "record": ("Record screen", f'spawn "{SCRIPTS}falcon-record"', False),
     "ocr": ("Copy text from screen", "spawn " + desk("region", "ocr"), False),
     "translate": ("Translate from screen", "spawn " + desk("region", "translate"), False),
+    "pin": ("Pin an area of the screen", "spawn " + desk("region", "pin"), False),
     "widgets": ("Edit widgets", "spawn " + desk("widgets"), False),
 }
 
