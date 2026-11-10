@@ -28,9 +28,15 @@ LazyLoader {
 
         // Fired each time the window appears, so every part replays its entrance.
         signal entered
+        // Milliseconds into the opening, read by the tabs for their cascade.
+        property real tabClock: 1000
+
+        function backOut(x) {
+            const c = 1.9;
+            return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2);
+        }
 
         function open() {
-            exit.stop();
             search.text = "";
             filter = "";
             scroller.contentY = 0;
@@ -39,6 +45,7 @@ LazyLoader {
             pageShift.y = 18;
             sidebarShift.x = -22;
             sidebar.opacity = 0;
+            tabClock = 0;
             visible = true;
             ensureTabVisible();
             search.forceActiveFocus();
@@ -46,11 +53,11 @@ LazyLoader {
             entered();
         }
 
+        // niri's own close animation fades the window with its content; fading the content
+        // first left a bare glass box on screen.
         function leave() {
-            if (!visible)
-                return;
             entrance.stop();
-            exit.restart();
+            visible = false;
         }
 
         readonly property int page: Math.max(0, Math.min(pages.length - 1, Ui.settingsPage))
@@ -713,6 +720,13 @@ LazyLoader {
                 duration: 900
                 easing.type: Easing.OutCubic
             }
+            NumberAnimation {
+                target: win
+                property: "tabClock"
+                from: 0
+                to: 1000
+                duration: 1000
+            }
             SequentialAnimation {
                 ParallelAnimation {
                     NumberAnimation {
@@ -754,36 +768,6 @@ LazyLoader {
             }
         }
 
-        // Closing: the page sinks and fades, then niri fades the glass away.
-        SequentialAnimation {
-            id: exit
-
-            ParallelAnimation {
-                NumberAnimation {
-                    targets: [pageArea, sidebar]
-                    property: "opacity"
-                    to: 0
-                    duration: 180
-                    easing.type: Easing.OutQuad
-                }
-                NumberAnimation {
-                    target: pageShift
-                    property: "y"
-                    to: 10
-                    duration: 180
-                    easing.type: Easing.OutQuad
-                }
-                NumberAnimation {
-                    target: wash
-                    property: "bloom"
-                    to: 0
-                    duration: 180
-                }
-            }
-            ScriptAction {
-                script: win.visible = false
-            }
-        }
 
         readonly property real glassFloor: Math.max(0.56, Theme.glassOpacity)
 
@@ -1038,45 +1022,15 @@ LazyLoader {
                                     readonly property bool opensGroup: index === 0 || win.pages[index - 1].group !== modelData.group
 
                                     width: parent.width
-                                    opacity: 0
+                                    // Each tab takes its step of the entrance from win.tabClock, so the
+                                    // cascade cannot stall. Opacity eases out, the slide overshoots a little.
+                                    readonly property real since: win.tabClock - (40 + index * 22)
+                                    readonly property real fade: Math.max(0, Math.min(1, since / 260))
+                                    readonly property real glide: Math.max(0, Math.min(1, since / 460))
+
+                                    opacity: 1 - Math.pow(1 - fade, 3)
                                     transform: Translate {
-                                        id: tabShift
-
-                                        x: -18
-                                    }
-
-                                    Connections {
-                                        target: win
-                                        function onEntered() {
-                                            tab.opacity = 0;
-                                            tabShift.x = -18;
-                                            tabEntrance.restart();
-                                        }
-                                    }
-
-                                    SequentialAnimation {
-                                        id: tabEntrance
-
-                                        PauseAnimation {
-                                            duration: 40 + tab.index * 22
-                                        }
-                                        ParallelAnimation {
-                                            NumberAnimation {
-                                                target: tab
-                                                property: "opacity"
-                                                to: 1
-                                                duration: 260
-                                                easing.type: Easing.OutCubic
-                                            }
-                                            NumberAnimation {
-                                                target: tabShift
-                                                property: "x"
-                                                to: 0
-                                                duration: 460
-                                                easing.type: Easing.BezierSpline
-                                                easing.bezierCurve: [0.2, 1.3, 0.3, 1, 1, 1]
-                                            }
-                                        }
+                                        x: -18 * (1 - win.backOut(tab.glide))
                                     }
 
                                     Item {
