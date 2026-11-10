@@ -4921,12 +4921,16 @@ def _():
         ok(data["lines"] >= 6 and "<span" in data["html"], (style, data["html"][:200]))
 
 
-@case("6 animatsiyaning WebP ko'rinishi yasaladi")
+@case("har bir logo va 7 animatsiyaning WebP ko'rinishi yasaladi")
 def _():
-    clips = json.loads(sh([str(LBIN / "falcon-fetch"), "--previews"], check=True, timeout=120).stdout)
-    ok(sorted(clips) == sorted(["spin", "pulse", "shine", "wave", "glitch", "scan"]), clips)
-    ok(all(Path(p).stat().st_size > 1000 for k, p in clips.items() if k != "logos"), clips)
-    ok(len(clips["logos"]) == 11 and all(Path(p).exists() for p in clips["logos"].values()), clips["logos"])
+    out = sh([str(LBIN / "falcon-fetch"), "--previews"], check=True, timeout=300).stdout
+    rows = [json.loads(l) for l in out.splitlines() if l.strip()]
+    stills = rows[0]["logos"]
+    clips = {(r["logo"], r["animation"]) for r in rows[1:]}
+    ok(len(stills) == 11 and all(Path(p).exists() for p in stills.values()), stills)
+    anims = {"spin", "flip", "swing", "bounce", "assemble", "decode", "aurora"}
+    ok(clips == {(l, a) for l in stills for a in anims}, len(clips))
+    ok(all(Path(r["path"]).stat().st_size > 1000 for r in rows[1:]), "bo'sh WebP")
 
 
 feature("songrec", "Qo'shiqni aniqlash")

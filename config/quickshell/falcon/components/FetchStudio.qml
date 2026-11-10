@@ -4,14 +4,18 @@ import Quickshell.Io
 import qs.components
 import qs.services
 
-// Top of the Fastfetch page: a live terminal preview, the logos, the ten styles and the six animations.
+// Top of the Fastfetch page: a live terminal preview, the logos, the ten styles and the seven animations.
 // Everything comes from bin/falcon-fetch, the same code that draws the greeting:
-// --preview-text gives the chosen style's lines, --previews an animated WebP per animation.
+// --preview-text gives the chosen style's lines, --previews a still PNG per logo and an animated
+// WebP for every logo and animation, one JSON line each, so another logo shows at once when picked.
+// While a clip is still being made, its logo's still picture stands in for it.
 Column {
     id: root
 
     readonly property string style: Settings.get("fetch.style", "classic")
-    readonly property string animation: Settings.get("fetch.animation", "spin")
+    readonly property string animationSet: Settings.get("fetch.animation", "spin")
+    // A name from an older list falls back to spin, as in falcon-fetch.
+    readonly property string animation: animations.some(a => a.id === animationSet) ? animationSet : "spin"
     readonly property real seconds: Settings.get("fetch.seconds", 3.2)
     readonly property string logo: Settings.get("fetch.logo", "brand")
     readonly property bool live: visible && Ui.settingsOpen
@@ -43,14 +47,17 @@ Column {
     ]
     readonly property var animations: [
         { id: "spin", name: Tr.t("Spin") },
-        { id: "pulse", name: Tr.t("Pulse") },
-        { id: "shine", name: Tr.t("Shine") },
-        { id: "wave", name: Tr.t("Wave") },
-        { id: "glitch", name: Tr.t("Glitch") },
-        { id: "scan", name: Tr.t("Scan") }
+        { id: "flip", name: Tr.t("Flip") },
+        { id: "swing", name: Tr.t("Swing") },
+        { id: "bounce", name: Tr.t("Bounce") },
+        { id: "assemble", name: Tr.t("Assemble") },
+        { id: "decode", name: Tr.t("Decode") },
+        { id: "aurora", name: Tr.t("Aurora") }
     ]
 
+    // clips[logo][animation] is the path of a WebP, stills[logo] of a PNG.
     property var clips: ({})
+    property var stills: ({})
     property var sample: ({ html: "", background: "#000000", foreground: "#ffffff", lines: 14 })
     property bool clipsBusy: false
 
@@ -63,6 +70,31 @@ Column {
         }
         root.clipsBusy = true;
         clipMaker.running = true;
+    }
+    function clipOf(logo, anim) {
+        const set = root.clips[logo];
+        return set && set[anim] ? "file://" + set[anim] : "";
+    }
+    function stillOf(logo) {
+        return root.stills[logo] ? "file://" + root.stills[logo] : "";
+    }
+    function takeLine(line) {
+        let data;
+        try {
+            data = JSON.parse(line);
+        } catch (e) {
+            return;
+        }
+        if (data.logos) {
+            root.stills = data.logos;
+            return;
+        }
+        if (!data.logo || !data.animation)
+            return;
+        const all = Object.assign({}, root.clips);
+        all[data.logo] = Object.assign({}, all[data.logo] || {});
+        all[data.logo][data.animation] = data.path;
+        root.clips = all;
     }
     function refreshText() {
         if (!live)
@@ -82,7 +114,6 @@ Column {
     }
     onStyleChanged: refreshText()
     onSecondsChanged: clipsAgain.restart()
-    onLogoChanged: clipsAgain.restart()
 
     Connections {
         target: Theme
@@ -109,13 +140,8 @@ Column {
         id: clipMaker
 
         command: ["falcon-fetch", "--previews"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    root.clips = JSON.parse(text);
-                } catch (e) {}
-                root.clipsBusy = false;
-            }
+        stdout: SplitParser {
+            onRead: line => root.takeLine(line)
         }
         onExited: root.clipsBusy = false
     }
@@ -195,17 +221,32 @@ Column {
                 y: 40
                 spacing: 18
 
-                AnimatedImage {
+                Item {
                     id: bigClip
 
                     // 24 columns of 9 px and 14 rows of 19 px, scaled to the preview's lines.
+                    readonly property string clip: root.clipOf(root.logo, root.animation)
+
                     height: 14 * term.lineHeight
                     width: Math.round(216 * height / 266)
-                    source: root.clips[root.animation] ? "file://" + root.clips[root.animation] : ""
-                    playing: root.live
-                    smooth: true
-                    mipmap: true
-                    fillMode: Image.PreserveAspectFit
+
+                    Image {
+                        anchors.fill: parent
+                        visible: bigClip.clip === ""
+                        source: root.stillOf(root.logo)
+                        smooth: true
+                        mipmap: true
+                        fillMode: Image.PreserveAspectFit
+                    }
+                    AnimatedImage {
+                        anchors.fill: parent
+                        visible: bigClip.clip !== ""
+                        source: bigClip.clip
+                        playing: root.live
+                        smooth: true
+                        mipmap: true
+                        fillMode: Image.PreserveAspectFit
+                    }
                 }
 
                 Text {
@@ -224,7 +265,7 @@ Column {
             }
 
             Label {
-                visible: root.clipsBusy && !root.clips[root.animation]
+                visible: root.clipsBusy && bigClip.clip === "" && root.stillOf(root.logo) === ""
                 anchors.centerIn: parent
                 text: Tr.t("Preparing the animations…")
                 color: Qt.alpha(root.sample.foreground, 0.7)
@@ -260,7 +301,7 @@ Column {
 
                     required property var modelData
                     readonly property bool chosen: root.logo === modelData.id
-                    readonly property string picture: root.clips.logos && root.clips.logos[modelData.id] ? root.clips.logos[modelData.id] : ""
+                    readonly property string picture: root.stillOf(modelData.id)
 
                     width: (logoGrid.width - logoGrid.spacing * (logoGrid.columns - 1)) / logoGrid.columns
                     height: 124
@@ -274,7 +315,7 @@ Column {
                         y: 10
                         height: 82
                         width: Math.round(216 * height / 266)
-                        source: logoCard.picture ? "file://" + logoCard.picture : ""
+                        source: logoCard.picture
                         smooth: true
                         mipmap: true
                         fillMode: Image.PreserveAspectFit
@@ -405,7 +446,7 @@ Column {
         Grid {
             id: animGrid
 
-            columns: 3
+            columns: 4
             spacing: 10
             width: root.width
 
@@ -417,20 +458,34 @@ Column {
 
                     required property var modelData
                     readonly property bool chosen: root.animation === modelData.id
+                    readonly property string clip: root.clipOf(root.logo, modelData.id)
 
                     width: (animGrid.width - animGrid.spacing * (animGrid.columns - 1)) / animGrid.columns
-                    height: 186
+                    height: 176
                     radius: 18
                     color: root.sample.background
                     border.width: chosen ? 2 : 1
                     border.color: chosen ? Theme.accent : cardMouse.containsMouse ? Qt.alpha(Theme.text, 0.25) : Qt.alpha(Theme.text, 0.08)
 
+                    Image {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        y: 12
+                        height: 116
+                        width: Math.round(216 * height / 266)
+                        visible: card.clip === ""
+                        opacity: 0.5
+                        source: root.stillOf(root.logo)
+                        smooth: true
+                        mipmap: true
+                        fillMode: Image.PreserveAspectFit
+                    }
                     AnimatedImage {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        y: 14
-                        height: 124
+                        y: 12
+                        height: 116
                         width: Math.round(216 * height / 266)
-                        source: root.clips[card.modelData.id] ? "file://" + root.clips[card.modelData.id] : ""
+                        visible: card.clip !== ""
+                        source: card.clip
                         playing: root.live
                         smooth: true
                         mipmap: true
@@ -473,9 +528,9 @@ Column {
                     }
 
                     Label {
-                        visible: !root.clips[card.modelData.id]
+                        visible: card.clip === "" && root.stillOf(root.logo) === ""
                         anchors.horizontalCenter: parent.horizontalCenter
-                        y: 66
+                        y: 60
                         text: "…"
                         color: Qt.alpha(root.sample.foreground, 0.6)
                     }

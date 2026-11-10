@@ -26,7 +26,8 @@ It writes each frame as one write between a cursor save and restore, so the
 prompt and what the user types stay where they are.
 
 For the Settings page:
-  --previews           makes an animated WebP of every animation, prints {name: path}
+  --previews           prints {"logos": {name: png}}, then one {"logo", "animation", "path"}
+                       line per animated WebP, for every logo and animation
   --preview-text STYLE prints {"html", "background", "foreground"}: that style's
                        lines as rich text in the terminal's colors
 """
@@ -62,9 +63,9 @@ CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.
 MIRROR = str.maketrans("/\\()[]{}<>", "\\/)(][}{><")
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 FALLBACK_ACCENT = (255, 52, 58)
-VERSION = 2
+VERSION = 3
 
-ANIMATIONS = ["spin", "pulse", "shine", "wave", "glitch", "scan"]
+ANIMATIONS = ["spin", "flip", "swing", "bounce", "assemble", "decode", "aurora"]
 # "brand" is brand.txt, the others are logos/<name>.txt. Each fits 22 columns and 14 rows.
 LOGOS = ["brand", "falcon", "sword", "skull", "moon", "mountain", "flame", "eye", "crystal",
          "bolt", "planet"]
@@ -388,33 +389,112 @@ def logo_file():
     return path
 
 
+# ---------------------------------------------------------------- shared timing
+# Each animation is one loop of `count` frames, t = i / count from 0 to 1.
+
+SCRAMBLE = "01$#@%&*+=<>/\\{}[]?!ABCDEFXYZ"
+MIRROR_V = str.maketrans("/\\^v'`,.", "\\/v^,.'`")
+
+
+def ease_out(p):
+    p = min(1.0, max(0.0, p))
+    return 1 - (1 - p) ** 3
+
+
+def ease_in(p):
+    p = min(1.0, max(0.0, p))
+    return p ** 3
+
+
+def flip_angle(t):
+    """Flip: a full tumble around the horizontal axis, with a short rest facing the viewer."""
+    if t < 0.25:
+        return 0.0
+    p = (t - 0.25) / 0.75
+    return 2 * math.pi * (p * p * (3 - 2 * p))
+
+
+def swing_angle(t):
+    """Swing: rocks like a hanging sign, up to about 49 degrees each way."""
+    return 0.85 * math.sin(2 * math.pi * t)
+
+
+def bounce_state(t):
+    """Bounce: (height 0..1, squash) for one jump that lands and settles."""
+    if t < 0.62:
+        p = t / 0.62
+        height = 4 * p * (1 - p)
+        squash = 0.0
+        if p < 0.08:
+            squash = -(1 - p / 0.08) * 0.6          # stretched as it leaves the ground
+    else:
+        p = (t - 0.62) / 0.38
+        height = 0.0
+        squash = math.exp(-5 * p) * math.cos(3 * math.pi * p)   # lands, wobbles, settles
+    return height, squash
+
+
+def cell_plan(lines, width, salt):
+    """The same random choices for every frame of one loop: per drawn cell."""
+    rnd = random.Random(salt)
+    plan = {}
+    for y, row in enumerate(lines):
+        for x, c in enumerate(row):
+            if c != " ":
+                angle = rnd.uniform(0, 2 * math.pi)
+                plan[(x, y)] = {
+                    "dx": math.cos(angle) * rnd.uniform(4, 11),
+                    "dy": math.sin(angle) * rnd.uniform(2, 6),
+                    "delay": rnd.uniform(0, 0.22),
+                    "reveal": 0.06 + rnd.uniform(0, 0.38),
+                    "leave": 0.80 + rnd.uniform(0, 0.15),
+                    "seed": rnd.randint(0, 1 << 30),
+                }
+    return plan
+
+
+def assemble_place(cell, t):
+    """Assemble: (offset in cells, alpha) of one character."""
+    p_in = ease_out((t - cell["delay"]) / 0.28)
+    if t < 0.62:
+        k = 1 - p_in
+        return cell["dx"] * k, cell["dy"] * k, p_in
+    p_out = ease_in((t - 0.74 - cell["delay"] * 0.4) / 0.2)
+    return cell["dx"] * p_out * 1.4, cell["dy"] * p_out * 1.4, 1 - p_out
+
+
+def decode_char(cell, c, t, i):
+    """Decode: (character, kind) of one cell; kind is None, "noise", "flash" or "real"."""
+    rnd = random.Random(cell["seed"] + i // 2)
+    if t >= cell["leave"]:
+        return None, None
+    if t >= cell["leave"] - 0.07:
+        return rnd.choice(SCRAMBLE), "noise"
+    if t >= cell["reveal"]:
+        return c, ("flash" if t - cell["reveal"] < 0.05 else "real")
+    if t >= cell["reveal"] - 0.22:
+        return rnd.choice(SCRAMBLE), "noise"
+    return None, None
+
+
+def aurora_tone(color, u):
+    """Aurora: a color that flows between the accent and its neighbours, u in 0..1."""
+    k = 0.5 + 0.5 * math.sin(2 * math.pi * u)
+    q = 0.5 + 0.5 * math.sin(2 * math.pi * u * 2 + 1.3)
+    warm = mixed(hue_turn(color, 0.2), WHITE, 0.25)
+    cool = hue_turn(color, -0.2)
+    return mixed(mixed(color, warm, k), cool, q * 0.45)
+
+
 # ---------------------------------------------------------------- text frames
 # Each frame is a grid of (character, color or None) for the text fallback.
 
-def glitch_frames(count):
-    """Frame numbers inside the three short bursts of the glitch animation."""
-    out = set()
-    for start, length in ((0.10, 0.07), (0.46, 0.05), (0.74, 0.09)):
-        a = int(start * count)
-        out.update(range(a, a + max(2, int(length * count))))
-    return out
-
-
-def scan_reveal(t):
-    """Share of the logo shown by the scan animation, and the place of its bright line."""
-    if t < 0.45:
-        p = t / 0.45
-        return p, p
-    if t < 0.85:
-        return 1.0, None
-    return 1.0 - (t - 0.85) / 0.15, None
-
-
-def text_grid(anim, lines, width, color, i, count):
+def text_grid(anim, lines, width, color, i, count, plan):
     t = i / count
     h = len(lines)
     mid = (width - 1) / 2
-    grid = [[(ch, color) if ch != " " else (" ", None) for ch in row] for row in lines]
+    vmid = (h - 1) / 2
+    empty = [[(" ", None) for _ in range(width)] for _ in range(h)]
     if anim == "spin":
         c = math.cos(2 * math.pi * t)
         squeeze = max(abs(c), 0.06)
@@ -433,73 +513,71 @@ def text_grid(anim, lines, width, color, i, count):
                 cells.append((ch, tone))
             out.append(cells)
         return out
-    if anim == "pulse":
-        s = 0.5 - 0.5 * math.cos(2 * math.pi * t)
-        tone = mixed(scaled(color, 0.55), mixed(color, WHITE, 0.3), s)
-        return [[(ch, tone if c else None) for ch, c in row] for row in grid]
-    if anim == "shine":
-        p = -0.35 + 1.7 * t / 0.6 if t < 0.6 else 9
+    if anim == "flip":
+        c = math.cos(flip_angle(t))
+        squeeze = max(abs(c), 0.08)
+        back = c < 0
+        tone = scaled(scaled(color, 0.72) if back else color, 0.6 + 0.4 * abs(c))
         out = []
-        for y, row in enumerate(grid):
-            cells = []
-            for x, (ch, c) in enumerate(row):
-                d = x / width * 0.8 + y / h * 0.35
-                k = math.exp(-((d - p) / 0.09) ** 2)
-                cells.append((ch, mixed(scaled(color, 0.82), WHITE, 0.8 * k) if c else None))
-            out.append(cells)
+        for y in range(h):
+            v = (y - vmid) / squeeze
+            if back:
+                v = -v
+            src = round(vmid + v)
+            row = lines[src] if 0 <= src < h else " " * width
+            row = row.translate(MIRROR_V) if back else row
+            out.append([(ch, tone) for ch in row])
         return out
-    if anim == "wave":
-        out = []
-        for y, row in enumerate(lines):
-            phase = 2 * math.pi * (y / h * 1.1 - t)
-            dx = round(math.sin(phase) * 1.2)
-            tone = scaled(color, 0.82 + 0.18 * math.sin(phase))
-            shifted = (" " * max(dx, 0) + row + " " * max(-dx, 0))[max(-dx, 0):][:width]
-            out.append([(ch, tone if ch != " " else None) for ch in shifted.ljust(width)])
-        return out
-    if anim == "glitch":
-        if i not in glitch_frames(count):
-            return grid
-        rnd = random.Random(i * 7919)
-        other = hue_turn(color, 0.42)
+    if anim == "swing":
+        a = swing_angle(t)
+        squeeze = math.cos(a)
         out = []
         for row in lines:
-            dx = rnd.choice((0, 0, 0, 1, -1, 2, -2))
-            shifted = (" " * max(dx, 0) + row + " " * max(-dx, 0))[max(-dx, 0):][:width].ljust(width)
             cells = []
-            for ch in shifted:
-                if ch != " " and rnd.random() < 0.12:
-                    cells.append((rnd.choice("#%@$&*+"), other))
-                else:
-                    cells.append((ch, (other if dx else color) if ch != " " else None))
+            for x in range(width):
+                src = round(mid + (x - mid) / squeeze)
+                ch = row[src] if 0 <= src < width else " "
+                near = 0.5 + 0.5 * math.sin(a) * (x - mid) / mid
+                cells.append((ch, scaled(color, 0.7 + 0.3 * near)))
             out.append(cells)
         return out
-    if anim == "scan":
-        shown, edge = scan_reveal(t)
-        out = []
-        for y, row in enumerate(grid):
-            pos = (y + 0.5) / h
-            if edge is not None:
-                if pos > shown:
-                    out.append([(" ", None)] * width)
-                    continue
-                tone = mixed(color, WHITE, 0.7) if shown - pos < 1.2 / h else color
-                out.append([(ch, tone if c else None) for ch, c in row])
-            else:
-                tone = scaled(color, shown)
-                out.append([(ch, tone if c and shown > 0.05 else None) for ch, c in row])
+    if anim == "bounce":
+        height, _ = bounce_state(t)
+        lift = round(height * 3)
+        out = [row for row in lines[lift:]] + [" " * width] * lift
+        return [[(ch, color) for ch in row] for row in out]
+    if anim == "assemble":
+        out = [row[:] for row in empty]
+        for (x, y), cell in plan.items():
+            dx, dy, alpha = assemble_place(cell, t)
+            nx, ny = round(x + dx), round(y + dy)
+            if alpha > 0.15 and 0 <= nx < width and 0 <= ny < h:
+                out[ny][nx] = (lines[y][x], scaled(color, 0.4 + 0.6 * alpha))
         return out
-    return grid
+    if anim == "decode":
+        out = [row[:] for row in empty]
+        light = mixed(color, WHITE, 0.55)
+        for (x, y), cell in plan.items():
+            ch, kind = decode_char(cell, lines[y][x], t, i)
+            if ch:
+                tone = {"noise": scaled(light, 0.75), "flash": WHITE, "real": color}[kind]
+                out[y][x] = (ch, tone)
+        return out
+    if anim == "aurora":
+        return [[(ch, aurora_tone(color, x / width * 0.6 + y / h * 0.4 - t) if ch != " " else None)
+                 for x, ch in enumerate(row)] for y, row in enumerate(lines)]
+    return [[(ch, color) for ch in row] for row in lines]
 
 
 def text_frames(anim, seconds, color):
     """Every frame of one loop, as ready-to-write rows."""
     lines, width = load_logo()
+    plan = cell_plan(lines, width, 7)
     count = max(2, round(FPS * seconds))
     out = []
     for i in range(count):
         rows = []
-        for cells in text_grid(anim, lines, width, color, i, count):
+        for cells in text_grid(anim, lines, width, color, i, count, plan):
             text, last = [], "none"
             for ch, c in cells:
                 if c is not None and c != last:
@@ -527,48 +605,198 @@ def font_file():
         return None
 
 
-def logo_mask(cw, ch, font):
-    """The logo as a float array (0 to 1), one column of margin on each side."""
+class Art:
+    """The logo drawn at one cell size: its whole mask and single glyphs for moving characters.
+    The picture has one spare column on each side."""
+
+    def __init__(self, cw, ch, font, name=None):
+        import numpy as np
+        from PIL import Image, ImageDraw, ImageFont
+        self.lines, self.width = load_logo(name)
+        self.cw, self.ch = cw, ch
+        probe = ImageFont.truetype(font, 100)
+        self.face = ImageFont.truetype(font, 100 * cw / probe.getlength("M"))
+        try:
+            self.face.set_variation_by_axes([700])
+        except Exception:
+            pass
+        ascent, descent = self.face.getmetrics()
+        self.lift = (ch - ascent - descent) / 2
+        self.w, self.h = (self.width + 2) * cw, len(self.lines) * ch
+        mask = Image.new("L", (self.w, self.h), 0)
+        draw = ImageDraw.Draw(mask)
+        for y, row in enumerate(self.lines):
+            for x, c in enumerate(row):
+                if c != " ":
+                    draw.text(((x + 1) * cw, y * ch + self.lift), c, fill=255, font=self.face)
+        self.mask = np.asarray(mask, dtype=np.float32) / 255
+        self.shape = self.mask.shape
+        self.pad = cw
+        self.glyphs = {}
+        self.plan = cell_plan(self.lines, self.width, 7)
+
+    def glyph(self, c):
+        import numpy as np
+        from PIL import Image, ImageDraw
+        if c not in self.glyphs:
+            img = Image.new("L", (self.cw + 2 * self.pad, self.ch + 2 * self.pad), 0)
+            ImageDraw.Draw(img).text((self.pad, self.pad + self.lift), c, fill=255, font=self.face)
+            self.glyphs[c] = np.asarray(img, dtype=np.float32) / 255
+        return self.glyphs[c]
+
+    def chars(self, items):
+        """Draws characters at free places: items of (x px, y px, char, alpha, color)."""
+        import numpy as np
+        a = np.zeros(self.shape, dtype=np.float32)
+        rgb = np.zeros(self.shape + (3,), dtype=np.float32)
+        for px, py, c, alpha, color in items:
+            g = self.glyph(c)
+            x0, y0 = int(round(px)) - self.pad, int(round(py)) - self.pad
+            gx0, gy0 = max(0, -x0), max(0, -y0)
+            x1, y1 = min(self.w, x0 + g.shape[1]), min(self.h, y0 + g.shape[0])
+            if x1 <= max(x0, 0) or y1 <= max(y0, 0):
+                continue
+            part = g[gy0:gy0 + y1 - max(y0, 0), gx0:gx0 + x1 - max(x0, 0)] * alpha
+            sl = (slice(max(y0, 0), y1), slice(max(x0, 0), x1))
+            low = a[sl]
+            new = part + low * (1 - part)
+            safe = np.where(new > 0, new, 1)[..., None]
+            rgb[sl] = (np.array(color, dtype=np.float32) * part[..., None]
+                       + rgb[sl] * (low * (1 - part))[..., None]) / safe
+            a[sl] = new
+        return a, rgb
+
+
+def quad_coeffs(dest, src):
+    """PIL perspective coefficients that map the dest corners onto the src corners."""
     import numpy as np
-    from PIL import Image, ImageDraw, ImageFont
-    lines, width = load_logo()
-    probe = ImageFont.truetype(font, 100)
-    size = 100 * cw / probe.getlength("M")
-    face = ImageFont.truetype(font, size)
+    rows = []
+    for (x, y), (u, v) in zip(dest, src):
+        rows.append([x, y, 1, 0, 0, 0, -u * x, -u * y])
+        rows.append([0, 0, 0, x, y, 1, -v * x, -v * y])
+    return np.linalg.solve(np.array(rows, dtype=np.float64),
+                           np.array([c for p in src for c in p], dtype=np.float64)).tolist()
+
+
+def warp(mask, corners):
+    """The mask laid onto four corners (top left, top right, bottom right, bottom left)."""
+    import numpy as np
+    from PIL import Image
+    h, w = mask.shape
+    img = Image.fromarray((mask * 255).astype("uint8"), "L")
     try:
-        face.set_variation_by_axes([700])
+        coeffs = quad_coeffs(corners, [(0, 0), (w, 0), (w, h), (0, h)])
     except Exception:
-        pass
-    ascent, descent = face.getmetrics()
-    lift = (ch - ascent - descent) / 2
-    w, h = (width + 2) * cw, len(lines) * ch
-    mask = Image.new("L", (w, h), 0)
-    draw = ImageDraw.Draw(mask)
-    for y, row in enumerate(lines):
-        for x, c in enumerate(row):
-            if c != " ":
-                draw.text(((x + 1) * cw, y * ch + lift), c, fill=255, font=face)
-    return np.asarray(mask, dtype=np.float32) / 255, width
+        return np.zeros_like(mask)
+    out = img.transform((w, h), Image.PERSPECTIVE, coeffs, Image.BICUBIC)
+    return np.asarray(out, dtype=np.float32) / 255
 
 
-def shift_x(a, dx):
+def turned(art, yaw=0.0, pitch=0.0, scale=1.0):
+    """The logo turned around its middle, seen with perspective. Returns (alpha, facing)."""
+    w, h = art.w, art.h
+    depth = 1.9 * max(w, h)
+    corners = []
+    for x, y in ((-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2)):
+        x, y = x * scale, y * scale
+        z = 0.0
+        # around the vertical axis, then the horizontal one
+        x, z = x * math.cos(yaw), x * math.sin(yaw)
+        y, z = y * math.cos(pitch) - z * math.sin(pitch), y * math.sin(pitch) + z * math.cos(pitch)
+        f = depth / (depth + z)
+        corners.append((w / 2 + x * f, h / 2 + y * f))
+    return warp(art.mask, corners), math.cos(yaw) * math.cos(pitch)
+
+
+def shade_across(art, yaw, color):
+    """Near side lighter, far side darker, for a turned logo."""
     import numpy as np
-    dx = int(round(dx))
-    out = np.zeros_like(a)
-    if dx > 0:
-        out[:, dx:] = a[:, :-dx]
-    elif dx < 0:
-        out[:, :dx] = a[:, -dx:]
-    else:
-        out[:] = a
-    return out
+    xs = np.linspace(-1, 1, art.w, dtype=np.float32)
+    k = 0.72 + 0.28 * np.sin(yaw) * xs
+    return np.array(color, dtype=np.float32)[None, None, :] * k[None, :, None] * np.ones(
+        (art.h, 1, 1), dtype=np.float32)
 
 
-def blur(a, radius):
+def picture_frame(anim, art, color, i, count):
+    """One frame as (alpha, rgb) float arrays."""
     import numpy as np
-    from PIL import Image, ImageFilter
-    img = Image.fromarray((np.clip(a, 0, 1) * 255).astype("uint8"), "L")
-    return np.asarray(img.filter(ImageFilter.GaussianBlur(radius)), dtype=np.float32) / 255
+    from PIL import Image
+    t = i / count
+    mask, cw, ch = art.mask, art.cw, art.ch
+    h, w = mask.shape
+    if anim == "spin":
+        c = math.cos(2 * math.pi * t)
+        back = c < 0
+        tone = scaled(scaled(color, 0.72) if back else color, 0.6 + 0.4 * abs(c))
+        narrow = max(1, round(w * max(abs(c), 0.04)))
+        img = Image.fromarray((mask * 255).astype("uint8"), "L").resize((narrow, h), Image.LANCZOS)
+        if back:
+            img = img.transpose(Image.FLIP_LEFT_RIGHT)
+        a = np.zeros_like(mask)
+        left = (w - narrow) // 2
+        a[:, left:left + narrow] = np.asarray(img, dtype=np.float32) / 255
+        return a, solid(tone, mask.shape)
+    if anim == "flip":
+        angle = flip_angle(t)
+        c = math.cos(angle)
+        if abs(c) < 0.03:
+            angle = math.acos(math.copysign(0.03, c))
+        a, facing = turned(art, pitch=angle, scale=0.8)
+        back = c < 0
+        tone = scaled(scaled(color, 0.72) if back else color, 0.6 + 0.4 * abs(c))
+        return a, solid(tone, mask.shape)
+    if anim == "swing":
+        yaw = swing_angle(t)
+        a, _ = turned(art, yaw=yaw, scale=0.86)
+        return a, shade_across(art, yaw, color)
+    if anim == "bounce":
+        height, squash = bounce_state(t)
+        base = 0.78
+        sy = base * (1 - 0.16 * squash)
+        sx = base * (1 + 0.1 * squash)
+        nw, nh = max(1, round(w * sx)), max(1, round(h * sy))
+        img = Image.fromarray((mask * 255).astype("uint8"), "L").resize((nw, nh), Image.LANCZOS)
+        bottom = h - 0.05 * h - height * (h - 0.05 * h - nh)
+        x0, y0 = (w - nw) // 2, int(round(bottom - nh))
+        a = np.zeros_like(mask)
+        ys0, ys1 = max(0, y0), min(h, y0 + nh)
+        a[ys0:ys1, x0:x0 + nw] = (np.asarray(img, dtype=np.float32) / 255)[ys0 - y0:ys1 - y0]
+        # A soft shadow on the ground, smaller and fainter while it is up.
+        yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+        rx = w * 0.32 * (1 - 0.45 * height)
+        ry = h * 0.02 + 1
+        shadow = np.clip(1 - ((xx - w / 2) / rx) ** 2 - ((yy - h * 0.975) / ry) ** 2, 0, 1)
+        shadow = shadow * 0.45 * (1 - 0.7 * height)
+        return over(a, solid(color, mask.shape), shadow, solid(scaled(color, 0.45), mask.shape))
+    if anim == "assemble":
+        items = []
+        for (x, y), cell in art.plan.items():
+            dx, dy, alpha = assemble_place(cell, t)
+            if alpha > 0.01:
+                tone = mixed(color, WHITE, 0.5 * (1 - alpha))
+                items.append(((x + 1 + dx) * cw, (y + dy) * ch, art.lines[y][x], alpha, tone))
+        return art.chars(items)
+    if anim == "decode":
+        items = []
+        light = mixed(color, WHITE, 0.55)
+        for (x, y), cell in art.plan.items():
+            c, kind = decode_char(cell, art.lines[y][x], t, i)
+            if c:
+                tone, alpha = {"noise": (light, 0.55), "flash": (WHITE, 1.0), "real": (color, 1.0)}[kind]
+                items.append(((x + 1) * cw, y * ch, c, alpha, tone))
+        return art.chars(items)
+    if anim == "aurora":
+        ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
+        u = xs / w * 0.6 + ys / h * 0.4 - t
+        k = (0.5 + 0.5 * np.sin(2 * np.pi * u))[..., None]
+        q = (0.5 + 0.5 * np.sin(2 * np.pi * u * 2 + 1.3))[..., None] * 0.45
+        base = np.array(color, dtype=np.float32)
+        warm = np.array(mixed(hue_turn(color, 0.2), WHITE, 0.25), dtype=np.float32)
+        cool = np.array(hue_turn(color, -0.2), dtype=np.float32)
+        rgb = base + (warm - base) * k
+        rgb = rgb + (cool - rgb) * q
+        return mask, rgb
+    return mask, solid(color, mask.shape)
 
 
 def solid(color, shape):
@@ -585,84 +813,6 @@ def over(top_a, top_c, low_a, low_c):
     safe = np.where(a > 0, a, 1)[..., None]
     c = (top_c * top_a[..., None] + low_c * (low_a * (1 - top_a))[..., None]) / safe
     return a, c
-
-
-def picture_frame(anim, mask, cw, ch, color, i, count):
-    """One frame as (alpha, rgb) float arrays."""
-    import numpy as np
-    from PIL import Image
-    t = i / count
-    h, w = mask.shape
-    if anim == "spin":
-        c = math.cos(2 * math.pi * t)
-        back = c < 0
-        tone = scaled(scaled(color, 0.72) if back else color, 0.6 + 0.4 * abs(c))
-        narrow = max(1, round(w * max(abs(c), 0.04)))
-        img = Image.fromarray((mask * 255).astype("uint8"), "L").resize((narrow, h), Image.LANCZOS)
-        if back:
-            img = img.transpose(Image.FLIP_LEFT_RIGHT)
-        a = np.zeros_like(mask)
-        left = (w - narrow) // 2
-        a[:, left:left + narrow] = np.asarray(img, dtype=np.float32) / 255
-        return a, solid(tone, mask.shape)
-    if anim == "pulse":
-        s = 0.5 - 0.5 * math.cos(2 * math.pi * t)
-        k = 0.94 + 0.06 * s
-        nw, nh = max(1, round(w * k)), max(1, round(h * k))
-        img = Image.fromarray((mask * 255).astype("uint8"), "L").resize((nw, nh), Image.LANCZOS)
-        a = np.zeros_like(mask)
-        x0, y0 = (w - nw) // 2, (h - nh) // 2
-        a[y0:y0 + nh, x0:x0 + nw] = np.asarray(img, dtype=np.float32) / 255
-        glow = np.clip(blur(a, cw * 0.9) * 1.8, 0, 1) * (0.15 + 0.75 * s)
-        tone = mixed(scaled(color, 0.6), mixed(color, WHITE, 0.3), s)
-        return over(a, solid(tone, mask.shape), glow, solid(color, mask.shape))
-    if anim == "shine":
-        p = -0.35 + 1.7 * t / 0.6 if t < 0.6 else 9
-        ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
-        d = xs / w * 0.8 + ys / h * 0.35
-        k = np.exp(-((d - p) / 0.07) ** 2)[..., None]
-        base = solid(scaled(color, 0.82), mask.shape)
-        rgb = base + (np.array(WHITE, dtype=np.float32) - base) * 0.85 * k
-        glow = blur(mask, cw * 0.5) * k[..., 0] * 0.9
-        return over(mask, rgb, glow, solid(mixed(color, WHITE, 0.5), mask.shape))
-    if anim == "wave":
-        a = np.zeros_like(mask)
-        rgb = np.zeros(mask.shape + (3,), dtype=np.float32)
-        for y in range(h):
-            phase = 2 * math.pi * (y / h * 1.1 - t)
-            a[y] = shift_x(mask[y:y + 1], math.sin(phase) * cw * 0.8)[0]
-            rgb[y] = scaled(color, 0.8 + 0.2 * math.sin(phase))
-        return a, rgb
-    if anim == "glitch":
-        base = solid(color, mask.shape)
-        if i not in glitch_frames(count):
-            return mask, base
-        rnd = random.Random(i * 7919)
-        a = mask.copy()
-        y = 0
-        while y < h:
-            band = rnd.randint(ch // 3, ch * 2)
-            if rnd.random() < 0.5:
-                a[y:y + band] = shift_x(mask[y:y + band], rnd.uniform(-1.0, 1.0) * cw)
-            y += band
-        left = shift_x(a, -cw * 0.35) * 0.75
-        right = shift_x(a, cw * 0.35) * 0.75
-        la, lc = over(left, solid(hue_turn(color, 0.42), mask.shape),
-                      right, solid(hue_turn(color, -0.3), mask.shape))
-        return over(a, base, la, lc)
-    if anim == "scan":
-        shown, edge = scan_reveal(t)
-        ys = (np.arange(h, dtype=np.float32) + 0.5) / h
-        if edge is not None:
-            keep = (ys <= shown).astype(np.float32)[:, None]
-            a = mask * keep
-            near = np.exp(-((ys - shown) * h / (ch * 0.6)) ** 2)[:, None]
-            rgb = solid(color, mask.shape)
-            rgb = rgb + (np.array(WHITE, dtype=np.float32) - rgb) * 0.75 * near[..., None]
-            beam = np.repeat(near * 0.55 * (shown < 1), w, axis=1).astype(np.float32)
-            return over(a, rgb, beam, solid(mixed(color, WHITE, 0.4), mask.shape))
-        return mask * shown, solid(color, mask.shape)
-    return mask, solid(color, mask.shape)
 
 
 def to_rgba(a, rgb):
@@ -700,10 +850,10 @@ def picture_frames(anim, seconds, color, cw, ch):
         os.utime(folder)
         return paths, w, h
 
-    mask, _ = logo_mask(cw, ch, font)
+    art = Art(cw, ch, font)
     os.makedirs(folder, exist_ok=True)
     for i, path in enumerate(paths):
-        frame = to_rgba(*picture_frame(anim, mask, cw, ch, color, i, count))
+        frame = to_rgba(*picture_frame(anim, art, color, i, count))
         tmp = path + ".tmp"
         with open(tmp, "wb") as f:
             f.write(zlib.compress(frame.tobytes(), 6))
@@ -792,60 +942,75 @@ def spin(fd, top, shell, look):
 
 # ---------------------------------------------------------------- previews
 
-def previews(seconds):
-    """Animated WebP of every animation, for the cards of the Settings page."""
+PREVIEW_CELL = (9, 19)
+
+
+def preview_folder(font, count, color):
+    shapes = {name: load_logo(name)[0] for name in LOGOS if os.path.exists(logo_source(name))}
+    key = hashlib.sha1(repr((VERSION, "preview", font, count, color, shapes)).encode()).hexdigest()[:16]
+    return os.path.join(CACHE, "preview-" + key), list(shapes)
+
+
+def make_clip(job):
+    """One animated WebP: (logo, animation, path, seconds, count, color, font). Returns the job."""
     from PIL import Image
+    logo, anim, path, seconds, count, color, font = job
+    if not os.path.exists(path):
+        art = Art(*PREVIEW_CELL, font, name=logo)
+        frames = [Image.fromarray(to_rgba(*picture_frame(anim, art, color, i, count)), "RGBA")
+                  for i in range(count)]
+        tmp = f"{path}.{os.getpid()}.tmp.webp"
+        frames[0].save(tmp, save_all=True, append_images=frames[1:],
+                       duration=round(1000 * seconds / count), loop=0, quality=85, method=0)
+        os.replace(tmp, path)
+    return logo, anim, path
+
+
+def previews(seconds, chosen):
+    """Prints JSON lines for the Settings page: first {"logos": {name: still png}}, then one
+    {"logo", "animation", "path"} per animated WebP, the chosen logo first. Every logo gets every
+    animation, so picking another logo on the page shows its clips at once. Made in parallel and
+    cached by accent, loop length and the logos' shapes."""
     font = font_file()
     if not font:
-        return {}
+        return
     color = accent()
-    cw, ch = 9, 19
     count = max(2, round(FPS * seconds))
-    key = hashlib.sha1(repr((VERSION, "preview", font, count, color,
-                             load_logo())).encode()).hexdigest()[:16]
-    folder = os.path.join(CACHE, "preview-" + key)
-    out = {}
-    mask = None
+    folder, names = preview_folder(font, count, color)
     os.makedirs(folder, exist_ok=True)
     os.utime(folder)
-    for anim in ANIMATIONS:
-        path = os.path.join(folder, anim + ".webp")
-        if not os.path.exists(path):
-            if mask is None:
-                mask, _ = logo_mask(cw, ch, font)
-            frames = [Image.fromarray(to_rgba(*picture_frame(anim, mask, cw, ch, color, i, count)),
-                                      "RGBA") for i in range(count)]
-            frames[0].save(path + ".tmp.webp", save_all=True, append_images=frames[1:],
-                           duration=round(1000 * seconds / count), loop=0, quality=85,
-                           method=0)
-            os.replace(path + ".tmp.webp", path)
-        out[anim] = path
-    out["logos"] = logo_pictures(font, color)
+    print(json.dumps({"logos": logo_pictures(font, color)}), flush=True)
+    order = [chosen] + [n for n in names if n != chosen] if chosen in names else names
+    jobs = [(logo, anim, os.path.join(folder, f"{logo}-{anim}.webp"), seconds, count, color, font)
+            for logo in order for anim in ANIMATIONS]
+    ready = [j for j in jobs if os.path.exists(j[2])]
+    for logo, anim, path, *_ in ready:
+        print(json.dumps({"logo": logo, "animation": anim, "path": path}), flush=True)
+    todo = [j for j in jobs if not os.path.exists(j[2])]
+    if todo:
+        import multiprocessing
+        workers = max(1, min(len(todo), (os.cpu_count() or 2) // 2))
+        with multiprocessing.get_context("fork").Pool(workers) as pool:
+            for logo, anim, path in pool.imap(make_clip, todo):
+                print(json.dumps({"logo": logo, "animation": anim, "path": path}), flush=True)
     prune()
-    return out
 
 
 def logo_pictures(font, color):
     """A still PNG of every logo, for the logo cards of the Settings page."""
     from PIL import Image
-    cw, ch = 9, 19
     shapes = {name: load_logo(name)[0] for name in LOGOS if os.path.exists(logo_source(name))}
     key = hashlib.sha1(repr((VERSION, "logos", font, color, shapes)).encode()).hexdigest()[:16]
     folder = os.path.join(CACHE, "logos-" + key)
     os.makedirs(folder, exist_ok=True)
     os.utime(folder)
-    global LOGO
-    chosen, out = LOGO, {}
-    try:
-        for name in shapes:
-            path = os.path.join(folder, name + ".png")
-            if not os.path.exists(path):
-                LOGO = name
-                mask, _ = logo_mask(cw, ch, font)
-                Image.fromarray(to_rgba(mask, solid(color, mask.shape)), "RGBA").save(path)
-            out[name] = path
-    finally:
-        LOGO = chosen
+    out = {}
+    for name in shapes:
+        path = os.path.join(folder, name + ".png")
+        if not os.path.exists(path):
+            art = Art(*PREVIEW_CELL, font, name=name)
+            Image.fromarray(to_rgba(art.mask, solid(color, art.shape)), "RGBA").save(path)
+        out[name] = path
     return out
 
 
@@ -954,7 +1119,8 @@ def preview_text(style):
 def main():
     args = sys.argv[1:]
     if "--previews" in args:
-        print(json.dumps(previews(settings()["seconds"])))
+        look = settings()
+        previews(look["seconds"], look["logo"])
         return
     if "--preview-text" in args:
         rest = args[args.index("--preview-text") + 1:]
