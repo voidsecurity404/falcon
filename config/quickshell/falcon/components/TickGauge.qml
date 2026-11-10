@@ -16,6 +16,12 @@ Item {
 
     property real level: live ? Math.max(0, Math.min(1, share)) : 0
 
+    // How many ticks are lit. The ticks read only this, so they change when a tick turns on or off,
+    // not on every frame of the sweep.
+    readonly property int lit: level > 0.002 ? Math.floor(level * (ticks - 1) + 1e-6) + 1 : 0
+    readonly property color litColor: hot ? Theme.error : Theme.accent
+    readonly property color offColor: Qt.alpha(Theme.text, 0.13)
+
     Behavior on level {
         NumberAnimation {
             duration: 650
@@ -30,13 +36,14 @@ Item {
             required property int index
 
             readonly property real at: index / (root.ticks - 1)
+            readonly property bool on: index < root.lit
 
             x: (root.width - width) / 2
             width: root.tickWidth
             height: root.tickLength
             radius: width / 2
             antialiasing: true
-            color: root.level > 0.002 && at <= root.level ? (root.hot ? Theme.error : Theme.accent) : Qt.alpha(Theme.text, 0.13)
+            color: on ? root.litColor : root.offColor
             transform: Rotation {
                 origin.x: root.tickWidth / 2
                 origin.y: root.height / 2

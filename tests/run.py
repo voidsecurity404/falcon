@@ -4784,6 +4784,40 @@ def _():
     wait(lambda: st()["shownImage"] == os.path.realpath(target) and not st()["shownLive"], 6, "olinmadi")
 
 
+@case("awww-daemon o'chib qolsa fon tanlash uni qayta ishga tushiradi")
+def _():
+    images = sorted((HOME / "Pictures/Wallpapers").glob("*.jpg"))[:2]
+    if len(images) < 2:
+        raise Skip("ikki rasm kerak")
+    old = os.path.realpath(HOME / ".local/state/falcon/wallpaper")
+    target = str(images[0]) if os.path.realpath(images[0]) != old else str(images[1])
+    sh(["pkill", "-x", "awww-daemon"])
+    wait(lambda: sh(["pgrep", "-x", "awww-daemon"]).returncode != 0, 4, "o'chmadi")
+    sh(["env", "FALCON_QUIET=1", str(LBIN / "falcon-wallpaper"), target], timeout=60)
+    ok(sh(["awww", "query"]).returncode == 0, "daemon qaytmadi")
+    wait(lambda: st()["shownImage"] == os.path.realpath(target), 6, "fon qo'yilmadi")
+    time.sleep(0.5)
+    names = layers()
+    ok(names.index("awww-daemon") < names.index("falcon-parallax") < names.index("falcon-widgets-face"), f"tartib: {names}")
+
+
+@case("Video va undan keyin darhol rasm: video rasm ustida o'ynab qolmaydi")
+def _():
+    videos = sorted((HOME / "Pictures/Wallpapers/Live").glob("*.mp4"))
+    images = sorted((HOME / "Pictures/Wallpapers").glob("*.jpg"))
+    if not videos or not images or not shutil.which("mpvpaper"):
+        raise Skip("video, rasm va mpvpaper kerak")
+    env = ["env", "FALCON_QUIET=1", str(LBIN / "falcon-wallpaper")]
+    first = subprocess.Popen(env + [str(videos[0])], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(0.3)
+    sh(env + [str(images[0])], timeout=60)
+    first.wait(timeout=60)
+    time.sleep(1)
+    ok(sh(["pgrep", "-x", "mpvpaper"]).returncode != 0, "mpvpaper qoldi")
+    ok(not (HOME / ".local/state/falcon/wallpaper-live").exists(), "jonli havola qoldi")
+    ok(os.path.realpath(HOME / ".local/state/falcon/wallpaper") == os.path.realpath(images[0]), "rasm qo'yilmadi")
+
+
 feature("appcolors", "KDE va VS Code ranglari")
 
 

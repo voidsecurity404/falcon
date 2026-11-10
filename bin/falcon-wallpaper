@@ -108,7 +108,12 @@ play() {
         niri msg -j layers 2>/dev/null | grep -q '"mpvpaper"' && break
         sleep 0.1
     done
-    qs -c falcon ipc call desk widgetsRestack >/dev/null 2>&1 || true
+    # At login the player can be up before the shell answers, so it is asked again for a while.
+    for _ in $(seq 1 40); do
+        qs -c falcon ipc call desk widgetsRestack >/dev/null 2>&1 && break
+        pgrep -x qs >/dev/null || break
+        sleep 0.25
+    done
 }
 
 # Vidjetlar yangi rasmning tinch joylariga ko'chadi.
