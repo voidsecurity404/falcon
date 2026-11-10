@@ -186,45 +186,4 @@ PanelWindow {
             }
         }
     }
-
-    // Depth: the wallpaper's subject over the widgets, drawn where the wallpaper itself lies, with
-    // the same parallax place and move as modules/Parallax.qml. See services/Depth.qml.
-    Item {
-        id: depth
-
-        readonly property bool parallaxOn: Settings.get("wallpaper.parallax", true)
-        readonly property real amount: Math.max(0, Math.min(0.2, Settings.get("wallpaper.parallaxAmount", 0.06)))
-        readonly property real tall: parallaxOn ? root.height * (1 + amount) : root.height
-        readonly property real place: parallaxOn && root.workspace ? Math.max(0, Math.min(4, root.workspace.idx - 1)) / 4 : 0
-
-        anchors.fill: parent
-        visible: root.wanted && Depth.subject !== "" && opacity > 0
-        opacity: Depth.subject !== "" && subjectImage.status === Image.Ready && !Widgets.editMode && !Niri.overview ? 1 : 0
-
-        Behavior on opacity {
-            NumberAnimation {
-                duration: 450
-            }
-        }
-
-        Image {
-            id: subjectImage
-
-            width: root.width
-            height: depth.tall
-            y: -depth.place * (depth.tall - root.height)
-            source: Depth.subject !== "" ? "file://" + Depth.subject : ""
-            sourceSize: Qt.size(root.width, depth.tall)
-            fillMode: Image.PreserveAspectCrop
-            asynchronous: true
-            cache: false
-
-            Behavior on y {
-                NumberAnimation {
-                    duration: 420
-                    easing.type: Easing.OutCubic
-                }
-            }
-        }
-    }
 }

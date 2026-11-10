@@ -1131,13 +1131,5 @@
  "Wallhaven and MotionBGs": "Wallhaven и MotionBGs",
  "Pictures": "Картинки",
  "Save": "Сохранить",
- "Looking…": "Ищу…",
- "Widgets behind the subject": "Виджеты за объектом",
- "Getting ready for depth": "Готовлю глубину",
- "Cutting out the subject of this wallpaper…": "Вырезаю объект с этих обоев…",
- "The main thing of the picture is cut out once and drawn over the widgets. The first time downloads about 400 MB": "Главное на картинке вырезается один раз и рисуется поверх виджетов. В первый раз загружается около 400 МБ",
- "Downloads the model and its Python once, about 400 MB": "Один раз загружает модель и её Python, около 400 МБ",
- "Depth is ready": "Глубина готова",
- "The first cut of each wallpaper takes about half a minute": "Первый раз каждые обои обрабатываются около полминуты",
- "Depth could not be set up": "Не удалось настроить глубину"
+ "Looking…": "Ищу…"
 }

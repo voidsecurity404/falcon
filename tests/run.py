@@ -5154,7 +5154,7 @@ def _():
     ok(any("thumb" in r and Path(r["thumb"]).exists() for r in rows), out[-1:] if out else "bo'sh")
 
 
-feature("newlooks", "Spektr, effekt, tovush, chuqurlik")
+feature("newlooks", "Spektr, effekt, tovush")
 
 
 @case("Yangi spektr ko'rinishlari va fon effektlari xatosiz yuklanadi")
@@ -5168,12 +5168,10 @@ def _():
     ok("spectrum.frag" not in log and "wallpaper.frag" not in log, "shader xatosi")
 
 
-@case("falcon-keysounds va falcon-depth holatini JSON qilib beradi")
+@case("falcon-keysounds holatini JSON qilib beradi")
 def _():
     keys = json.loads(sh([str(LBIN / "falcon-keysounds"), "status"], check=True).stdout)
     ok("ready" in keys and "packs" in keys and len(keys["packs"]) == 7, keys)
-    depth = json.loads(sh([str(LBIN / "falcon-depth"), "status"], check=True).stdout)
-    ok("installed" in depth, depth)
 
 
 def main():
