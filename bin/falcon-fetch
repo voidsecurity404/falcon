@@ -16,6 +16,14 @@ sent through kitty's graphics protocol. kitty plays it by itself, forever, and
 the picture belongs to those cells, so it keeps moving while commands run,
 while the output scrolls and in the scrollback. No process stays behind.
 Frames are cached in ~/.cache/falcon/fetch and kitty reads them from there.
+When the frames for the current color are not made yet, a still picture of the
+logo stands in and a background process makes them and starts the animation,
+so the prompt never waits for them.
+
+  --recolor            run by `falcon-apply --colors`: repaints, in the new accent,
+                       the logos still playing in open terminals (each is recorded
+                       as img-<id>.json in the runtime folder) and makes the frames
+                       the next greeting will want
 
 Elsewhere a small background process redraws that spot as text instead, and
 it stops by itself when:
@@ -597,6 +605,26 @@ def kitty_ok():
 
 
 def font_file():
+    # fc-match takes about 30 ms, so its answer is kept for the session.
+    memo = os.path.join(runtime_dir(), "font")
+    try:
+        with open(memo) as f:
+            path = f.read().strip()
+        if os.path.exists(path):
+            return path
+    except OSError:
+        pass
+    path = ask_font()
+    if path:
+        try:
+            with open(memo, "w") as f:
+                f.write(path)
+        except OSError:
+            pass
+    return path
+
+
+def ask_font():
     try:
         out = subprocess.run(["fc-match", "-f", "%{file}", "Geist Mono:bold"],
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).stdout
@@ -834,27 +862,36 @@ def prune():
         shutil.rmtree(old, ignore_errors=True)
 
 
-def picture_frames(anim, seconds, color, cw, ch):
-    """Paths of zlib-compressed RGBA frames for one loop, made once per look and cell size."""
+def frame_set(anim, seconds, color, cw, ch):
+    """Where the frames of one look live: (paths, w, h, ready, font), or None without a font."""
     lines, width = load_logo()
     font = font_file()
     if not font:
-        return None, 0, 0
+        return None
     count = max(2, round(FPS * seconds))
     key = hashlib.sha1(repr((VERSION, anim, lines, font, os.path.getmtime(font), cw, ch,
                              count, color)).encode()).hexdigest()[:16]
     folder = os.path.join(CACHE, key)
     w, h = (width + 2) * cw, len(lines) * ch
     paths = [os.path.join(folder, f"{i:03}.z") for i in range(count)]
-    if all(os.path.exists(p) for p in paths):
+    return paths, w, h, all(os.path.exists(p) for p in paths), font
+
+
+def picture_frames(anim, seconds, color, cw, ch):
+    """Paths of zlib-compressed RGBA frames for one loop, made once per look and cell size."""
+    found = frame_set(anim, seconds, color, cw, ch)
+    if not found:
+        return None, 0, 0
+    paths, w, h, ready, font = found
+    folder = os.path.dirname(paths[0])
+    if ready:
         os.utime(folder)
         return paths, w, h
-
     art = Art(cw, ch, font)
     os.makedirs(folder, exist_ok=True)
     for i, path in enumerate(paths):
-        frame = to_rgba(*picture_frame(anim, art, color, i, count))
-        tmp = path + ".tmp"
+        frame = to_rgba(*picture_frame(anim, art, color, i, len(paths)))
+        tmp = f"{path}.{os.getpid()}.tmp"
         with open(tmp, "wb") as f:
             f.write(zlib.compress(frame.tobytes(), 6))
         os.replace(tmp, path)
@@ -862,53 +899,218 @@ def picture_frames(anim, seconds, color, cw, ch):
     return paths, w, h
 
 
+def still_frame(color, cw, ch, font):
+    """The whole logo standing still in one color, shown while the frames are being made."""
+    path = os.path.join(runtime_dir(), f"still-{LOGO}-{cw}x{ch}-%02x%02x%02x.z" % color)
+    if not os.path.exists(path):
+        art = Art(cw, ch, font)
+        frame = to_rgba(art.mask, solid(color, art.mask.shape))
+        tmp = f"{path}.{os.getpid()}.tmp"
+        with open(tmp, "wb") as f:
+            f.write(zlib.compress(frame.tobytes(), 1))
+        os.replace(tmp, path)
+    return path
+
+
 def gfx(keys, path=None):
     data = ";" + __import__("base64").b64encode(path.encode()).decode() if path else ""
     return f"\x1b_G{keys}{data}\x1b\\"
 
 
-def picture(fd, top, look):
-    """Swap the text logo for an animated picture kitty plays itself. True if done."""
+def play(ident, paths, w, h, seconds, replace):
+    """Commands that give image `ident` the rest of its frames and start it. With `replace`
+    its first frame, a still picture, becomes the animation's first frame in place."""
+    gap = round(1000 * seconds / len(paths))
+    common = f"i={ident},f=32,s={w},v={h},o=z,t=f,q=2"
+    out = [gfx(f"a=f,{common},r=1,X=1", paths[0])] if replace else []
+    out += [gfx(f"a=f,{common},z={gap}", p) for p in paths[1:]]
+    out.append(gfx(f"a=a,i={ident},r=1,z={gap},q=2"))
+    out.append(gfx(f"a=a,i={ident},s=3,v=1,q=2"))
+    return "".join(out)
+
+
+def recolor_frames(ident, paths, w, h, seconds):
+    """Replaces every frame of a playing image with new ones of the same size."""
+    common = f"i={ident},f=32,s={w},v={h},o=z,t=f,q=2"
+    return "".join(gfx(f"a=f,{common},r={i + 1},X=1", p) for i, p in enumerate(paths))
+
+
+def shell_tty(shell):
+    try:
+        path = os.readlink(f"/proc/{shell}/fd/0")
+    except OSError:
+        return None
+    return path if path.startswith("/dev/pts/") else None
+
+
+def register(ident, shell, look, cw, ch, count):
+    """Remembers a playing logo, so --recolor can repaint it when the wallpaper changes."""
+    tty_path = shell_tty(shell)
+    if not tty_path:
+        return
+    data = {"ident": ident, "shell": shell, "tty": tty_path, "animation": look["animation"],
+            "seconds": look["seconds"], "logo": LOGO, "cw": cw, "ch": ch, "count": count}
+    with open(os.path.join(runtime_dir(), f"img-{ident}.json"), "w") as f:
+        json.dump(data, f)
+    with open(os.path.join(runtime_dir(), "cell"), "w") as f:
+        json.dump({"cw": cw, "ch": ch}, f)
+
+
+def detach():
+    """Forks. The parent gets True and goes on, the child runs on its own, away from the shell."""
+    if os.fork():
+        return True
+    os.setsid()
+    if os.fork():
+        os._exit(0)
+    devnull = os.open(os.devnull, os.O_RDWR)
+    for n in (0, 1, 2):
+        os.dup2(devnull, n)
+    return False
+
+
+def picture(fd, top, look, shell):
+    """Swap the text logo for an animated picture kitty plays itself. True if done.
+    Frames not made yet for this color are made in the background while a still picture of
+    the logo stands in, so the terminal is ready at once."""
     rows, cols, xpx, ypx = struct.unpack("HHHH", fcntl.ioctl(fd, termios.TIOCGWINSZ, b"\0" * 8))
     if not (rows and cols and xpx and ypx):
         return False
     cw, ch = xpx // cols, ypx // rows
+    color = accent()
     try:
-        paths, w, h = picture_frames(look["animation"], look["seconds"], accent(), cw, ch)
+        found = frame_set(look["animation"], look["seconds"], color, cw, ch)
+        if not found:
+            return False
+        paths, w, h, ready, font = found
+        if ready:
+            os.utime(os.path.dirname(paths[0]))
+            first = paths[0]
+        else:
+            first = still_frame(color, cw, ch, font)
     except Exception:
-        return False
-    if not paths:
         return False
     lines, width = load_logo()
     ident = random.randint(1, 0xFFFFFF)
-    gap = round(1000 * look["seconds"] / len(paths))
     common = f"i={ident},f=32,s={w},v={h},o=z,t=f,q=2"
     out = ["\x1b[?2026h\x1b7"]
     for i in range(len(lines)):
         out.append(f"\x1b[{top + i};{LOGO_COL}H" + " " * width)
     # The picture has a spare column on each side, so it starts one column to the left.
     out.append(f"\x1b[{top};{LOGO_COL - 1}H")
-    out.append(gfx(f"a=T,{common},c={width + 2},r={len(lines)},C=1", paths[0]))
-    for p in paths[1:]:
-        out.append(gfx(f"a=f,{common},z={gap}", p))
-    out.append(gfx(f"a=a,i={ident},r=1,z={gap},q=2"))
-    out.append(gfx(f"a=a,i={ident},s=3,v=1,q=2"))
+    out.append(gfx(f"a=T,{common},c={width + 2},r={len(lines)},C=1", first))
+    if ready:
+        out.append(play(ident, paths, w, h, look["seconds"], replace=False))
     out.append("\x1b8\x1b[?2026l")
     os.write(fd, "".join(out).encode())
-    return True
+    try:
+        register(ident, shell, look, cw, ch, len(paths))
+    except OSError:
+        pass
+    if ready or detach():
+        return True
+    # The background child: make the frames, then turn the still picture into the animation.
+    # Each burst of commands is one write, which the tty never splits between writers.
+    try:
+        paths, w, h = picture_frames(look["animation"], look["seconds"], color, cw, ch)
+        if paths:
+            os.write(fd, play(ident, paths, w, h, look["seconds"], replace=True).encode())
+    finally:
+        os._exit(0)
+
+
+def recolor():
+    """Called after the colors change: makes frames in the new accent for every logo still
+    playing in a terminal, swaps them in place, and makes the frames a new terminal will want,
+    so it opens at once."""
+    color = accent()
+    folder = runtime_dir()
+    looks = {}
+    for name in os.listdir(folder):
+        if not (name.startswith("img-") and name.endswith(".json")):
+            continue
+        path = os.path.join(folder, name)
+        try:
+            with open(path) as f:
+                rec = json.load(f)
+            os.kill(rec["shell"], 0)
+            if shell_tty(rec["shell"]) != rec["tty"]:
+                raise OSError
+        except (OSError, ValueError, KeyError, TypeError):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+            continue
+        looks.setdefault((rec["animation"], rec["seconds"], rec["logo"], rec["cw"], rec["ch"]),
+                         []).append(rec)
+    # The look of the next greeting, at the last cell size.
+    try:
+        with open(os.path.join(folder, "cell")) as f:
+            cell = json.load(f)
+        look = settings()
+        if look["enabled"]:
+            looks.setdefault((look["animation"], look["seconds"], look["logo"],
+                              int(cell["cw"]), int(cell["ch"])), [])
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    def late(*_):
+        raise TimeoutError
+
+    signal.signal(signal.SIGALRM, late)
+    global LOGO
+    for (anim, seconds, logo, cw, ch), recs in looks.items():
+        if logo not in LOGOS or not os.path.exists(logo_source(logo)):
+            continue
+        LOGO = logo
+        try:
+            paths, w, h = picture_frames(anim, seconds, color, cw, ch)
+        except Exception:
+            continue
+        if not paths:
+            continue
+        for rec in recs:
+            if len(paths) != rec["count"]:
+                continue
+            try:
+                tty_fd = os.open(rec["tty"], os.O_WRONLY | os.O_NOCTTY)
+            except OSError:
+                continue
+            signal.alarm(3)     # a terminal that stopped reading must not hold the rest
+            try:
+                os.write(tty_fd, recolor_frames(rec["ident"], paths, w, h, seconds).encode())
+            except OSError:
+                pass
+            finally:
+                signal.alarm(0)
+                os.close(tty_fd)
+
+
+def colors_stamp():
+    try:
+        return os.stat(os.path.join(STATE, "falcon", "colors.json")).st_mtime_ns
+    except OSError:
+        return None
 
 
 def spin(fd, top, shell, look):
-    color = accent()
-    frames = text_frames(look["animation"], look["seconds"], color)
-    rendered = []
-    for rows in frames:
-        moves = "".join(f"\x1b[{top + i};{LOGO_COL}H{r}" for i, r in enumerate(rows))
-        rendered.append(("\x1b[?2026h\x1b7" + moves + "\x1b8\x1b[?2026l").encode())
     lines, _ = load_logo()
-    still = "".join(f"\x1b[{top + i};{LOGO_COL}H\x1b[1;38;2;%d;%d;%dm{r}\x1b[0m" % color
-                    for i, r in enumerate(lines))
-    still = ("\x1b[?2026h\x1b7" + still + "\x1b8\x1b[?2026l").encode()
+    rendered, still = [], b""
+
+    def paint():
+        # The frames in the current accent, made again when the wallpaper changes it.
+        nonlocal rendered, still
+        color = accent()
+        rendered = []
+        for rows in text_frames(look["animation"], look["seconds"], color):
+            moves = "".join(f"\x1b[{top + i};{LOGO_COL}H{r}" for i, r in enumerate(rows))
+            rendered.append(("\x1b[?2026h\x1b7" + moves + "\x1b8\x1b[?2026l").encode())
+        text = "".join(f"\x1b[{top + i};{LOGO_COL}H\x1b[1;38;2;%d;%d;%dm{r}\x1b[0m" % color
+                       for i, r in enumerate(lines))
+        still = ("\x1b[?2026h\x1b7" + text + "\x1b8\x1b[?2026l").encode()
+
+    stamp = colors_stamp()
+    paint()
 
     def rest(*_):
         # Leave the whole logo in place, not caught halfway through a move.
@@ -933,6 +1135,9 @@ def spin(fd, top, shell, look):
                 return
         except OSError:
             return
+        if n % len(rendered) == 0 and colors_stamp() != stamp:
+            stamp = colors_stamp()
+            paint()
         os.write(fd, rendered[n % len(rendered)])
         n += 1
         delay = start + n * step - time.monotonic()
@@ -1132,6 +1337,13 @@ def main():
     if "--stop" in args:
         stop(shell)
         return
+    if "--recolor" in args:
+        if not detach():
+            try:
+                recolor()
+            finally:
+                os._exit(0)
+        return
     stop(shell)
     look = settings()
     if not look["enabled"]:
@@ -1158,7 +1370,7 @@ def main():
     if row is None or printed < LOGO_LINES:
         return
     top = row - printed
-    if top >= 1 and kitty_ok() and picture(fd, top, look):
+    if top >= 1 and kitty_ok() and picture(fd, top, look, shell):
         return
     rows, _ = term_size(fd)
     # Too close to the bottom: the prompt would scroll the logo away.
