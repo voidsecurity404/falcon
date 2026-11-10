@@ -1,0 +1,265 @@
+#!/usr/bin/env python3
+"""Finds and downloads wallpapers for the shell's download window.
+
+  falcon-wallget search wallhaven|motionbgs [QUERY] [PAGE] [WxH]
+      One JSON line per result, each once its small picture is on disk:
+      {"source", "id", "title", "thumb", "url", "kind": "image"|"video", "size"}
+      then {"done": true, "more": bool}, or {"error": "offline"|"empty"}.
+  falcon-wallget get wallhaven|motionbgs ID URL TITLE
+      Downloads into the wallpaper folder (videos into its Live folder), printing
+      {"progress": 0.4} lines and then {"path": "..."} or {"error": "..."}.
+
+Wallhaven's public API needs no key and gives only safe pictures here. MotionBGs has no API,
+so its search page is read; a video's 1080p file is /dl/hd/<id>. Small pictures are kept in
+~/.cache/falcon/wallget for a week.
+"""
+import concurrent.futures
+import hashlib
+import html
+import json
+import os
+import re
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+AGENT = "Mozilla/5.0 (X11; Linux x86_64) falcon-wallget"
+CACHE = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "falcon" / "wallget"
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "falcon"
+KEEP_DAYS = 7
+
+
+def say(obj):
+    try:
+        print(json.dumps(obj, ensure_ascii=False), flush=True)
+    except BrokenPipeError:
+        # The window closed or searched again.
+        os._exit(0)
+
+
+def fetch(url, timeout=15):
+    request = urllib.request.Request(url, headers={"User-Agent": AGENT})
+    with urllib.request.urlopen(request, timeout=timeout) as answer:
+        return answer.read()
+
+
+def wallpaper_dir():
+    folder = "~/Pictures/Wallpapers"
+    for name in ("defaults.json", "settings.json"):
+        try:
+            value = json.loads((CONFIG / name).read_text()).get("wallpaperDir")
+            if value:
+                folder = value
+        except (OSError, ValueError):
+            pass
+    return Path(os.path.expanduser(folder))
+
+
+def slug(text, fallback):
+    text = re.sub(r"\b(live|animated|wallpaper|4k|hd)\b", " ", text.lower())
+    text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+    return text[:60] or fallback
+
+
+# ---------- sources ----------
+
+def wallhaven(query, page, size):
+    params = {"categories": "111", "purity": "100", "page": str(page)}
+    if size:
+        params["atleast"] = size
+    if query:
+        params.update(q=query, sorting="relevance")
+    else:
+        params.update(sorting="toplist", topRange="1M")
+    data = json.loads(fetch("https://wallhaven.cc/api/v1/search?" + urllib.parse.urlencode(params)))
+    rows = []
+    for item in data.get("data", []):
+        tags = query or ""
+        rows.append({
+            "source": "wallhaven",
+            "id": item["id"],
+            "title": tags.strip() or "wallhaven " + item["id"],
+            "thumbUrl": item["thumbs"]["large"],
+            "url": item["path"],
+            "kind": "image",
+            "size": item.get("resolution", ""),
+        })
+    meta = data.get("meta", {})
+    return rows, meta.get("current_page", page) < meta.get("last_page", page)
+
+
+def motionbgs(query, page, size):
+    if query:
+        url = "https://motionbgs.com/search?q=" + urllib.parse.quote(query)
+    else:
+        url = "https://motionbgs.com/"
+    if page > 1:
+        url += ("&" if "?" in url else "?") + f"page={page}"
+    text = fetch(url).decode("utf-8", "replace")
+    rows = []
+    seen = set()
+    for match in re.finditer(r'<a title="([^"]+)" href=(/[a-z0-9-]+/?)>(.*?)</a>', text, re.S):
+        title, inner = match.group(1), match.group(3)
+        picture = re.search(r'<img[^>]*src=(/i/c/\d+x\d+/media/(\d+)/[^ >]+)', inner)
+        if not picture or picture.group(2) in seen:
+            continue
+        seen.add(picture.group(2))
+        name = re.search(r'class=ttl>([^<]+)<', inner)
+        label = re.search(r'class=frm>\s*([^<]+?)\s*<', inner)
+        rows.append({
+            "source": "motionbgs",
+            "id": picture.group(2),
+            "title": html.unescape(name.group(1) if name else re.sub(r"\s+(live|animated) wallpaper$", "", title)),
+            "thumbUrl": "https://motionbgs.com" + picture.group(1).replace("/364x205/", "/546x308/"),
+            "url": f"https://motionbgs.com/dl/hd/{picture.group(2)}/",
+            "kind": "video",
+            "size": label.group(1) if label else "",
+        })
+    more = bool(re.search(r'[?&]page=%d\b' % (page + 1), text))
+    return rows, more
+
+
+SOURCES = {"wallhaven": wallhaven, "motionbgs": motionbgs}
+
+
+def thumb(row):
+    CACHE.mkdir(parents=True, exist_ok=True)
+    path = CACHE / (hashlib.sha1(row["thumbUrl"].encode()).hexdigest() + ".jpg")
+    if not path.exists():
+        data = fetch(row["thumbUrl"], timeout=20)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_bytes(data)
+        tmp.replace(path)
+    return str(path)
+
+
+def prune():
+    limit = time.time() - KEEP_DAYS * 86400
+    for path in CACHE.glob("*.jpg"):
+        try:
+            if path.stat().st_mtime < limit:
+                path.unlink()
+        except OSError:
+            pass
+
+
+def search(source, query, page, size):
+    try:
+        rows, more = SOURCES[source](query.strip(), page, size)
+    except (urllib.error.URLError, OSError, ValueError):
+        say({"error": "offline"})
+        return 0
+    if not rows:
+        say({"error": "empty"})
+        return 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+        futures = {pool.submit(thumb, row): i for i, row in enumerate(rows)}
+        for future in concurrent.futures.as_completed(futures):
+            row = rows[futures[future]]
+            try:
+                row["thumb"] = future.result()
+            except (urllib.error.URLError, OSError):
+                continue
+            row["order"] = futures[future]
+            row.pop("thumbUrl", None)
+            say(row)
+    say({"done": True, "more": more})
+    prune()
+    return 0
+
+
+def tag_title(ident, fallback):
+    """Wallhaven's own tags name the file, as the other downloaded wallpapers are named."""
+    try:
+        data = json.loads(fetch(f"https://wallhaven.cc/api/v1/w/{urllib.parse.quote(ident)}", timeout=10)).get("data", {})
+        tags = [t["name"] for t in data.get("tags", [])][:3]
+        return " ".join(tags) or fallback
+    except (urllib.error.URLError, OSError, ValueError, KeyError):
+        return fallback
+
+
+def index():
+    try:
+        return json.loads((CACHE / "downloads.json").read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def remember(key, path):
+    known = index()
+    known[key] = str(path)
+    CACHE.mkdir(parents=True, exist_ok=True)
+    tmp = CACHE / "downloads.json.tmp"
+    tmp.write_text(json.dumps(known, ensure_ascii=False))
+    tmp.replace(CACHE / "downloads.json")
+
+
+def get(source, ident, url, title):
+    video = source == "motionbgs"
+    key = f"{source}:{ident}"
+    # Fetched before and still there: nothing to download.
+    earlier = index().get(key)
+    if earlier and Path(earlier).exists():
+        say({"path": earlier})
+        return 0
+    if source == "wallhaven":
+        title = tag_title(ident, title)
+    folder = wallpaper_dir() / ("Live" if video else "")
+    folder.mkdir(parents=True, exist_ok=True)
+    ext = ".mp4" if video else (os.path.splitext(urllib.parse.urlparse(url).path)[1] or ".jpg")
+    base = slug(title, f"{source}-{ident}")
+    path = folder / (base + ext)
+    # Another picture with the same name keeps it; this one gets its id too.
+    if path.exists():
+        path = folder / f"{base}-{ident}{ext}"
+    part = path.with_suffix(path.suffix + ".part")
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": AGENT})
+        with urllib.request.urlopen(request, timeout=30) as answer, open(part, "wb") as out:
+            total = int(answer.headers.get("Content-Length") or 0)
+            kind = (answer.headers.get("Content-Type") or "").split(";")[0]
+            if (video and not kind.startswith("video/")) or (not video and not kind.startswith("image/")):
+                raise ValueError(kind)
+            done = 0
+            last = 0.0
+            while True:
+                chunk = answer.read(1 << 16)
+                if not chunk:
+                    break
+                out.write(chunk)
+                done += len(chunk)
+                if total and time.monotonic() - last > 0.15:
+                    last = time.monotonic()
+                    say({"progress": round(done / total, 3)})
+        part.replace(path)
+        remember(key, path)
+    except ValueError:
+        part.unlink(missing_ok=True)
+        say({"error": "type"})
+        return 1
+    except (urllib.error.URLError, OSError):
+        part.unlink(missing_ok=True)
+        say({"error": "offline"})
+        return 1
+    say({"path": str(path)})
+    return 0
+
+
+def main():
+    args = sys.argv[1:]
+    if len(args) >= 2 and args[0] == "search" and args[1] in SOURCES:
+        query = args[2] if len(args) > 2 else ""
+        page = int(args[3]) if len(args) > 3 and args[3].isdigit() else 1
+        size = args[4] if len(args) > 4 and re.fullmatch(r"\d+x\d+", args[4]) else ""
+        return search(args[1], query, page, size)
+    if len(args) == 5 and args[0] == "get" and args[1] in SOURCES:
+        return get(*args[1:])
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

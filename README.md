@@ -110,6 +110,7 @@ How it works: `falcon-remote` (Go, `remote/` in the repo) is a user service that
 - **Timer:** `>timer 25`, `>timer 1:30`, `>timer 90s`, or `>pomodoro` in the app menu. Click it in the island to pause, right click to stop. It survives a restart and sleep, but it cannot wake the laptop.
 - **Microphone and camera:** an icon on the panel while an app uses them. A click names the apps.
 - **Clipboard pins:** `Ctrl+P` in `Mod+V` keeps up to 6 rows on top. They stay on disk until unpinned.
+- **Download wallpapers:** the download button beside the picker's tabs, Ctrl+D in the picker, or `>download` in the app menu opens a window that searches Wallhaven for pictures and MotionBGs for live wallpapers; empty search shows the popular ones and scrolling loads more. Set downloads and applies, Save only downloads, into the wallpaper folder and its `Live` folder, named after the picture's tags. Downloads go on after the window closes.
 - **Wallpaper by itself:** a slideshow, or one picture for the day and one for the night, in Settings → Wallpaper.
 - **Parallax:** the wallpaper is drawn a little taller than the screen and slides up as you go down the workspaces, so it feels deeper. Settings → Wallpaper → Depth turns it off or changes its strength. A live wallpaper does not move.
 - **Wallpaper effects:** a new wallpaper arrives with one of 15 effects drawn by a shader: grow, fade, wipe, wave, dissolve, pixels, blocks, shatter, glitch, melt, ripple, zoom, swirl, blinds and push, or Random for a different one each time. Settings → Wallpaper → Transition.

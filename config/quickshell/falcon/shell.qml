@@ -51,6 +51,7 @@ ShellRoot {
     PolkitDialog {}
     KeysSheet {}
     WallpaperPicker {}
+    WallpaperBrowser {}
     SettingsWindow {}
     TranslateWindow {}
     WindowSwitcher {}
@@ -101,6 +102,10 @@ ShellRoot {
         }
         function wallpapers(): void {
             Ui.togglePopup("wallpapers");
+        }
+        // The wallpaper download window.
+        function wallget(): void {
+            Ui.togglePopup("wallget");
         }
 
         // Switches the open picker's tab, or opens the picker on that tab.

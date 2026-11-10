@@ -268,6 +268,13 @@ LazyLoader {
             Keys.onBacktabPressed: root.setTab(1 - root.tab)
             Keys.onReturnPressed: root.apply(root.selected)
             Keys.onEnterPressed: root.apply(root.selected)
+            // Ctrl+D, by the key's place so the Russian layout works too (D is 40 with the evdev offset).
+            Keys.onPressed: event => {
+                if ((event.modifiers & Qt.ControlModifier) && (event.key === Qt.Key_D || event.nativeScanCode === 40)) {
+                    Ui.popup = "wallget";
+                    event.accepted = true;
+                }
+            }
 
             // One capsule holds both tabs. The colored piece stretches on its way across: its front
             // edge goes ahead and its back edge catches up, and the labels change color exactly where it passes.
@@ -424,6 +431,45 @@ LazyLoader {
                             }
                         }
                     }
+                }
+            }
+
+            // Opens the download window, beside the tabs.
+            Rectangle {
+                anchors.left: tabStrip.right
+                anchors.leftMargin: 10
+                anchors.verticalCenter: tabStrip.verticalCenter
+                width: 54
+                height: 54
+                radius: 27
+                color: Qt.rgba(0, 0, 0, downloadArea.containsMouse ? 0.6 : 0.45)
+                opacity: root.reveal
+                scale: downloadArea.pressed ? 0.92 : 1
+
+                Behavior on color {
+                    ColorAnimation {
+                        duration: 150
+                    }
+                }
+                Behavior on scale {
+                    NumberAnimation {
+                        duration: 120
+                    }
+                }
+
+                Icon {
+                    anchors.centerIn: parent
+                    name: "save"
+                    size: 20
+                    color: "white"
+                }
+                MouseArea {
+                    id: downloadArea
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Ui.popup = "wallget"
                 }
             }
 

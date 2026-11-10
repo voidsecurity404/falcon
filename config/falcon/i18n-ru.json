@@ -1117,5 +1117,19 @@
  "Recordings of real switches, about 15 MB": "Записи настоящих переключателей, около 15 МБ",
  "Key sounds could not be downloaded": "Не удалось загрузить звуки клавиш",
  "Done. Key sounds can now be turned on in Settings.": "Готово. Звуки клавиш теперь можно включить в настройках.",
- "Key sounds need python-evdev: sudo pacman -S python-evdev": "Звукам клавиш нужен python-evdev: sudo pacman -S python-evdev"
+ "Key sounds need python-evdev: sudo pacman -S python-evdev": "Звукам клавиш нужен python-evdev: sudo pacman -S python-evdev",
+ "Search {site}, Enter to find. Empty shows the popular ones": "Поиск на {site}, Enter — найти. Пусто — популярные",
+ "No answer from the site. Check the internet connection": "Сайт не отвечает. Проверьте подключение к интернету",
+ "Set": "Поставить",
+ "Waiting…": "Ждёт…",
+ "Loading more…": "Загружаю ещё…",
+ "Set downloads and applies, Save only downloads · Tab: pictures or live · Esc: close": "«Поставить» скачивает и применяет, «Сохранить» только скачивает · Tab: картинки или живые · Esc: закрыть",
+ "Saved to wallpapers": "Сохранено в обои",
+ "Could not download the wallpaper": "Не удалось скачать обои",
+ "The site sent something else": "Сайт прислал не то",
+ "Download wallpapers": "Скачать обои",
+ "Wallhaven and MotionBGs": "Wallhaven и MotionBGs",
+ "Pictures": "Картинки",
+ "Save": "Сохранить",
+ "Looking…": "Ищу…"
 }

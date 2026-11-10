@@ -177,6 +177,14 @@ PanelWindow {
             run: () => Ui.popup = "wallpapers"
         },
         {
+            id: "wallget",
+            icon: "save",
+            name: Tr.t("Download wallpapers"),
+            detail: Tr.t("Wallhaven and MotionBGs"),
+            keywords: "download wallpaper wallhaven motionbgs live скачать обои живые",
+            run: () => Ui.popup = "wallget"
+        },
+        {
             id: "settings",
             icon: "settings",
             name: Tr.t("Settings"),
