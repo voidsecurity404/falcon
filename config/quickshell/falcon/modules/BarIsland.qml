@@ -232,30 +232,29 @@ GlassIsland {
             objectName: "workspaces"
             spacing: 0
 
+            // The model holds plain workspace ids, so a switch keeps every chip alive and its
+            // width, size and color animate; a list of objects rebuilt the chips on each switch.
             Repeater {
-                model: Niri.workspacesOn(root.output)
+                model: ScriptModel {
+                    values: Niri.workspacesOn(root.output).map(w => w.id)
+                }
 
                 delegate: Item {
                     id: chip
 
                     required property var modelData
+                    readonly property var ws: Niri.workspaces.find(w => w.id === chip.modelData) || ({ idx: 0, is_active: false, is_urgent: false })
 
-                    readonly property bool active: modelData.is_active
-                    readonly property bool occupied: Niri.hasWindows(modelData.id)
+                    readonly property bool active: ws.is_active
+                    readonly property bool occupied: Niri.hasWindows(chip.modelData)
                     readonly property bool numbers: dots.style === "numbers"
                     readonly property int box: Math.max(18, BarLayout.buttonHeight - 8)
 
-                    objectName: "dot" + modelData.idx
+                    objectName: "dot" + ws.idx
                     visible: active || occupied || !dots.hideEmpty
+                    // Follows the dot's own animated width, so the pill never overlaps its neighbour.
                     width: visible ? dot.width + (numbers ? 4 : 6) : 0
                     height: BarLayout.buttonHeight
-
-                    Behavior on width {
-                        NumberAnimation {
-                            duration: 300
-                            easing.type: Easing.OutCubic
-                        }
-                    }
 
                     Rectangle {
                         id: dot
@@ -264,7 +263,7 @@ GlassIsland {
                         width: chip.numbers ? chip.box : chip.active ? (dots.style === "dots" ? 20 : 28) : 9
                         height: chip.numbers ? chip.box : chip.active ? (dots.style === "dots" ? 9 : 18) : 9
                         radius: height / 2
-                        color: chip.active ? Theme.accent : chip.modelData.is_urgent ? Theme.error : chip.numbers ? Qt.alpha(Theme.text, area.containsMouse ? 0.12 : chip.occupied ? 0.07 : 0) : Qt.alpha(Theme.text, chip.occupied ? (area.containsMouse ? 0.85 : 0.62) : (area.containsMouse ? 0.4 : 0.2))
+                        color: chip.active ? Theme.accent : chip.ws.is_urgent ? Theme.error : chip.numbers ? Qt.alpha(Theme.text, area.containsMouse ? 0.12 : chip.occupied ? 0.07 : 0) : Qt.alpha(Theme.text, chip.occupied ? (area.containsMouse ? 0.85 : 0.62) : (area.containsMouse ? 0.4 : 0.2))
 
                         Behavior on width {
                             NumberAnimation {
@@ -286,11 +285,11 @@ GlassIsland {
 
                         Label {
                             anchors.centerIn: parent
-                            text: chip.modelData.idx
+                            text: chip.ws.idx
                             font.family: Theme.mono
                             size: 11
                             font.weight: Font.Bold
-                            color: chip.active || chip.modelData.is_urgent ? Theme.accentText : Qt.alpha(Theme.text, chip.occupied ? 0.9 : 0.4)
+                            color: chip.active || chip.ws.is_urgent ? Theme.accentText : Qt.alpha(Theme.text, chip.occupied ? 0.9 : 0.4)
                             opacity: chip.numbers || (chip.active && dots.style === "pills") ? 1 : 0
 
                             Behavior on opacity {
@@ -307,7 +306,7 @@ GlassIsland {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: Sticky.active ? Sticky.switchTo(chip.modelData.idx) : Niri.focusWorkspace(chip.modelData.idx)
+                        onClicked: Sticky.active ? Sticky.switchTo(chip.ws.idx) : Niri.focusWorkspace(chip.ws.idx)
                     }
                 }
             }
