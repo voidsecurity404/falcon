@@ -8,8 +8,8 @@ import qs.services
 
 // The right island of the glass bar: screenshot and color tools, the tray, Claude, the
 // microphone and camera in use, waiting updates, the keyboard layout, the status (network,
-// Bluetooth, volume, battery) which opens the control center, notifications and the control
-// center button.
+// Bluetooth, volume, battery) which opens the control center, notifications and the
+// settings button.
 GlassIsland {
     id: root
 
@@ -345,11 +345,15 @@ GlassIsland {
         }
     }
 
+    // Settings window.
     BarButton {
         anchors.verticalCenter: parent.verticalCenter
-        objectName: "panel"
-        icon: "panel"
-        lit: Ui.popup === "control"
-        onClicked: Ui.togglePopup("control")
+        objectName: "settings"
+        icon: "settings"
+        lit: Ui.settingsOpen
+        onClicked: {
+            Ui.popup = "";
+            Ui.settingsOpen = !Ui.settingsOpen;
+        }
     }
 }

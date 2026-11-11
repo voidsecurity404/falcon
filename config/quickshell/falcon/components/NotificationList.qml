@@ -105,7 +105,7 @@ Rectangle {
     }
     Label {
         anchors.right: parent.right
-        anchors.rightMargin: 62
+        anchors.rightMargin: 18
         height: 54
         verticalAlignment: Text.AlignVCenter
         opacity: Toasts.history.length > 0 && !root.clearing ? 1 : 0

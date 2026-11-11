@@ -2596,12 +2596,12 @@ def _():
     wait(lambda: st()["unread"] == 0, 3)
 
 
-@case("Panel tugmasi va holat boshqaruv panelini ochadi va yopadi")
+@case("Tishli g'ildirak sozlamalarni ochadi, holat boshqaruv panelini ochadi")
 def _():
-    click_part("panel")
-    wait(lambda: st()["popup"] == "control", 3)
-    click_part("panel")
-    wait(lambda: st()["popup"] == "", 3)
+    click_part("settings")
+    wait(lambda: st()["settings"], 3)
+    click_part("settings")
+    wait(lambda: not st()["settings"], 3)
     click_part("status")
     wait(lambda: st()["popup"] == "control", 3)
     c = st()["bar"]["control"]

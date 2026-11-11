@@ -2,7 +2,7 @@ import QtQuick
 import qs.components
 import qs.services
 
-// The bell's menu: the notification history, with Clear and a button to the notification settings.
+// The bell's menu: the notification history, with Clear.
 Flyout {
     id: root
 
@@ -15,20 +15,6 @@ Flyout {
 
         NotificationList {
             anchors.fill: parent
-        }
-
-        BarButton {
-            objectName: "notifySettings"
-            anchors.right: parent.right
-            anchors.rightMargin: 12
-            y: 12
-            icon: "settings"
-            iconSize: 17
-            onClicked: {
-                Ui.popup = "";
-                Ui.settingsPage = 3;
-                Ui.settingsOpen = true;
-            }
         }
     }
 }
