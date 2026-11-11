@@ -24,6 +24,17 @@ PanelWindow {
     property real ribbonOut: barShown ? 0 : 1
     property real statusOut: barShown ? 0 : 1
     property real islandOut: islandShown ? 0 : 1
+    // A floating island stands this far from the edge, level with the side panels.
+    readonly property int islandGap: island.capsule ? (Settings.hug ? 4 : 8) : 0
+
+    // The place of the status item's n-th separate capsule on this window, empty when there is none.
+    function chipRect(n) {
+        const list = status.groupRects;
+        if (!status.chips || root.statusOut > 0 || n >= list.length)
+            return Qt.rect(0, 0, 0, 0);
+        const r = list[n];
+        return Qt.rect(status.x + r.x, status.y + r.y, r.width, r.height);
+    }
 
     // A calm settle with no bounce, and it starts just off the screen, so all of the way is seen.
     Behavior on ribbonOut {
@@ -92,21 +103,70 @@ PanelWindow {
             flipY: Settings.bottom
         }
         Region {
-            item: root.statusOut < 1 ? status : null
+            item: root.statusOut < 1 && !status.chips ? status : null
             topLeftRadius: status.topLeftRadius
             topRightRadius: status.topRightRadius
             bottomLeftRadius: status.bottomLeftRadius
             bottomRightRadius: status.bottomRightRadius
         }
+        // Separate capsules each get their own glass, at their place inside the status item.
+        Region {
+            readonly property rect r: root.chipRect(0)
+            x: r.x
+            y: r.y
+            width: r.width
+            height: r.height
+            radius: r.height / 2
+        }
+        Region {
+            readonly property rect r: root.chipRect(1)
+            x: r.x
+            y: r.y
+            width: r.width
+            height: r.height
+            radius: r.height / 2
+        }
+        Region {
+            readonly property rect r: root.chipRect(2)
+            x: r.x
+            y: r.y
+            width: r.width
+            height: r.height
+            radius: r.height / 2
+        }
+        Region {
+            readonly property rect r: root.chipRect(3)
+            x: r.x
+            y: r.y
+            width: r.width
+            height: r.height
+            radius: r.height / 2
+        }
+        Region {
+            readonly property rect r: root.chipRect(4)
+            x: r.x
+            y: r.y
+            width: r.width
+            height: r.height
+            radius: r.height / 2
+        }
+        Region {
+            readonly property rect r: root.chipRect(5)
+            x: r.x
+            y: r.y
+            width: r.width
+            height: r.height
+            radius: r.height / 2
+        }
         CurveRegion {
-            size: Settings.hug && root.statusOut < 1 ? 18 : 0
+            size: Settings.hug && !status.chips && root.statusOut < 1 ? 18 : 0
             x: status.x - 18
             y: Settings.bottom ? status.y + 44 - 18 : status.y + 1
             flipX: true
             flipY: Settings.bottom
         }
         CurveRegion {
-            size: Settings.hug && root.statusOut < 1 ? 18 : 0
+            size: Settings.hug && !status.chips && root.statusOut < 1 ? 18 : 0
             x: status.x + status.width - 1 - 18
             y: Settings.bottom ? status.y - 18 : status.y + status.height
             flipX: true
@@ -114,20 +174,20 @@ PanelWindow {
         }
         Region {
             item: root.islandOut === 1 ? null : island.body
-            bottomLeftRadius: Settings.bottom ? 0 : island.body.animatedRadius
-            bottomRightRadius: Settings.bottom ? 0 : island.body.animatedRadius
-            topLeftRadius: Settings.bottom ? island.body.animatedRadius : 0
-            topRightRadius: Settings.bottom ? island.body.animatedRadius : 0
+            bottomLeftRadius: Settings.bottom && !island.capsule ? 0 : island.body.animatedRadius
+            bottomRightRadius: Settings.bottom && !island.capsule ? 0 : island.body.animatedRadius
+            topLeftRadius: Settings.bottom || island.capsule ? island.body.animatedRadius : 0
+            topRightRadius: Settings.bottom || island.capsule ? island.body.animatedRadius : 0
         }
         CurveRegion {
-            size: root.islandOut === 0 ? 18 : 0
+            size: root.islandOut === 0 && !island.capsule ? 18 : 0
             x: island.x - 18
             y: island.y + (Settings.bottom ? island.height - 18 : 0)
             flipX: true
             flipY: Settings.bottom
         }
         CurveRegion {
-            size: root.islandOut === 0 ? 18 : 0
+            size: root.islandOut === 0 && !island.capsule ? 18 : 0
             x: island.x + island.width
             y: island.y + (Settings.bottom ? island.height - 18 : 0)
             flipY: Settings.bottom
@@ -201,7 +261,7 @@ PanelWindow {
         id: island
 
         anchors.horizontalCenter: parent.horizontalCenter
-        y: Settings.bottom ? parent.height - height : 0
+        y: Settings.bottom ? parent.height - height - root.islandGap : root.islandGap
         slide: root.islandOut
         visible: root.islandOut < 1
         showDashboard: root.panelHere && Ui.popup === "dashboard"

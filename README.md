@@ -149,6 +149,10 @@ Archmarket is written in Rust, its window drawn with egui, in `archmarket/` in t
 
 The side panels can hug the screen's corners, which then look round, or float away from the edge: Settings → Panel → Panel shape.
 
+Each part of the panel has its own look on Settings → Panel, with a live preview and four ready-made looks: the workspaces as numbers, dots, pills or the icons of their apps; the clock island joined to the edge or as a floating capsule, with a classic, wide or accent-colored clock; the status panel as one panel, separate capsules or icons only.
+
+The wallpaper picker (`Mod+W`) shows the wallpapers as slanted slices: the chosen one opens wide, the row settles on a spring and curls a little while it moves, and a live wallpaper plays in its slice. A click brings a slice to the middle, a click on the middle one (or Enter) applies it.
+
 Most things change from the `Mod+,` window and apply immediately: appearance, wallpaper, panel, widgets, windows, per-app rules, monitors, keyboard, mouse and touchpad, shortcuts, terminal and system. Reset to defaults is on the System page. If a value from that window is rejected, it is reverted and the reason is shown. If you edit `settings.json` by hand, the file is left as is, and no setting applies until you fix the value named in the error. From the command line: `falcon-set windows.gaps 8`.
 
 | What | Where |

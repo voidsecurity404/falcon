@@ -19,20 +19,33 @@ Item {
             shownToast = currentToast;
     }
     property alias body: body
+    // A copy drawn in the settings preview: only the clock, no clicks.
+    property bool preview: false
+
+    // panel.island: "notch" is joined to the screen edge, "capsule" floats a little away from it
+    // with every corner round. panel.clock chooses the face of the clock.
+    readonly property bool capsule: Settings.get("panel.island", "notch") === "capsule"
+    readonly property string clockStyle: Settings.get("panel.clock", "classic")
 
     readonly property string mode: showDashboard ? "dashboard" : Toasts.current ? "toast" : "idle"
     readonly property bool showSeconds: Settings.get("panel.clockSeconds", false)
     readonly property bool showDate: Settings.get("panel.clockDate", false)
     readonly property bool clock24: Settings.get("panel.clock24", true)
-    readonly property int targetWidth: mode === "dashboard" ? 1160 : mode === "toast" ? 440 : (Ui.recordBusy ? 232 : 186) + (Countdown.active ? timerPart.width + 10 : 0) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0) + (clock24 ? 0 : 26)
-    readonly property int cornerRadius: mode === "dashboard" ? 32 : 18
-    readonly property int targetHeight: mode === "dashboard" ? 580 : mode === "toast" ? 68 : 44
+    readonly property int targetWidth: mode === "dashboard" ? 1160 : mode === "toast" ? 440 : (Ui.recordBusy ? 232 : 186) + (Countdown.active ? timerPart.width + 10 : 0) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0) + (clock24 ? 0 : 26) + (clockStyle === "display" ? 22 : 0)
+    readonly property int cornerRadius: mode === "dashboard" ? 32 : capsule ? (mode === "toast" ? 24 : 19) : 18
+    readonly property int targetHeight: mode === "dashboard" ? 580 : mode === "toast" ? 68 : capsule ? 38 : 44
 
     width: body.width
     height: body.height
 
+    readonly property string hoursText: Ui.pad(clock24 ? clock.hours : clock.hours % 12 || 12)
+    readonly property string restText: Ui.pad(clock.minutes) + (showSeconds ? ":" + Ui.pad(clock.seconds) : "") + (clock24 ? "" : clock.hours < 12 ? " AM" : " PM")
+    readonly property string timeText: hoursText + ":" + restText
+    readonly property string dateText: Ui.pad(clock.date.getDate()) + "." + Ui.pad(clock.date.getMonth() + 1)
+
     // Ekran chetiga qo'shilib turadigan ichki egilgan burchaklar.
     EdgeCurve {
+        visible: !root.capsule
         x: -size
         y: body.y + (Settings.bottom ? body.height - size : 0)
         flipX: true
@@ -40,6 +53,7 @@ Item {
         color: Theme.glassTop
     }
     EdgeCurve {
+        visible: !root.capsule
         x: body.width
         y: body.y + (Settings.bottom ? body.height - size : 0)
         flipY: Settings.bottom
@@ -64,10 +78,10 @@ Item {
                 color: Theme.panel
             }
         }
-        topLeftRadius: Settings.bottom ? animatedRadius : 0
-        topRightRadius: Settings.bottom ? animatedRadius : 0
-        bottomLeftRadius: Settings.bottom ? 0 : animatedRadius
-        bottomRightRadius: Settings.bottom ? 0 : animatedRadius
+        topLeftRadius: Settings.bottom || root.capsule ? animatedRadius : 0
+        topRightRadius: Settings.bottom || root.capsule ? animatedRadius : 0
+        bottomLeftRadius: Settings.bottom && !root.capsule ? 0 : animatedRadius
+        bottomRightRadius: Settings.bottom && !root.capsule ? 0 : animatedRadius
         clip: true
 
         property real animatedRadius: root.cornerRadius
@@ -98,6 +112,7 @@ Item {
         // Panel shishasi ustidagi sahna: har bo'limning rangi, musiqa bo'limida albom.
         Loader {
             anchors.fill: parent
+            active: !root.preview
             asynchronous: true
             opacity: root.mode === "dashboard" ? 1 : 0
             visible: opacity > 0
@@ -118,6 +133,7 @@ Item {
         // Bosish: soatda dashboard'ni ochadi, xabarda uni bajaradi.
         MouseArea {
             anchors.fill: parent
+            enabled: !root.preview
             cursorShape: root.mode === "dashboard" ? Qt.ArrowCursor : Qt.PointingHandCursor
             onClicked: {
                 if (root.mode === "toast")
@@ -240,15 +256,60 @@ Item {
                     onClicked: Ui.toggleRecording()
                 }
             }
+            // The clock, in the face chosen by panel.clock.
             Label {
                 anchors.verticalCenter: parent.verticalCenter
-                text: {
-                    const hours = root.clock24 ? clock.hours : clock.hours % 12 || 12;
-                    const time = Ui.pad(hours) + ":" + Ui.pad(clock.minutes) + (root.showSeconds ? ":" + Ui.pad(clock.seconds) : "") + (root.clock24 ? "" : clock.hours < 12 ? " AM" : " PM");
-                    return root.showDate ? Ui.pad(clock.date.getDate()) + "." + Ui.pad(clock.date.getMonth() + 1) + "  " + time : time;
-                }
+                visible: root.clockStyle === "classic"
+                text: root.showDate ? root.dateText + "  " + root.timeText : root.timeText
                 size: 15
                 font.weight: Font.Medium
+            }
+            Label {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.clockStyle === "display"
+                text: root.showDate ? root.dateText + "  " + root.timeText : root.timeText
+                font.family: Theme.display
+                size: 13
+                font.weight: Font.DemiBold
+                font.letterSpacing: 1
+                font.features: {
+                    "tnum": 1
+                }
+            }
+            Row {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.clockStyle === "accent"
+                spacing: 8
+
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: root.showDate
+                    text: root.dateText
+                    color: Qt.alpha(Theme.text, 0.72)
+                    size: 13
+                    font.weight: Font.Medium
+                }
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Label {
+                        text: root.hoursText
+                        color: Theme.accent
+                        size: 15
+                        font.weight: Font.Bold
+                        font.features: {
+                            "tnum": 1
+                        }
+                    }
+                    Label {
+                        text: ":" + root.restText
+                        size: 15
+                        font.weight: Font.Medium
+                        font.features: {
+                            "tnum": 1
+                        }
+                    }
+                }
             }
         }
 
@@ -343,6 +404,7 @@ Item {
         }
 
         Loader {
+            active: !root.preview
             width: 1160
             height: root.targetHeight
             // Stays loaded after the first start: opening the panel creates nothing.

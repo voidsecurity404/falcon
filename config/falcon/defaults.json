@@ -58,6 +58,10 @@
   "panel": {
     "position": "top",
     "style": "hug",
+    "workspaces": "numbers",
+    "island": "notch",
+    "clock": "classic",
+    "status": "together",
     "ribbon": true,
     "hideEmpty": false,
     "lang": true,

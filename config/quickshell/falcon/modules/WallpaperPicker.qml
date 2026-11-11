@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Effects
+import QtMultimedia
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -7,7 +8,7 @@ import Quickshell.Widgets
 import qs.components
 import qs.services
 
-// Qiyshiq kartalar: fon tanlanganda ranglar ham undan olinadi.
+// Qiyshiq tilimlar: tanlangani keng ochiladi, fon tanlanganda ranglar ham undan olinadi.
 LazyLoader {
     active: Ui.pickerAlive
 
@@ -131,8 +132,32 @@ LazyLoader {
             return Math.min(3, Math.max(1, Math.round(time / frame))) * frame;
         }
 
-        readonly property real cardHeight: Math.min(620, height * 0.62)
-        readonly property real skew: 0.12
+        // The row of slices: every one narrow, the chosen one as wide as a screen in small.
+        readonly property real sliceHeight: Math.round(Math.min(500, height * 0.46))
+        readonly property real skewPx: Math.round(sliceHeight * 0.28)
+        readonly property real wide: Math.round(Math.min(sliceHeight * 16 / 9, width * 0.48))
+        readonly property real narrow: Math.round(sliceHeight * 0.4)
+        readonly property real gap: 16
+        // How long a spring takes to settle, following the animation speed of the desktop.
+        readonly property real motionMs: 260 / Math.max(0.25, Settings.get("windows.animationSpeed", 1))
+
+        function titleOf(path) {
+            return path.split("/").pop().replace(/\.[^.]+$/, "").replace(/[-_]/g, " ");
+        }
+
+        // The picture for a wide slice: the original, or a live wallpaper's first frame.
+        function fullOf(path, live) {
+            if (!live)
+                return "file://" + path;
+            return "file://" + Wallpapers.stateDir + "/live-posters/" + Wallpapers.nameOf(path).replace(/\.[^.]+$/, "") + ".jpg";
+        }
+
+        function choose(index) {
+            moved = true;
+            const next = marks.slice();
+            next[tab] = Math.max(0, Math.min(files.length - 1, index));
+            marks = next;
+        }
 
         Connections {
             target: Ui
@@ -184,7 +209,7 @@ LazyLoader {
 
         function apply(index) {
             const path = files[index];
-            if (!path)
+            if (!path || closing)
                 return;
             Wallpapers.chosen(path, tab === 0);
             Ui.popup = "";
@@ -282,8 +307,14 @@ LazyLoader {
                 id: tabStrip
 
                 readonly property var items: [
-                    { label: Tr.t("Live wallpapers"), icon: "play" },
-                    { label: Tr.t("Wallpapers"), icon: "wallpaper" }
+                    {
+                        label: Tr.t("Live wallpapers"),
+                        icon: "play"
+                    },
+                    {
+                        label: Tr.t("Wallpapers"),
+                        icon: "wallpaper"
+                    }
                 ]
                 readonly property int pad: 5
                 readonly property int gap: 2
@@ -477,10 +508,11 @@ LazyLoader {
                 id: stage
 
                 anchors.centerIn: parent
+                anchors.verticalCenterOffset: -20
                 width: parent.width
-                height: root.cardHeight
+                height: root.sliceHeight
 
-                // Each tab keeps its own carousel, so it comes back where it was left. The live one
+                // Each tab keeps its own row, so it comes back where it was left. The live one
                 // waits off to the left of the plain one, and they cross as one wave.
                 Repeater {
                     model: 2
@@ -490,14 +522,178 @@ LazyLoader {
 
                         required property int index
                         readonly property var files: root.filesOf(index)
-                        // -1 for the carousel on the left, 1 for the one on the right.
+                        // -1 for the row on the left, 1 for the one on the right.
                         readonly property int side: index === 0 ? -1 : 1
                         readonly property bool gone: Math.abs(root.travel - index) >= 1
+                        readonly property int target: root.markOf(index)
 
                         anchors.fill: parent
                         enabled: root.tab === index
-                        // Not "visible": a hidden list would only find its place once it is shown.
+                        // Not "visible": a hidden row would only find its place once it is shown.
                         opacity: gone ? 0 : 1
+
+                        // Slices of the row. Every slice is narrow but the chosen one, which opens wide.
+                        // Widths, the camera and the frame each follow their own spring: the widths and
+                        // the camera are a little loose, so a step lands with a small wobble, and the
+                        // camera's speed curls the slices like pages pulled through the air.
+                        property var widths: ({})
+                        property var marks: ({})
+                        property real camera: 0
+                        property real cameraSpeed: 0
+                        property bool moving: false
+                        // Changes once per frame while anything moves, so the slices read the springs again.
+                        property int tick: 0
+                        property int hovered: -1
+
+                        readonly property real stride: root.narrow + root.gap
+                        readonly property real bend: Math.max(-0.75, Math.min(0.75, cameraSpeed / Math.max(1, root.wide * 3.4)))
+                        readonly property int near: Math.round(camera / stride)
+                        readonly property int reach: Math.ceil(width / 2 / stride) + 2
+                        readonly property var shown: {
+                            const list = [];
+                            for (let i = Math.max(0, near - reach); i <= Math.min(files.length - 1, near + reach); i++)
+                                list.push(i);
+                            return list;
+                        }
+
+                        function widthOf(i) {
+                            const s = widths[i];
+                            return s ? s.x : (i === target ? root.wide : root.narrow);
+                        }
+                        function markOf(i) {
+                            const s = marks[i];
+                            return s ? Math.max(0, Math.min(1, s.x)) : (i === target ? 1 : 0);
+                        }
+                        // The middle of slice i along the row: every slice before it is narrow, plus
+                        // whatever the moving and the chosen ones add.
+                        function centerOf(i) {
+                            let c = i * stride + widthOf(i) / 2;
+                            for (const key in widths) {
+                                const j = Number(key);
+                                if (j < i)
+                                    c += widths[key].x - root.narrow;
+                            }
+                            if (target < i && !widths[target])
+                                c += root.wide - root.narrow;
+                            return c;
+                        }
+                        function goal() {
+                            return target * stride + root.wide / 2;
+                        }
+                        function spring(from, to, velocity) {
+                            return {
+                                x: from,
+                                v: velocity || 0,
+                                to: to
+                            };
+                        }
+                        // Everything at rest at the chosen slice. With `unfold` the chosen slice opens from
+                        // narrow, which is how the row arrives on opening.
+                        function place(unfold) {
+                            const w = {};
+                            if (unfold)
+                                w[target] = spring(root.narrow, root.wide);
+                            widths = w;
+                            marks = {};
+                            camera = goal() - (unfold ? (root.wide - root.narrow) / 2 : 0);
+                            cameraSpeed = 0;
+                            moving = unfold;
+                            tick++;
+                        }
+                        function retarget(from, to) {
+                            const w = Object.assign({}, widths);
+                            w[from] = spring(widthOf(from), root.narrow, w[from] ? w[from].v : 0);
+                            w[to] = spring(widthOf(to), root.wide, w[to] ? w[to].v : 0);
+                            widths = w;
+                            const m = Object.assign({}, marks);
+                            m[from] = spring(markOf(from), 0, m[from] ? m[from].v : 0);
+                            m[to] = spring(markOf(to), 1, m[to] ? m[to].v : 0);
+                            marks = m;
+                            moving = true;
+                        }
+
+                        property int lastTarget: 0
+                        Component.onCompleted: {
+                            lastTarget = target;
+                            place(root.opening && root.tab === index);
+                        }
+                        onTargetChanged: {
+                            const from = lastTarget;
+                            lastTarget = target;
+                            // Before the first press the place only follows the lists and the current wallpaper.
+                            if (!root.moved) {
+                                place(false);
+                                return;
+                            }
+                            retarget(from, target);
+                        }
+                        onFilesChanged: {
+                            if (!root.moved)
+                                Qt.callLater(place, false);
+                        }
+                        // The sizes come from the screen, which is known a moment after the window is made.
+                        readonly property real geometry: root.wide + stride
+                        onGeometryChanged: {
+                            if (!moving)
+                                Qt.callLater(place, false);
+                        }
+
+                        // One step of a spring that settles in `ms` with damping `zeta`, in small steps,
+                        // so a slow frame never throws it off. Returns true while it still moves.
+                        function advance(s, dt, ms, zeta, epsilon) {
+                            const omega = 6.64 / (ms / 1000);
+                            const k = omega * omega;
+                            const c = 2 * omega * zeta;
+                            let left = Math.min(dt, 0.05);
+                            while (left > 0) {
+                                const h = Math.min(1 / 240, left);
+                                s.v += (-k * (s.x - s.to) - c * s.v) * h;
+                                s.x += s.v * h;
+                                left -= h;
+                            }
+                            if (Math.abs(s.x - s.to) < epsilon && Math.abs(s.v) < epsilon * 10) {
+                                s.x = s.to;
+                                s.v = 0;
+                                return false;
+                            }
+                            return true;
+                        }
+
+                        FrameAnimation {
+                            running: deck.moving
+                            onTriggered: {
+                                const dt = root.frameStep(frameTime);
+                                let busy = false;
+                                const w = deck.widths;
+                                for (const key in w) {
+                                    if (deck.advance(w[key], dt, root.motionMs, 0.5, 0.05))
+                                        busy = true;
+                                    else
+                                        delete w[key];
+                                }
+                                const m = deck.marks;
+                                for (const key in m) {
+                                    if (deck.advance(m[key], dt, root.motionMs, 1, 0.002))
+                                        busy = true;
+                                    else
+                                        delete m[key];
+                                }
+                                // A var property hands out a copy, so the stepped springs are stored back.
+                                deck.widths = w;
+                                deck.marks = m;
+                                const cam = {
+                                    x: deck.camera,
+                                    v: deck.cameraSpeed,
+                                    to: deck.goal()
+                                };
+                                if (deck.advance(cam, dt, root.motionMs * 1.15, 0.45, 0.05))
+                                    busy = true;
+                                deck.camera = cam.x;
+                                deck.cameraSpeed = cam.v;
+                                deck.tick++;
+                                deck.moving = busy;
+                            }
+                        }
 
                         Label {
                             anchors.centerIn: parent
@@ -508,253 +704,341 @@ LazyLoader {
                             size: 18
                         }
 
-                        // Fonlar ko'p: tanlangani doim o'rtada, qolganlari yonga suriladi.
-                        // The whole carousel follows one number, the fractional index at the middle of
-                        // the screen. Every card's place and width are computed from it, so nothing is
-                        // laid out again while it moves, and a press in the middle of a move carries on
-                        // from the same speed.
-                        Item {
-                            id: carousel
+                        // The name of the chosen wallpaper and its place in the list, under the row.
+                        Column {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            y: parent.height + 34
+                            spacing: 4
+                            visible: deck.files.length > 0
+                            opacity: root.reveal * Math.max(0, 1 - Math.abs(root.travel - deck.index) * 2)
 
-                            anchors.fill: parent
-                            readonly property int target: root.markOf(deck.index)
-                            // Not bound to target: a binding would carry every change across at once.
-                            property real pos: 0
-                            // Each move eases out from where the carousel is to the new target, so a
-                            // press during a move turns it from its current place.
-                            property real from: 0
-                            property real elapsed: duration
-                            readonly property real duration: 0.42
-                            readonly property real stepWidth: 328
-                            readonly property real activeExtra: 50
-                            readonly property int near: Math.round(pos)
-                            readonly property int reach: Math.ceil(width / 2 / stepWidth) + 2
-                            readonly property var shown: {
-                                const list = [];
-                                for (let i = Math.max(0, near - reach); i <= Math.min(deck.files.length - 1, near + reach); i++)
-                                    list.push(i);
-                                return list;
-                            }
+                            Label {
+                                id: nameLabel
 
-                            function place() {
-                                pos = target;
-                                from = target;
-                                elapsed = duration;
-                            }
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: root.titleOf(deck.files[deck.target] || "")
+                                color: "white"
+                                size: 18
+                                font.weight: Font.Medium
 
-                            Component.onCompleted: place()
+                                // A new name rises in place of the old one.
+                                onTextChanged: nameSwap.restart()
 
-                            // Before the first press the place only follows the lists and the current wallpaper.
-                            onTargetChanged: {
-                                if (!root.moved) {
-                                    place();
-                                    return;
-                                }
-                                from = pos;
-                                elapsed = 0;
-                            }
-
-                            FrameAnimation {
-                                running: carousel.elapsed < carousel.duration
-                                onTriggered: {
-                                    carousel.elapsed = Math.min(carousel.duration, carousel.elapsed + root.frameStep(frameTime));
-                                    const u = 1 - carousel.elapsed / carousel.duration;
-                                    carousel.pos = carousel.from + (carousel.target - carousel.from) * (1 - u * u * u);
-                                }
-                            }
-
-                            Repeater {
-                                model: ScriptModel {
-                                    values: carousel.shown
+                                transform: Translate {
+                                    id: nameShift
                                 }
 
-                                delegate: Item {
-                                    id: card
+                                ParallelAnimation {
+                                    id: nameSwap
 
-                                    // The place of this card's file in the list.
-                                    required property int modelData
-                                    readonly property int slot: modelData
-                                    readonly property string path: deck.files[slot] || ""
-                                    // Distance from the middle of the screen, in cards.
-                                    readonly property real offset: slot - carousel.pos
-                                    readonly property real nearness: Math.max(0, 1 - Math.abs(offset))
-
-                                    readonly property string title: path.split("/").pop().replace(/\.[^.]+$/, "").replace(/[-_]/g, " ")
-                                    // Cards rise one after another, from the selected one outwards.
-                                    property real appear: root.opening ? 0 : 1
-                                    // How far this card is on its way to its place during a tab change, 1 when there.
-                                    // The wave reaches cards on the left first. At rest nothing here reads the
-                                    // carousel's position, so scrolling does not recompute it.
-                                    readonly property real arrived: {
-                                        const t = root.travel;
-                                        if (t === deck.index)
-                                            return 1;
-                                        if (Math.abs(t - deck.index) >= 1)
-                                            return 0;
-                                        const place = Math.max(0, Math.min(1, (x + width / 2) / carousel.width));
-                                        const wave = Math.max(0, Math.min(1, (t - root.waveDelay * place) / (1 - root.waveDelay)));
-                                        return deck.index === 1 ? wave : 1 - wave;
+                                    NumberAnimation {
+                                        target: nameShift
+                                        property: "y"
+                                        from: 8
+                                        to: 0
+                                        duration: 260
+                                        easing.type: Easing.OutCubic
                                     }
-                                    // The moving part of the way. It starts late, so at the middle of a change the old
-                                    // card has already slid off and never lies over the new one in the same place.
-                                    readonly property real way: Math.max(0, (arrived - 0.5) / 0.5)
-                                    // Goes a little past its place and settles. Played backward, the same curve makes
-                                    // a leaving card first lean the other way.
-                                    readonly property real glide: {
-                                        const u = way - 1;
-                                        return 1 + 1.9 * u * u * u + 0.9 * u * u;
+                                    NumberAnimation {
+                                        target: nameLabel
+                                        property: "opacity"
+                                        from: 0.2
+                                        to: 1
+                                        duration: 260
                                     }
+                                }
+                            }
+                            Label {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: (deck.target + 1) + " / " + deck.files.length
+                                color: Qt.rgba(1, 1, 1, 0.55)
+                                size: 13
+                                font.family: Theme.mono
+                            }
+                        }
 
-                                    opacity: Math.min(1, appear) * Math.min(1, way / 0.5)
+                        Repeater {
+                            model: ScriptModel {
+                                values: deck.shown
+                            }
 
-                                    Component.onCompleted: {
-                                        if (root.opening)
+                            delegate: Item {
+                                id: card
+
+                                // The place of this card's file in the list.
+                                required property int modelData
+                                readonly property int slot: modelData
+                                readonly property string path: deck.files[slot] || ""
+                                readonly property bool chosen: slot === deck.target
+                                readonly property real w: {
+                                    deck.tick;
+                                    return deck.widthOf(slot);
+                                }
+                                readonly property real mark: {
+                                    deck.tick;
+                                    return deck.markOf(slot);
+                                }
+                                readonly property real middle: {
+                                    deck.tick;
+                                    return deck.width / 2 + deck.centerOf(slot) - deck.camera;
+                                }
+                                // Slices fade out toward the sides, before their edge reaches the screen's.
+                                readonly property real edgeFade: {
+                                    const half = deck.width / 2;
+                                    const dist = Math.abs(middle - half);
+                                    const zeroAt = Math.min(half * 1.2, half - w / 2 - root.skewPx / 2 + 40);
+                                    const start = Math.min(root.wide / 2 + 2 * deck.stride, zeroAt);
+                                    if (dist <= start)
+                                        return 1;
+                                    if (dist >= zeroAt)
+                                        return 0;
+                                    return 1 - (dist - start) / Math.max(1, zeroAt - start);
+                                }
+                                // Room around the slice for its slant, its curl and its shadow.
+                                readonly property real padX: w * 0.3 + root.skewPx / 2 + 30
+                                readonly property real padY: 44
+
+                                // Cards rise one after another, from the selected one outwards.
+                                property real appear: root.opening ? 0 : 1
+                                // How far this card is on its way to its place during a tab change, 1 when there.
+                                // The wave reaches cards on the left first.
+                                readonly property real arrived: {
+                                    const t = root.travel;
+                                    if (t === deck.index)
+                                        return 1;
+                                    if (Math.abs(t - deck.index) >= 1)
+                                        return 0;
+                                    const place = Math.max(0, Math.min(1, middle / deck.width));
+                                    const wave = Math.max(0, Math.min(1, (t - root.waveDelay * place) / (1 - root.waveDelay)));
+                                    return deck.index === 1 ? wave : 1 - wave;
+                                }
+                                // The moving part of the way. It starts late, so at the middle of a change the old
+                                // card has already slid off and never lies over the new one in the same place.
+                                readonly property real way: Math.max(0, (arrived - 0.5) / 0.5)
+                                // Goes a little past its place and settles. Played backward, the same curve makes
+                                // a leaving card first lean the other way.
+                                readonly property real glide: {
+                                    const u = way - 1;
+                                    return 1 + 1.9 * u * u * u + 0.9 * u * u;
+                                }
+
+                                x: middle - width / 2
+                                y: -padY
+                                width: w + padX * 2
+                                height: root.sliceHeight + padY * 2
+                                z: chosen ? 1000 : slot === deck.hovered ? 999 : 100 - Math.abs(slot - deck.target)
+                                opacity: Math.min(1, appear) * Math.min(1, way / 0.5) * edgeFade
+                                visible: opacity > 0.005
+
+                                Component.onCompleted: {
+                                    if (root.opening)
+                                        rise.start();
+                                }
+
+                                Connections {
+                                    target: root
+                                    function onClosingChanged() {
+                                        if (root.closing) {
+                                            rise.stop();
+                                            fall.start();
+                                        } else {
+                                            fall.stop();
                                             rise.start();
-                                    }
-
-                                    Connections {
-                                        target: root
-                                        function onClosingChanged() {
-                                            if (root.closing) {
-                                                rise.stop();
-                                                fall.start();
-                                            } else {
-                                                fall.stop();
-                                                rise.start();
-                                            }
                                         }
                                     }
+                                }
 
-                                    // Closing is the opening in reverse: the outer cards leave first.
-                                    SequentialAnimation {
-                                        id: fall
+                                // Closing is the opening in reverse: the outer cards leave first.
+                                SequentialAnimation {
+                                    id: fall
 
-                                        PauseAnimation {
-                                            duration: (6 - Math.min(6, Math.abs(card.slot - carousel.target))) * 16
+                                    PauseAnimation {
+                                        duration: (6 - Math.min(6, Math.abs(card.slot - deck.target))) * 16
+                                    }
+                                    NumberAnimation {
+                                        target: card
+                                        property: "appear"
+                                        to: 0
+                                        duration: 240
+                                        easing.type: Easing.InCubic
+                                    }
+                                }
+
+                                SequentialAnimation {
+                                    id: rise
+
+                                    PauseAnimation {
+                                        duration: 40 + Math.min(6, Math.abs(card.slot - deck.target)) * 50
+                                    }
+                                    NumberAnimation {
+                                        target: card
+                                        property: "appear"
+                                        to: 1
+                                        duration: 620
+                                        easing.type: Easing.BezierSpline
+                                        easing.bezierCurve: [0.22, 1.2, 0.36, 1, 1, 1]
+                                    }
+                                }
+
+                                transform: [
+                                    Rotation {
+                                        origin.x: card.width / 2
+                                        origin.y: card.height / 2
+                                        axis {
+                                            x: 0
+                                            y: 1
+                                            z: 0
                                         }
+                                        angle: deck.side * (1 - card.glide) * 38
+                                    },
+                                    Scale {
+                                        origin.x: card.width / 2
+                                        origin.y: card.height / 2
+                                        xScale: 1 - Math.max(0, 1 - card.glide) * 0.14
+                                        yScale: xScale
+                                    },
+                                    Translate {
+                                        x: deck.side * (1 - card.glide) * 560
+                                        y: (1 - card.appear) * 90
+                                    }
+                                ]
+
+                                // The small picture every slice starts with. It is already in memory.
+                                Image {
+                                    id: thumb
+
+                                    visible: false
+                                    source: Wallpapers.thumbOf(card.path)
+                                    // The same size as in the service: this finds the picture already in memory.
+                                    sourceSize: Wallpapers.thumbSize
+                                    fillMode: Image.PreserveAspectCrop
+                                    asynchronous: true
+                                }
+
+                                // The full picture, only for the chosen slice, which is too wide for the small one.
+                                // A live wallpaper uses its first frame.
+                                Image {
+                                    id: full
+
+                                    visible: false
+                                    // Kept while the slice closes, so its picture fades back to the small one instead of to black.
+                                    source: (card.chosen || card.fullMix > 0) && card.path !== "" ? root.fullOf(card.path, deck.index === 0) : ""
+                                    sourceSize.width: 1600
+                                    asynchronous: true
+                                    cache: false
+                                }
+
+                                // The video itself plays in the chosen live slice once the row has stopped there.
+                                property bool dwelt: false
+                                Timer {
+                                    interval: 420
+                                    running: card.chosen && deck.index === 0 && !root.closing
+                                    onTriggered: card.dwelt = true
+                                }
+                                onChosenChanged: {
+                                    if (!chosen)
+                                        dwelt = false;
+                                }
+
+                                Loader {
+                                    id: clip
+
+                                    active: card.dwelt && card.chosen && !root.closing
+                                    visible: false
+                                    sourceComponent: Video {
+                                        width: 1280
+                                        height: full.implicitWidth > 0 ? 1280 * full.implicitHeight / full.implicitWidth : 720
+                                        source: "file://" + card.path
+                                        muted: true
+                                        loops: MediaPlayer.Infinite
+                                        autoPlay: true
+                                        fillMode: VideoOutput.Stretch
+                                        property bool started: position > 0
+                                    }
+                                }
+                                ShaderEffectSource {
+                                    id: clipTexture
+
+                                    visible: false
+                                    sourceItem: clip.item
+                                    hideSource: true
+                                    live: true
+                                }
+                                readonly property bool playing: !!clip.item && clip.item.started
+
+                                property real fullMix: (playing || full.status === Image.Ready) && card.chosen ? 1 : 0
+                                Behavior on fullMix {
+                                    NumberAnimation {
+                                        duration: 260
+                                    }
+                                }
+
+                                ShaderEffect {
+                                    anchors.fill: parent
+
+                                    property variant source: thumb
+                                    property variant hiSource: card.playing ? clipTexture : full
+                                    property size box: Qt.size(width, height)
+                                    property size extent: Qt.size(card.w / 2, root.sliceHeight / 2)
+                                    property real skew: root.skewPx
+                                    property real radius: 16
+                                    property real bend: deck.bend
+                                    property real dim: (card.slot === deck.hovered ? 0.12 : 0.42) * (1 - card.mark)
+                                    property real frame: 1 + 2 * card.mark
+                                    property color frameColor: card.mark > 0.5 ? Theme.accent : "white"
+                                    property real frameAlpha: card.mark > 0.5 ? card.mark : Math.max(card.slot === deck.hovered ? 0.55 : 0.16, card.mark)
+                                    property real texAspect: thumb.implicitHeight > 0 ? thumb.implicitWidth / thumb.implicitHeight : 0.85
+                                    property real hiAspect: full.implicitHeight > 0 ? full.implicitWidth / full.implicitHeight : 16 / 9
+                                    property real hiMix: card.fullMix
+                                    // The picture slides inside its slice as the row passes, a window onto it.
+                                    property real shift: Math.max(-1, Math.min(1, (card.middle - deck.width / 2) / (deck.width / 2))) * -0.6
+                                    property real shadow: 0.6 + 0.4 * card.mark
+                                    property real glow: card.mark
+                                    fragmentShader: Qt.resolvedUrl("../shaders/slice.frag.qsb")
+                                }
+
+                                // A small play sign marks live wallpapers, until the video itself plays.
+                                Rectangle {
+                                    visible: deck.index === 0
+                                    opacity: card.playing ? 0 : 0.9 * Math.max(0.35, card.mark)
+                                    x: card.padX + card.w / 2 - width / 2 - root.skewPx * 0.12
+                                    y: card.padY + root.sliceHeight - 54
+                                    width: 34
+                                    height: 34
+                                    radius: 17
+                                    color: Qt.rgba(0, 0, 0, 0.5)
+
+                                    Behavior on opacity {
                                         NumberAnimation {
-                                            target: card
-                                            property: "appear"
-                                            to: 0
-                                            duration: 240
-                                            easing.type: Easing.InCubic
+                                            duration: 200
                                         }
                                     }
 
-                                    SequentialAnimation {
-                                        id: rise
-
-                                        PauseAnimation {
-                                            duration: 40 + Math.min(6, Math.abs(card.slot - carousel.target)) * 55
-                                        }
-                                        NumberAnimation {
-                                            target: card
-                                            property: "appear"
-                                            to: 1
-                                            duration: 620
-                                            easing.type: Easing.BezierSpline
-                                            easing.bezierCurve: [0.22, 1.2, 0.36, 1, 1, 1]
-                                        }
-                                    }
-
-                                    // The card nearer the middle lies over its neighbour on both sides. The order
-                                    // follows the position smoothly, so a card leaving the middle to the right
-                                    // never drops under its neighbour at the end of the move.
-                                    z: 10 - Math.abs(offset)
-                                    // The card at the middle is wider. Its neighbours make room for it on both
-                                    // sides, and both change gradually as the carousel moves.
-                                    width: 340 + 100 * nearness
-                                    height: root.cardHeight
-                                    x: carousel.width / 2 + offset * carousel.stepWidth + Math.max(-1, Math.min(1, offset)) * carousel.activeExtra - width / 2
-
-                                    transform: [
-                                        Matrix4x4 {
-                                            matrix: Qt.matrix4x4(1, -root.skew, 0, root.skew * root.cardHeight / 2, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
-                                        },
-                                        Rotation {
-                                            origin.x: card.width / 2
-                                            origin.y: card.height / 2
-                                            axis { x: 0; y: 1; z: 0 }
-                                            angle: deck.side * (1 - card.glide) * 38
-                                        },
-                                        Scale {
-                                            origin.x: card.width / 2
-                                            origin.y: card.height / 2
-                                            xScale: 1 - Math.max(0, 1 - card.glide) * 0.14
-                                            yScale: xScale
-                                        },
-                                        Translate {
-                                            x: deck.side * (1 - card.glide) * 560
-                                            y: (1 - card.appear) * 90
-                                        }
-                                    ]
-
-                                    ClippingRectangle {
-                                        anchors.fill: parent
-                                        radius: 15
-                                        color: Theme.pill
-
-                                        Image {
-                                            anchors.centerIn: parent
-                                            width: parent.width + root.cardHeight * root.skew + 8
-                                            height: parent.height
-                                            source: Wallpapers.thumbOf(card.path)
-                                            // The same size as in the service: this finds the picture already in memory.
-                                            sourceSize: Wallpapers.thumbSize
-                                            fillMode: Image.PreserveAspectCrop
-                                            asynchronous: true
-                                            transform: Matrix4x4 {
-                                                matrix: Qt.matrix4x4(1, root.skew, 0, -root.skew * root.cardHeight / 2, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
-                                            }
-                                        }
-
-                                        // Nom yorug' rasm ustida ham o'qilsin.
-                                        Rectangle {
-                                            anchors.left: parent.left
-                                            anchors.right: parent.right
-                                            anchors.bottom: parent.bottom
-                                            height: 96
-                                            gradient: Gradient {
-                                                GradientStop {
-                                                    position: 0
-                                                    color: "transparent"
-                                                }
-                                                GradientStop {
-                                                    position: 1
-                                                    color: Qt.rgba(0, 0, 0, 0.62)
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        radius: 15
-                                        color: "transparent"
-                                        // The frame follows the card into the middle instead of jumping to it.
-                                        border.width: 1 + 2 * card.nearness
-                                        border.color: Qt.rgba(1, 1, 1, Math.max(card.nearness, cardHover.containsMouse ? 0.6 : 0.14))
-                                    }
-
-                                    Label {
-                                        x: 26
-                                        anchors.bottom: parent.bottom
-                                        anchors.bottomMargin: 18
-                                        width: parent.width - 52
-                                        text: card.title
+                                    Icon {
+                                        anchors.centerIn: parent
+                                        name: "play"
+                                        size: 15
                                         color: "white"
-                                        size: 17
-                                        font.weight: Font.Medium
                                     }
+                                }
 
-                                    MouseArea {
-                                        id: cardHover
-
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: root.apply(card.slot)
+                                // Only the slice itself takes the pointer, not the room around it.
+                                MouseArea {
+                                    x: card.padX
+                                    y: card.padY
+                                    width: card.w
+                                    height: root.sliceHeight
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onContainsMouseChanged: {
+                                        if (containsMouse)
+                                            deck.hovered = card.slot;
+                                        else if (deck.hovered === card.slot)
+                                            deck.hovered = -1;
                                     }
+                                    // The chosen slice applies, another one is brought to the middle first.
+                                    onClicked: card.chosen ? root.apply(card.slot) : root.choose(card.slot)
+                                    onDoubleClicked: root.apply(card.slot)
                                 }
                             }
                         }

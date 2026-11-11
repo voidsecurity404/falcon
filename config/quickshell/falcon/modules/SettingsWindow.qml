@@ -199,6 +199,7 @@ LazyLoader {
                 subtitle: Tr.t("Top bar, clock and notifications"),
                 icon: "panel",
                 group: 0,
+                panelStudio: true,
                 sections: [
                     {
                         title: Tr.t("Look"),
@@ -206,6 +207,15 @@ LazyLoader {
                             { key: "appearance.panelOpacity", label: Tr.t("Panel opacity"), hint: Tr.t("Lower is more see-through"), type: "slider", min: 0.15, max: 1, step: 0.05, unit: "percent" },
                             { key: "panel.position", label: Tr.t("Position"), type: "choice", options: ["top", "bottom"], names: [Tr.t("Top"), Tr.t("Bottom")] },
                             { key: "panel.style", label: Tr.t("Panel shape"), type: "choice", options: ["hug", "float"], names: [Tr.t("In the corners"), Tr.t("Floating")] }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Parts of the panel"),
+                        items: [
+                            { key: "panel.workspaces", label: Tr.t("Workspaces"), hint: Tr.t("Top left"), type: "choice", layout: "chips", options: ["numbers", "dots", "pills", "apps"], names: [Tr.t("Numbers"), Tr.t("Dots"), Tr.t("Pills"), Tr.t("App icons")] },
+                            { key: "panel.island", label: Tr.t("Clock island"), hint: Tr.t("Top middle, it also opens the dashboard"), type: "choice", options: ["notch", "capsule"], names: [Tr.t("At the edge"), Tr.t("Capsule")] },
+                            { key: "panel.clock", label: Tr.t("Clock face"), type: "choice", layout: "chips", options: ["classic", "display", "accent"], names: [Tr.t("Classic"), Tr.t("Wide"), Tr.t("Accent hours")] },
+                            { key: "panel.status", label: Tr.t("Status panel"), hint: Tr.t("Top right, it opens the control center"), type: "choice", layout: "chips", options: ["together", "chips", "minimal"], names: [Tr.t("One panel"), Tr.t("Separate capsules"), Tr.t("Icons only")] }
                         ]
                     },
                     {
@@ -225,7 +235,7 @@ LazyLoader {
                     {
                         title: Tr.t("Shown on the panel"),
                         items: [
-                            { key: "panel.ribbon", label: Tr.t("Workspace numbers"), type: "toggle" },
+                            { key: "panel.ribbon", label: Tr.t("Workspaces"), type: "toggle" },
                             { key: "panel.hideEmpty", label: Tr.t("Hide empty workspaces"), type: "toggle" },
                             { key: "panel.tray", label: Tr.t("Tray"), type: "toggle" },
                             { key: "panel.claude", label: Tr.t("Claude icon"), type: "toggle" },
@@ -1282,6 +1292,11 @@ LazyLoader {
 
                         OpenAnimStudio {
                             visible: win.filter === "" && !!win.pages[win.page].openAnims
+                            width: cards.width
+                        }
+
+                        PanelStudio {
+                            visible: win.filter === "" && !!win.pages[win.page].panelStudio
                             width: cards.width
                         }
 
