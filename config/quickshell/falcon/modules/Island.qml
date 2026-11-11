@@ -9,6 +9,20 @@ Item {
     id: root
 
     property bool showDashboard: false
+    // The halo capsule also turns into the control center.
+    property bool showControl: false
+    // The output this island is on, for the halo capsule's workspaces.
+    property string output: ""
+    signal releaseFocus
+
+    // falcon: joined to the edge. halo: one floating capsule holding the whole panel, which becomes
+    // the dashboard and the control center. rail: no clock here, it only opens for messages and the
+    // dashboard, beside the rail. studio: a floating clock capsule, the dashboard opens elsewhere.
+    readonly property string layout: Settings.layout
+    readonly property bool joined: layout === "falcon"
+    readonly property bool hostsDashboard: layout !== "studio"
+    // In the rail layout the island is away while nothing is shown in it.
+    readonly property bool resting: layout === "rail" && mode === "idle"
     // How far the island has left the screen edge, for focus mode. 0 is in place.
     property real slide: 0
     // The last message stays here while the island closes, so its text and icon leave with it.
@@ -20,19 +34,20 @@ Item {
     }
     property alias body: body
 
-    readonly property string mode: showDashboard ? "dashboard" : Toasts.current ? "toast" : "idle"
+    readonly property string mode: showDashboard && hostsDashboard ? "dashboard" : showControl && layout === "halo" ? "control" : Toasts.current ? "toast" : "idle"
     readonly property bool showSeconds: Settings.get("panel.clockSeconds", false)
     readonly property bool showDate: Settings.get("panel.clockDate", false)
     readonly property bool clock24: Settings.get("panel.clock24", true)
-    readonly property int targetWidth: mode === "dashboard" ? 1160 : mode === "toast" ? 440 : (Ui.recordBusy ? 232 : 186) + (Countdown.active ? timerPart.width + 10 : 0) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0) + (clock24 ? 0 : 26)
-    readonly property int cornerRadius: mode === "dashboard" ? 32 : 18
-    readonly property int targetHeight: mode === "dashboard" ? 580 : mode === "toast" ? 68 : 44
+    readonly property int targetWidth: mode === "dashboard" ? 1160 : mode === "control" ? controlBox.panelWidth : mode === "toast" ? 440 : layout === "halo" ? haloBar.implicitWidth + 12 : resting ? 120 : (Ui.recordBusy ? 232 : 186) + (Countdown.active ? timerPart.width + 10 : 0) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0) + (clock24 ? 0 : 26)
+    readonly property int cornerRadius: mode === "dashboard" ? 32 : mode === "control" ? 28 : joined ? 18 : mode === "toast" ? 24 : 20
+    readonly property int targetHeight: mode === "dashboard" ? 580 : mode === "control" ? controlBox.shownHeight : mode === "toast" ? 68 : resting ? 40 : joined ? 44 : 40
 
     width: body.width
     height: body.height
 
     // Ekran chetiga qo'shilib turadigan ichki egilgan burchaklar.
     EdgeCurve {
+        visible: root.joined
         x: -size
         y: body.y + (Settings.bottom ? body.height - size : 0)
         flipX: true
@@ -40,6 +55,7 @@ Item {
         color: Theme.glassTop
     }
     EdgeCurve {
+        visible: root.joined
         x: body.width
         y: body.y + (Settings.bottom ? body.height - size : 0)
         flipY: Settings.bottom
@@ -50,6 +66,22 @@ Item {
         id: body
 
         y: (Settings.bottom ? 1 : -1) * root.slide * (body.height + 28)
+        // Away in the rail layout until a message or the dashboard comes.
+        opacity: root.resting ? 0 : 1
+        scale: root.resting ? 0.92 : 1
+        transformOrigin: Item.Left
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: root.resting ? 200 : 140
+            }
+        }
+        Behavior on scale {
+            NumberAnimation {
+                duration: 260
+                easing.type: Easing.OutCubic
+            }
+        }
         width: root.targetWidth
         height: root.targetHeight
         border.width: 1
@@ -64,10 +96,10 @@ Item {
                 color: Theme.panel
             }
         }
-        topLeftRadius: Settings.bottom ? animatedRadius : 0
-        topRightRadius: Settings.bottom ? animatedRadius : 0
-        bottomLeftRadius: Settings.bottom ? 0 : animatedRadius
-        bottomRightRadius: Settings.bottom ? 0 : animatedRadius
+        topLeftRadius: Settings.bottom || !root.joined ? animatedRadius : 0
+        topRightRadius: Settings.bottom || !root.joined ? animatedRadius : 0
+        bottomLeftRadius: Settings.bottom && root.joined ? 0 : animatedRadius
+        bottomRightRadius: Settings.bottom && root.joined ? 0 : animatedRadius
         clip: true
 
         property real animatedRadius: root.cornerRadius
@@ -82,22 +114,23 @@ Item {
         // Ochilishda avval kengayadi, keyin yumshoq sakrab pastga tushadi. Yopilish tez va sakrashsiz.
         Behavior on width {
             NumberAnimation {
-                duration: root.mode === "dashboard" ? 460 : 340
+                duration: root.mode === "dashboard" || root.mode === "control" ? 460 : 340
                 easing.type: Easing.BezierSpline
-                easing.bezierCurve: root.mode === "dashboard" ? [0.2, 1.05, 0.3, 1, 1, 1] : [0.35, 0, 0.1, 1, 1, 1]
+                easing.bezierCurve: root.mode === "dashboard" || root.mode === "control" ? [0.2, 1.05, 0.3, 1, 1, 1] : [0.35, 0, 0.1, 1, 1, 1]
             }
         }
         Behavior on height {
             NumberAnimation {
-                duration: root.mode === "dashboard" ? 600 : 320
+                duration: root.mode === "dashboard" || root.mode === "control" ? 600 : 320
                 easing.type: Easing.BezierSpline
-                easing.bezierCurve: root.mode === "dashboard" ? [0.24, 1.22, 0.36, 1, 1, 1] : [0.35, 0, 0.1, 1, 1, 1]
+                easing.bezierCurve: root.mode === "dashboard" || root.mode === "control" ? [0.24, 1.22, 0.36, 1, 1, 1] : [0.35, 0, 0.1, 1, 1, 1]
             }
         }
 
         // Panel shishasi ustidagi sahna: har bo'limning rangi, musiqa bo'limida albom.
         Loader {
             anchors.fill: parent
+            active: root.hostsDashboard
             asynchronous: true
             opacity: root.mode === "dashboard" ? 1 : 0
             visible: opacity > 0
@@ -122,7 +155,7 @@ Item {
             onClicked: {
                 if (root.mode === "toast")
                     Toasts.activate();
-                else if (root.mode === "idle")
+                else if (root.mode === "idle" && root.layout !== "halo")
                     Ui.togglePopup("dashboard");
             }
         }
@@ -131,7 +164,7 @@ Item {
         Row {
             anchors.centerIn: parent
             spacing: 10
-            opacity: root.mode === "idle" ? 1 : 0
+            opacity: root.mode === "idle" && (root.layout === "falcon" || root.layout === "studio") ? 1 : 0
             visible: opacity > 0
 
             Behavior on opacity {
@@ -342,7 +375,48 @@ Item {
             }
         }
 
+        // The halo capsule: workspaces, clock and status in one piece.
+        HaloBar {
+            id: haloBar
+
+            anchors.centerIn: parent
+            output: root.output
+            opacity: root.layout === "halo" && root.mode === "idle" ? 1 : 0
+            visible: root.layout === "halo" && opacity > 0
+            scale: root.mode === "idle" ? 1 : 0.94
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: root.mode === "idle" ? 260 : 120
+                }
+            }
+            Behavior on scale {
+                NumberAnimation {
+                    duration: 300
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
+
+        // The control center, grown out of the halo capsule.
+        ControlCenter {
+            id: controlBox
+
+            embedded: true
+            visible: root.layout === "halo" && opacity > 0
+            shown: root.mode === "control"
+            opacity: root.mode === "control" ? 1 : 0
+            onReleaseFocus: root.releaseFocus()
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: root.mode === "control" ? 320 : 120
+                }
+            }
+        }
+
         Loader {
+            active: root.hostsDashboard
             width: 1160
             height: root.targetHeight
             // Stays loaded after the first start: opening the panel creates nothing.

@@ -207,13 +207,195 @@ LazyLoader {
             tab = next;
         }
 
+        // Applying: the chosen slice straightens and grows over the whole screen, the wallpaper is
+        // set under it, and only when the desktop shows it does the picker fade away, so the new
+        // picture never jumps.
+        property bool applying: false
+        property real landing: 0
+        property string applyPath: ""
+
         function apply(index) {
             const path = files[index];
-            if (!path || closing)
+            if (!path || closing || applying)
                 return;
-            Wallpapers.chosen(path, tab === 0);
-            Ui.popup = "";
-            Ui.run("falcon-wallpaper", path);
+            if (index !== selected)
+                choose(index);
+            applyPath = path;
+            applying = true;
+            land.start();
+        }
+
+        function finishApply() {
+            // The wallpaper already on screen: the desktop shows it, nothing to wait for.
+            if (applyPath === (tab === 0 ? Wallpapers.currentLive : Wallpapers.currentImage) && (tab === 0 || Wallpapers.currentLive === "")) {
+                Ui.popup = "";
+                return;
+            }
+            Wallpapers.chosen(applyPath, tab === 0);
+            Ui.run("falcon-wallpaper", applyPath);
+            shownWait.restart();
+        }
+
+        NumberAnimation {
+            id: land
+
+            target: root
+            property: "landing"
+            to: 1
+            duration: 560
+            easing.type: Easing.BezierSpline
+            easing.bezierCurve: [0.3, 0, 0.1, 1, 1, 1]
+            onFinished: root.finishApply()
+        }
+
+        // The desktop reports the new picture as its own change starts, which then plays under the
+        // picker for wallpaper.duration. A timeout closes it anyway.
+        Timer {
+            id: shownWait
+
+            interval: 4000
+            onTriggered: Ui.popup = ""
+        }
+        Timer {
+            id: settleWait
+
+            interval: Math.max(200, Settings.get("wallpaper.duration", 1) * 1000) + 120
+            onTriggered: Ui.popup = ""
+        }
+        Connections {
+            target: Wallpapers
+            enabled: root.applying
+            function onShownImageChanged() {
+                if (shownWait.running) {
+                    shownWait.stop();
+                    settleWait.restart();
+                }
+            }
+        }
+
+        // ------------------------------------------------ typing jumps to a wallpaper by name
+        property string query: ""
+        property bool queryMissed: false
+
+        function search(text) {
+            query = text;
+            queryMissed = false;
+            queryClear.restart();
+            if (text === "")
+                return;
+            const needle = text.toLowerCase();
+            const index = files.findIndex(f => titleOf(f).toLowerCase().indexOf(needle) >= 0);
+            if (index >= 0)
+                choose(index);
+            else
+                queryMissed = true;
+        }
+
+        Timer {
+            id: queryClear
+
+            interval: 2200
+            onTriggered: root.query = ""
+        }
+
+        // ------------------------------------------------ colors of the chosen wallpaper
+        // Read from its small picture: `tint` lights the chosen slice and `palette` previews the
+        // colors the desktop would take from it.
+        property color tint: Theme.accent
+        property var palette: []
+        readonly property string chosenThumb: files.length > 0 ? Wallpapers.thumbOf(files[selected] || "") : ""
+
+        Behavior on tint {
+            ColorAnimation {
+                duration: 420
+            }
+        }
+
+        Canvas {
+            id: sampler
+
+            property string want: ""
+            readonly property int side: 24
+
+            width: side
+            height: side
+            visible: false
+            renderStrategy: Canvas.Immediate
+
+            Timer {
+                id: sampleLater
+
+                interval: 120
+                onTriggered: {
+                    sampler.want = root.chosenThumb;
+                    if (sampler.want === "")
+                        return;
+                    if (sampler.isImageLoaded(sampler.want))
+                        sampler.requestPaint();
+                    else
+                        sampler.loadImage(sampler.want);
+                }
+            }
+            Connections {
+                target: root
+                function onChosenThumbChanged() {
+                    sampleLater.restart();
+                }
+            }
+            Component.onCompleted: sampleLater.start()
+            onImageLoaded: requestPaint()
+            onPaint: {
+                if (want === "" || !isImageLoaded(want))
+                    return;
+                const ctx = getContext("2d");
+                ctx.clearRect(0, 0, side, side);
+                ctx.drawImage(want, 0, 0, side, side);
+                const data = ctx.getImageData(0, 0, side, side).data;
+                const pixels = [];
+                for (let i = 0; i < data.length; i += 4)
+                    pixels.push([data[i] / 255, data[i + 1] / 255, data[i + 2] / 255]);
+                root.readColors(pixels);
+            }
+        }
+
+        // A few rounds of k-means, then the liveliest cluster that is neither too dark nor too pale.
+        function readColors(pixels) {
+            const k = 5;
+            let centers = [];
+            for (let i = 0; i < k; i++)
+                centers.push(pixels[Math.floor((i + 0.5) * pixels.length / k)].slice());
+            for (let round = 0; round < 6; round++) {
+                const sums = centers.map(() => [0, 0, 0, 0]);
+                for (const p of pixels) {
+                    let best = 0;
+                    let bestD = 9;
+                    for (let c = 0; c < k; c++) {
+                        const d = (p[0] - centers[c][0]) ** 2 + (p[1] - centers[c][1]) ** 2 + (p[2] - centers[c][2]) ** 2;
+                        if (d < bestD) {
+                            bestD = d;
+                            best = c;
+                        }
+                    }
+                    sums[best][0] += p[0];
+                    sums[best][1] += p[1];
+                    sums[best][2] += p[2];
+                    sums[best][3]++;
+                }
+                centers = centers.map((c, i) => sums[i][3] > 0 ? [sums[i][0] / sums[i][3], sums[i][1] / sums[i][3], sums[i][2] / sums[i][3], sums[i][3]] : c);
+            }
+            const colors = centers.map(c => Qt.rgba(c[0], c[1], c[2], 1)).sort((a, b) => b.hslLightness - a.hslLightness);
+            palette = colors;
+            let best = null;
+            let bestScore = -1;
+            for (const c of colors) {
+                const score = c.hslSaturation * (1 - Math.abs(c.hslLightness - 0.55) * 1.6);
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = c;
+                }
+            }
+            if (best)
+                tint = Qt.hsla(best.hslHue < 0 ? 0 : best.hslHue, Math.max(0.45, best.hslSaturation), Math.min(0.72, Math.max(0.58, best.hslLightness)), 1);
         }
 
         anchors {
@@ -237,16 +419,19 @@ LazyLoader {
 
         // The blurred current wallpaper and a dim layer fade in together. It is already in memory,
         // and it is blurred once into a small texture.
+        // The backdrop follows the chosen slice: its picture, blurred, crossfades in a moment after
+        // the row stops, so the whole screen takes the mood of the wallpaper being looked at.
         Item {
             anchors.fill: parent
             opacity: root.reveal
 
-            Image {
+            Item {
+                id: ambient
+
+                property var sources: [Wallpapers.thumbOf(Wallpapers.currentLive || Wallpapers.currentImage), ""]
+                property int front: 0
+
                 anchors.fill: parent
-                source: Wallpapers.thumbOf(Wallpapers.currentLive || Wallpapers.currentImage)
-                sourceSize: Wallpapers.thumbSize
-                fillMode: Image.PreserveAspectCrop
-                asynchronous: true
                 layer.enabled: true
                 layer.textureSize: Qt.size(480, 270)
                 layer.smooth: true
@@ -254,7 +439,53 @@ LazyLoader {
                     blurEnabled: true
                     blur: 1
                     blurMax: 48
-                    saturation: 0.1
+                    saturation: 0.2
+                }
+
+                Timer {
+                    id: ambientLater
+
+                    interval: 260
+                    onTriggered: {
+                        if (root.chosenThumb === "" || root.chosenThumb === ambient.sources[ambient.front])
+                            return;
+                        const next = ambient.sources.slice();
+                        next[1 - ambient.front] = root.chosenThumb;
+                        ambient.sources = next;
+                    }
+                }
+                Connections {
+                    target: root
+                    function onChosenThumbChanged() {
+                        ambientLater.restart();
+                    }
+                }
+
+                Repeater {
+                    model: 2
+
+                    delegate: Image {
+                        required property int index
+
+                        anchors.fill: parent
+                        source: ambient.sources[index]
+                        sourceSize: Wallpapers.thumbSize
+                        fillMode: Image.PreserveAspectCrop
+                        asynchronous: true
+                        opacity: ambient.front === index ? 1 : 0
+                        // The newer picture takes the front once it is decoded.
+                        onStatusChanged: {
+                            if (status === Image.Ready && index !== ambient.front && source == ambient.sources[index])
+                                ambient.front = index;
+                        }
+
+                        Behavior on opacity {
+                            NumberAnimation {
+                                duration: 700
+                                easing.type: Easing.InOutQuad
+                            }
+                        }
+                    }
                 }
             }
             Rectangle {
@@ -271,7 +502,12 @@ LazyLoader {
         Item {
             anchors.fill: parent
             focus: true
-            Keys.onEscapePressed: Ui.popup = ""
+            Keys.onEscapePressed: {
+                if (root.query !== "")
+                    root.search("");
+                else
+                    Ui.popup = "";
+            }
 
             // Sensorli panel mayda qadamlar yuboradi, shuning uchun yig'ib hisoblaymiz.
             WheelHandler {
@@ -297,6 +533,12 @@ LazyLoader {
             Keys.onPressed: event => {
                 if ((event.modifiers & Qt.ControlModifier) && (event.key === Qt.Key_D || event.nativeScanCode === 40)) {
                     Ui.popup = "wallget";
+                    event.accepted = true;
+                } else if (event.key === Qt.Key_Backspace && root.query !== "") {
+                    root.search(root.query.slice(0, -1));
+                    event.accepted = true;
+                } else if (!(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)) && event.text.length === 1 && (event.text.toLowerCase() !== event.text.toUpperCase() || /[0-9 ]/.test(event.text)) && !(event.text === " " && root.query === "")) {
+                    root.search(root.query + event.text);
                     event.accepted = true;
                 }
             }
@@ -330,7 +572,7 @@ LazyLoader {
                 anchors.bottomMargin: 30 + (1 - root.reveal) * 18
                 width: width0 + width1 + gap + pad * 2
                 height: 54
-                opacity: root.reveal
+                opacity: root.reveal * (1 - root.landing)
 
                 Rectangle {
                     anchors.fill: parent
@@ -474,7 +716,7 @@ LazyLoader {
                 height: 54
                 radius: 27
                 color: Qt.rgba(0, 0, 0, downloadArea.containsMouse ? 0.6 : 0.45)
-                opacity: root.reveal
+                opacity: root.reveal * (1 - root.landing)
                 scale: downloadArea.pressed ? 0.92 : 1
 
                 Behavior on color {
@@ -511,6 +753,8 @@ LazyLoader {
                 anchors.verticalCenterOffset: -20
                 width: parent.width
                 height: root.sliceHeight
+                // While applying only the grown slice is left, and it leaves with the picker.
+                opacity: root.applying ? root.reveal : 1
 
                 // Each tab keeps its own row, so it comes back where it was left. The live one
                 // waits off to the left of the plain one, and they cross as one wave.
@@ -556,9 +800,16 @@ LazyLoader {
                             return list;
                         }
 
+                        // A slice under the pointer opens a little, as a peek.
+                        readonly property int peekIndex: hovered !== target && !root.applying ? hovered : -1
+                        readonly property real peek: Math.round(root.narrow * 0.38)
+
+                        function restWidth(i) {
+                            return i === target ? root.wide : i === peekIndex ? root.narrow + peek : root.narrow;
+                        }
                         function widthOf(i) {
                             const s = widths[i];
-                            return s ? s.x : (i === target ? root.wide : root.narrow);
+                            return s ? s.x : restWidth(i);
                         }
                         function markOf(i) {
                             const s = marks[i];
@@ -575,10 +826,23 @@ LazyLoader {
                             }
                             if (target < i && !widths[target])
                                 c += root.wide - root.narrow;
+                            if (peekIndex >= 0 && peekIndex < i && !widths[peekIndex])
+                                c += peek;
                             return c;
                         }
                         function goal() {
-                            return target * stride + root.wide / 2;
+                            return target * stride + root.wide / 2 + (peekIndex >= 0 && peekIndex < target ? peek : 0);
+                        }
+                        property int lastPeek: -1
+                        onPeekIndexChanged: {
+                            const w = Object.assign({}, widths);
+                            for (const i of [lastPeek, peekIndex]) {
+                                if (i >= 0 && i !== target)
+                                    w[i] = spring(w[i] ? w[i].x : (i === lastPeek ? root.narrow + peek : root.narrow), restWidth(i), w[i] ? w[i].v : 0);
+                            }
+                            lastPeek = peekIndex;
+                            widths = w;
+                            moving = true;
                         }
                         function spring(from, to, velocity) {
                             return {
@@ -602,7 +866,7 @@ LazyLoader {
                         }
                         function retarget(from, to) {
                             const w = Object.assign({}, widths);
-                            w[from] = spring(widthOf(from), root.narrow, w[from] ? w[from].v : 0);
+                            w[from] = spring(widthOf(from), restWidth(from), w[from] ? w[from].v : 0);
                             w[to] = spring(widthOf(to), root.wide, w[to] ? w[to].v : 0);
                             widths = w;
                             const m = Object.assign({}, marks);
@@ -707,10 +971,11 @@ LazyLoader {
                         // The name of the chosen wallpaper and its place in the list, under the row.
                         Column {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            y: parent.height + 34
-                            spacing: 4
+                            // Over the faded end of the mirror images, like a caption on a glossy floor.
+                            y: parent.height + Math.round(root.sliceHeight * 0.19)
+                            spacing: 6
                             visible: deck.files.length > 0
-                            opacity: root.reveal * Math.max(0, 1 - Math.abs(root.travel - deck.index) * 2)
+                            opacity: root.reveal * (1 - root.landing) * Math.max(0, 1 - Math.abs(root.travel - deck.index) * 2)
 
                             Label {
                                 id: nameLabel
@@ -748,6 +1013,66 @@ LazyLoader {
                                     }
                                 }
                             }
+                            // The colors the desktop would take from this wallpaper.
+                            Row {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                spacing: 6
+                                visible: deck.index === root.tab
+
+                                Repeater {
+                                    model: root.palette.length
+
+                                    delegate: Rectangle {
+                                        required property int index
+
+                                        width: 14
+                                        height: 14
+                                        radius: 7
+                                        color: root.palette[index] || "transparent"
+                                        border.width: 1
+                                        border.color: Qt.rgba(1, 1, 1, 0.25)
+
+                                        Behavior on color {
+                                            ColorAnimation {
+                                                duration: 420
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // What was typed to find a wallpaper by name.
+                            Rectangle {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                visible: root.query !== "" && deck.index === root.tab
+                                width: queryRow.implicitWidth + 24
+                                height: 30
+                                radius: 15
+                                color: root.queryMissed ? Qt.rgba(0.8, 0.2, 0.2, 0.55) : Qt.rgba(0, 0, 0, 0.5)
+                                border.width: 1
+                                border.color: Qt.rgba(1, 1, 1, 0.2)
+
+                                Row {
+                                    id: queryRow
+
+                                    anchors.centerIn: parent
+                                    spacing: 7
+
+                                    Icon {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        name: "search"
+                                        size: 14
+                                        color: "white"
+                                    }
+                                    Label {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: root.query
+                                        color: "white"
+                                        size: 14
+                                    }
+                                }
+                            }
+
                             Label {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 text: (deck.target + 1) + " / " + deck.files.length
@@ -794,9 +1119,33 @@ LazyLoader {
                                         return 0;
                                     return 1 - (dist - start) / Math.max(1, zeroAt - start);
                                 }
+                                // Applying: this slice straightens and fills the screen, the others step aside.
+                                readonly property real land: chosen ? root.landing : 0
+                                readonly property real cardW: w + (root.width - w) * land
+                                readonly property real cardH: root.sliceHeight + (root.height - root.sliceHeight) * land
+                                readonly property real slant: root.skewPx * (1 - land)
+                                readonly property real mid: middle + (deck.width / 2 - middle) * land
+                                // Where the slice is from the middle of the screen, -1 to 1, for the depth.
+                                readonly property real side: Math.max(-1, Math.min(1, (middle - deck.width / 2) / (deck.width / 2)))
+                                // The mirror image on the floor under the row.
+                                readonly property real reflectSize: Math.round(root.sliceHeight * 0.34) * (1 - land)
                                 // Room around the slice for its slant, its curl and its shadow.
-                                readonly property real padX: w * 0.3 + root.skewPx / 2 + 30
-                                readonly property real padY: 44
+                                readonly property real padX: (cardW * 0.3 + slant / 2 + 30) * (1 - land)
+                                readonly property real padY: 44 * (1 - land)
+
+                                // A slow drift over a still picture while the row rests on it.
+                                property real drift: 0
+                                property real driftOn: chosen && !deck.moving && !playing && !root.applying ? 1 : 0
+                                Behavior on driftOn {
+                                    NumberAnimation {
+                                        duration: 1400
+                                        easing.type: Easing.InOutSine
+                                    }
+                                }
+                                FrameAnimation {
+                                    running: card.driftOn > 0 && !root.closing
+                                    onTriggered: card.drift += frameTime
+                                }
 
                                 // Cards rise one after another, from the selected one outwards.
                                 property real appear: root.opening ? 0 : 1
@@ -822,12 +1171,13 @@ LazyLoader {
                                     return 1 + 1.9 * u * u * u + 0.9 * u * u;
                                 }
 
-                                x: middle - width / 2
-                                y: -padY
-                                width: w + padX * 2
-                                height: root.sliceHeight + padY * 2
+                                x: mid - width / 2
+                                // The stage sits 20 px above the middle of the screen.
+                                y: -padY + 20 * land - (cardH - root.sliceHeight) / 2
+                                width: cardW + padX * 2
+                                height: cardH + padY * 2 + reflectSize
                                 z: chosen ? 1000 : slot === deck.hovered ? 999 : 100 - Math.abs(slot - deck.target)
-                                opacity: Math.min(1, appear) * Math.min(1, way / 0.5) * edgeFade
+                                opacity: Math.min(1, appear) * Math.min(1, way / 0.5) * edgeFade * (chosen ? 1 : 1 - root.landing)
                                 visible: opacity > 0.005
 
                                 Component.onCompleted: {
@@ -881,6 +1231,26 @@ LazyLoader {
                                 }
 
                                 transform: [
+                                    // Depth: slices away from the middle turn toward it and step back.
+                                    Rotation {
+                                        origin.x: card.width / 2
+                                        origin.y: card.height / 2
+                                        axis {
+                                            x: 0
+                                            y: 1
+                                            z: 0
+                                        }
+                                        angle: -card.side * 16 * (1 - card.land)
+                                    },
+                                    Scale {
+                                        origin.x: card.width / 2
+                                        origin.y: card.padY + root.sliceHeight / 2
+                                        xScale: 1 - 0.08 * Math.pow(Math.abs(card.side), 1.3) * (1 - card.land)
+                                        yScale: xScale
+                                    },
+                                    Translate {
+                                        x: card.chosen ? 0 : Math.sign(card.slot - deck.target) * root.landing * 240
+                                    },
                                     Rotation {
                                         origin.x: card.width / 2
                                         origin.y: card.height / 2
@@ -979,28 +1349,34 @@ LazyLoader {
                                     property variant source: thumb
                                     property variant hiSource: card.playing ? clipTexture : full
                                     property size box: Qt.size(width, height)
-                                    property size extent: Qt.size(card.w / 2, root.sliceHeight / 2)
-                                    property real skew: root.skewPx
-                                    property real radius: 16
-                                    property real bend: deck.bend
+                                    property size extent: Qt.size(card.cardW / 2, card.cardH / 2)
+                                    property real skew: card.slant
+                                    property real radius: 16 * (1 - card.land)
+                                    property real bend: deck.bend * (1 - card.land)
                                     property real dim: (card.slot === deck.hovered ? 0.12 : 0.42) * (1 - card.mark)
-                                    property real frame: 1 + 2 * card.mark
-                                    property color frameColor: card.mark > 0.5 ? Theme.accent : "white"
+                                    property real frame: (1 + 2 * card.mark) * (1 - card.land)
+                                    property color frameColor: card.mark > 0.5 ? root.tint : "white"
                                     property real frameAlpha: card.mark > 0.5 ? card.mark : Math.max(card.slot === deck.hovered ? 0.55 : 0.16, card.mark)
                                     property real texAspect: thumb.implicitHeight > 0 ? thumb.implicitWidth / thumb.implicitHeight : 0.85
                                     property real hiAspect: full.implicitHeight > 0 ? full.implicitWidth / full.implicitHeight : 16 / 9
                                     property real hiMix: card.fullMix
                                     // The picture slides inside its slice as the row passes, a window onto it.
-                                    property real shift: Math.max(-1, Math.min(1, (card.middle - deck.width / 2) / (deck.width / 2))) * -0.6
-                                    property real shadow: 0.6 + 0.4 * card.mark
-                                    property real glow: card.mark
+                                    property real shift: card.side * -0.6 * (1 - card.land)
+                                    property real shadow: (0.6 + 0.4 * card.mark) * (1 - card.land)
+                                    property real glow: card.mark * (1 - card.land)
+                                    property real centerY: -card.reflectSize / 2
+                                    property real reflection: 1 - card.land
+                                    property real reflectSize: card.reflectSize
+                                    // Ken Burns: a slow zoom and pan over the chosen still picture.
+                                    property real zoom: 1 + 0.07 * card.driftOn * (0.5 - 0.5 * Math.cos(card.drift * 0.45))
+                                    property point pan: Qt.point(Math.sin(card.drift * 0.21) * card.driftOn, Math.cos(card.drift * 0.17) * 0.6 * card.driftOn)
                                     fragmentShader: Qt.resolvedUrl("../shaders/slice.frag.qsb")
                                 }
 
                                 // A small play sign marks live wallpapers, until the video itself plays.
                                 Rectangle {
                                     visible: deck.index === 0
-                                    opacity: card.playing ? 0 : 0.9 * Math.max(0.35, card.mark)
+                                    opacity: card.playing || root.applying ? 0 : 0.9 * Math.max(0.35, card.mark)
                                     x: card.padX + card.w / 2 - width / 2 - root.skewPx * 0.12
                                     y: card.padY + root.sliceHeight - 54
                                     width: 34

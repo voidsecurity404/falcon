@@ -5,14 +5,18 @@ import qs.services
 
 // Oynalar panel ostiga kirmasligi uchun joy ajratadi. O'zi ko'rinmaydi va bosilmaydi.
 PanelWindow {
+    readonly property bool rail: Settings.layout === "rail"
+
+    // The rail takes room along the left edge, the others along the top or bottom.
     anchors {
-        top: !Settings.bottom
-        bottom: Settings.bottom
+        top: rail || !Settings.bottom
+        bottom: rail || Settings.bottom
         left: true
-        right: true
+        right: !rail
     }
     implicitHeight: 1
-    exclusiveZone: Ui.zen ? 0 : 40
+    implicitWidth: 1
+    exclusiveZone: Ui.zen ? 0 : rail ? 64 : Settings.layout === "halo" ? 44 : 40
     color: "transparent"
     mask: Region {}
     WlrLayershell.layer: WlrLayer.Top

@@ -1,4 +1,6 @@
 import QtQuick
+import Quickshell
+import Quickshell.Widgets
 import qs.components
 import qs.services
 
@@ -9,9 +11,15 @@ Rectangle {
     property var screenInfo: null
 
     readonly property string output: screenInfo ? screenInfo.name : ""
+    // The studio layout also names the focused window beside the workspaces.
+    readonly property bool withTitle: Settings.layout === "studio"
+    readonly property var focused: {
+        const w = Niri.windows[Niri.focusedWindowId];
+        return w && w.app_id !== "org.quickshell" ? w : null;
+    }
 
     visible: Settings.get("panel.ribbon", true)
-    implicitWidth: row.implicitWidth + (Settings.hug ? 26 : 8)
+    implicitWidth: row.implicitWidth + (Settings.hug ? 26 : 8) + (withTitle && focused ? titlePart.width + 6 : 0)
     height: Settings.hug ? 45 : 34
     // In the corner only the free corner stays round. The border on the screen edges lies off the screen.
     topLeftRadius: Settings.hug ? 0 : 11
@@ -75,10 +83,47 @@ Rectangle {
         }
     }
 
+    // The focused window: its app's icon and its title.
+    Row {
+        id: titlePart
+
+        visible: root.withTitle && !!root.focused
+        x: row.x + row.width + 8
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: 8
+
+        Rectangle {
+            anchors.verticalCenter: parent.verticalCenter
+            width: 1
+            height: 16
+            color: Qt.alpha(Theme.text, 0.14)
+        }
+        IconImage {
+            readonly property var entry: root.focused ? DesktopEntries.heuristicLookup(root.focused.app_id) : null
+
+            anchors.verticalCenter: parent.verticalCenter
+            implicitSize: 16
+            source: entry ? Quickshell.iconPath(entry.icon, true) : root.focused ? Quickshell.iconPath(root.focused.app_id, true) : ""
+        }
+        Label {
+            anchors.verticalCenter: parent.verticalCenter
+            width: Math.min(implicitWidth, 340)
+            text: root.focused ? root.focused.title || root.focused.app_id : ""
+            elide: Text.ElideRight
+            size: 13
+            font.weight: Font.Medium
+        }
+        Item {
+            width: 4
+            height: 1
+        }
+    }
+
     Row {
         id: row
 
-        anchors.centerIn: parent
+        x: root.withTitle && root.focused ? 4 : (root.width - (root.withTitle && root.focused ? titlePart.width + 6 : 0) - width) / 2
+        anchors.verticalCenter: parent.verticalCenter
         spacing: 0
 
         Repeater {

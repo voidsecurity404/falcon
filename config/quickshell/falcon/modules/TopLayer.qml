@@ -11,6 +11,12 @@ PanelWindow {
 
     readonly property bool isFocusedScreen: !!screen && (Niri.focusedOutput === "" || Niri.focusedOutput === screen.name)
     readonly property bool panelHere: Ui.topPanelOpen && isFocusedScreen
+    // The panel design, see Settings.layout. Each one places the parts and opens the dashboard and
+    // the control center in its own way.
+    readonly property string layout: Settings.layout
+    readonly property bool sideParts: layout === "falcon" || layout === "studio"
+    // Where the rail layout opens its panels: just right of the rail.
+    readonly property int railRight: 10 + rail.width + 10
     // Focus mode sends the bar off the screen. The island still comes back for the dashboard and
     // for the way-out hint. Each part has its own distance out, 0 is in place and 1 is gone.
     readonly property bool barShown: !Ui.zen
@@ -21,6 +27,21 @@ PanelWindow {
     // Side panels in the corners have their border just off the screen. Otherwise they float.
     readonly property int edgeGap: Settings.hug ? -1 : 10
     readonly property int sideGap: Settings.hug ? -1 : 14
+
+    // Small popups (tray menu, Claude limits) open under the panel's right side, under the halo
+    // capsule, or beside the rail at its bottom.
+    function popupX(w) {
+        if (layout === "rail")
+            return railRight;
+        if (layout === "halo")
+            return Math.min(width - w - 14, island.x + island.width - w);
+        return width - w - 14;
+    }
+    function popupY(h) {
+        if (layout === "rail")
+            return height - h - 10;
+        return Settings.bottom ? height - h - 52 : 56;
+    }
     property real ribbonOut: barShown ? 0 : 1
     property real statusOut: barShown ? 0 : 1
     property real islandOut: islandShown ? 0 : 1
@@ -73,7 +94,19 @@ PanelWindow {
             radius: control.radius
         }
         Region {
-            item: root.ribbonOut < 1 ? ribbon : null
+            item: rail.visible ? rail : null
+            radius: rail.radius
+        }
+        Region {
+            item: dashModal.card.visible ? dashModal.card : null
+            radius: dashModal.card.radius
+        }
+        Region {
+            item: sidebar.visible ? sidebar : null
+            radius: sidebar.radius
+        }
+        Region {
+            item: root.ribbonOut < 1 && root.sideParts ? ribbon : null
             topLeftRadius: ribbon.topLeftRadius
             topRightRadius: ribbon.topRightRadius
             bottomLeftRadius: ribbon.bottomLeftRadius
@@ -92,7 +125,7 @@ PanelWindow {
             flipY: Settings.bottom
         }
         Region {
-            item: root.statusOut < 1 ? status : null
+            item: root.statusOut < 1 && root.sideParts ? status : null
             topLeftRadius: status.topLeftRadius
             topRightRadius: status.topRightRadius
             bottomLeftRadius: status.bottomLeftRadius
@@ -113,21 +146,21 @@ PanelWindow {
             flipY: Settings.bottom
         }
         Region {
-            item: root.islandOut === 1 ? null : island.body
-            bottomLeftRadius: Settings.bottom ? 0 : island.body.animatedRadius
-            bottomRightRadius: Settings.bottom ? 0 : island.body.animatedRadius
-            topLeftRadius: Settings.bottom ? island.body.animatedRadius : 0
-            topRightRadius: Settings.bottom ? island.body.animatedRadius : 0
+            item: root.islandOut === 1 || island.body.opacity < 0.05 || dashModal.t > 0.05 ? null : island.body
+            bottomLeftRadius: Settings.bottom && island.joined ? 0 : island.body.animatedRadius
+            bottomRightRadius: Settings.bottom && island.joined ? 0 : island.body.animatedRadius
+            topLeftRadius: Settings.bottom || !island.joined ? island.body.animatedRadius : 0
+            topRightRadius: Settings.bottom || !island.joined ? island.body.animatedRadius : 0
         }
         CurveRegion {
-            size: root.islandOut === 0 ? 18 : 0
+            size: root.islandOut === 0 && island.joined ? 18 : 0
             x: island.x - 18
             y: island.y + (Settings.bottom ? island.height - 18 : 0)
             flipX: true
             flipY: Settings.bottom
         }
         CurveRegion {
-            size: root.islandOut === 0 ? 18 : 0
+            size: root.islandOut === 0 && island.joined ? 18 : 0
             x: island.x + island.width
             y: island.y + (Settings.bottom ? island.height - 18 : 0)
             flipY: Settings.bottom
@@ -139,13 +172,16 @@ PanelWindow {
             item: catcher
         }
         Region {
-            item: root.barShown ? ribbon : null
+            item: root.barShown && root.sideParts ? ribbon : null
         }
         Region {
-            item: root.barShown ? status : null
+            item: root.barShown && root.sideParts ? status : null
         }
         Region {
-            item: root.islandOut < 1 ? island.body : null
+            item: root.barShown && root.layout === "rail" ? rail : null
+        }
+        Region {
+            item: root.islandOut < 1 && !island.resting ? island.body : null
         }
     }
 
@@ -183,7 +219,19 @@ PanelWindow {
         x: root.sideGap
         y: (Settings.bottom ? parent.height - height - root.edgeGap : root.edgeGap) + root.edgeSign * root.ribbonOut * 46
         opacity: 1 - root.ribbonOut
-        visible: root.ribbonOut < 1
+        visible: root.ribbonOut < 1 && root.sideParts
+        screenInfo: root.screen
+    }
+
+    // The rail layout's column. Focus mode sends it off the left edge.
+    Rail {
+        id: rail
+
+        x: 10 - root.ribbonOut * 80
+        y: 10
+        height: parent.height - 20
+        opacity: 1 - root.ribbonOut
+        visible: root.layout === "rail" && root.ribbonOut < 1
         screenInfo: root.screen
     }
 
@@ -194,40 +242,61 @@ PanelWindow {
         anchors.rightMargin: root.sideGap
         y: (Settings.bottom ? parent.height - height - root.edgeGap : root.edgeGap) + root.edgeSign * root.statusOut * 64
         opacity: Math.min(1, (1 - root.statusOut) * 3)
-        visible: root.statusOut < 1
+        visible: root.statusOut < 1 && root.sideParts
     }
 
     Island {
         id: island
 
-        anchors.horizontalCenter: parent.horizontalCenter
-        y: Settings.bottom ? parent.height - height : 0
+        // Joined to the edge in the middle, floating a little below it, or beside the rail.
+        x: root.layout === "rail" ? root.railRight : (parent.width - width) / 2
+        y: Settings.bottom ? parent.height - height : root.layout === "falcon" ? 0 : root.layout === "halo" ? 8 : 10
         slide: root.islandOut
         visible: root.islandOut < 1
+        output: root.screen ? root.screen.name : ""
         showDashboard: root.panelHere && Ui.popup === "dashboard"
+        showControl: root.panelHere && Ui.popup === "control"
+        onReleaseFocus: keyScope.forceActiveFocus()
+    }
+
+    // The studio layout's dashboard, grown out of the clock island into the middle of the screen.
+    DashModal {
+        id: dashModal
+
+        anchors.fill: parent
+        shown: root.layout === "studio" && root.panelHere && Ui.popup === "dashboard"
+        from: Qt.rect(island.x, island.y, island.body.width, island.body.height)
+    }
+
+    // The studio layout's control center, along the right edge.
+    ControlSidebar {
+        id: sidebar
+
+        shown: root.layout === "studio" && root.panelHere && Ui.popup === "control"
+        onReleaseFocus: keyScope.forceActiveFocus()
     }
 
     TrayMenu {
-        anchors.right: parent.right
-        anchors.rightMargin: 14
-        y: Settings.bottom ? parent.height - height - 52 : 52
+        x: root.popupX(width)
+        y: root.popupY(height)
         shown: root.panelHere && Ui.popup === "tray"
     }
 
     ClaudePanel {
-        anchors.right: parent.right
-        anchors.rightMargin: 14
-        y: Settings.bottom ? parent.height - height - 52 : 52
+        x: root.popupX(width)
+        y: root.popupY(height)
         shown: root.panelHere && Ui.popup === "claude"
     }
 
+    // The control center drops from the status pill, or, in the rail layout, comes up beside the
+    // rail's status from below. The halo and studio layouts have their own.
     ControlCenter {
         id: control
 
-        anchors.right: parent.right
-        anchors.rightMargin: 14
-        y: Settings.bottom ? parent.height - height - 52 : 52
-        shown: root.panelHere && Ui.popup === "control"
+        x: root.layout === "rail" ? root.railRight - (1 - reveal) * 24 : parent.width - width - 14
+        y: root.layout === "rail" ? parent.height - height - 10 : Settings.bottom ? parent.height - height - 52 : 52
+        growUp: Settings.bottom || root.layout === "rail"
+        shown: (root.layout === "falcon" || root.layout === "rail") && root.panelHere && Ui.popup === "control"
         onReleaseFocus: keyScope.forceActiveFocus()
     }
 
