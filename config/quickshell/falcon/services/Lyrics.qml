@@ -12,7 +12,7 @@ Singleton {
 
     // Saved choice of the music tab: lyrics in place of the big title.
     property bool shown: false
-    readonly property bool wanted: shown && Spectrum.musicTab && !!Media.player
+    readonly property bool wanted: shown && Ui.popup === "player" && !!Media.player
     // idle, loading, synced, plain, instrumental, none, offline
     property string status: "idle"
     // [[seconds, text], ...] for synced, [[-1, text], ...] for plain.
@@ -123,11 +123,11 @@ Singleton {
         interval: 400
         onTriggered: root.load()
     }
-    // An offline miss is asked again when the tab opens later.
+    // An offline miss is asked again when the player menu opens later.
     Connections {
-        target: Spectrum
-        function onMusicTabChanged() {
-            if (Spectrum.musicTab && root.status === "offline")
+        target: Ui
+        function onPopupChanged() {
+            if (Ui.popup === "player" && root.status === "offline")
                 root.loadedKey = "";
             root.load();
         }

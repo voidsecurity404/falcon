@@ -33,8 +33,8 @@ Singleton {
     property bool historyLoaded: false
     onHistoryChanged: saveHistory()
     onUnreadChanged: saveHistory()
-    // The history is on the Today tab of the dashboard.
-    readonly property bool historySeen: Ui.popup === "dashboard" && Ui.dashTab === 0
+    // The history is in the bell's menu.
+    readonly property bool historySeen: Ui.popup === "notifications"
     onHistorySeenChanged: {
         if (historySeen)
             unread = 0;
@@ -117,23 +117,18 @@ Singleton {
             advance();
     }
 
+    // Volume and brightness levels have their own small pill under the bar's middle island, so
+    // they never wait behind a notification or push one away.
+    property var osd: null
+
     function level(key, title, value, icon) {
-        const item = {
+        osd = {
             title: title,
-            sub: "",
             icon: icon,
             value: value,
-            key: key,
-            notification: null,
-            sticky: false,
-            run: null
+            key: key
         };
-        if (!current || current.key !== "") {
-            display(item);
-            return;
-        }
-        const levels = queue.filter(q => q.key !== "" && q.key !== key).concat([item]);
-        queue = levels.concat(queue.filter(q => q.key === ""));
+        osdTimer.restart();
     }
 
     function enqueue(item) {
@@ -159,7 +154,7 @@ Singleton {
         if (item.sticky) {
             timer.stop();
         } else {
-            timer.interval = item.hold ? item.hold : item.key !== "" ? 1600 : Settings.get("notifications.seconds", 3.6) * 1000;
+            timer.interval = item.hold ? item.hold : Settings.get("notifications.seconds", 3.6) * 1000;
             timer.restart();
         }
     }
@@ -266,12 +261,19 @@ Singleton {
     }
 
     Timer {
+        id: osdTimer
+
+        interval: 1600
+        onTriggered: root.osd = null
+    }
+
+    Timer {
         id: timer
 
-        // Dashboard ochiq turganda xabar vaqti o'tmaydi, u yopilgach ko'rinadi.
+        // While the bell's menu is open the card waits under it and is shown after it closes.
         running: false
         onTriggered: {
-            if (Ui.popup === "dashboard")
+            if (Ui.popup === "notifications")
                 restart();
             else
                 root.advance();

@@ -117,8 +117,13 @@ ShellRoot {
                 Ui.popup = "wallpapers";
             }
         }
+        // The clock's menu: the calendar and the weather (Mod+D).
         function dashboard(): void {
-            Ui.togglePopup("dashboard");
+            Ui.togglePopup("calendar");
+        }
+        // 0 calendar, 1 player, 2 system, 3 notifications.
+        function menuOpen(name: string): void {
+            Ui.popup = ["calendar", "player", "system", "notifications"].includes(name) ? name : "";
         }
         function control(): void {
             Ui.togglePopup("control");
@@ -158,7 +163,7 @@ ShellRoot {
                 layout: Niri.layoutLabel,
                 lang: Tr.language,
                 sample: Tr.t("Settings"),
-                dashTab: Ui.dashTab,
+                level: Toasts.osd ? Toasts.osd.title : "",
                 switcher: Ui.switcherPhase,
                 switcherRows: Ui.switcherRows,
                 switcherSelected: Ui.switcherSelected,
@@ -218,7 +223,6 @@ ShellRoot {
             Sticky.ids = [];
             Countdown.stop();
             Night.setEnabled(Settings.get("nightlight.auto", false));
-            Ui.dashTab = 0;
             Widgets.editMode = false;
         }
         function controlPage(name: string): void {
@@ -227,8 +231,7 @@ ShellRoot {
             Ui.controlPage = ["wifi", "bluetooth", "record"].includes(name) ? name : "";
         }
         function dashboardTab(index: int): void {
-            Ui.dashTab = Math.max(0, Math.min(2, index));
-            Ui.popup = "dashboard";
+            Ui.popup = ["calendar", "player", "system", "notifications"][Math.max(0, Math.min(3, index))];
         }
         function launcherQuery(text: string): void {
             Ui.launcherInject(text);

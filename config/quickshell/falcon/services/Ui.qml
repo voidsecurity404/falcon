@@ -19,7 +19,8 @@ Singleton {
     // Places in the pages list of SettingsWindow, for panels that open a page directly.
     readonly property int pageMonitors: 7
     readonly property int pagePower: 12
-    property int dashTab: 0
+    // Grows each time a notification card flies into the bell, so the bell can ring.
+    property int bellRings: 0
     // "", wifi, bluetooth
     property string controlPage: ""
     property var trayItem: null
@@ -53,7 +54,8 @@ Singleton {
     property int recordCountdown: 0
     readonly property bool recordBusy: recording || recordCountdown > 0
 
-    readonly property bool topPanelOpen: popup === "dashboard" || popup === "control" || popup === "tray" || popup === "claude"
+    // The menus that drop from the bar.
+    readonly property bool topPanelOpen: ["calendar", "player", "system", "notifications", "control", "tray", "claude"].includes(popup)
 
     // Choosing a part of the screen: "" closed, "wait" lets panels close first, "grab" pictures
     // the screens, "select" shows them.
@@ -79,16 +81,6 @@ Singleton {
 
     function togglePopup(name) {
         popup = popup === name ? "" : name;
-    }
-
-    // Opens the dashboard on a tab, or closes it when it already shows that tab.
-    function openDashboard(tab) {
-        if (popup === "dashboard" && dashTab === tab) {
-            popup = "";
-            return;
-        }
-        dashTab = tab;
-        popup = "dashboard";
     }
 
     // Opens the selector, or changes its action or closes it when it is already open.

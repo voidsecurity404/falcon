@@ -8,7 +8,7 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    readonly property bool active: Ui.popup === "dashboard" && Ui.dashTab === 2
+    readonly property bool active: Ui.popup === "system"
     readonly property string user: Quickshell.env("USER")
 
     // Every process: pids in list order, byPid gives {pid, user, cpu, mem, name}.

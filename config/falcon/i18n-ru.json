@@ -92,7 +92,6 @@
  "Cursor theme": "Тема курсора",
  "Dark": "Тёмный",
  "Dark mode starts": "Начало тёмной темы",
- "Dashboard": "Панель",
  "Date": "Дата",
  "Decoration": "Оформление",
  "Delete": "Удалить",
@@ -1167,5 +1166,7 @@
  "Comes up from below": "Поднимается снизу",
  "Springs past its size": "Пружинит чуть больше размера",
  "Unfold": "Развёртывание",
- "Screenshot and color picker": "Скриншот и выбор цвета"
+ "Screenshot and color picker": "Скриншот и выбор цвета",
+ "GB free": "ГБ свободно",
+ "Open the task manager": "Открыть диспетчер задач"
 }

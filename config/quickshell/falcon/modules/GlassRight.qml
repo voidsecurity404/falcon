@@ -25,6 +25,8 @@ GlassIsland {
     readonly property bool showVolume: Audio.available && Settings.get("panel.volume", true)
     readonly property bool showBattery: Sys.hasBattery && Settings.get("panel.battery", true)
 
+    property alias bellItem: bell
+
     spacing: 6
 
     BarButton {
@@ -257,15 +259,70 @@ GlassIsland {
         }
     }
 
-    // Notifications: the badge counts the unread ones, a click opens them on the dashboard.
+    // Notifications: the badge counts the unread ones, a click opens their menu. It swings when a
+    // notification card flies into it.
     BarButton {
         id: bell
 
         anchors.verticalCenter: parent.verticalCenter
         objectName: "bell"
         icon: "bell"
-        lit: Ui.popup === "dashboard" && Ui.dashTab === 0
-        onClicked: Ui.openDashboard(0)
+        lit: Ui.popup === "notifications"
+        transformOrigin: Item.Top
+        onClicked: Ui.togglePopup("notifications")
+
+        Connections {
+            target: Ui
+            function onBellRingsChanged() {
+                ring.restart();
+            }
+        }
+        SequentialAnimation {
+            id: ring
+
+            NumberAnimation {
+                target: bell
+                property: "scale"
+                to: 1.25
+                duration: 90
+                easing.type: Easing.OutCubic
+            }
+            ParallelAnimation {
+                NumberAnimation {
+                    target: bell
+                    property: "scale"
+                    to: 1
+                    duration: 420
+                    easing.type: Easing.OutBack
+                }
+                SequentialAnimation {
+                    NumberAnimation {
+                        target: bell
+                        property: "rotation"
+                        to: 18
+                        duration: 80
+                    }
+                    NumberAnimation {
+                        target: bell
+                        property: "rotation"
+                        to: -14
+                        duration: 110
+                    }
+                    NumberAnimation {
+                        target: bell
+                        property: "rotation"
+                        to: 8
+                        duration: 100
+                    }
+                    NumberAnimation {
+                        target: bell
+                        property: "rotation"
+                        to: 0
+                        duration: 120
+                    }
+                }
+            }
+        }
 
         Rectangle {
             visible: Toasts.unread > 0

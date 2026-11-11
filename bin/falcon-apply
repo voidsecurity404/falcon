@@ -273,7 +273,7 @@ ACTIONS = {
     "apps": ("Apps", "spawn " + desk("menu"), False),
     "market": ("App store", f'spawn "{SCRIPTS}archmarket"', False),
     "clipboard": ("Clipboard history", "spawn " + desk("clipboard"), False),
-    "dashboard": ("Dashboard", "spawn " + desk("dashboard"), False),
+    "dashboard": ("Calendar", "spawn " + desk("dashboard"), False),
     "control": ("Control center", "spawn " + desk("control"), False),
     "wallpapers": ("Wallpaper and color", "spawn " + desk("wallpapers"), False),
     "settings": ("Settings", "spawn " + desk("settings"), False),

@@ -1059,7 +1059,7 @@ LazyLoader {
                 sections: [
                     {
                         title: Tr.t("Panels and menus"),
-                        items: [win.bind("apps", Tr.t("Apps")), win.bind("market", Tr.t("App store")), win.bind("clipboard", Tr.t("Clipboard history")), win.bind("dashboard", Tr.t("Dashboard")), win.bind("control", Tr.t("Control center")), win.bind("wallpapers", Tr.t("Wallpaper and color")), win.bind("settings", Tr.t("Settings")), win.bind("widgets", Tr.t("Edit widgets"))]
+                        items: [win.bind("apps", Tr.t("Apps")), win.bind("market", Tr.t("App store")), win.bind("clipboard", Tr.t("Clipboard history")), win.bind("dashboard", Tr.t("Calendar")), win.bind("control", Tr.t("Control center")), win.bind("wallpapers", Tr.t("Wallpaper and color")), win.bind("settings", Tr.t("Settings")), win.bind("widgets", Tr.t("Edit widgets"))]
                     },
                     {
                         title: Tr.t("Apps"),

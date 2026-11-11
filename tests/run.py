@@ -1237,7 +1237,7 @@ def _():
 
 
 # ---------------------------------------------------------------------------------------
-feature("dashboard", "Dashboard")
+feature("dashboard", "Panel menyulari: kalendar, pleyer, tizim")
 
 
 def is_top_exclusive():
@@ -1247,7 +1247,7 @@ def is_top_exclusive():
 @case("Mod+D ochadi va klaviaturani oladi")
 def _():
     key("mod", "d")
-    wait(lambda: st()["popup"] == "dashboard")
+    wait(lambda: st()["popup"] == "calendar")
     wait(is_top_exclusive)
 
 
@@ -1263,12 +1263,12 @@ def _():
 @case("Soatni bosish ochadi")
 def _():
     click_part("clock")
-    wait(lambda: st()["popup"] == "dashboard")
+    wait(lambda: st()["popup"] == "calendar")
 
 
 @case("Tashqariga bosish yopadi")
 def _():
-    click_part("clock"); wait(lambda: st()["popup"] == "dashboard")
+    click_part("clock"); wait(lambda: st()["popup"] == "calendar")
     time.sleep(0.5)
     click(640, 650)
     wait(lambda: st()["popup"] == "")
@@ -1276,35 +1276,37 @@ def _():
 
 @case("Ichiga bosish yopmaydi")
 def _():
-    click_part("clock"); wait(lambda: st()["popup"] == "dashboard")
+    click_part("clock"); wait(lambda: st()["popup"] == "calendar")
     time.sleep(0.5)
-    click(1000, 280)
+    m = st()["bar"]["menu"]
+    click(m[0] + m[2] // 2, m[1] + m[3] - 30)
     time.sleep(0.3)
-    ok(st()["popup"] == "dashboard")
+    ok(st()["popup"] == "calendar")
 
 
-@case("Dashboard ochiq turganda boshqa panel ochilsa almashadi")
+@case("Kalendar ochiq turganda boshqa panel ochilsa almashadi")
 def _():
-    key("mod", "d"); wait(lambda: st()["popup"] == "dashboard")
+    key("mod", "d"); wait(lambda: st()["popup"] == "calendar")
     key("mod", "c")
     wait(lambda: st()["popup"] == "control")
 
 
-@case("Xabar dashboard yopilguncha kutadi")
+@case("Xabarlar menyusi ochiq turganda karta kutadi")
 def _():
-    key("mod", "d"); wait(lambda: st()["popup"] == "dashboard")
+    ipc("menuOpen", "notifications"); wait(lambda: st()["popup"] == "notifications")
     ipc("toast", "Kutish", "sinov")
     time.sleep(4.5)
-    ok(st()["toast"] == "Kutish", st()["toast"])
+    ok(st()["toast"] == "Kutish" and st()["bar"]["card"] is None, (st()["toast"], st()["bar"]["card"]))
     key("esc")
+    wait(lambda: st()["bar"]["card"] is not None, 3)
 
 
-@case("CPU halqasini bosish monitor ochadi")
+@case("Tizim menyusidagi tugma monitor ochadi")
 def _():
-    ipc("dashboardTab", "0")
-    wait(lambda: st()["popup"] == "dashboard" and st()["dashTab"] == 1)
+    click_part("rings")
+    wait(lambda: st()["popup"] == "system")
     time.sleep(0.5)
-    click(650, 130)
+    click_part("btop")
     w = wait(lambda: next(x for x in windows() if x["app_id"] == "falcon-tool"), 6)
     wait(lambda: sh("pgrep -u $(id -u) -x btop").returncode == 0, 4)
     # btop kamida 80 ustun talab qiladi: kitty katagi taxminan 9.6 piksel.
@@ -1316,9 +1318,9 @@ def _():
 def _():
     settings(weather__enabled=False)
     key("mod", "d")
-    wait(lambda: st()["popup"] == "dashboard")
+    wait(lambda: st()["popup"] == "calendar")
     time.sleep(0.5)
-    ok(st()["popup"] == "dashboard")
+    ok(st()["popup"] == "calendar")
 
 
 @case("Tez ochib-yopishda holat chalkashmaydi")
@@ -1608,7 +1610,7 @@ def _():
 def _():
     notify("Oqilmagan")
     wait(lambda: st()["unread"] == 1)
-    ipc("dashboardTab", "0")
+    ipc("menuOpen", "notifications")
     wait(lambda: st()["unread"] == 0)
 
 
@@ -1647,8 +1649,8 @@ def _():
 @case("Xabarni sichqoncha bilan surib yo'qotsa bo'ladi")
 def _():
     notify("Surish")
-    ipc("dashboardTab", "0")
-    wait(lambda: st()["popup"] == "dashboard")
+    ipc("menuOpen", "notifications")
+    wait(lambda: st()["popup"] == "notifications")
     drag(1040, 145, 1070, 145)
     time.sleep(0.5)
     ok("Surish" in st()["history"], st()["history"])
@@ -1659,8 +1661,8 @@ def _():
 @case("Tozalash hammasini animatsiya bilan yo'qotadi")
 def _():
     notify("Bir"); notify("Ikki")
-    ipc("dashboardTab", "0")
-    wait(lambda: st()["popup"] == "dashboard")
+    ipc("menuOpen", "notifications")
+    wait(lambda: st()["popup"] == "notifications")
     click(1105, 93)
     ok(len(st()["history"]) >= 2, st()["history"])
     wait(lambda: st()["history"] == [], 2)
@@ -2577,11 +2579,11 @@ def _():
 @case("Halqalar Tizim, soat Bugun vkladkasini ochadi")
 def _():
     click_part("rings")
-    wait(lambda: st()["popup"] == "dashboard" and st()["dashTab"] == 2, 3)
+    wait(lambda: st()["popup"] == "system", 3)
     key("esc")
     wait(lambda: st()["popup"] == "", 3)
     click_part("clock")
-    wait(lambda: st()["popup"] == "dashboard" and st()["dashTab"] == 0, 3)
+    wait(lambda: st()["popup"] == "calendar", 3)
 
 
 @case("Qo'ng'iroq xabarlarni ochadi, belgi o'chadi")
@@ -2590,7 +2592,7 @@ def _():
     wait(lambda: st()["unread"] >= 1, 5)
     wait(lambda: st()["toast"] == "", 10)
     click_part("bell")
-    wait(lambda: st()["popup"] == "dashboard" and st()["dashTab"] == 0, 3)
+    wait(lambda: st()["popup"] == "calendar", 3)
     wait(lambda: st()["unread"] == 0, 3)
 
 
@@ -3026,76 +3028,19 @@ def run(*argv, stdin=None, timeout=30):
     return sh([str(LBIN / argv[0]), *argv[1:]], stdin=stdin, timeout=timeout)
 
 
+MENUS = ["calendar", "player", "system", "notifications"]
+
+
 def dash(tab):
+    """Opens a menu of the bar: 0 calendar, 1 player, 2 system, 3 notifications."""
     ipc("dashboardTab", str(tab))
-    wait(lambda: st()["popup"] == "dashboard" and st()["dashTab"] == tab, 3, "vkladka ochilmadi")
+    wait(lambda: st()["popup"] == MENUS[tab], 3, "menyu ochilmadi")
     time.sleep(0.5)
 
 
 def write_json(path, data):
     path.write_text(json.dumps(data))
     time.sleep(0.6)
-
-
-feature("dash", "Dashboard: 2 ta vkladka")
-
-for _i, _name in enumerate(["Today", "Music"]):
-    @case(f"{_i + 1}-vkladka ({_name}) ochiladi")
-    def _(i=_i):
-        dash(i)
-        ok(st()["dashTab"] == i)
-
-
-@case("Soatni bosish birinchi vkladkani ochadi")
-def _():
-    click_part("clock")
-    wait(lambda: st()["popup"] == "dashboard", 3, "ochilmadi")
-    ok(st()["dashTab"] == 0)
-
-
-@case("Vkladka nomini bosish uni tanlaydi")
-def _():
-    dash(0)
-    click(699, 35)
-    wait(lambda: st()["dashTab"] == 1, 2, "almashmadi")
-    click(581, 35)
-    wait(lambda: st()["dashTab"] == 0, 2, "almashmadi")
-
-
-@case("Raqam tugmalari vkladkani almashtiradi")
-def _():
-    dash(0)
-    key("2")
-    wait(lambda: st()["dashTab"] == 1, 2, "2 ishlamadi")
-    key("1")
-    wait(lambda: st()["dashTab"] == 0, 2, "1 ishlamadi")
-
-
-@case("Tab keyingisiga o'tadi va aylanadi")
-def _():
-    dash(0)
-    key("tab")
-    wait(lambda: st()["dashTab"] == 1, 2, f"Musiqaga o'tmadi: {layers()} {focused()}")
-    key("tab")
-    wait(lambda: st()["dashTab"] == 0, 2, "aylanmadi")
-
-
-@case("Esc har vkladkada yopadi")
-def _():
-    for i in range(2):
-        dash(i)
-        key("esc")
-        wait(lambda: st()["popup"] == "", 2, f"{i}-vkladka yopilmadi")
-
-
-@case("Oxirgi tanlangan vkladka qayta ochilganda eslab qolinadi")
-def _():
-    dash(1)
-    key("esc")
-    wait(lambda: st()["popup"] == "", 2)
-    ipc("dashboard")
-    wait(lambda: st()["popup"] == "dashboard", 2)
-    ok(st()["dashTab"] == 1)
 
 
 feature("restore", "Sessiyani tiklash")
@@ -4178,123 +4123,40 @@ def _():
         tmp.rename(SHOTS)
 
 
-feature("dash-ui", "Soat menyusi: real foydalanish")
+feature("levels", "Ovoz va yorqinlik: o'rtadagi orol ostidagi plashka")
 
 
-@case("Soatni bosib ochadi, tashqariga bosib yopadi")
+@case("Ovoz o'zgarsa plashka chiqadi, xabarnoma kartasi bilan birga turadi")
 def _():
-    click_part("clock")
-    wait(lambda: st()["popup"] == "dashboard", 3)
-    time.sleep(0.7)
-    click(640, 650)
-    wait(lambda: st()["popup"] == "", 3)
+    sh("notify-send nd-sarlavha nd-matn")
+    wait(lambda: st()["toast"] == "nd-sarlavha", 3)
+    key("voldown")
+    wait(lambda: st()["level"] != "" and st()["bar"]["level"], 3, st()["level"])
+    ok(st()["toast"] == "nd-sarlavha" and st()["queue"] == 0, (st()["toast"], st()["queue"]))
+    wait(lambda: st()["level"] == "", 3.5, st()["level"])
+    key("volup")
 
 
-@case("Tablarni juda tez almashtiradi: oxirgisi to'g'ri qoladi")
-def _():
-    dash(0)
-    for k in ("2", "1", "2", "1", "2", "1", "2"):
-        key(k)
-    wait(lambda: st()["dashTab"] == 1, 3)
-    time.sleep(0.7)
-    ok(st()["popup"] == "dashboard")
-
-
-@case("Panel ochilayotganda darhol yopadi: qotib qolmaydi")
-def _():
-    ipc("dashboard")
-    time.sleep(0.05)
-    ipc("close")
-    time.sleep(0.05)
-    ipc("dashboard")
-    time.sleep(0.05)
-    ipc("close")
-    wait(lambda: st()["popup"] == "", 2)
-    time.sleep(0.9)
-    ok("falcon-top" in layers())
-
-
-@case("Musiqa bo'limida Esc bosadi: panel yopiladi, keyin oxirgi bo'lim eslab qolinadi")
-def _():
-    dash(1)
-    key("esc")
-    wait(lambda: st()["popup"] == "", 3)
-    time.sleep(0.5)
-    ipc("dashboard")
-    wait(lambda: st()["popup"] == "dashboard" and st()["dashTab"] == 1, 3)
-
-
-feature("levels", "Ovoz va yorqinlik xabari orolda")
-
-
-def alternate(times=6):
-    for _ in range(times):
-        key("voldown")
-        key("brightdown")
-
-
-def need_levels():
-    if len(bright()) < 5:
-        raise Skip("backlight yo'q")
-
-
-@case("Ovoz xabari turganda yorqinlikni o'zgartiradi: xabar darhol almashadi, navbat to'planmaydi")
-def _():
-    need_levels()
-    before = bright()[2]
-    try:
-        key("voldown")
-        wait(lambda: "Volume" in st()["toast"] or "Muted" in st()["toast"], 3)
-        key("brightdown")
-        wait(lambda: "Brightness" in st()["toast"], 2, st()["toast"])
-        ok(st()["queue"] == 0, st()["queue"])
-    finally:
-        sh(f"brightnessctl --class=backlight -q set {before}")
-
-
-@case("Ovoz va yorqinlikni navbat bilan ko'p o'zgartiradi: xabar 3 soniyada yo'qoladi")
-def _():
-    need_levels()
-    before = bright()[2]
-    try:
-        alternate()
-        ok(st()["queue"] == 0, st()["queue"])
-        wait(lambda: st()["toast"] == "", 3.5, st()["toast"])
-    finally:
-        sh(f"brightnessctl --class=backlight -q set {before}")
-
-
-@case("Slayderni uzoq sudraydi: navbat to'planmaydi va xabar yo'qoladi")
+@case("Slayderni uzoq sudraydi: navbat to'planmaydi, plashka yo'qoladi")
 def _():
     setvol(0.2)
     for i in range(30):
         sh(f"wpctl set-volume @DEFAULT_AUDIO_SINK@ {0.2 + i * 0.01:.2f}")
     time.sleep(0.3)
     ok(st()["queue"] == 0, st()["queue"])
-    wait(lambda: st()["toast"] == "", 3.5, st()["toast"])
+    wait(lambda: st()["level"] == "", 3.5, st()["level"])
     setvol(0.5)
 
 
-@case("Oddiy xabar turganda ovozni o'zgartiradi: xabar yo'qolmaydi, keyin ovoz ko'rinadi")
+@case("Xabarnoma o'ng burchakda chiqadi va qo'ng'iroqqa uchib kiradi")
 def _():
-    sh("notify-send nd-sarlavha nd-matn")
-    wait(lambda: st()["toast"] == "nd-sarlavha", 3)
-    for _ in range(4):
-        key("voldown")
-    time.sleep(0.3)
-    ok(st()["toast"] == "nd-sarlavha" and st()["queue"] == 1, (st()["toast"], st()["queue"]))
-    wait(lambda: "Volume" in st()["toast"] or "Muted" in st()["toast"], 8, st()["toast"])
-
-
-@case("Ikkita oddiy xabar yo'qolmaydi, ikkalasi navbat bilan chiqadi")
-def _():
-    sh("notify-send nd-bir")
-    wait(lambda: st()["toast"] == "nd-bir", 3)
-    sh("notify-send nd-ikki")
-    time.sleep(0.4)
-    key("voldown")
-    wait(lambda: st()["toast"] == "nd-ikki" or "Volume" in st()["toast"], 8)
-    wait(lambda: st()["toast"] == "nd-ikki", 8, st()["toast"])
+    w0 = st()["bar"]["center"][2]
+    sh("notify-send nd-karta")
+    wait(lambda: st()["bar"]["card"] is not None, 3)
+    b = st()["bar"]
+    ok(b["card"][0] + b["card"][2] == b["screen"][0] - 10 and b["center"][2] == w0, b)
+    wait(lambda: st()["bar"]["cardFlying"], 8)
+    wait(lambda: st()["bar"]["card"] is None, 3)
 
 
 feature("glass", "Tepadagi panellar: shisha va fon rangi")
@@ -4587,15 +4449,6 @@ def tool_x(i):
     return int(882 + 368 / 6 * (i + 0.5))
 
 
-@case("Bugun bo'limidagi tishli g'ildirak sozlamalarni ochadi, panel yopiladi")
-def _():
-    dash(0)
-    time.sleep(0.6)
-    click(143, 470 - 16 - 4 - 19)
-    wait(lambda: st()["settings"] and st()["popup"] == "", 4, "sozlamalar ochilmadi")
-    ipc("reset")
-
-
 @case("Fokus tugmasi fokus rejimini yoqadi")
 def _():
     open_control()
@@ -4648,29 +4501,11 @@ def _():
     ok(st()["spectrumWanted"] is False and not spectrum_running())
 
 
-@case("Bugun bo'limida CPU va harorat yangilanib turadi")
+@case("Tizim menyusida CPU va harorat yangilanib turadi")
 def _():
-    dash(0)
+    dash(2)
     time.sleep(4.5)
-    ok(st()["popup"] == "dashboard")
-
-
-@case("Bo'limni tez almashtiradi: vizualizator jarayoni qolib ketmaydi")
-def _():
-    for t in (1, 0, 1, 0, 1, 0):
-        ipc("dashboardTab", str(t))
-        time.sleep(0.2)
-    ipc("close")
-    time.sleep(1.5)
-    ok(not spectrum_running())
-
-
-@case("Panel orqa foni bor: rasmsiz holatda ham ochiladi")
-def _():
-    dash(1)
-    a = shot("mu1", "60,60 1160x300")
-    ok(a)
-    ok(st()["dashTab"] == 1)
+    ok(st()["popup"] == "system")
 
 
 @case("Tovush to'lqinlari sozlamasi vidjetlar joyini boshqaradi va musiqasiz ovoz tinglanmaydi")

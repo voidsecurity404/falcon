@@ -1,6 +1,6 @@
 # Falcon
 
-Falcon is a desktop for niri: a top bar of three glass islands and colors taken from the wallpaper. The panel, launcher and dashboard are written in Quickshell. The interface is available in English and Russian ([Русская версия](README.ru.md)).
+Falcon is a desktop for niri: a top bar of three glass islands and colors taken from the wallpaper. The panel, its menus and the launcher are written in Quickshell. The interface is available in English and Russian ([Русская версия](README.ru.md)).
 
 > For a no-desktop CachyOS or Arch install. `install.sh` stops on Omarchy on purpose, because it conflicts with its hypr, kitty and GTK settings.
 
@@ -35,7 +35,7 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | `Mod+Space` | App menu from the bottom of the screen: type an app name, or `>` for commands. The red button beside the search field opens the big power menu in the middle of the screen: lock, sleep, log out, reboot and shut down. It warns when a package update or a download is still running |
 | `Mod+I` | Archmarket, the app store, see below |
 | `Mod+V` | Clipboard history |
-| `Mod+D` | Dashboard |
+| `Mod+D` | Calendar |
 | `Mod+C` | Control center |
 | `Mod+W` | Wallpaper and color |
 | `Mod+F` | Focus mode |
@@ -61,14 +61,11 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | `Mod+Alt+P` | Translate a screen area |
 | `Mod+Alt+S` | Pin a screen area: the picture stays above the windows. Drag moves it, the wheel resizes, Ctrl+wheel changes its opacity, double click returns its size, middle click closes; copy, save and close show on hover |
 
-## Dashboard
+## Bar menus
 
-Click the clock. Two tabs, switched with `1`, `2` or `Tab`.
+Each part of the bar opens its own small menu under it. The clock opens the calendar, with arrows to other months and the weather of the next four days (`Mod+D` too). The music opens the player: the cover, title and artist, a seek bar and the controls. The resource rings open the system menu: processor, memory, disk and temperature, the five busiest processes and a button that opens btop. The bell opens the notification history, where a card can be swiped away and Clear removes all of them.
 
-| Tab | Purpose |
-| --- | --- |
-| Today | The time made of living dots that flee from the pointer and tremble with the CPU load, the date and weather, CPU, memory, temperature, disk and battery, settings button |
-| Music | Blurred, slowly moving cover in the background, colors taken from the cover, a spinning record, seekable progress bar, and a visualizer that follows the real sound. The sound is only measured on this computer |
+Notifications appear as cards at the top right, under the right island. When their time is up they shrink and fly into the bell, which swings as they land, and the bell's badge counts the unread ones. A click on a card runs it, a right click sends it away. Volume and brightness levels show in a small pill under the middle island.
 
 ## Desktop widgets
 
@@ -116,8 +113,7 @@ How it works: `falcon-remote` (Go, `remote/` in the repo) is a user service that
 - **Wallpaper by itself:** a slideshow, or one picture for the day and one for the night, in Settings → Wallpaper.
 - **Parallax:** the wallpaper is drawn a little taller than the screen and slides up as you go down the workspaces, so it feels deeper. Settings → Wallpaper → Depth turns it off or changes its strength. A live wallpaper does not move.
 - **Wallpaper effects:** a new wallpaper arrives with one of 15 effects drawn by a shader: grow, fade, wipe, wave, dissolve, pixels, blocks, shatter, glitch, melt, ripple, zoom, swirl, blinds and push, or Random for a different one each time. Settings → Wallpaper → Transition.
-- **What song is this?** The button on the dashboard's Music tab, or `>song` in the app menu, listens to what the computer plays for 10 seconds and names it through Shazam with `songrec`. Only a fingerprint of the sound is sent. A click on the answer opens its page. `qs -c falcon ipc call desk songrec` does the same from a key.
-- **Lyrics.** The Lyrics button on the Music tab replaces the big title with the song's words from LRCLIB (lrclib.net). Timed lyrics scroll with the song, the sung line lit in the cover's color, and a click on a line jumps there. Only the artist, title and length are sent, and answers are kept in `~/.cache/falcon/lyrics`.
+- **What song is this?** `>song` in the app menu listens to what the computer plays for 10 seconds and names it through Shazam with `songrec`. Only a fingerprint of the sound is sent. A click on the answer opens its page. `qs -c falcon ipc call desk songrec` does the same from a key.
 - **Hearing protection:** if an app or a newly connected device suddenly makes the sound much louder, the volume goes back and a message says so. Settings → Sound sets the largest jump and a maximum volume. The volume keys and the slider work as usual.
 - **Apps follow the wallpaper too:** besides GTK, Qt, kitty and Firefox, KDE apps get a Falcon color scheme in `~/.config/kdeglobals`, and VS Code, VSCodium, Cursor and Windsurf, when installed, get a theme named Falcon: choose it once in the editor, and it changes with each wallpaper. The mpv video player gets the uosc controller with frame previews on the timeline (`falcon-mpv-ui` installs it without root), its menus and on-screen text in the wallpaper colors, with hardware decoding, resume and Russian layout keys. Text inside kitty follows the wallpaper as well, and Claude Code is switched to its ANSI theme so it draws with those colors.
 - **Displays keep their settings** by display, not by port. A new display gets a toast that opens its settings. Mirroring is not offered, because niri has no mirror mode.
@@ -147,7 +143,7 @@ Archmarket is written in Rust, its window drawn with egui, in `archmarket/` in t
 
 ## Configuration
 
-The top bar is three glass islands floating just under the edge of the screen. The left one holds the app menu button, the workspaces of that screen as dots (the current one is a pill with its number, the ones with windows are brighter) and the focused window's icon and title. The middle one shows processor, memory and temperature rings, the clock and the music playing, each opening its tab of the dashboard, which grows out of this island; messages and the volume level show in it too. The right one holds the screenshot and color picker tools, the tray, Claude, the microphone and camera in use, waiting updates, the keyboard layout, the network, Bluetooth, volume and battery (a click opens the control center, which drops under this island), the notification bell with the unread count, and the control center button. The mouse wheel over the bar changes the screen brightness on the left half of the screen and the volume on the right half. Settings → Panel chooses what the bar shows.
+The top bar is three glass islands floating just under the edge of the screen. The left one holds the app menu button, the workspaces of that screen as dots (the current one is a pill with its number, the ones with windows are brighter) and the focused window's icon and title. The middle one shows processor, memory and temperature rings, the clock and the music playing, each opening its own menu (see Bar menus). The right one holds the screenshot and color picker tools, the tray, Claude, the microphone and camera in use, waiting updates, the keyboard layout, the network, Bluetooth, volume and battery (a click opens the control center, which drops under this island), the notification bell with the unread count (the history opens from it), and the control center button. The mouse wheel over the bar changes the screen brightness on the left half of the screen and the volume on the right half. Settings → Panel chooses what the bar shows.
 
 The wallpaper picker (`Mod+W`) shows the wallpapers as slanted slices on a glossy floor: the chosen one opens wide on a spring, the row curls a little while it moves and turns in depth toward the middle, a slice under the pointer opens a little, a still picture drifts slowly, and a live wallpaper plays in its slice. The background takes the chosen wallpaper's mood, and dots under its name show the colors the desktop would take from it. Typing jumps to a wallpaper by name. A click brings a slice to the middle; Enter, or a click on the middle one, sets it on the desktop at once.
 
@@ -165,7 +161,7 @@ Most things change from the `Mod+,` window and apply immediately: appearance, wa
 
 ```
 config/niri/        niri config, split by topic
-config/quickshell/  panel, island, dashboard, search, wallpaper picker
+config/quickshell/  panel, menus, search, wallpaper picker
 config/matugen/     templates that take colors from the wallpaper
 config/hypr/        hyprlock and hypridle
 config/falcon/   defaults, Russian catalog, emoji list

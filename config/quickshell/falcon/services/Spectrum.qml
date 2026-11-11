@@ -11,8 +11,7 @@ Singleton {
     readonly property int count: 36
     // Screens where the desktop waves can be seen right now.
     property var watching: ({})
-    readonly property bool musicTab: Ui.popup === "dashboard" && Ui.dashTab === 1
-    readonly property bool wanted: (musicTab || Object.keys(watching).length > 0) && !!Media.player && Media.player.isPlaying
+    readonly property bool wanted: Object.keys(watching).length > 0 && !!Media.player && Media.player.isPlaying
     property var levels: []
 
     function setWatching(screen, on) {
