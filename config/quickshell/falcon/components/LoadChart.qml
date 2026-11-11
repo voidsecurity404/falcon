@@ -16,7 +16,6 @@ Item {
 
     onValuesChanged: chart.requestPaint()
     onWidthChanged: chart.requestPaint()
-    onVisibleChanged: chart.requestPaint()
 
     Connections {
         target: Theme

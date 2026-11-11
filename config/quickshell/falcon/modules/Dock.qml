@@ -11,7 +11,7 @@ PanelWindow {
     id: root
 
     readonly property bool wanted: Settings.get("dock.enabled", true) && !Ui.zen && Ui.popup !== "menu" && Ui.popup !== "power"
-    readonly property int edgeGap: Settings.layout === "orbit" ? 70 : Settings.bottom ? 56 : 8
+    readonly property int edgeGap: Settings.bottom ? 56 : 8
     readonly property int triggerWidth: 520
     readonly property var pinned: Settings.get("dock.pinned", [])
     property bool hovered: false
@@ -67,8 +67,7 @@ PanelWindow {
         right: true
     }
     implicitHeight: 96
-    // The windows layout's taskbar already holds the apps.
-    visible: Settings.get("dock.enabled", true) && Settings.layout !== "windows"
+    visible: Settings.get("dock.enabled", true)
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
     WlrLayershell.layer: WlrLayer.Top

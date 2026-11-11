@@ -51,8 +51,7 @@ Singleton {
     property int recordCountdown: 0
     readonly property bool recordBusy: recording || recordCountdown > 0
 
-    // "calendar" is the windows layout's clock flyout, "apple" the macos layout's system menu.
-    readonly property bool topPanelOpen: popup === "dashboard" || popup === "control" || popup === "tray" || popup === "claude" || popup === "calendar" || popup === "apple"
+    readonly property bool topPanelOpen: popup === "dashboard" || popup === "control" || popup === "tray" || popup === "claude"
 
     // Choosing a part of the screen: "" closed, "wait" lets panels close first, "grab" pictures
     // the screens, "select" shows them.

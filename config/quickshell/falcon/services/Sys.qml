@@ -9,7 +9,7 @@ import Quickshell.Services.UPower
 Singleton {
     id: root
 
-    property bool active: Ui.popup === "dashboard" || Widgets.systemLive || Settings.layout === "terminal" || (Ui.popup === "control" && Settings.layout === "windows")
+    property bool active: Ui.popup === "dashboard" || Widgets.systemLive
 
     property int cpu: 0
     property int ram: 0

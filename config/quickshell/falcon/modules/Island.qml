@@ -20,13 +20,9 @@ Item {
     // dashboard, beside the rail. studio: a floating clock capsule, the dashboard opens elsewhere.
     readonly property string layout: Settings.layout
     readonly property bool joined: layout === "falcon"
-    // The windows, macos, terminal and orbit layouts open their dashboards elsewhere too, and keep
-    // the island only for messages.
-    readonly property bool hostsDashboard: layout === "falcon" || layout === "halo" || layout === "rail"
-    // In the rail layout and those four the island is away while nothing is shown in it.
-    readonly property bool resting: layout !== "falcon" && layout !== "halo" && layout !== "studio" && mode === "idle"
-    // Each host has its own dashboard and its own size for it.
-    readonly property size dashSize: layout === "halo" ? Qt.size(1000, 560) : layout === "rail" ? Qt.size(960, 600) : Qt.size(1160, 580)
+    readonly property bool hostsDashboard: layout !== "studio"
+    // In the rail layout the island is away while nothing is shown in it.
+    readonly property bool resting: layout === "rail" && mode === "idle"
     // How far the island has left the screen edge, for focus mode. 0 is in place.
     property real slide: 0
     // The last message stays here while the island closes, so its text and icon leave with it.
@@ -42,9 +38,9 @@ Item {
     readonly property bool showSeconds: Settings.get("panel.clockSeconds", false)
     readonly property bool showDate: Settings.get("panel.clockDate", false)
     readonly property bool clock24: Settings.get("panel.clock24", true)
-    readonly property int targetWidth: mode === "dashboard" ? dashSize.width : mode === "control" ? controlBox.panelWidth : mode === "toast" ? 440 : layout === "halo" ? haloBar.implicitWidth + 12 : resting ? 120 : (Ui.recordBusy ? 232 : 186) + (Countdown.active ? timerPart.width + 10 : 0) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0) + (clock24 ? 0 : 26)
+    readonly property int targetWidth: mode === "dashboard" ? 1160 : mode === "control" ? controlBox.panelWidth : mode === "toast" ? 440 : layout === "halo" ? haloBar.implicitWidth + 12 : resting ? 120 : (Ui.recordBusy ? 232 : 186) + (Countdown.active ? timerPart.width + 10 : 0) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0) + (clock24 ? 0 : 26)
     readonly property int cornerRadius: mode === "dashboard" ? 32 : mode === "control" ? 28 : joined ? 18 : mode === "toast" ? 24 : 20
-    readonly property int targetHeight: mode === "dashboard" ? dashSize.height : mode === "control" ? controlBox.shownHeight : mode === "toast" ? 68 : resting ? 40 : joined ? 44 : 40
+    readonly property int targetHeight: mode === "dashboard" ? 580 : mode === "control" ? controlBox.shownHeight : mode === "toast" ? 68 : resting ? 40 : joined ? 44 : 40
 
     width: body.width
     height: body.height
@@ -134,7 +130,7 @@ Item {
         // Panel shishasi ustidagi sahna: har bo'limning rangi, musiqa bo'limida albom.
         Loader {
             anchors.fill: parent
-            active: root.layout === "falcon"
+            active: root.hostsDashboard
             asynchronous: true
             opacity: root.mode === "dashboard" ? 1 : 0
             visible: opacity > 0
@@ -421,13 +417,13 @@ Item {
 
         Loader {
             active: root.hostsDashboard
-            width: root.dashSize.width
-            height: root.dashSize.height
+            width: 1160
+            height: root.targetHeight
             // Stays loaded after the first start: opening the panel creates nothing.
             asynchronous: true
             opacity: root.mode === "dashboard" ? 1 : 0
             visible: opacity > 0
-            sourceComponent: root.layout === "halo" ? haloDash : root.layout === "rail" ? railDash : falconDash
+            sourceComponent: Dashboard {}
 
             Behavior on opacity {
                 NumberAnimation {
@@ -436,25 +432,8 @@ Item {
             }
         }
 
-        Component {
-            id: falconDash
-
-            Dashboard {}
-        }
-        Component {
-            id: haloDash
-
-            HaloDash {}
-        }
-        Component {
-            id: railDash
-
-            RailDash {}
-        }
-
         // Light along the free edge of the open panel, in the color of the current page.
         Rectangle {
-            visible: root.layout === "falcon"
             anchors.horizontalCenter: parent.horizontalCenter
             y: Settings.bottom ? 0 : parent.height - 1
             width: parent.width * 0.7

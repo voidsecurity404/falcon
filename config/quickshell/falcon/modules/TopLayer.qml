@@ -17,11 +17,6 @@ PanelWindow {
     readonly property bool sideParts: layout === "falcon" || layout === "studio"
     // Where the rail layout opens its panels: just right of the rail.
     readonly property int railRight: 10 + rail.width + 10
-    // The bars of the other layouts: a taskbar, a menu bar, a console bar and a floating pill.
-    readonly property bool winLayout: layout === "windows"
-    readonly property bool macLayout: layout === "macos"
-    readonly property bool termLayout: layout === "terminal"
-    readonly property bool orbitLayout: layout === "orbit"
     // Focus mode sends the bar off the screen. The island still comes back for the dashboard and
     // for the way-out hint. Each part has its own distance out, 0 is in place and 1 is gone.
     readonly property bool barShown: !Ui.zen
@@ -40,21 +35,11 @@ PanelWindow {
             return railRight;
         if (layout === "halo")
             return Math.min(width - w - 14, island.x + island.width - w);
-        if (orbitLayout)
-            return Math.min(width - w - 14, orbitBar.x + orbitBar.width - w);
-        return width - w - (macLayout ? 8 : 14);
+        return width - w - 14;
     }
     function popupY(h) {
         if (layout === "rail")
             return height - h - 10;
-        if (winLayout)
-            return height - h - 60;
-        if (orbitLayout)
-            return orbitBar.y - h - 12;
-        if (macLayout)
-            return 36;
-        if (termLayout)
-            return 34;
         return Settings.bottom ? height - h - 52 : 56;
     }
     property real ribbonOut: barShown ? 0 : 1
@@ -119,51 +104,6 @@ PanelWindow {
         Region {
             item: sidebar.visible ? sidebar : null
             radius: sidebar.radius
-        }
-        Region {
-            item: winBar.visible ? winBar : null
-        }
-        Region {
-            item: winStart.visible ? winStart : null
-            radius: winStart.radius
-        }
-        Region {
-            item: winCalendar.visible ? winCalendar.notes : null
-            radius: 10
-        }
-        Region {
-            item: winCalendar.visible ? winCalendar.month : null
-            radius: 10
-        }
-        Region {
-            item: macBar.visible ? macBar : null
-        }
-        Region {
-            item: macCenter.visible ? macCenter : null
-            radius: macCenter.radius
-        }
-        Region {
-            item: macApple.visible ? macApple : null
-            radius: macApple.radius
-        }
-        Region {
-            item: termBar.visible ? termBar : null
-        }
-        Region {
-            item: termDrop.visible ? termDrop : null
-            bottomLeftRadius: 8
-            bottomRightRadius: 8
-        }
-        Region {
-            item: orbitBar.visible ? orbitBar : null
-            radius: orbitBar.radius
-        }
-        Region {
-            item: orbitDome.visible ? orbitDome : null
-            topLeftRadius: orbitDome.topLeftRadius
-            topRightRadius: orbitDome.topRightRadius
-            bottomLeftRadius: orbitDome.bottomLeftRadius
-            bottomRightRadius: orbitDome.bottomRightRadius
         }
         Region {
             item: root.ribbonOut < 1 && root.sideParts ? ribbon : null
@@ -241,18 +181,6 @@ PanelWindow {
             item: root.barShown && root.layout === "rail" ? rail : null
         }
         Region {
-            item: root.barShown && root.winLayout ? winBar : null
-        }
-        Region {
-            item: root.barShown && root.macLayout ? macBar : null
-        }
-        Region {
-            item: root.barShown && root.termLayout ? termBar : null
-        }
-        Region {
-            item: root.barShown && root.orbitLayout ? orbitBar : null
-        }
-        Region {
             item: root.islandOut < 1 && !island.resting ? island.body : null
         }
     }
@@ -320,98 +248,15 @@ PanelWindow {
     Island {
         id: island
 
-        // Joined to the edge in the middle, floating a little below it, or beside the rail. In the
-        // other layouts it only carries messages: over the taskbar's right end as on Windows,
-        // under the menu bar's right end as on macOS, under the console bar, over the pill.
-        x: root.layout === "rail" ? root.railRight : root.winLayout || root.macLayout ? parent.width - width - 12 : (parent.width - width) / 2
-        y: root.winLayout ? parent.height - 60 - height : root.orbitLayout ? orbitBar.y - 12 - height : root.macLayout ? 38 : root.termLayout ? 36 : Settings.bottom ? parent.height - height : root.layout === "falcon" ? 0 : root.layout === "halo" ? 8 : 10
+        // Joined to the edge in the middle, floating a little below it, or beside the rail.
+        x: root.layout === "rail" ? root.railRight : (parent.width - width) / 2
+        y: Settings.bottom ? parent.height - height : root.layout === "falcon" ? 0 : root.layout === "halo" ? 8 : 10
         slide: root.islandOut
         visible: root.islandOut < 1
         output: root.screen ? root.screen.name : ""
         showDashboard: root.panelHere && Ui.popup === "dashboard"
         showControl: root.panelHere && Ui.popup === "control"
         onReleaseFocus: keyScope.forceActiveFocus()
-    }
-
-    // ------------------------------------------------ windows: taskbar, start menu, clock flyout
-    WinTaskbar {
-        id: winBar
-
-        width: parent.width
-        y: parent.height - height + root.ribbonOut * 60
-        visible: root.winLayout && root.ribbonOut < 1
-        screenInfo: root.screen
-    }
-    WinStart {
-        id: winStart
-
-        x: Math.max(12, Math.min(parent.width - width - 12, (parent.width - width) / 2))
-        baseY: parent.height - 48
-        shown: root.winLayout && root.panelHere && Ui.popup === "dashboard"
-    }
-    WinCalendar {
-        id: winCalendar
-
-        x: parent.width - width - 12
-        baseY: parent.height - 48
-        shown: root.winLayout && root.panelHere && Ui.popup === "calendar"
-    }
-
-    // ------------------------------------------------ macos: menu bar, notification center, apple menu
-    MacMenuBar {
-        id: macBar
-
-        width: parent.width
-        y: -root.ribbonOut * 40
-        visible: root.macLayout && root.ribbonOut < 1
-        screenInfo: root.screen
-    }
-    MacCenter {
-        id: macCenter
-
-        topGap: 38
-        shown: root.macLayout && root.panelHere && Ui.popup === "dashboard"
-    }
-    MacAppleMenu {
-        id: macApple
-
-        x: 8
-        y: 34
-        shown: root.macLayout && root.panelHere && Ui.popup === "apple"
-    }
-
-    // ------------------------------------------------ terminal: console bar and the drop-down console
-    TermBar {
-        id: termBar
-
-        width: parent.width
-        y: -root.ribbonOut * 36
-        visible: root.termLayout && root.ribbonOut < 1
-        screenInfo: root.screen
-    }
-    TermDrop {
-        id: termDrop
-
-        x: 12
-        y: 28
-        width: parent.width - 24
-        shown: root.termLayout && root.panelHere && Ui.popup === "dashboard"
-    }
-
-    // ------------------------------------------------ orbit: the pill and the dome
-    OrbitBar {
-        id: orbitBar
-
-        x: (parent.width - width) / 2
-        y: parent.height - height - 10 + root.ribbonOut * 80
-        visible: root.orbitLayout && root.ribbonOut < 1
-        screenInfo: root.screen
-    }
-    OrbitDome {
-        id: orbitDome
-
-        from: Qt.rect(orbitBar.x, orbitBar.y, orbitBar.width, orbitBar.height)
-        shown: root.orbitLayout && root.panelHere && Ui.popup === "dashboard"
     }
 
     // The studio layout's dashboard, grown out of the clock island into the middle of the screen.
@@ -444,18 +289,14 @@ PanelWindow {
     }
 
     // The control center drops from the status pill, or, in the rail layout, comes up beside the
-    // rail's status from below. Windows slides it up over the taskbar's right end, macOS drops it
-    // under the menu bar, the console hangs it under its bar, and the orbit blooms it as a circle
-    // over the pill. The halo and studio layouts have their own.
+    // rail's status from below. The halo and studio layouts have their own.
     ControlCenter {
         id: control
 
-        readonly property real orbitMiddle: orbitBar.y - 14 - panelWidth / 2
-
-        x: root.layout === "rail" ? root.railRight - (1 - reveal) * 24 : root.orbitLayout ? Math.max(10 + panelWidth / 2, Math.min(parent.width - 10 - panelWidth / 2, orbitBar.x + orbitBar.statusCenter)) - width / 2 : root.macLayout ? parent.width - width - 8 : parent.width - width - (root.winLayout || root.termLayout ? 12 : 14)
-        y: (root.layout === "rail" ? parent.height - height - 10 : root.winLayout ? parent.height - 48 - 12 - height : root.macLayout ? 36 : root.termLayout ? 28 : root.orbitLayout ? (round ? orbitMiddle - height / 2 : orbitBar.y - 14 - height) : Settings.bottom ? parent.height - height - 52 : 52) + offsetY
-        growUp: (Settings.bottom && !root.orbitLayout) || root.layout === "rail"
-        shown: ["falcon", "rail", "windows", "macos", "terminal", "orbit"].includes(root.layout) && root.panelHere && Ui.popup === "control"
+        x: root.layout === "rail" ? root.railRight - (1 - reveal) * 24 : parent.width - width - 14
+        y: root.layout === "rail" ? parent.height - height - 10 : Settings.bottom ? parent.height - height - 52 : 52
+        growUp: Settings.bottom || root.layout === "rail"
+        shown: (root.layout === "falcon" || root.layout === "rail") && root.panelHere && Ui.popup === "control"
         onReleaseFocus: keyScope.forceActiveFocus()
     }
 

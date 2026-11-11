@@ -5238,49 +5238,6 @@ def _():
     ipc("settings")
 
 
-feature("panellayouts", "Sakkizta panel ko'rinishi")
-
-PANEL_LAYOUTS = ["falcon", "halo", "rail", "studio", "windows", "macos", "terminal", "orbit"]
-
-
-@case("Har bir ko'rinishda obzor, boshqaruv markazi va qo'shimcha oynalar xatosiz ochiladi")
-def _():
-    try:
-        for layout in PANEL_LAYOUTS:
-            settings(panel__layout=layout)
-            time.sleep(1.5)
-            before = len(sh(["qs", "log", "-c", "falcon"]).stdout.splitlines())
-            for popup in ["dashboard", "control"]:
-                ipc(popup)
-                time.sleep(1.2)
-                ok(st()["popup"] == popup, (layout, popup))
-                shot(f"layout-{layout}-{popup}")
-                ipc("close")
-                time.sleep(0.5)
-            flyout = {"windows": "calendar", "macos": "apple"}.get(layout)
-            if flyout:
-                ipc("flyout", flyout)
-                time.sleep(1)
-                ok(st()["popup"] == flyout, (layout, flyout))
-                shot(f"layout-{layout}-{flyout}")
-                ipc("close")
-            fresh = sh(["qs", "log", "-c", "falcon"]).stdout.splitlines()[before:]
-            bad = [l for l in fresh if ("WARN" in l or "ERROR" in l) and "qt.qpa" not in l and "sni" not in l]
-            ok(not bad, (layout, bad[:3]))
-    finally:
-        settings(panel__layout="falcon")
-
-
-@case("Windows ko'rinishida dok yashirinadi, joy pastdan ajratiladi")
-def _():
-    try:
-        settings(panel__layout="windows")
-        time.sleep(1.5)
-        ok("falcon-dock" not in layers(), "dok ko'rinmoqda")
-    finally:
-        settings(panel__layout="falcon")
-
-
 feature("market", "Archmarket do'koni")
 
 

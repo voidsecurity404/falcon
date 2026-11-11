@@ -16,13 +16,7 @@ PanelWindow {
     }
     implicitHeight: 1
     implicitWidth: 1
-    exclusiveZone: Ui.zen ? 0 : rail ? 64 : ({
-            halo: 44,
-            windows: 48,
-            macos: 30,
-            terminal: 28,
-            orbit: 60
-        })[Settings.layout] || 40
+    exclusiveZone: Ui.zen ? 0 : rail ? 64 : Settings.layout === "halo" ? 44 : 40
     color: "transparent"
     mask: Region {}
     WlrLayershell.layer: WlrLayer.Top
