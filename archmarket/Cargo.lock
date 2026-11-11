@@ -100,6 +100,7 @@ dependencies = [
  "flate2",
  "image",
  "jxl-oxide",
+ "libc",
  "ruzstd",
  "serde",
  "serde_json",

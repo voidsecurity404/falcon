@@ -7,6 +7,7 @@
 mod app;
 mod appstream;
 mod aur;
+mod broker;
 mod catalog;
 mod fonts;
 mod i18n;
@@ -35,6 +36,14 @@ fn toggle_existing() -> bool {
 }
 
 fn main() -> eframe::Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+    // Root helper and sudo stand-in: see broker.rs. Nothing else runs then.
+    if args.get(1).map(String::as_str) == Some("--root-helper") {
+        std::process::exit(broker::serve(args.get(2).map(String::as_str).unwrap_or("")));
+    }
+    if args.get(1).map(String::as_str) == Some("--sudo-proxy") {
+        std::process::exit(broker::proxy(args[2..].to_vec()));
+    }
     if std::env::args().any(|a| a == "--version") {
         println!("archmarket {}", env!("CARGO_PKG_VERSION"));
         return Ok(());

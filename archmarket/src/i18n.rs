@@ -128,6 +128,7 @@ pub fn t(s: &'static str) -> &'static str {
         "{} more in the queue" => "Ещё в очереди: {}",
         "No output yet" => "Пока пусто",
         "{} votes" => "голосов: {}",
+        "Could not get administrator rights" => "Не удалось получить права администратора",
         "Best matches" => "Лучшие совпадения",
         "Apps from the repositories and the AUR" => "Приложения из репозиториев и AUR",
         other => other,

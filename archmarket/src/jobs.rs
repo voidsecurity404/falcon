@@ -9,6 +9,7 @@
 //! the password. AUR builds run as the user through yay, which calls pkexec
 //! only for its pacman steps.
 
+use crate::broker::{self, Broker};
 use std::collections::VecDeque;
 use std::io::{Read, Seek, SeekFrom};
 use std::os::unix::process::CommandExt;
@@ -148,10 +149,15 @@ impl Jobs {
     }
 
     fn work(&self, ctx: egui::Context) {
+        // One root helper serves the whole queue: one password.
+        let mut helper: Option<Broker> = None;
         loop {
             let (job, _) = {
                 let (lock, cv) = &*self.inner;
                 let mut g = lock.lock().unwrap();
+                if g.queue.is_empty() {
+                    drop(helper.take());
+                }
                 while g.queue.is_empty() {
                     g = cv.wait(g).unwrap();
                 }
@@ -160,7 +166,7 @@ impl Jobs {
                 (job, ())
             };
             let Some(job) = job else { continue };
-            let result = self.run(&job, &ctx);
+            let result = self.run(&job, &ctx, &mut helper);
             {
                 let mut g = self.inner.0.lock().unwrap();
                 if let Some(j) = g.jobs.iter_mut().find(|j| j.id == job.id) {
@@ -177,7 +183,7 @@ impl Jobs {
         }
     }
 
-    fn run(&self, job: &Job, ctx: &egui::Context) -> Result<(), String> {
+    fn run(&self, job: &Job, ctx: &egui::Context, helper: &mut Option<Broker>) -> Result<(), String> {
         // Another package manager holds the lock: wait for it, visibly.
         let lock = std::path::Path::new("/var/lib/pacman/db.lck");
         if lock.exists() {
@@ -194,8 +200,22 @@ impl Jobs {
         self.update(job.id, |j| j.state = State::Running);
         ctx.request_repaint();
 
-        let argv = command(job);
         let dir = runtime_dir();
+        if !helper.as_mut().map(|h| h.alive()).unwrap_or(false) {
+            *helper = None;
+            self.update(job.id, |j| j.stage = crate::i18n::t("Waiting for the password").into());
+            ctx.request_repaint();
+            match Broker::start(&dir) {
+                Ok(h) => *helper = Some(h),
+                Err(126) => return Err(crate::i18n::t("Password prompt was cancelled").into()),
+                Err(127) => return Err(crate::i18n::t("Not authorized").into()),
+                Err(_) => return Err(crate::i18n::t("Could not get administrator rights").into()),
+            }
+            self.update(job.id, |j| j.stage.clear());
+        }
+        let h = helper.as_ref().unwrap();
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?.to_string_lossy().into_owned();
+        let argv = command(job, &exe);
         let log = dir.join(format!("job-{}-{}.log", std::process::id(), job.id));
         let code = dir.join(format!("job-{}-{}.code", std::process::id(), job.id));
         let _ = std::fs::remove_file(&code);
@@ -210,6 +230,8 @@ impl Jobs {
             .arg(&log)
             .arg(&code)
             .args(&argv)
+            .env(broker::ENV_SOCK, &h.sock)
+            .env(broker::ENV_TOKEN, &h.token)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -275,37 +297,46 @@ impl Jobs {
     }
 }
 
-fn yay_flags() -> Vec<String> {
-    [
+fn yay_flags(exe: &str) -> Vec<String> {
+    let mut v: Vec<String> = [
         "--noconfirm",
         "--answerdiff", "None",
         "--answerclean", "None",
         "--answeredit", "None",
         "--answerupgrade", "None",
         "--removemake",
-        "--sudo", "pkexec",
+        "--sudoflags", "--sudo-proxy",
     ]
     .iter()
     .map(|s| s.to_string())
-    .collect()
+    .collect();
+    v.push("--sudo".into());
+    v.push(exe.into());
+    v
 }
 
-fn command(job: &Job) -> Vec<String> {
+/// Root steps go through the helper: `archmarket --sudo-proxy pacman …`.
+fn command(job: &Job, exe: &str) -> Vec<String> {
     let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<String>>();
+    let root = |v: &[&str]| {
+        let mut a = vec![exe.to_string(), "--sudo-proxy".to_string()];
+        a.extend(v.iter().map(|x| x.to_string()));
+        a
+    };
     let mut argv = match job.kind {
         Kind::Install if job.aur => {
             let mut a = s(&["yay", "-S", "--needed"]);
-            a.extend(yay_flags());
+            a.extend(yay_flags(exe));
             a
         }
-        Kind::Install => s(&["pkexec", "pacman", "-S", "--needed", "--noconfirm"]),
-        Kind::Remove => s(&["pkexec", "pacman", "-Rns", "--noconfirm"]),
+        Kind::Install => root(&["pacman", "-S", "--needed", "--noconfirm"]),
+        Kind::Remove => root(&["pacman", "-Rns", "--noconfirm"]),
         Kind::Upgrade if job.aur && crate::catalog::have("yay") => {
             let mut a = s(&["yay", "-Syu"]);
-            a.extend(yay_flags());
+            a.extend(yay_flags(exe));
             a
         }
-        Kind::Upgrade => s(&["pkexec", "pacman", "-Syu", "--noconfirm"]),
+        Kind::Upgrade => root(&["pacman", "-Syu", "--noconfirm"]),
     };
     argv.push("--".into());
     argv.extend(job.pkgs.iter().cloned());
