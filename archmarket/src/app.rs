@@ -1075,7 +1075,7 @@ impl Market {
             let g = wrap_galley(ui, &it.summary, body(15.0), alpha(sub_c, fade), (r.width() * 0.5).min(460.0), 2);
             p.galley(pos2(x, r.top() + 104.0), g, sub_c);
             let ui_rect = Rect::from_min_max(pos2(r.left() + 36.0, r.bottom() - 72.0), pos2(r.center().x, r.bottom() - 28.0));
-            ui.scope_builder(UiBuilder::new().max_rect(ui_rect).layout(egui::Layout::left_to_right(egui::Align::Center)), |ui| {
+            place(ui, UiBuilder::new().max_rect(ui_rect).id_salt("hero-actions").layout(egui::Layout::left_to_right(egui::Align::Center)), |ui| {
                 self.action_buttons(ui, &it, 40.0, "hero");
                 if button(ui, &pal, Id::new("hero-more"), t("Details"), None, Btn::Ghost, 40.0).clicked() {
                     self.acts.push(Act::Show(it.name.clone()));
@@ -1225,7 +1225,7 @@ impl Market {
             p.text(pos2(btn_area.left() + 4.0, btn_area.center().y), Align2::LEFT_CENTER, t("Installed"), semi(12.5), pal.good);
             glyph(&p, Rect::from_center_size(pos2(btn_area.right() - 12.0, btn_area.center().y), vec2(18.0, 18.0)), Glyph::Check, pal.good);
         } else if self.job_for(name).is_some() || hov > 0.01 {
-            ui.scope_builder(UiBuilder::new().max_rect(btn_area).layout(egui::Layout::right_to_left(egui::Align::Center)), |ui| {
+            place(ui, UiBuilder::new().max_rect(btn_area).id_salt(("card-actions", name)).layout(egui::Layout::right_to_left(egui::Align::Center)), |ui| {
                 ui.multiply_opacity(if self.job_for(name).is_some() { 1.0 } else { hov });
                 self.action_buttons(ui, &it, btn_h, "card");
             });
@@ -1369,7 +1369,7 @@ impl Market {
         // right side: action and badges
         let right_w = 300.0f32.min(w * 0.42);
         let right = Rect::from_min_max(pos2(rect.right() - right_w, rect.top()), pos2(rect.right() - 14.0, rect.bottom()));
-        ui.scope_builder(UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)), |ui| {
+        place(ui, UiBuilder::new().max_rect(right).id_salt(("row-actions", name)).layout(egui::Layout::right_to_left(egui::Align::Center)), |ui| {
             self.action_buttons(ui, &it, 34.0, "row");
         });
         let x = icon_r.right() + 14.0;
@@ -2005,6 +2005,15 @@ impl Market {
             p.galley(pos2(r.left() + 40.0, r.center().y - g.size().y / 2.0), g, alpha(pal.text, k));
         });
     }
+}
+
+/// Lays out a child in a fixed place without moving the parent's cursor.
+/// `scope_builder` would advance the cursor to the child's bottom, which
+/// is above the end of the card or row it sits in, so the next item would
+/// be drawn over the current one.
+fn place<R>(ui: &mut Ui, builder: UiBuilder, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let mut child = ui.new_child(builder);
+    add(&mut child)
 }
 
 fn group(n: usize) -> String {
