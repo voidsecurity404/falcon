@@ -1050,10 +1050,14 @@ LazyLoader {
                                     return deck.width / 2 + deck.centerOf(slot) - deck.camera;
                                 }
                                 // Slices fade out toward the sides, before their edge reaches the screen's.
+                                // A peeking slice is judged by its width at rest: counted with the peek, the
+                                // last slice on each side faded out under the pointer, lost the hover, closed,
+                                // came back and shook.
                                 readonly property real edgeFade: {
                                     const half = deck.width / 2;
                                     const dist = Math.abs(middle - half);
-                                    const zeroAt = Math.min(half * 1.2, half - w / 2 - root.skewPx / 2 + 40);
+                                    const restW = slot === deck.peekIndex ? Math.max(root.narrow, w - deck.peek) : w;
+                                    const zeroAt = Math.min(half * 1.2, half - restW / 2 - root.skewPx / 2 + 40);
                                     const start = Math.min(root.wide / 2 + 2 * deck.stride, zeroAt);
                                     if (dist <= start)
                                         return 1;
@@ -1331,11 +1335,14 @@ LazyLoader {
                                     }
                                 }
 
-                                // Only the slice itself takes the pointer, not the room around it.
+                                // Only the slice itself takes the pointer, not the room around it. The hovered
+                                // one reaches a little further, so its own peek and turn cannot slide its edge
+                                // out from under a still pointer.
                                 MouseArea {
-                                    x: card.padX
+                                    readonly property real hold: card.slot === deck.hovered ? 14 : 0
+                                    x: card.padX - hold
                                     y: card.padY
-                                    width: card.w
+                                    width: card.w + hold * 2
                                     height: root.sliceHeight
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
