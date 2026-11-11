@@ -280,7 +280,7 @@ LazyLoader {
             },
             {
                 title: Tr.t("Windows"),
-                subtitle: Tr.t("Layout, decoration and animations"),
+                subtitle: Tr.t("Layout and decoration"),
                 icon: "windows",
                 group: 1,
                 sections: [
@@ -312,15 +312,25 @@ LazyLoader {
                         items: [
                             { key: "windows.focusFollowsMouse", label: Tr.t("Focus follows cursor"), type: "toggle" },
                             { key: "windows.warpMouse", label: Tr.t("Cursor follows focus"), type: "toggle" },
-                            { key: "windows.autoBackForth", label: Tr.t("Same number again goes to previous workspace"), type: "toggle" }
-                        ]
-                    },
-                    {
-                        title: Tr.t("Animations"),
-                        items: [
-                            { key: "windows.animations", label: Tr.t("Animations"), type: "toggle" },
-                            { key: "windows.animationSpeed", label: Tr.t("Animation speed"), type: "slider", min: 0.3, max: 3, step: 0.1, unit: "scale" },
+                            { key: "windows.autoBackForth", label: Tr.t("Same number again goes to previous workspace"), type: "toggle" },
                             { key: "windows.overviewZoom", label: Tr.t("Overview zoom"), type: "slider", min: 0.25, max: 0.75, step: 0.01, unit: "percent" }
+                        ]
+                    }
+                ]
+            },
+            {
+                title: Tr.t("Animations"),
+                subtitle: Tr.t("How windows open, and how fast"),
+                icon: "sparkle",
+                group: 1,
+                openAnims: true,
+                sections: [
+                    {
+                        title: Tr.t("Speed"),
+                        items: [
+                            { key: "windows.openDuration", label: Tr.t("Opening time"), hint: Tr.t("Less is faster"), type: "slider", min: 100, max: 1200, step: 10, unit: "ms" },
+                            { key: "windows.animationSpeed", label: Tr.t("Animation speed"), hint: Tr.t("All animations of the desktop, opening too"), type: "slider", min: 0.3, max: 3, step: 0.1, unit: "scale" },
+                            { key: "windows.animations", label: Tr.t("Animations"), type: "toggle" }
                         ]
                     }
                 ]
@@ -1266,6 +1276,11 @@ LazyLoader {
 
                         FetchStudio {
                             visible: win.filter === "" && !!win.pages[win.page].fetch
+                            width: cards.width
+                        }
+
+                        OpenAnimStudio {
+                            visible: win.filter === "" && !!win.pages[win.page].openAnims
                             width: cards.width
                         }
 

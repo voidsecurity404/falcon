@@ -47,6 +47,8 @@
     "autoBackForth": false,
     "animations": true,
     "animationSpeed": 1.0,
+    "openAnimation": "standard",
+    "openDuration": 220,
     "rules": [],
     "edgeMargin": 0,
     "shadowSoftness": 34,

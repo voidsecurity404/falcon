@@ -5196,6 +5196,47 @@ def _():
     ok("ready" in keys and "packs" in keys and len(keys["packs"]) == 7, keys)
 
 
+
+feature("openanim", "Oyna ochilish animatsiyasi")
+
+OPEN_LOOKS = ["standard", "fade", "pop", "rise", "drop", "zoom", "unfold", "flip", "swing", "circle", "pixels",
+              "glitch", "dissolve", "blinds", "random"]
+
+
+@case("Har bir ko'rinish niri'da xatosiz kompilyatsiya bo'ladi")
+def _():
+    since = time.strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        for look in OPEN_LOOKS:
+            settings(windows__openAnimation=look, windows__openDuration=400)
+            text = (HOME / ".config/niri/generated/settings.kdl").read_text()
+            ok(("custom-shader" in text) == (look != "standard"), look)
+            ok("duration-ms 400" in text, look)
+        log = sh(["journalctl", "--user", "-b", "--since", since, "-o", "cat"]).stdout
+        ok("custom open shader" not in log, "shader xatosi")
+    finally:
+        settings(windows__openAnimation="standard", windows__openDuration=220)
+
+
+@case("Noto'g'ri qiymat rad etiladi, o'chirilgan animatsiyada window-open yo'q")
+def _():
+    ok(sh([str(LBIN / "falcon-set"), "windows.openAnimation", '"bogus"']).returncode == 1, "bogus qabul qilindi")
+    ok(sh([str(LBIN / "falcon-set"), "windows.openDuration", "50000"]).returncode == 1, "50000 qabul qilindi")
+    try:
+        settings(windows__animations=False, windows__openAnimation="flip")
+        ok("window-open" not in (HOME / ".config/niri/generated/settings.kdl").read_text(), "off'da ham bor")
+    finally:
+        settings(windows__animations=True, windows__openAnimation="standard")
+
+
+@case("Animatsiyalar sahifasi ochiladi, ko'rinish shaderi yuklanadi")
+def _():
+    ipc("settingsPage", "5")
+    time.sleep(1.5)
+    log = sh(["qs", "log", "-c", "falcon"]).stdout
+    ok("winopen.frag" not in log and "OpenAnimStudio" not in log, "QML yoki shader xatosi")
+    ipc("settings")
+
 def main():
     global GOOD
     args = sys.argv[1:]

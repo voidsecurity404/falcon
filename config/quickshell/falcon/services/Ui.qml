@@ -17,8 +17,8 @@ Singleton {
     property bool settingsOpen: false
     property int settingsPage: 0
     // Places in the pages list of SettingsWindow, for panels that open a page directly.
-    readonly property int pageMonitors: 6
-    readonly property int pagePower: 11
+    readonly property int pageMonitors: 7
+    readonly property int pagePower: 12
     property int dashTab: 0
     // "", wifi, bluetooth
     property string controlPage: ""
