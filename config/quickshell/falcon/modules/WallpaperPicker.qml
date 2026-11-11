@@ -1246,7 +1246,8 @@ LazyLoader {
                                     id: clip
 
                                     active: card.dwelt && card.chosen && !root.closing
-                                    visible: false
+                                    // Left visible on purpose: hideSource keeps it off screen, while an invisible
+                                    // Video sends no updates, so the slice froze once the row stood still.
                                     sourceComponent: Video {
                                         width: 1280
                                         height: full.implicitWidth > 0 ? 1280 * full.implicitHeight / full.implicitWidth : 720
