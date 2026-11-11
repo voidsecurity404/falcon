@@ -2596,12 +2596,14 @@ def _():
     wait(lambda: st()["unread"] == 0, 3)
 
 
-@case("Tishli g'ildirak sozlamalarni ochadi, holat boshqaruv panelini ochadi")
+@case("Kalendardagi tishli g'ildirak sozlamalarni ochadi, holat boshqaruv panelini ochadi")
 def _():
+    click_part("clock")
+    wait(lambda: st()["popup"] == "calendar", 3)
+    time.sleep(0.5)
     click_part("settings")
-    wait(lambda: st()["settings"], 3)
-    click_part("settings")
-    wait(lambda: not st()["settings"], 3)
+    wait(lambda: st()["settings"] and st()["popup"] == "", 3)
+    ipc("settings")
     click_part("status")
     wait(lambda: st()["popup"] == "control", 3)
     c = st()["bar"]["control"]

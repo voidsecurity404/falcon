@@ -3,8 +3,8 @@ import Quickshell
 import qs.components
 import qs.services
 
-// The clock's menu: the month with today marked, arrows to other months, and the weather of the
-// next days. Opened by a click on the clock or by `desk dashboard` (Mod+D).
+// The clock's menu: the month with today marked, arrows to other months, the settings button,
+// and the weather of the next days. Opened by a click on the clock or by `desk dashboard` (Mod+D).
 Flyout {
     id: root
 
@@ -78,6 +78,17 @@ Flyout {
                     icon: "forward"
                     iconSize: 15
                     onClicked: root.monthShift += 1
+                }
+                // Opens the Settings window.
+                BarButton {
+                    objectName: "settings"
+                    anchors.verticalCenter: parent.verticalCenter
+                    icon: "settings"
+                    iconSize: 15
+                    onClicked: {
+                        Ui.popup = "";
+                        Ui.settingsOpen = true;
+                    }
                 }
             }
         }
