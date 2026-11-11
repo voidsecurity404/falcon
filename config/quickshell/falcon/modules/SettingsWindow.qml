@@ -427,6 +427,7 @@ LazyLoader {
                         title: Tr.t("Panels and menus"),
                         items: [
                             win.bind("apps", Tr.t("Apps")),
+                            win.bind("market", Tr.t("App store")),
                             win.bind("clipboard", Tr.t("Clipboard history")),
                             win.bind("dashboard", Tr.t("Dashboard")),
                             win.bind("control", Tr.t("Control center")),

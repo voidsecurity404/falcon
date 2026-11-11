@@ -124,6 +124,7 @@
   "binds": {
     "terminal": "Mod+Return",
     "apps": "Mod+Space",
+    "market": "Mod+I",
     "clipboard": "Mod+V",
     "dashboard": "Mod+D",
     "control": "Mod+C",

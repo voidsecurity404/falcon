@@ -33,6 +33,7 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | --- | --- |
 | `Mod+Return` | Terminal |
 | `Mod+Space` | App menu from the bottom of the screen: type an app name, or `>` for commands. The red button beside the search field opens the big power menu in the middle of the screen: lock, sleep, log out, reboot and shut down. It warns when a package update or a download is still running |
+| `Mod+I` | Archmarket, the app store, see below |
 | `Mod+V` | Clipboard history |
 | `Mod+D` | Dashboard |
 | `Mod+C` | Control center |
@@ -123,7 +124,7 @@ How it works: `falcon-remote` (Go, `remote/` in the repo) is a user service that
 
 ## App store (Archmarket)
 
-Archmarket is a store for everything pacman and the AUR offer. Open it from the app menu: `Mod+Space`, type `archmarket` and press Enter. Starting it again while it is open brings its window forward. Start typing anywhere to search all repository packages and the AUR at once; Enter opens the first result. Discover shows a rotating pick, shelves of popular apps and categories; every app from the official repositories has its real name, icon, description and screenshots from Arch's AppStream catalog, and apps it does not know, such as `visual-studio-code-bin`, `google-chrome` or `spotify` from the AUR, get the icon of the same app from Flathub's catalog, kept in `~/.cache/archmarket/icons`. Search lists the best matching apps first, with their icons. Installed lists what is on the computer (apps, everything you installed, AUR packages, or all), Updates shows waiting updates and installs them all at once.
+Archmarket is a store for everything pacman and the AUR offer. Open it with `Mod+I`, or from the app menu: `Mod+Space`, type `archmarket` and press Enter. Starting it again while it is open brings its window forward. Start typing anywhere to search all repository packages and the AUR at once; Enter opens the first result. Discover shows a rotating pick, shelves of popular apps and categories; every app from the official repositories has its real name, icon, description and screenshots from Arch's AppStream catalog, and apps it does not know, such as `visual-studio-code-bin`, `google-chrome` or `spotify` from the AUR, get the icon of the same app from Flathub's catalog, kept in `~/.cache/archmarket/icons`. Search lists the best matching apps first, with their icons. Installed lists what is on the computer (apps, everything you installed, AUR packages, or all), Updates shows waiting updates and installs them all at once.
 
 Install and Remove ask for the password once, through the desktop's own prompt, for the whole queue: an AUR install that needs several root steps does not ask again. Packages from the repositories go through `pacman`, AUR packages are built by `yay` as your user, with diffs and edits skipped; an AUR page warns that those packages come from users. Jobs run one after another in a queue. The Install button turns into the percentage done, counted from pacman's own download and install progress (and, for the AUR, the download of sources and the build steps); the panel at the bottom shows the current step, and its terminal button the full log. They keep running if the window closes. Removal needs a second press, and core packages such as the kernel, systemd, pacman or niri cannot be removed from here.
 

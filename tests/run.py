@@ -5262,6 +5262,17 @@ def _():
     wait(lambda: not market_windows(), 5, "yopilmadi")
 
 
+@case("Mod+I Archmarket'ni ochadi, qayta bosish oynani oldinga chiqaradi")
+def _():
+    key("mod", "i")
+    wait(lambda: market_windows(), 10, "oyna ochilmadi")
+    key("mod", "i")
+    time.sleep(1)
+    ok(len(market_windows()) == 1, "ikkinchi oyna ochildi")
+    niri("close-window", "--id", str(market_windows()[0]["id"]))
+    wait(lambda: not market_windows(), 5, "yopilmadi")
+
+
 @case("archmarket qidiruv va sahifalar bilan xatosiz ochiladi")
 def _():
     for args in (["--search", "firefox"], ["--page", "installed"], ["--page", "updates"], ["--show", "gimp"]):
