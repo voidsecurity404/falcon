@@ -264,7 +264,7 @@ if command -v go >/dev/null; then
     say "Building the Telegram bot"
     soft env FALCON_REPO="$root" "$root/bin/falcon-remote-build"
 fi
-# Archmarket, the app store (Mod+Space), is a Rust program, so it is built here too.
+# Archmarket, the app store (in the app menu), is a Rust program, so it is built here too.
 if command -v cargo >/dev/null; then
     say "Building Archmarket"
     soft env FALCON_REPO="$root" "$root/bin/falcon-archmarket-build"

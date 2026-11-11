@@ -17,8 +17,7 @@ mod widgets;
 
 use std::process::Command;
 
-/// One window only: a second start focuses the open one, or closes it when
-/// it already has the focus, so the same key opens and hides the store.
+/// One window only: starting it again brings the open window forward.
 fn toggle_existing() -> bool {
     if std::env::var_os("NIRI_SOCKET").is_none() {
         return false;
@@ -28,8 +27,7 @@ fn toggle_existing() -> bool {
     for w in v.as_array().into_iter().flatten() {
         if w["app_id"].as_str() == Some("archmarket") {
             let id = w["id"].as_u64().unwrap_or(0).to_string();
-            let action = if w["is_focused"].as_bool() == Some(true) { "close-window" } else { "focus-window" };
-            let _ = Command::new("niri").args(["msg", "action", action, "--id", &id]).status();
+            let _ = Command::new("niri").args(["msg", "action", "focus-window", "--id", &id]).status();
             return true;
         }
     }

@@ -5245,22 +5245,21 @@ def market_windows():
     return [w for w in windows() if w.get("app_id") == "archmarket"]
 
 
-@case("Mod+Space Archmarket'ni suzib ochadi, ikkinchi bosish yopadi")
+@case("Mod+Space menyusidan archmarket ochiladi, qayta ishga tushirish oynani oldinga chiqaradi")
 def _():
     key("mod", "space")
+    wait(lambda: "falcon-menu" in layers(), 4, "menyu ochilmadi")
+    typ("archmarket")
+    time.sleep(0.4)
+    key("enter")
     wait(lambda: market_windows(), 10, "oyna ochilmadi")
     w = market_windows()[0]
-    ok(w["is_floating"] and w["is_focused"], w)
-    time.sleep(2)
-    key("mod", "space")
+    ok(w["is_floating"], w)
+    sh([str(LBIN / "archmarket")])
+    time.sleep(1)
+    ok(len(market_windows()) == 1, "ikkinchi oyna ochildi")
+    niri("close-window", "--id", str(market_windows()[0]["id"]))
     wait(lambda: not market_windows(), 5, "yopilmadi")
-
-
-@case("Mod+A dastur menyusini ochadi")
-def _():
-    key("mod", "a")
-    wait(lambda: "falcon-menu" in layers(), 4, "menyu ochilmadi")
-    key("esc")
 
 
 @case("archmarket qidiruv va sahifalar bilan xatosiz ochiladi")
