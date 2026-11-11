@@ -1,0 +1,137 @@
+//! Interface text is English in code and translated by the locale. Russian
+//! is built in, since this desktop runs in ru_RU.
+
+use std::sync::OnceLock;
+
+pub fn ru() -> bool {
+    static RU: OnceLock<bool> = OnceLock::new();
+    *RU.get_or_init(|| {
+        ["LC_ALL", "LC_MESSAGES", "LANG"]
+            .iter()
+            .find_map(|k| std::env::var(k).ok().filter(|v| !v.is_empty()))
+            .map(|v| v.starts_with("ru"))
+            .unwrap_or(false)
+    })
+}
+
+pub fn t(s: &'static str) -> &'static str {
+    if !ru() {
+        return s;
+    }
+    match s {
+        "Another package manager kept pacman busy" => "Другой менеджер пакетов слишком долго занимал pacman",
+        "Password prompt was cancelled" => "Ввод пароля отменён",
+        "Not authorized" => "Нет прав",
+        "A file is missing on the mirror. Update the system first, then try again" => "Файла нет на зеркале. Сначала обновите систему, потом повторите",
+        "Other packages depend on it" => "От него зависят другие пакеты",
+        "It conflicts with an installed package" => "Конфликтует с установленным пакетом",
+        "pacman is busy with something else" => "pacman занят другой задачей",
+        "Package not found" => "Пакет не найден",
+        "The AUR package failed to build" => "Пакет из AUR не собрался",
+        "Something went wrong, see the log" => "Что-то пошло не так, смотрите журнал",
+        "Internet" => "Интернет",
+        "Graphics" => "Графика",
+        "Audio and video" => "Аудио и видео",
+        "Development" => "Разработка",
+        "Office" => "Офис",
+        "Games" => "Игры",
+        "System" => "Система",
+        "Utilities" => "Утилиты",
+        "Science and education" => "Наука и обучение",
+        "Everyday essentials" => "На каждый день",
+        "Create" => "Творчество",
+        "For developers" => "Для разработчиков",
+        "Play" => "Игры",
+        "{} installed" => "{} установлен",
+        "{} removed" => "{} удалён",
+        "The system is up to date" => "Система обновлена",
+        "Finishing the installation first, then closing" => "Сначала закончу установку, потом закроюсь",
+        "Reading package databases" => "Читаю базы пакетов",
+        "Loading app catalog" => "Загружаю каталог приложений",
+        "Downloading app catalog" => "Скачиваю каталог приложений",
+        "Loading" => "Загрузка",
+        "Discover" => "Обзор",
+        "Installed" => "Установлено",
+        "Updates" => "Обновления",
+        "CATEGORIES" => "КАТЕГОРИИ",
+        "{} packages" => "Пакетов: {}",
+        "{} apps with icons" => "Приложений с иконками: {}",
+        "Search {} packages and the AUR" => "Поиск среди {} пакетов и в AUR",
+        "Search packages and the AUR" => "Поиск пакетов и в AUR",
+        "{} in progress" => "В работе: {}",
+        "Esc closes" => "Esc — закрыть",
+        "The apps most people install first" => "То, что ставят первым делом",
+        "Draw, edit photos, make videos and music" => "Рисунки, фото, видео и музыка",
+        "Editors and tools for writing code" => "Редакторы и инструменты для кода",
+        "Games and launchers" => "Игры и лаунчеры",
+        "Popular in the AUR" => "Популярное в AUR",
+        "Built from source by yay, maintained by the community" => "Собирается через yay, поддерживается сообществом",
+        "Browse by category" => "Категории",
+        "Every app with a real icon, sorted by name" => "Все приложения с иконками, по алфавиту",
+        "EDITOR'S PICK" => "ВЫБОР РЕДАКЦИИ",
+        "Details" => "Подробнее",
+        "Queued" => "В очереди",
+        "Waiting for pacman" => "Жду pacman",
+        "Removing…" => "Удаление…",
+        "Installing…" => "Установка…",
+        "Open" => "Открыть",
+        "Remove for sure?" => "Точно удалить?",
+        "Remove" => "Удалить",
+        "Install" => "Установить",
+        "{} apps" => "Приложений: {}",
+        "Everything" => "Всё",
+        "Repositories" => "Репозитории",
+        "Official repositories" => "Официальные репозитории",
+        "{} found" => "Найдено: {}",
+        "Nothing in the repositories" => "В репозиториях ничего нет",
+        "Searching…" => "Ищу…",
+        "No connection to the AUR" => "Нет связи с AUR",
+        "Install yay to install from the AUR" => "Для установки из AUR нужен yay",
+        "Apps" => "Приложения",
+        "Installed by you" => "Установлены вами",
+        "Nothing here" => "Здесь пусто",
+        "Checking for updates…" => "Проверяю обновления…",
+        "Everything is up to date" => "Всё обновлено",
+        "{} updates are waiting" => "Ждут обновления: {}",
+        "Updating…" => "Обновление…",
+        "Update everything" => "Обновить всё",
+        "Check again" => "Проверить снова",
+        "Your system is fresh" => "Система свежая",
+        "marked out of date" => "помечен устаревшим",
+        "Website" => "Сайт",
+        "Starting" => "Запуск",
+        "AUR packages are written by users and built on this computer. Read the PKGBUILD on the AUR page if you do not know the author." => "Пакеты AUR пишут пользователи, а собираются они на этом компьютере. Если автор незнаком, прочитайте PKGBUILD на странице AUR.",
+        "Version" => "Версия",
+        "Installed version" => "Установлена версия",
+        "Source" => "Источник",
+        "Download" => "Загрузка",
+        "Installed size" => "Размер на диске",
+        "License" => "Лицензия",
+        "Votes" => "Голоса",
+        "Popularity" => "Популярность",
+        "Maintainer" => "Сопровождающий",
+        "nobody" => "никто",
+        "Last updated" => "Обновлён",
+        "Packager" => "Сборщик",
+        "Built" => "Собран",
+        "Installed on" => "Установлен",
+        "Depends on" => "Зависимости",
+        "Optional" => "Дополнительно",
+        "It did not work" => "Не получилось",
+        "Cancelled" => "Отменено",
+        "Installing {}" => "Устанавливаю {}",
+        "Removing {}" => "Удаляю {}",
+        "Updating the system" => "Обновляю систему",
+        "Another package manager is running" => "Работает другой менеджер пакетов",
+        "Building from the AUR" => "Сборка из AUR",
+        "Waiting for the password" => "Жду пароль",
+        "{} more in the queue" => "Ещё в очереди: {}",
+        "No output yet" => "Пока пусто",
+        "{} votes" => "голосов: {}",
+        other => other,
+    }
+}
+
+pub fn tf(s: &'static str, v: &str) -> String {
+    t(s).replacen("{}", v, 1)
+}

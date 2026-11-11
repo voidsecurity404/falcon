@@ -79,6 +79,19 @@ def remote_stale():
     return any(p.stat().st_mtime > built for p in (REPO / "remote").rglob("*") if p.is_file())
 
 
+def archmarket_stale():
+    """Archmarket, the app store, is built from Rust code in archmarket/, so it is rebuilt when that code is newer."""
+    binary = HOME / ".local/bin/archmarket"
+    if not shutil.which("cargo"):
+        return False
+    if not binary.exists():
+        return True
+    built = binary.stat().st_mtime
+    src = REPO / "archmarket"
+    files = [src / "Cargo.toml", src / "Cargo.lock", *(src / "src").rglob("*"), *(src / "assets").rglob("*")]
+    return any(p.is_file() and p.stat().st_mtime > built for p in files)
+
+
 def main(args):
     if not (REPO / "install.sh").exists():
         print(tr("The repo was not found: {path}. Set FALCON_REPO.", path=REPO), file=sys.stderr)
@@ -93,8 +106,11 @@ def main(args):
     rebuild = remote_stale()
     if rebuild:
         print("remote/ -> ~/.local/bin/falcon-remote (go build)")
+    market = archmarket_stale()
+    if market:
+        print("archmarket/ -> ~/.local/bin/archmarket (cargo build)")
     if "--check" in args:
-        return 1 if copy or remove or rebuild else 0
+        return 1 if copy or remove or rebuild or market else 0
     for source, target in copy:
         live = HOME / target
         live.parent.mkdir(parents=True, exist_ok=True)
@@ -103,9 +119,11 @@ def main(args):
         path.unlink()
     if rebuild:
         subprocess.run([str(REPO / "bin/falcon-remote-build")], env={**os.environ, "FALCON_REPO": str(REPO)}, check=False)
+    if market:
+        subprocess.run([str(REPO / "bin/falcon-archmarket-build")], env={**os.environ, "FALCON_REPO": str(REPO)}, check=False)
     if any(t.startswith(".config/systemd/") for _, t in copy):
         subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
-    if not copy and not remove and not rebuild:
+    if not copy and not remove and not rebuild and not market:
         print(tr("Everything is up to date"))
     if RESTART & {t for _, t in copy}:
         subprocess.run(["pkill", "-x", "qs"], check=False)

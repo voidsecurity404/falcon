@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Archmarket
+GenericName=App store
+GenericName[ru]=Магазин приложений
+Comment=Install apps from the Arch repositories and the AUR
+Comment[ru]=Установка приложений из репозиториев Arch и AUR
+Exec=@BIN@
+Icon=archmarket
+Terminal=false
+Categories=System;PackageManager;
+Keywords=store;install;pacman;aur;yay;packages;apps;магазин;установить;пакеты;приложения;
+StartupWMClass=archmarket

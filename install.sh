@@ -109,6 +109,9 @@ targets=(
     .local/bin/falcon-remote
     .local/bin/falcon-remote-build
     .config/systemd/user/falcon-remote.service
+    .local/bin/archmarket
+    .local/bin/falcon-archmarket-build
+    .local/share/applications/archmarket.desktop
 )
 
 if ((uninstall)); then
@@ -260,6 +263,11 @@ soft systemctl --user daemon-reload
 if command -v go >/dev/null; then
     say "Building the Telegram bot"
     soft env FALCON_REPO="$root" "$root/bin/falcon-remote-build"
+fi
+# Archmarket, the app store (Mod+Space), is a Rust program, so it is built here too.
+if command -v cargo >/dev/null; then
+    say "Building Archmarket"
+    soft env FALCON_REPO="$root" "$root/bin/falcon-archmarket-build"
 fi
 
 # Foydalanuvchi sozlamalari va fon rasmlari ustidan yozilmaydi.

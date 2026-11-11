@@ -157,3 +157,14 @@ layer-rule {
         xray false
     }
 }
+
+// Archmarket do'koni: o'rtada suzib ochiladi, orqasi xiralashgan shisha.
+window-rule {
+    match app-id="^archmarket$"
+    open-floating true
+    default-column-width { fixed 1240; }
+    default-window-height { fixed 790; }
+    background-effect {
+        blur true
+    }
+}

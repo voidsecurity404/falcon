@@ -17,7 +17,7 @@ HOME = Path.home()
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
 STATE = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local/state")) / "falcon"
 COMMANDS = ["niri", "qs", "awww", "matugen", "hyprlock", "hypridle", "kitty", "cliphist", "wl-copy", "grim", "wf-recorder",
-            "tesseract", "playerctl", "brightnessctl", "wlsunset", "fd", "mpvpaper", "ffmpeg", "qt6ct", "satty", "checkupdates", "pw-dump"]
+            "tesseract", "playerctl", "brightnessctl", "wlsunset", "fd", "mpvpaper", "ffmpeg", "qt6ct", "satty", "checkupdates", "pw-dump", "expac", "yay", "archmarket"]
 PROCESSES = ["qs", "awww-daemon", "hypridle"]
 problems = 0
 

@@ -75,6 +75,10 @@ dconf
 # Telegram orqali boshqaruv: Go dasturi va https tunnel
 go
 cloudflared
+# Archmarket do'koni: Rust'da yozilgan, pacman va AUR (yay)
+rust
+expac
+yay
 # Key sounds (falcon-keysounds)
 python-evdev
 libcanberra

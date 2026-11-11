@@ -32,7 +32,8 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | Shortcut | Action |
 | --- | --- |
 | `Mod+Return` | Terminal |
-| `Mod+Space` | App menu from the bottom of the screen: type an app name, or `>` for commands. The red button beside the search field opens the big power menu in the middle of the screen: lock, sleep, log out, reboot and shut down. It warns when a package update or a download is still running |
+| `Mod+Space` | Archmarket, the app store, see below |
+| `Mod+A` | App menu from the bottom of the screen: type an app name, or `>` for commands. The red button beside the search field opens the big power menu in the middle of the screen: lock, sleep, log out, reboot and shut down. It warns when a package update or a download is still running |
 | `Mod+V` | Clipboard history |
 | `Mod+D` | Dashboard |
 | `Mod+C` | Control center |
@@ -120,6 +121,14 @@ How it works: `falcon-remote` (Go, `remote/` in the repo) is a user service that
 - **Hearing protection:** if an app or a newly connected device suddenly makes the sound much louder, the volume goes back and a message says so. Settings → Sound sets the largest jump and a maximum volume. The volume keys and the slider work as usual.
 - **Apps follow the wallpaper too:** besides GTK, Qt, kitty and Firefox, KDE apps get a Falcon color scheme in `~/.config/kdeglobals`, and VS Code, VSCodium, Cursor and Windsurf, when installed, get a theme named Falcon: choose it once in the editor, and it changes with each wallpaper. The mpv video player gets the uosc controller with frame previews on the timeline (`falcon-mpv-ui` installs it without root), its menus and on-screen text in the wallpaper colors, with hardware decoding, resume and Russian layout keys. Text inside kitty follows the wallpaper as well, and Claude Code is switched to its ANSI theme so it draws with those colors.
 - **Displays keep their settings** by display, not by port. A new display gets a toast that opens its settings. Mirroring is not offered, because niri has no mirror mode.
+
+## App store (Archmarket)
+
+`Mod+Space` opens Archmarket, a store for everything pacman and the AUR offer, and the same key hides it again. Start typing anywhere to search all repository packages and the AUR at once; Enter opens the first result. Discover shows a rotating pick, shelves of popular apps and categories; every app from the official repositories has its real name, icon, description and screenshots from Arch's AppStream catalog. Installed lists what is on the computer (apps, everything you installed, AUR packages, or all), Updates shows waiting updates and installs them all at once.
+
+Install and Remove ask for the password through the desktop's own prompt. Packages from the repositories go through `pacman`, AUR packages are built by `yay` as your user, with diffs and edits skipped; an AUR page warns that those packages come from users. Jobs run one after another in a queue, with the current step, a progress bar and the full log behind the terminal button. They keep running if the window closes. Removal needs a second press, and core packages such as the kernel, systemd, pacman or niri cannot be removed from here.
+
+Archmarket is written in Rust, its window drawn with egui, in `archmarket/` in the repo. `falcon-archmarket-build` rebuilds it after a change. Without the `archlinux-appstream-data` package it downloads that catalog once into `~/.cache/archmarket` and refreshes it every two weeks. From a terminal: `archmarket --search TEXT`, `--show PACKAGE`, `--page installed|updates`.
 
 ## Helper commands
 

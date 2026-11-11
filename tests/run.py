@@ -5237,6 +5237,43 @@ def _():
     ok("winopen.frag" not in log and "OpenAnimStudio" not in log, "QML yoki shader xatosi")
     ipc("settings")
 
+
+feature("market", "Archmarket do'koni")
+
+
+def market_windows():
+    return [w for w in windows() if w.get("app_id") == "archmarket"]
+
+
+@case("Mod+Space Archmarket'ni suzib ochadi, ikkinchi bosish yopadi")
+def _():
+    key("mod", "space")
+    wait(lambda: market_windows(), 10, "oyna ochilmadi")
+    w = market_windows()[0]
+    ok(w["is_floating"] and w["is_focused"], w)
+    time.sleep(2)
+    key("mod", "space")
+    wait(lambda: not market_windows(), 5, "yopilmadi")
+
+
+@case("Mod+A dastur menyusini ochadi")
+def _():
+    key("mod", "a")
+    wait(lambda: "falcon-menu" in layers(), 4, "menyu ochilmadi")
+    key("esc")
+
+
+@case("archmarket qidiruv va sahifalar bilan xatosiz ochiladi")
+def _():
+    for args in (["--search", "firefox"], ["--page", "installed"], ["--page", "updates"], ["--show", "gimp"]):
+        proc = subprocess.Popen([str(LBIN / "archmarket"), *args], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        wait(lambda: market_windows(), 10, f"{args}: oyna ochilmadi")
+        time.sleep(2)
+        ok(proc.poll() is None, f"{args}: dastur tushib qoldi")
+        proc.terminate()
+        proc.wait(5)
+        wait(lambda: not market_windows(), 5, "yopilmadi")
+
 def main():
     global GOOD
     args = sys.argv[1:]

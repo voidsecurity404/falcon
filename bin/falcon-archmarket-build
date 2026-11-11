@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Builds Archmarket, the app store (archmarket/ in the repo, written in Rust), into ~/.local/bin/archmarket
+# and installs its desktop entry and icon.
+set -euo pipefail
+repo="${FALCON_REPO:-$HOME/Downloads/falcon}"
+src="$repo/archmarket"
+out="$HOME/.local/bin/archmarket"
+if ! command -v cargo >/dev/null; then
+    echo "Rust is not installed: sudo pacman -S rust" >&2
+    exit 1
+fi
+[[ -f "$src/Cargo.toml" ]] || { echo "Not found: $src" >&2; exit 1; }
+(cd "$src" && cargo build --release --locked)
+mkdir -p "$(dirname "$out")"
+install -m755 "$src/target/release/archmarket" "$out.new"
+mv -f "$out.new" "$out"
+apps="$HOME/.local/share/applications"
+mkdir -p "$apps" "$HOME/.local/share/icons/hicolor/scalable/apps"
+sed "s|@BIN@|$out|" "$src/assets/archmarket.desktop" >"$apps/archmarket.desktop"
+install -m644 "$src/assets/archmarket.svg" "$HOME/.local/share/icons/hicolor/scalable/apps/archmarket.svg"
+echo "Built $out"
