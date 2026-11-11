@@ -422,8 +422,8 @@ impl Market {
                 if app.is_some() {
                     s += 140;
                 }
-                if p.name.ends_with("-debug") || p.name.starts_with("lib32-") || p.name.ends_with("-docs") {
-                    s -= 120;
+                if s < 1000 && app.is_none() && !crate::icons::app_like(&p.name) {
+                    s -= 150;
                 }
                 scored.push((s, i));
             }
@@ -506,6 +506,7 @@ impl Market {
         self.icons.get(&key, || match file {
             Some(f) => Some(Src::File(f)),
             None if installed => Some(Src::Installed(name.to_string())),
+            None if crate::icons::app_like(name) => Some(Src::Web(name.to_string())),
             None => None,
         })
     }
@@ -1406,6 +1407,30 @@ impl Market {
                 }
             });
             ui.add_space(6.0);
+            // Apps first: what has a real icon in the repositories, then the
+            // AUR packages people use most whose name carries the query.
+            let q = self.query.trim().to_lowercase();
+            let mut best: Vec<String> = Vec::new();
+            if self.scope == Scope::All {
+                best.extend(hits.iter().filter(|n| self.cat.apps.contains_key(*n)).take(3).cloned());
+                let squeezed: String = q.split_whitespace().collect::<Vec<_>>().join("-");
+                best.extend(
+                    aur.iter()
+                        .filter(|n| crate::icons::app_like(n))
+                        .filter(|n| self.aur.get(*n).map(|p| p.votes >= 10 && (p.lname.contains(&squeezed) || p.ldesc.contains(&q))).unwrap_or(false))
+                        .take(4)
+                        .cloned(),
+                );
+            }
+            if !best.is_empty() {
+                self.shelf_title(ui, t("Best matches"), t("Apps from the repositories and the AUR"));
+                for n in &best {
+                    let extra = self.aur.get(n).filter(|_| !self.cat.index.contains_key(n)).map(|p| format!("{}  ·  {}", p.version, tf("{} votes", &p.votes.to_string())));
+                    self.row(ui, n, extra);
+                }
+            }
+            let hits: Vec<String> = hits.into_iter().filter(|n| !best.contains(n)).collect();
+            let aur: Vec<String> = aur.into_iter().filter(|n| !best.contains(n)).collect();
             if self.scope != Scope::Aur {
                 self.shelf_title(ui, t("Official repositories"), &tf("{} found", &hits.len().to_string()));
                 if hits.is_empty() {

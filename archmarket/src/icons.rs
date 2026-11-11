@@ -10,8 +10,12 @@ use std::sync::{Arc, Mutex};
 
 pub enum Src {
     File(PathBuf),
-    /// An installed package without AppStream data: its desktop file's icon.
+    /// An installed package without AppStream data: its desktop file's icon,
+    /// then the web.
     Installed(String),
+    /// A package AppStream does not know (mostly the AUR): the icon of the
+    /// app with the same name in Flathub's catalog, kept on disk.
+    Web(String),
     Url(String),
 }
 
@@ -93,11 +97,12 @@ impl Icons {
 fn load(src: &Src) -> Option<ColorImage> {
     match src {
         Src::File(p) => load_file(p),
-        Src::Installed(pkg) => {
-            let (_, icon) = crate::catalog::desktop_entry(pkg)?;
-            let icon = icon?;
-            load_file(&find_theme_icon(&icon)?)
-        }
+        Src::Installed(pkg) => crate::catalog::desktop_entry(pkg)
+            .and_then(|(_, icon)| icon)
+            .and_then(|icon| find_theme_icon(&icon))
+            .and_then(|f| load_file(&f))
+            .or_else(|| web_icon(pkg)),
+        Src::Web(pkg) => web_icon(pkg),
         Src::Url(url) => {
             let mut resp = crate::aur::agent(20).get(url).call().ok()?;
             let bytes = resp.body_mut().with_config().limit(25 << 20).read_to_vec().ok()?;
@@ -156,4 +161,116 @@ pub fn find_theme_icon(name: &str) -> Option<PathBuf> {
     }
     let f = PathBuf::from(format!("/usr/share/pixmaps/{name}.png"));
     f.is_file().then_some(f)
+}
+
+/// Whether a package name looks like an app, not a library, font or
+/// language module: only those are looked up on the web.
+pub fn app_like(name: &str) -> bool {
+    const PRE: &[&str] = &[
+        "lib", "python", "perl-", "ruby-", "haskell-", "ttf-", "otf-", "noto-fonts", "texlive-", "r-", "php", "lua",
+        "nodejs-", "go-", "rust-", "ocaml-", "java-", "mingw-", "gst-", "qt5-", "qt6-", "kf5-", "kf6-", "xorg-", "linux-",
+        "vim-", "emacs-", "fcitx", "ibus-", "tree-sitter", "gnome-shell-extension", "plasma5-applets", "cachyos-",
+    ];
+    const POST: &[&str] = &[
+        "-docs", "-doc", "-debug", "-headers", "-dkms", "-data", "-common", "-libs", "-dev", "-devel", "-fonts", "-font",
+        "-theme", "-themes", "-icons", "-cursors", "-plugin", "-plugins", "-keyring", "-utils", "-tools", "-cli", "-i18n",
+    ];
+    !PRE.iter().any(|p| name.starts_with(p)) && !POST.iter().any(|p| name.ends_with(p)) && !name.contains("-i18n-")
+}
+
+fn norm(s: &str) -> String {
+    s.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
+}
+
+/// The name an app is known by, from its package name:
+/// `visual-studio-code-bin` → `visual studio code`.
+fn app_words(pkg: &str) -> String {
+    const TAILS: &[&str] = &[
+        "-bin", "-git", "-appimage", "-desktop", "-stable", "-beta", "-nightly", "-electron", "-wayland", "-latest",
+        "-qt", "-gtk", "-native", "-launcher-bin", "-x11", "-official", "-linux",
+    ];
+    let mut base = pkg.to_lowercase();
+    loop {
+        match TAILS.iter().find(|t| base.ends_with(*t) && base.len() > t.len() + 2) {
+            Some(t) => base.truncate(base.len() - t.len()),
+            None => break,
+        }
+    }
+    base.replace(['-', '_', '.'], " ")
+}
+
+fn web_dir() -> PathBuf {
+    let dir = std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| crate::theme::home().join(".cache"))
+        .join("archmarket/icons");
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
+
+fn web_icon(pkg: &str) -> Option<ColorImage> {
+    if pkg.contains('/') || !app_like(pkg) {
+        return None;
+    }
+    let dir = web_dir();
+    let file = dir.join(format!("{pkg}.png"));
+    if file.is_file() {
+        return load_file(&file);
+    }
+    // a miss is remembered for a month, so the same name is not asked again
+    let miss = dir.join(format!("{pkg}.none"));
+    let recent = std::fs::metadata(&miss)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .map(|age| age.as_secs() < 30 * 24 * 3600)
+        .unwrap_or(false);
+    if recent {
+        return None;
+    }
+    match fetch_web_icon(pkg) {
+        Ok(Some(bytes)) => {
+            let _ = std::fs::write(&file, &bytes);
+            load_file(&file)
+        }
+        Ok(None) => {
+            let _ = std::fs::write(&miss, b"");
+            None
+        }
+        Err(()) => None, // offline: try again next time
+    }
+}
+
+fn fetch_web_icon(pkg: &str) -> Result<Option<Vec<u8>>, ()> {
+    let words = app_words(pkg);
+    let want = norm(&words);
+    if want.len() < 3 {
+        return Ok(None);
+    }
+    let agent = crate::aur::agent(12);
+    let mut resp = agent
+        .post("https://flathub.org/api/v2/search")
+        .send_json(serde_json::json!({ "query": words, "hits_per_page": 6 }))
+        .map_err(|_| ())?;
+    let v: serde_json::Value = resp.body_mut().read_json().map_err(|_| ())?;
+    let hits = v["hits"].as_array().cloned().unwrap_or_default();
+    let score = |h: &serde_json::Value| -> u8 {
+        let name = norm(h["name"].as_str().unwrap_or(""));
+        let id = norm(h["app_id"].as_str().unwrap_or("").rsplit('.').next().unwrap_or(""));
+        if name == want || id == want {
+            3
+        } else if name.len() >= 4 && want.len() >= 4 && (name.starts_with(&want) || want.starts_with(&name)) {
+            2
+        } else if id.len() >= 4 && want.starts_with(&id) {
+            1
+        } else {
+            0
+        }
+    };
+    let best = hits.iter().map(|h| (score(h), h)).filter(|(s, _)| *s > 0).max_by_key(|(s, _)| *s);
+    let Some((_, hit)) = best else { return Ok(None) };
+    let Some(url) = hit["icon"].as_str().filter(|u| u.starts_with("https://")) else { return Ok(None) };
+    let mut img = agent.get(url).call().map_err(|_| ())?;
+    let bytes = img.body_mut().with_config().limit(4 << 20).read_to_vec().map_err(|_| ())?;
+    Ok(image::load_from_memory(&bytes).is_ok().then_some(bytes))
 }
