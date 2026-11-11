@@ -4,7 +4,7 @@ import Quickshell.Wayland
 import qs.services
 
 // Oynalar panel ostiga kirmasligi uchun joy ajratadi. O'zi ko'rinmaydi va bosilmaydi.
-// The islands float 8 px under the top edge and are 42 px tall, and niri's gaps add the rest.
+// The islands float under the top edge (BarLayout's edge gap and height), and niri's gaps add the rest.
 PanelWindow {
     anchors {
         top: true
@@ -12,7 +12,7 @@ PanelWindow {
         right: true
     }
     implicitHeight: 1
-    exclusiveZone: Ui.zen ? 0 : 46
+    exclusiveZone: Ui.zen ? 0 : BarLayout.reserved
     color: "transparent"
     mask: Region {}
     WlrLayershell.layer: WlrLayer.Top

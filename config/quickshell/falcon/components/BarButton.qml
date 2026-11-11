@@ -16,7 +16,7 @@ Item {
     signal clicked(var mouse)
 
     implicitWidth: (icon !== "" ? iconSize : holder.childrenRect.width) + padding * 2
-    implicitHeight: 30
+    implicitHeight: BarLayout.buttonHeight
     width: implicitWidth
     height: implicitHeight
 

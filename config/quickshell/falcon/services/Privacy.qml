@@ -8,7 +8,7 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    readonly property bool enabled: Settings.get("panel.privacy", true)
+    readonly property bool enabled: BarLayout.has("privacy")
     property var mic: []
     property var camera: []
 

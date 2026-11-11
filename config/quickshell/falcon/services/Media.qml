@@ -49,7 +49,7 @@ Singleton {
     Timer {
         interval: 1000
         repeat: true
-        running: !!root.player && root.player.isPlaying && (Ui.topPanelOpen || Widgets.musicLive || (!Ui.zen && Settings.get("panel.media", true)))
+        running: !!root.player && root.player.isPlaying && (Ui.topPanelOpen || Widgets.musicLive || (!Ui.zen && BarLayout.has("media")))
         onTriggered: root.player.positionChanged()
     }
 }

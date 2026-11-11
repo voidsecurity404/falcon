@@ -13,8 +13,8 @@ Rectangle {
     signal scrolled(real x, int step)
 
     implicitWidth: row.implicitWidth + 24
-    implicitHeight: 42
-    radius: 15
+    implicitHeight: BarLayout.height
+    radius: BarLayout.radius
     gradient: Gradient {
         GradientStop {
             position: 0
@@ -25,7 +25,7 @@ Rectangle {
             color: Theme.panel
         }
     }
-    border.width: 1
+    border.width: BarLayout.border ? 1 : 0
     border.color: Theme.panelEdge
 
     Row {
@@ -33,7 +33,7 @@ Rectangle {
 
         x: 12
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 8
+        spacing: BarLayout.spacing
     }
 
     // Above the row so it sees the wheel first. A plain Item takes no presses, so clicks pass.

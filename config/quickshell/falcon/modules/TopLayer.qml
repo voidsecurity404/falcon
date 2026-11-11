@@ -6,10 +6,10 @@ import qs.services
 
 // Butun ekranni egallaydigan shaffof qatlam. Bosishlar faqat mask ichidagi elementlarga tushadi,
 // panel ochiq bo'lganda catcher ekranning qolgan qismidagi bosishni ham ushlab panelni yopadi.
-// The bar is three glass islands floating under the top edge: workspaces and the focused window
-// on the left, resources, clock and music in the middle, tools, tray and status on the right. Each
-// part opens its own small menu under it. Notifications come as cards under the right island and
-// fly into the bell; volume and brightness levels show in a pill under the middle island.
+// The bar is three glass islands floating under the top edge. What each island holds, in which
+// order, and the islands' sizes come from BarLayout (Settings → Panel). Each part opens its own
+// small menu under it, wherever it was put. Notifications come as cards under the bell and fly
+// into it; volume and brightness levels show in a pill under the middle of the screen.
 PanelWindow {
     id: root
 
@@ -19,22 +19,33 @@ PanelWindow {
     readonly property bool barShown: !Ui.zen
     readonly property var leaveCurve: [0.4, 0, 0.9, 0.3, 1, 1]
     readonly property var arriveCurve: [0.25, 1.25, 0.35, 1, 1, 1]
-    readonly property int edgeGap: 8
-    readonly property int sideGap: 10
+    readonly property int edgeGap: BarLayout.edgeGap
+    readonly property int sideGap: BarLayout.sideGap
     // Where the menus under the bar start.
-    readonly property int popupTop: edgeGap + 42 + 8
+    readonly property int popupTop: BarLayout.popupTop
+    // Changes whenever a part may have moved, so the menus' places follow it.
+    readonly property real layoutKey: left.x + left.width + center.x + center.width + right.x + right.width + left.rev + center.rev + right.rev + BarLayout.left.length * 7 + BarLayout.center.length * 11 + BarLayout.right.length * 13
 
-    // Small popups (tray menu, Claude limits) open under the right island.
-    function popupX(w) {
-        return width - w - sideGap;
+    // The first visible part of these names in any island, or null.
+    function part(names) {
+        for (const name of names) {
+            for (const island of [left, center, right]) {
+                if (!island.visible)
+                    continue;
+                const hit = island.find(name);
+                if (hit)
+                    return hit;
+            }
+        }
+        return null;
     }
-    function popupY(h) {
-        return popupTop;
-    }
-    // A menu centered under a part of the bar, kept on the screen. The middle island's place and
-    // size are read so the binding follows them.
-    function under(part, w, follow) {
-        const middle = part.mapToItem(null, part.width / 2, 0).x;
+    // A menu centered under a part of the bar, kept on the screen. Without the part it goes to
+    // `fallback`: "right" against the right edge, otherwise the middle of the screen.
+    function under(names, w, fallback, key) {
+        const item = part(names);
+        if (!item)
+            return fallback === "right" ? width - w - sideGap : Math.round((width - w) / 2);
+        const middle = item.mapToItem(null, item.width / 2, 0).x;
         return Math.max(sideGap, Math.min(width - w - sideGap, Math.round(middle - w / 2)));
     }
 
@@ -69,16 +80,34 @@ PanelWindow {
             card: card.visible ? rect(card) : null,
             cardFlying: card.flying,
             level: levelPill.visible,
-            dots: left.shownDots,
+            dots: dotCount(),
             leftShown: left.visible && left.opacity > 0.5,
             centerShown: center.visible && center.opacity > 0.5,
             rightShown: right.visible && right.opacity > 0.5,
-            title: left.focused ? left.focused.title || left.focused.app_id : "",
-            media: center.showMedia,
-            resources: center.showResources,
+            title: focusedTitle(),
+            media: BarLayout.has("media") && !!Media.player,
+            resources: BarLayout.has("resources"),
+            parts: {
+                left: BarLayout.left,
+                center: BarLayout.center,
+                right: BarLayout.right
+            },
+            height: BarLayout.height,
             screen: [width, height],
             items: named()
         };
+    }
+    function dotCount() {
+        if (!part(["workspaces"]))
+            return 0;
+        const hideEmpty = Settings.get("panel.hideEmpty", false);
+        return Niri.workspacesOn(screen ? screen.name : "").filter(w => w.is_active || Niri.hasWindows(w.id) || !hideEmpty).length;
+    }
+    function focusedTitle() {
+        if (!part(["window"]))
+            return "";
+        const w = Niri.windows[Niri.focusedWindowId];
+        return w && w.app_id !== "org.quickshell" ? w.title || w.app_id : "";
     }
     // Window coordinates of every visible named part of the bar and its menus.
     function named() {
@@ -240,35 +269,39 @@ PanelWindow {
         }
     }
 
-    GlassLeft {
+    BarIsland {
         id: left
 
+        zone: "left"
         x: root.sideGap
         y: root.edgeGap - root.leftOut * 60
         opacity: 1 - root.leftOut
-        visible: root.leftOut < 1
+        visible: root.leftOut < 1 && hasContent
         screenInfo: root.screen
         onScrolled: (x, step) => root.scrollAt(left.x + x, step)
     }
 
-    GlassCenter {
+    BarIsland {
         id: center
 
+        zone: "center"
         x: Math.round((parent.width - width) / 2)
         y: root.edgeGap - root.centerOut * 60
         opacity: 1 - root.centerOut
-        visible: root.centerOut < 1
+        visible: root.centerOut < 1 && hasContent
+        screenInfo: root.screen
         onScrolled: (x, step) => root.scrollAt(center.x + x, step)
     }
 
-    GlassRight {
+    BarIsland {
         id: right
 
-        anchors.right: parent.right
-        anchors.rightMargin: root.sideGap
+        zone: "right"
+        x: parent.width - width - root.sideGap
         y: root.edgeGap - root.rightOut * 60
         opacity: Math.min(1, (1 - root.rightOut) * 3)
-        visible: root.rightOut < 1
+        visible: root.rightOut < 1 && hasContent
+        screenInfo: root.screen
         onScrolled: (x, step) => root.scrollAt(right.x + x, step)
     }
 
@@ -279,25 +312,31 @@ PanelWindow {
         restY: root.popupTop
     }
 
-    // Notifications, under the right island. They fly into the bell when their time is up.
+    // Notifications, under the bell. They fly into it when their time is up; without a bell on
+    // the bar they wait at the right edge and fly up off the screen.
     NotifyCard {
         id: card
 
-        restX: parent.width - cardWidth - root.sideGap
+        readonly property var bellPart: {
+            const key = root.layoutKey;
+            return root.part(["bell"]);
+        }
+
+        restX: root.under(["bell"], cardWidth, "right", root.layoutKey)
         restY: root.popupTop
         bell: {
-            const b = right.bellItem;
-            const follow = right.x + right.width;
-            return b.mapToItem(null, b.width / 2, b.height / 2);
+            const key = root.layoutKey;
+            const b = card.bellPart;
+            return b ? b.mapToItem(null, b.width / 2, b.height / 2) : Qt.point(root.width - root.sideGap - 20, -30);
         }
-        bellSeen: right.visible && right.opacity > 0.5 && root.isFocusedScreen
+        bellSeen: !!bellPart && root.barShown && root.isFocusedScreen
         allowed: root.isFocusedScreen && !(root.panelHere && Ui.popup === "notifications") && (!Ui.zen || (!!Toasts.current && Toasts.current.inZen === true))
     }
 
     CalendarMenu {
         id: calendar
 
-        x: root.under(center.clockItem, width, center.x + center.width)
+        x: root.under(["clock", "weather"], width, "middle", root.layoutKey)
         y: root.popupTop
         shown: root.panelHere && Ui.popup === "calendar"
     }
@@ -305,7 +344,7 @@ PanelWindow {
     PlayerMenu {
         id: player
 
-        x: root.under(center.showMedia ? center.mediaItem : center.clockItem, width, center.x + center.width)
+        x: root.under(["media", "clock"], width, "middle", root.layoutKey)
         y: root.popupTop
         shown: root.panelHere && Ui.popup === "player"
     }
@@ -313,7 +352,7 @@ PanelWindow {
     SystemMenu {
         id: system
 
-        x: root.under(center.ringsItem, width, center.x + center.width)
+        x: root.under(["rings"], width, "middle", root.layoutKey)
         y: root.popupTop
         shown: root.panelHere && Ui.popup === "system"
     }
@@ -321,28 +360,28 @@ PanelWindow {
     NotificationsMenu {
         id: notifications
 
-        x: parent.width - width - root.sideGap
+        x: root.under(["bell"], width, "right", root.layoutKey)
         y: root.popupTop
         shown: root.panelHere && Ui.popup === "notifications"
     }
 
     TrayMenu {
-        x: root.popupX(width)
-        y: root.popupY(height)
+        x: root.under(["trayRow"], width, "right", root.layoutKey)
+        y: root.popupTop
         shown: root.panelHere && Ui.popup === "tray"
     }
 
     ClaudePanel {
-        x: root.popupX(width)
-        y: root.popupY(height)
+        x: root.under(["claude"], width, "right", root.layoutKey)
+        y: root.popupTop
         shown: root.panelHere && Ui.popup === "claude"
     }
 
-    // The control center drops from the right island.
+    // The control center drops from the status part.
     ControlCenter {
         id: control
 
-        x: parent.width - width - root.sideGap
+        x: root.under(["status"], width, "right", root.layoutKey)
         y: root.popupTop
         shown: root.panelHere && Ui.popup === "control"
         onReleaseFocus: keyScope.forceActiveFocus()

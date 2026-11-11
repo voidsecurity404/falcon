@@ -2576,6 +2576,20 @@ def _():
     wait(lambda: active_ws() == 2)
 
 
+@case("Soat chap orolga ko'chadi, kalendar uning ostida ochiladi")
+def _():
+    settings(panel__left=["menu", "clock", "workspaces"], panel__height=34)
+    wait(lambda: st()["bar"]["parts"]["left"] == ["menu", "clock", "workspaces"], 3)
+    b = st()["bar"]
+    ok("clock" not in b["parts"]["center"] and b["left"][3] == 34, b)
+    click_part("clock")
+    wait(lambda: st()["popup"] == "calendar", 3)
+    m = st()["bar"]["menu"]
+    ok(m[0] < b["screen"][0] / 3 and m[1] == 8 + 34 + 8, m)
+    key("esc")
+    settings(panel__left=None, panel__height=None)
+
+
 @case("Halqalar Tizim, soat Bugun vkladkasini ochadi")
 def _():
     click_part("rings")

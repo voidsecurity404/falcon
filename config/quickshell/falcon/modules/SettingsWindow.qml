@@ -393,9 +393,10 @@ LazyLoader {
             },
             {
                 title: Tr.t("Panel"),
-                subtitle: Tr.t("Top bar, clock and notifications"),
+                subtitle: Tr.t("Top bar: its parts, their places and its look"),
                 icon: "panel",
                 group: 0,
+                bar: true,
                 sections: [
                     {
                         title: Tr.t("Look"),
@@ -409,16 +410,73 @@ LazyLoader {
                                 max: 1,
                                 step: 0.05,
                                 unit: "percent"
+                            },
+                            {
+                                key: "panel.height",
+                                label: Tr.t("Height"),
+                                type: "slider",
+                                min: 30,
+                                max: 60,
+                                step: 1,
+                                unit: "px"
+                            },
+                            {
+                                key: "panel.radius",
+                                label: Tr.t("Corner roundness"),
+                                hint: Tr.t("Half the height makes round ends"),
+                                type: "slider",
+                                min: 0,
+                                max: 30,
+                                step: 1,
+                                unit: "px"
+                            },
+                            {
+                                key: "panel.edgeGap",
+                                label: Tr.t("Gap from the top edge"),
+                                type: "slider",
+                                min: 0,
+                                max: 30,
+                                step: 1,
+                                unit: "px"
+                            },
+                            {
+                                key: "panel.sideGap",
+                                label: Tr.t("Gap from the sides"),
+                                type: "slider",
+                                min: 0,
+                                max: 60,
+                                step: 1,
+                                unit: "px"
+                            },
+                            {
+                                key: "panel.spacing",
+                                label: Tr.t("Space between parts"),
+                                type: "slider",
+                                min: 0,
+                                max: 24,
+                                step: 1,
+                                unit: "px"
+                            },
+                            {
+                                key: "panel.border",
+                                label: Tr.t("Thin outline"),
+                                type: "toggle"
                             }
                         ]
                     },
                     {
-                        title: Tr.t("Dock"),
+                        title: Tr.t("Workspaces"),
                         items: [
                             {
-                                key: "dock.enabled",
-                                label: Tr.t("Show the dock at the bottom edge"),
-                                hint: Tr.t("Right click an icon to pin or unpin it"),
+                                key: "panel.workspaceStyle",
+                                label: Tr.t("Style"),
+                                type: "choice",
+                                options: ["pills", "dots", "numbers"],
+                                names: [Tr.t("Pill with number"), Tr.t("Dots"), Tr.t("Numbers")]
+                            },
+                            {
+                                key: "panel.hideEmpty",
+                                label: Tr.t("Hide empty workspaces"),
                                 type: "toggle"
                             }
                         ]
@@ -444,61 +502,35 @@ LazyLoader {
                         ]
                     },
                     {
-                        title: Tr.t("Shown on the panel"),
+                        title: Tr.t("Widths"),
                         items: [
                             {
-                                key: "panel.ribbon",
-                                label: Tr.t("Workspaces"),
-                                type: "toggle"
+                                key: "panel.titleWidth",
+                                label: Tr.t("Window title"),
+                                hint: Tr.t("Longer titles are cut"),
+                                type: "slider",
+                                min: 60,
+                                max: 600,
+                                step: 10,
+                                unit: "px"
                             },
                             {
-                                key: "panel.hideEmpty",
-                                label: Tr.t("Hide empty workspaces"),
-                                type: "toggle"
-                            },
-                            {
-                                key: "panel.resources",
-                                label: Tr.t("Processor, memory and temperature"),
-                                type: "toggle"
-                            },
-                            {
-                                key: "panel.media",
-                                label: Tr.t("Music"),
-                                type: "toggle"
-                            },
-                            {
-                                key: "panel.tools",
-                                label: Tr.t("Screenshot and color picker"),
-                                type: "toggle"
-                            },
-                            {
-                                key: "panel.tray",
-                                label: Tr.t("Tray"),
-                                type: "toggle"
-                            },
-                            {
-                                key: "panel.claude",
-                                label: Tr.t("Claude icon"),
-                                type: "toggle"
-                            },
-                            {
-                                key: "panel.updates",
-                                label: Tr.t("Waiting updates"),
-                                type: "toggle"
-                            },
-                            {
-                                key: "panel.privacy",
-                                label: Tr.t("Microphone and camera in use"),
-                                type: "toggle"
-                            },
-                            {
-                                key: "panel.lang",
-                                label: Tr.t("Keyboard layout"),
-                                type: "toggle"
-                            },
+                                key: "panel.mediaWidth",
+                                label: Tr.t("Song title"),
+                                type: "slider",
+                                min: 60,
+                                max: 400,
+                                step: 10,
+                                unit: "px"
+                            }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Status button"),
+                        items: [
                             {
                                 key: "panel.wifi",
-                                label: Tr.t("Wi-Fi icon"),
+                                label: Tr.t("Network and Bluetooth"),
                                 type: "toggle"
                             },
                             {
@@ -509,6 +541,17 @@ LazyLoader {
                             {
                                 key: "panel.battery",
                                 label: Tr.t("Battery"),
+                                type: "toggle"
+                            }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Dock"),
+                        items: [
+                            {
+                                key: "dock.enabled",
+                                label: Tr.t("Show the dock at the bottom edge"),
+                                hint: Tr.t("Right click an icon to pin or unpin it"),
                                 type: "toggle"
                             }
                         ]
@@ -2273,6 +2316,11 @@ LazyLoader {
 
                         RemoteStatus {
                             visible: win.filter === "" && !!win.pages[win.page].remote
+                            width: cards.width
+                        }
+
+                        BarStudio {
+                            visible: win.filter === "" && !!win.pages[win.page].bar
                             width: cards.width
                         }
 

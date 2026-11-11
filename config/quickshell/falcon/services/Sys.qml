@@ -10,7 +10,7 @@ Singleton {
     id: root
 
     // The bar's rings need the numbers whenever the bar is on screen.
-    property bool active: Ui.popup === "system" || Widgets.systemLive || (!Ui.zen && Settings.get("panel.resources", true))
+    property bool active: Ui.popup === "system" || Widgets.systemLive || (!Ui.zen && BarLayout.has("resources"))
 
     property int cpu: 0
     property int ram: 0
