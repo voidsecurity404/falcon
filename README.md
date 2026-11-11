@@ -1,6 +1,6 @@
 # Falcon
 
-Falcon is a desktop for niri: small black panels, a numbered workspace strip, one island at the top and colors taken from the wallpaper. The panel, launcher and dashboard are written in Quickshell. The interface is available in English and Russian ([Русская версия](README.ru.md)).
+Falcon is a desktop for niri: a top bar of three glass islands and colors taken from the wallpaper. The panel, launcher and dashboard are written in Quickshell. The interface is available in English and Russian ([Русская версия](README.ru.md)).
 
 > For a no-desktop CachyOS or Arch install. `install.sh` stops on Omarchy on purpose, because it conflicts with its hypr, kitty and GTK settings.
 
@@ -147,9 +147,7 @@ Archmarket is written in Rust, its window drawn with egui, in `archmarket/` in t
 
 ## Configuration
 
-The side panels can hug the screen's corners, which then look round, or float away from the edge: Settings → Panel → Panel shape.
-
-Settings → Panel offers four panel designs, each with its own way of opening the dashboard and the control center, shown as animated cards: Falcon (three parts at the edge, the dashboard drops from the clock island), Halo (one floating capsule that turns into the dashboard and the control center), Rail (a column on the left, panels slide out of it like drawers) and Studio (the focused window's title beside the workspaces, the dashboard grows out of the clock into the middle of the screen, the control center is a sidebar along the right edge with the notifications).
+The top bar is three glass islands floating just under the edge of the screen. The left one holds the app menu button, the workspaces of that screen as dots (the current one is a pill with its number, the ones with windows are brighter) and the focused window's icon and title. The middle one shows processor, memory and temperature rings, the clock and the music playing, each opening its tab of the dashboard, which grows out of this island; messages and the volume level show in it too. The right one holds the screenshot and color picker tools, the tray, Claude, the microphone and camera in use, waiting updates, the keyboard layout, the network, Bluetooth, volume and battery (a click opens the control center, which drops under this island), the notification bell with the unread count, and the control center button. The mouse wheel over the bar changes the screen brightness on the left half of the screen and the volume on the right half. Settings → Panel chooses what the bar shows.
 
 The wallpaper picker (`Mod+W`) shows the wallpapers as slanted slices on a glossy floor: the chosen one opens wide on a spring, the row curls a little while it moves and turns in depth toward the middle, a slice under the pointer opens a little, a still picture drifts slowly, and a live wallpaper plays in its slice. The background takes the chosen wallpaper's mood, and dots under its name show the colors the desktop would take from it. Typing jumps to a wallpaper by name. A click brings a slice to the middle; Enter, or a click on the middle one, sets it on the desktop at once.
 

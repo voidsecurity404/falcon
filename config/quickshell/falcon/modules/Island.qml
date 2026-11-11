@@ -9,20 +9,8 @@ Item {
     id: root
 
     property bool showDashboard: false
-    // The halo capsule also turns into the control center.
-    property bool showControl: false
-    // The output this island is on, for the halo capsule's workspaces.
-    property string output: ""
     signal releaseFocus
 
-    // falcon: joined to the edge. halo: one floating capsule holding the whole panel, which becomes
-    // the dashboard and the control center. rail: no clock here, it only opens for messages and the
-    // dashboard, beside the rail. studio: a floating clock capsule, the dashboard opens elsewhere.
-    readonly property string layout: Settings.layout
-    readonly property bool joined: layout === "falcon"
-    readonly property bool hostsDashboard: layout !== "studio"
-    // In the rail layout the island is away while nothing is shown in it.
-    readonly property bool resting: layout === "rail" && mode === "idle"
     // How far the island has left the screen edge, for focus mode. 0 is in place.
     property real slide: 0
     // The last message stays here while the island closes, so its text and icon leave with it.
@@ -33,55 +21,26 @@ Item {
             shownToast = currentToast;
     }
     property alias body: body
+    signal scrolled(real x, int step)
 
-    readonly property string mode: showDashboard && hostsDashboard ? "dashboard" : showControl && layout === "halo" ? "control" : Toasts.current ? "toast" : "idle"
+    readonly property string mode: showDashboard ? "dashboard" : Toasts.current ? "toast" : "idle"
     readonly property bool showSeconds: Settings.get("panel.clockSeconds", false)
     readonly property bool showDate: Settings.get("panel.clockDate", false)
     readonly property bool clock24: Settings.get("panel.clock24", true)
-    readonly property int targetWidth: mode === "dashboard" ? 1160 : mode === "control" ? controlBox.panelWidth : mode === "toast" ? 440 : layout === "halo" ? haloBar.implicitWidth + 12 : resting ? 120 : (Ui.recordBusy ? 232 : 186) + (Countdown.active ? timerPart.width + 10 : 0) + (showSeconds ? 28 : 0) + (showDate ? 62 : 0) + (clock24 ? 0 : 26)
-    readonly property int cornerRadius: mode === "dashboard" ? 32 : mode === "control" ? 28 : joined ? 18 : mode === "toast" ? 24 : 20
-    readonly property int targetHeight: mode === "dashboard" ? 580 : mode === "control" ? controlBox.shownHeight : mode === "toast" ? 68 : resting ? 40 : joined ? 44 : 40
+    readonly property bool showResources: Settings.get("panel.resources", true)
+    readonly property bool showMedia: Settings.get("panel.media", true) && !!Media.player
+    readonly property int targetWidth: mode === "dashboard" ? 1160 : mode === "toast" ? 440 : idleRow.implicitWidth + 26
+    readonly property int cornerRadius: mode === "dashboard" ? 32 : mode === "toast" ? 24 : 15
+    readonly property int targetHeight: mode === "dashboard" ? 580 : mode === "toast" ? 68 : 42
 
     width: body.width
     height: body.height
 
-    // Ekran chetiga qo'shilib turadigan ichki egilgan burchaklar.
-    EdgeCurve {
-        visible: root.joined
-        x: -size
-        y: body.y + (Settings.bottom ? body.height - size : 0)
-        flipX: true
-        flipY: Settings.bottom
-        color: Theme.glassTop
-    }
-    EdgeCurve {
-        visible: root.joined
-        x: body.width
-        y: body.y + (Settings.bottom ? body.height - size : 0)
-        flipY: Settings.bottom
-        color: Theme.glassTop
-    }
-
     Rectangle {
         id: body
 
-        y: (Settings.bottom ? 1 : -1) * root.slide * (body.height + 28)
-        // Away in the rail layout until a message or the dashboard comes.
-        opacity: root.resting ? 0 : 1
-        scale: root.resting ? 0.92 : 1
-        transformOrigin: Item.Left
+        y: -root.slide * (body.height + 28)
 
-        Behavior on opacity {
-            NumberAnimation {
-                duration: root.resting ? 200 : 140
-            }
-        }
-        Behavior on scale {
-            NumberAnimation {
-                duration: 260
-                easing.type: Easing.OutCubic
-            }
-        }
         width: root.targetWidth
         height: root.targetHeight
         border.width: 1
@@ -96,10 +55,7 @@ Item {
                 color: Theme.panel
             }
         }
-        topLeftRadius: Settings.bottom || !root.joined ? animatedRadius : 0
-        topRightRadius: Settings.bottom || !root.joined ? animatedRadius : 0
-        bottomLeftRadius: Settings.bottom && root.joined ? 0 : animatedRadius
-        bottomRightRadius: Settings.bottom && root.joined ? 0 : animatedRadius
+        radius: animatedRadius
         clip: true
 
         property real animatedRadius: root.cornerRadius
@@ -114,23 +70,22 @@ Item {
         // Ochilishda avval kengayadi, keyin yumshoq sakrab pastga tushadi. Yopilish tez va sakrashsiz.
         Behavior on width {
             NumberAnimation {
-                duration: root.mode === "dashboard" || root.mode === "control" ? 460 : 340
+                duration: root.mode === "dashboard" ? 460 : 340
                 easing.type: Easing.BezierSpline
-                easing.bezierCurve: root.mode === "dashboard" || root.mode === "control" ? [0.2, 1.05, 0.3, 1, 1, 1] : [0.35, 0, 0.1, 1, 1, 1]
+                easing.bezierCurve: root.mode === "dashboard" ? [0.2, 1.05, 0.3, 1, 1, 1] : [0.35, 0, 0.1, 1, 1, 1]
             }
         }
         Behavior on height {
             NumberAnimation {
-                duration: root.mode === "dashboard" || root.mode === "control" ? 600 : 320
+                duration: root.mode === "dashboard" ? 600 : 320
                 easing.type: Easing.BezierSpline
-                easing.bezierCurve: root.mode === "dashboard" || root.mode === "control" ? [0.24, 1.22, 0.36, 1, 1, 1] : [0.35, 0, 0.1, 1, 1, 1]
+                easing.bezierCurve: root.mode === "dashboard" ? [0.24, 1.22, 0.36, 1, 1, 1] : [0.35, 0, 0.1, 1, 1, 1]
             }
         }
 
         // Panel shishasi ustidagi sahna: har bo'limning rangi, musiqa bo'limida albom.
         Loader {
             anchors.fill: parent
-            active: root.hostsDashboard
             asynchronous: true
             opacity: root.mode === "dashboard" ? 1 : 0
             visible: opacity > 0
@@ -155,22 +110,56 @@ Item {
             onClicked: {
                 if (root.mode === "toast")
                     Toasts.activate();
-                else if (root.mode === "idle" && root.layout !== "halo")
-                    Ui.togglePopup("dashboard");
+                else if (root.mode === "idle")
+                    Ui.openDashboard(0);
             }
         }
 
-        // Oddiy holat: soat
+        // Idle: resource rings, the clock and the music, each opening its dashboard tab.
         Row {
+            id: idleRow
+
             anchors.centerIn: parent
             spacing: 10
-            opacity: root.mode === "idle" && (root.layout === "falcon" || root.layout === "studio") ? 1 : 0
+            opacity: root.mode === "idle" ? 1 : 0
             visible: opacity > 0
 
             Behavior on opacity {
                 NumberAnimation {
                     duration: 180
                 }
+            }
+
+            // CPU, memory and temperature. Opens the System tab.
+            BarButton {
+                anchors.verticalCenter: parent.verticalCenter
+                objectName: "rings"
+                visible: root.showResources
+                padding: 3
+                lit: Ui.popup === "dashboard" && Ui.dashTab === 2
+                onClicked: Ui.openDashboard(2)
+
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 6
+
+                    RingMeter {
+                        icon: "chip"
+                        value: Sys.cpu / 100
+                    }
+                    RingMeter {
+                        icon: "memory"
+                        value: Sys.ram / 100
+                    }
+                    RingMeter {
+                        icon: "thermo"
+                        value: Sys.temperature / 100
+                    }
+                }
+            }
+
+            BarSeparator {
+                visible: root.showResources
             }
 
             SystemClock {
@@ -273,15 +262,115 @@ Item {
                     onClicked: Ui.toggleRecording()
                 }
             }
-            Label {
+            // The clock, with the date beside it. Opens the Today tab.
+            BarButton {
                 anchors.verticalCenter: parent.verticalCenter
-                text: {
-                    const hours = root.clock24 ? clock.hours : clock.hours % 12 || 12;
-                    const time = Ui.pad(hours) + ":" + Ui.pad(clock.minutes) + (root.showSeconds ? ":" + Ui.pad(clock.seconds) : "") + (root.clock24 ? "" : clock.hours < 12 ? " AM" : " PM");
-                    return root.showDate ? Ui.pad(clock.date.getDate()) + "." + Ui.pad(clock.date.getMonth() + 1) + "  " + time : time;
+                objectName: "clock"
+                padding: 8
+                lit: Ui.popup === "dashboard" && Ui.dashTab === 0
+                onClicked: Ui.openDashboard(0)
+
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 8
+
+                    Label {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: {
+                            const hours = root.clock24 ? clock.hours : clock.hours % 12 || 12;
+                            return Ui.pad(hours) + ":" + Ui.pad(clock.minutes) + (root.showSeconds ? ":" + Ui.pad(clock.seconds) : "") + (root.clock24 ? "" : clock.hours < 12 ? " AM" : " PM");
+                        }
+                        font.family: Theme.display
+                        size: 15
+                        font.weight: Font.DemiBold
+                    }
+                    Label {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: root.showDate
+                        text: Tr.capitalized(clock.date.toLocaleDateString(Tr.locale, "ddd, d MMM"))
+                        size: 12
+                        color: Theme.muted
+                    }
                 }
-                size: 15
-                font.weight: Font.Medium
+            }
+
+            BarSeparator {
+                visible: root.showMedia
+            }
+
+            // The music: play or pause, the title and how far it has played. The title opens the
+            // Music tab.
+            Row {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.showMedia
+                spacing: 9
+
+                Rectangle {
+                    objectName: "play"
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 24
+                    height: 24
+                    radius: 12
+                    color: playArea.containsMouse ? Qt.lighter(Theme.accent, 1.12) : Theme.accent
+
+                    Icon {
+                        anchors.centerIn: parent
+                        anchors.horizontalCenterOffset: Media.player && Media.player.isPlaying ? 0 : 1
+                        name: Media.player && Media.player.isPlaying ? "pause" : "play"
+                        filled: true
+                        size: 12
+                        color: Theme.accentText
+                    }
+                    MouseArea {
+                        id: playArea
+
+                        anchors.fill: parent
+                        anchors.margins: -3
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (Media.player && Media.player.canTogglePlaying)
+                                Media.player.togglePlaying();
+                        }
+                    }
+                }
+                Item {
+                    objectName: "media"
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 140
+                    height: 30
+
+                    Label {
+                        y: 4
+                        width: parent.width
+                        text: Media.title + (Media.player && Media.player.trackArtist ? " — " + Media.player.trackArtist : "")
+                        size: 12
+                        font.weight: Font.Medium
+                        color: mediaArea.containsMouse ? Theme.accent : Theme.text
+                    }
+                    Rectangle {
+                        y: 22
+                        width: parent.width
+                        height: 3
+                        radius: 1.5
+                        color: Qt.alpha(Theme.text, 0.18)
+
+                        Rectangle {
+                            width: parent.width * Math.max(0, Math.min(1, Media.progress))
+                            height: parent.height
+                            radius: 1.5
+                            color: Theme.accent
+                        }
+                    }
+                    MouseArea {
+                        id: mediaArea
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Ui.openDashboard(1)
+                    }
+                }
             }
         }
 
@@ -375,48 +464,7 @@ Item {
             }
         }
 
-        // The halo capsule: workspaces, clock and status in one piece.
-        HaloBar {
-            id: haloBar
-
-            anchors.centerIn: parent
-            output: root.output
-            opacity: root.layout === "halo" && root.mode === "idle" ? 1 : 0
-            visible: root.layout === "halo" && opacity > 0
-            scale: root.mode === "idle" ? 1 : 0.94
-
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: root.mode === "idle" ? 260 : 120
-                }
-            }
-            Behavior on scale {
-                NumberAnimation {
-                    duration: 300
-                    easing.type: Easing.OutCubic
-                }
-            }
-        }
-
-        // The control center, grown out of the halo capsule.
-        ControlCenter {
-            id: controlBox
-
-            embedded: true
-            visible: root.layout === "halo" && opacity > 0
-            shown: root.mode === "control"
-            opacity: root.mode === "control" ? 1 : 0
-            onReleaseFocus: root.releaseFocus()
-
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: root.mode === "control" ? 320 : 120
-                }
-            }
-        }
-
         Loader {
-            active: root.hostsDashboard
             width: 1160
             height: root.targetHeight
             // Stays loaded after the first start: opening the panel creates nothing.
@@ -432,10 +480,31 @@ Item {
             }
         }
 
+        // The wheel over the idle island: brightness left of the screen's middle, volume right of it.
+        Item {
+            anchors.fill: parent
+            z: 10
+            enabled: root.mode === "idle"
+
+            WheelHandler {
+                property real rest: 0
+
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                onWheel: event => {
+                    rest += event.angleDelta.y !== 0 ? event.angleDelta.y : event.pixelDelta.y * 4;
+                    while (Math.abs(rest) >= 120) {
+                        const step = rest > 0 ? 1 : -1;
+                        rest -= step * 120;
+                        root.scrolled(point.position.x, step);
+                    }
+                }
+            }
+        }
+
         // Light along the free edge of the open panel, in the color of the current page.
         Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
-            y: Settings.bottom ? 0 : parent.height - 1
+            y: parent.height - 1
             width: parent.width * 0.7
             height: 1
             opacity: root.mode === "dashboard" ? 1 : 0

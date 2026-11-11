@@ -1,0 +1,56 @@
+import QtQuick
+import qs.services
+
+// One glass island of the bar: a rounded plate holding a row. The compositor blurs what is
+// behind it through TopLayer's blur region. The wheel over it reports whole steps, as end-4 does:
+// TopLayer turns them into brightness on the left half of the screen and volume on the right.
+Rectangle {
+    id: root
+
+    default property alias content: row.data
+    property alias spacing: row.spacing
+    property real wheelRest: 0
+    signal scrolled(real x, int step)
+
+    implicitWidth: row.implicitWidth + 24
+    implicitHeight: 42
+    radius: 15
+    gradient: Gradient {
+        GradientStop {
+            position: 0
+            color: Theme.glassTop
+        }
+        GradientStop {
+            position: 1
+            color: Theme.panel
+        }
+    }
+    border.width: 1
+    border.color: Theme.panelEdge
+
+    Row {
+        id: row
+
+        x: 12
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: 8
+    }
+
+    // Above the row so it sees the wheel first. A plain Item takes no presses, so clicks pass.
+    Item {
+        anchors.fill: parent
+        z: 10
+
+        WheelHandler {
+            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+            onWheel: event => {
+                root.wheelRest += event.angleDelta.y !== 0 ? event.angleDelta.y : event.pixelDelta.y * 4;
+                while (Math.abs(root.wheelRest) >= 120) {
+                    const step = root.wheelRest > 0 ? 1 : -1;
+                    root.wheelRest -= step * 120;
+                    root.scrolled(point.position.x, step);
+                }
+            }
+        }
+    }
+}

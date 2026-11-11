@@ -2,7 +2,7 @@
 """settings.json dagi bitta qiymatni o'zgartiradi. Ochiq shell uni darhol qo'llaydi.
 
   falcon-set windows.gaps 8
-  falcon-set panel.position '"bottom"'
+  falcon-set appearance.mode '"light"'
   falcon-set --reset windows.gaps
 """
 import json

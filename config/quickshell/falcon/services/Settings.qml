@@ -28,14 +28,6 @@ Singleton {
     readonly property real weatherLat: get("weather.lat", 41.31)
     readonly property real weatherLon: get("weather.lon", 69.28)
     readonly property string wallpaperDir: String(get("wallpaperDir", "~/Pictures/Wallpapers")).replace(/^~/, home)
-    // The whole panel design, panel.layout: "falcon" (three parts at the edge, the dashboard drops from
-    // the clock island), "halo" (one capsule that turns into the dashboard and the control center),
-    // "rail" (a column on the left, panels slide out of it) and "studio" (a modal dashboard and a
-    // control sidebar along the right edge). Only falcon can sit at the bottom or hug the corners.
-    readonly property string layout: ["falcon", "halo", "rail", "studio"].indexOf(get("panel.layout", "falcon")) >= 0 ? get("panel.layout", "falcon") : "falcon"
-    readonly property bool bottom: layout === "falcon" && get("panel.position", "top") === "bottom"
-    // The side panels hug the screen's corners, which are rounded, or float away from the edge.
-    readonly property bool hug: layout === "falcon" && get("panel.style", "hug") !== "float"
 
     function merge(base, over) {
         const out = Object.assign({}, base);

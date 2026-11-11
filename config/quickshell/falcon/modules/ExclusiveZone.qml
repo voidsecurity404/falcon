@@ -4,19 +4,15 @@ import Quickshell.Wayland
 import qs.services
 
 // Oynalar panel ostiga kirmasligi uchun joy ajratadi. O'zi ko'rinmaydi va bosilmaydi.
+// The islands float 8 px under the top edge and are 42 px tall, and niri's gaps add the rest.
 PanelWindow {
-    readonly property bool rail: Settings.layout === "rail"
-
-    // The rail takes room along the left edge, the others along the top or bottom.
     anchors {
-        top: rail || !Settings.bottom
-        bottom: rail || Settings.bottom
+        top: true
         left: true
-        right: !rail
+        right: true
     }
     implicitHeight: 1
-    implicitWidth: 1
-    exclusiveZone: Ui.zen ? 0 : rail ? 64 : Settings.layout === "halo" ? 44 : 40
+    exclusiveZone: Ui.zen ? 0 : 46
     color: "transparent"
     mask: Region {}
     WlrLayershell.layer: WlrLayer.Top

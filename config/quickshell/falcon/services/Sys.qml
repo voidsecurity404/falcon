@@ -9,7 +9,8 @@ import Quickshell.Services.UPower
 Singleton {
     id: root
 
-    property bool active: Ui.popup === "dashboard" || Widgets.systemLive
+    // The bar's rings need the numbers whenever the bar is on screen.
+    property bool active: Ui.popup === "dashboard" || Widgets.systemLive || (!Ui.zen && Settings.get("panel.resources", true))
 
     property int cpu: 0
     property int ram: 0

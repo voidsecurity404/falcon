@@ -14,7 +14,7 @@ PanelWindow {
 
     readonly property bool closing: Ui.popup !== "menu"
     // The menu floats above the bottom edge, and higher above a panel there.
-    readonly property int edgeGap: Settings.bottom ? 56 : 14
+    readonly property int edgeGap: 14
     readonly property int rowHeight: 54
     readonly property int maxRows: 7
     readonly property int padding: 12

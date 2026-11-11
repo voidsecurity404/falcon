@@ -56,11 +56,11 @@
     "overviewZoom": 0.46
   },
   "panel": {
-    "position": "top",
-    "style": "hug",
-    "layout": "falcon",
     "ribbon": true,
     "hideEmpty": false,
+    "resources": true,
+    "media": true,
+    "tools": true,
     "lang": true,
     "wifi": true,
     "volume": true,

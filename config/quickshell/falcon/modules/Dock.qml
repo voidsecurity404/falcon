@@ -11,7 +11,7 @@ PanelWindow {
     id: root
 
     readonly property bool wanted: Settings.get("dock.enabled", true) && !Ui.zen && Ui.popup !== "menu" && Ui.popup !== "power"
-    readonly property int edgeGap: Settings.bottom ? 56 : 8
+    readonly property int edgeGap: 8
     readonly property int triggerWidth: 520
     readonly property var pinned: Settings.get("dock.pinned", [])
     property bool hovered: false

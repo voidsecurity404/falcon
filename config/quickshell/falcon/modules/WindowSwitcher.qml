@@ -52,8 +52,8 @@ PanelWindow {
         const height = screen.height;
         const edge = Settings.get("windows.gaps", 16) + Settings.get("windows.edgeMargin", 0);
         const zone = Ui.zen ? 0 : 40;
-        const top = Settings.bottom ? 0 : zone;
-        const bottom = Settings.bottom ? zone : 0;
+        const top = zone;
+        const bottom = 0;
         const layout = w ? w.layout : null;
         const tile = layout ? layout.tile_size : null;
         if (w && w.is_floating && tile && layout.tile_pos_in_workspace_view) {

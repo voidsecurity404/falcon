@@ -7,29 +7,18 @@ import qs.components
 import qs.services
 
 // Network, quick switches, levels, tools and power mode on glass. The panel drops down from the
-// status pill by growing its own size, because the blur region follows that and not a scale.
+// right island of the bar by growing its own size, because the blur region follows that and not a scale.
 Rectangle {
     id: root
 
     property bool shown: false
     property real reveal: 0
-    // Inside another glass (the halo capsule, the studio sidebar) it draws no glass of its own and
-    // keeps its full size: the host grows and fades it.
-    property bool embedded: false
-    // The page sits at the bottom while the panel grows, so it seems to come up from below.
-    property bool growUp: Settings.bottom
     readonly property int panelWidth: 430
     readonly property int padding: 16
     readonly property real pageHeight: (Ui.controlPage === "" ? content.implicitHeight : pageLoader.implicitHeight) + padding * 2
     property real shownHeight: pageHeight
 
     onShownChanged: {
-        if (embedded) {
-            reveal = shown ? 1 : 0;
-            if (!shown)
-                pageReset.restart();
-            return;
-        }
         revealAnimation.stop();
         revealAnimation.to = shown ? 1 : 0;
         revealAnimation.duration = shown ? 420 : 220;
@@ -40,16 +29,6 @@ Rectangle {
     onHeightChanged: Ui.controlHeight = height
 
     signal releaseFocus
-
-    Timer {
-        id: pageReset
-
-        interval: 420
-        onTriggered: {
-            if (!root.shown)
-                Ui.controlPage = "";
-        }
-    }
 
     Gradient {
         id: glass
@@ -70,17 +49,17 @@ Rectangle {
     }
 
     // Grows less than twice the padding, so the contents are never cut at the sides.
-    width: embedded ? panelWidth : panelWidth - 28 * (1 - reveal)
-    height: embedded ? shownHeight : shownHeight * reveal
+    width: panelWidth - 28 * (1 - reveal)
+    height: shownHeight * reveal
     clip: true
     radius: 28
-    border.width: embedded ? 0 : 1
+    border.width: 1
     border.color: Theme.panelEdge
     color: "transparent"
     // Stays dark enough for its text over a white window, whatever the panel opacity is.
-    gradient: embedded ? null : glass
-    opacity: embedded ? 1 : Math.min(1, reveal * 2.5)
-    visible: embedded || reveal > 0
+    gradient: glass
+    opacity: Math.min(1, reveal * 2.5)
+    visible: reveal > 0
 
     NumberAnimation {
         id: revealAnimation
@@ -95,7 +74,7 @@ Rectangle {
     }
 
     Behavior on shownHeight {
-        enabled: root.reveal >= 1 && !root.embedded
+        enabled: root.reveal >= 1
 
         NumberAnimation {
             duration: 380
@@ -107,13 +86,12 @@ Rectangle {
     // Panel ichidagi bosish orqadagi catcher'ga o'tib ketmasin.
     MouseArea {
         anchors.fill: parent
-        enabled: !root.embedded
     }
 
     // Keeps its size while the panel grows, so nothing inside reflows.
     Item {
         x: (root.width - width) / 2
-        y: root.growUp ? root.height - height : 0
+        y: 0
         width: root.panelWidth
         height: root.pageHeight
 

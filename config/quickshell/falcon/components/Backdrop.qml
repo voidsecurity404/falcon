@@ -45,7 +45,7 @@ Item {
     // One fixed size while the panel grows around it: nothing is painted or blurred again during the opening.
     Item {
         anchors.horizontalCenter: parent.horizontalCenter
-        y: Settings.bottom ? parent.height - height : 0
+        y: 0
         width: root.fullWidth
         height: root.fullHeight
 

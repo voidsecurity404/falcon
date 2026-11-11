@@ -396,7 +396,6 @@ LazyLoader {
                 subtitle: Tr.t("Top bar, clock and notifications"),
                 icon: "panel",
                 group: 0,
-                panelLayouts: true,
                 sections: [
                     {
                         title: Tr.t("Look"),
@@ -410,22 +409,6 @@ LazyLoader {
                                 max: 1,
                                 step: 0.05,
                                 unit: "percent"
-                            },
-                            {
-                                key: "panel.position",
-                                label: Tr.t("Position"),
-                                hint: Tr.t("Falcon panel only"),
-                                type: "choice",
-                                options: ["top", "bottom"],
-                                names: [Tr.t("Top"), Tr.t("Bottom")]
-                            },
-                            {
-                                key: "panel.style",
-                                label: Tr.t("Panel shape"),
-                                hint: Tr.t("Falcon panel only"),
-                                type: "choice",
-                                options: ["hug", "float"],
-                                names: [Tr.t("In the corners"), Tr.t("Floating")]
                             }
                         ]
                     },
@@ -471,6 +454,21 @@ LazyLoader {
                             {
                                 key: "panel.hideEmpty",
                                 label: Tr.t("Hide empty workspaces"),
+                                type: "toggle"
+                            },
+                            {
+                                key: "panel.resources",
+                                label: Tr.t("Processor, memory and temperature"),
+                                type: "toggle"
+                            },
+                            {
+                                key: "panel.media",
+                                label: Tr.t("Music"),
+                                type: "toggle"
+                            },
+                            {
+                                key: "panel.tools",
+                                label: Tr.t("Screenshot and color picker"),
                                 type: "toggle"
                             },
                             {
@@ -2255,11 +2253,6 @@ LazyLoader {
 
                         OpenAnimStudio {
                             visible: win.filter === "" && !!win.pages[win.page].openAnims
-                            width: cards.width
-                        }
-
-                        PanelLayouts {
-                            visible: win.filter === "" && !!win.pages[win.page].panelLayouts
                             width: cards.width
                         }
 

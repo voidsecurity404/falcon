@@ -103,7 +103,7 @@ PanelWindow {
     // The floor of the desktop, under the widgets. It has no place of its own to change.
     SpectrumBars {
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: Settings.bottom ? 56 : 0
+        anchors.bottomMargin: 0
         anchors.left: parent.left
         anchors.right: parent.right
         height: Widgets.wavesHeight
@@ -137,7 +137,7 @@ PanelWindow {
         readonly property real side: Math.min(parent.width, parent.height) * Math.min(0.9, 0.35 + Widgets.wavesHeight / 600)
 
         x: round ? (parent.width - side) / 2 : 0
-        y: strip ? parent.height - height - (Settings.bottom ? 56 : 0) : round ? (parent.height - side) / 2 : 0
+        y: strip ? parent.height - height : round ? (parent.height - side) / 2 : 0
         width: round ? side : parent.width
         height: strip ? Widgets.wavesHeight : round ? side : parent.height
         active: root.wavesSeen && drawsIt

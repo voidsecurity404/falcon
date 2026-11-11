@@ -23,6 +23,8 @@ Singleton {
     // "", wifi, bluetooth
     property string controlPage: ""
     property var trayItem: null
+    // The bar of the focused screen, for `desk state`.
+    property var barLayer: null
     property var launcherRows: []
     property int launcherSelected: 0
     // The picker stays on screen after the popup changes, until its closing animation ends.
@@ -77,6 +79,16 @@ Singleton {
 
     function togglePopup(name) {
         popup = popup === name ? "" : name;
+    }
+
+    // Opens the dashboard on a tab, or closes it when it already shows that tab.
+    function openDashboard(tab) {
+        if (popup === "dashboard" && dashTab === tab) {
+            popup = "";
+            return;
+        }
+        dashTab = tab;
+        popup = "dashboard";
     }
 
     // Opens the selector, or changes its action or closes it when it is already open.

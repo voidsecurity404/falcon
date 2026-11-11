@@ -72,7 +72,7 @@ Rectangle {
     color: Theme.pill
     opacity: shown ? 1 : 0
     scale: shown ? 1 : 0.94
-    transformOrigin: Settings.bottom ? Item.BottomRight : Item.TopRight
+    transformOrigin: Item.TopRight
     visible: opacity > 0
 
     Behavior on opacity {
