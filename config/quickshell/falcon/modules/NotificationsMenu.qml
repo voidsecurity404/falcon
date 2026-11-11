@@ -26,7 +26,7 @@ Flyout {
             iconSize: 17
             onClicked: {
                 Ui.popup = "";
-                Ui.settingsPage = 2;
+                Ui.settingsPage = 3;
                 Ui.settingsOpen = true;
             }
         }

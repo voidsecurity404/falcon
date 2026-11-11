@@ -1168,5 +1168,14 @@
  "Unfold": "Развёртывание",
  "Screenshot and color picker": "Скриншот и выбор цвета",
  "GB free": "ГБ свободно",
- "Open the task manager": "Открыть диспетчер задач"
+ "Open the task manager": "Открыть диспетчер задач",
+ "Cards at the top right and the bell": "Карточки в правом верхнем углу и колокольчик",
+ "Cards": "Карточки",
+ "Then the card flies into the bell": "Потом карточка улетает в колокольчик",
+ "On: only urgent cards show, the rest go to the history": "Включено: показываются только срочные карточки, остальные уходят в историю",
+ "Off: every notification shows a card": "Выключено: каждое уведомление показывает карточку",
+ "Clear the notification history": "Очистить историю уведомлений",
+ "in the history": "в истории",
+ "Turn off": "Выключить",
+ "Turn on": "Включить"
 }

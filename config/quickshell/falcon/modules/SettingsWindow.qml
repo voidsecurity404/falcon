@@ -512,18 +512,48 @@ LazyLoader {
                                 type: "toggle"
                             }
                         ]
-                    },
+                    }
+                ]
+            },
+            {
+                title: Tr.t("Notifications"),
+                subtitle: Tr.t("Cards at the top right and the bell"),
+                icon: "bell",
+                group: 0,
+                sections: [
                     {
-                        title: Tr.t("Notifications"),
+                        title: Tr.t("Cards"),
                         items: [
                             {
                                 key: "notifications.seconds",
                                 label: Tr.t("Notification duration"),
+                                hint: Tr.t("Then the card flies into the bell"),
                                 type: "slider",
                                 min: 1,
                                 max: 15,
                                 step: 0.5,
                                 unit: "sec"
+                            },
+                            {
+                                label: Tr.t("Silent"),
+                                hint: Toasts.doNotDisturb ? Tr.t("On: only urgent cards show, the rest go to the history") : Tr.t("Off: every notification shows a card"),
+                                type: "action",
+                                text: Toasts.doNotDisturb ? Tr.t("Turn off") : Tr.t("Turn on"),
+                                run: () => Toasts.doNotDisturb = !Toasts.doNotDisturb
+                            }
+                        ]
+                    },
+                    {
+                        title: Tr.t("History"),
+                        items: [
+                            {
+                                label: Tr.t("Clear the notification history"),
+                                hint: Toasts.history.length + " " + Tr.t("in the history"),
+                                type: "action",
+                                text: Tr.t("Clear"),
+                                danger: true,
+                                confirm: Tr.t("Press to confirm"),
+                                run: () => Toasts.forget(Toasts.history.map(h => h.id))
                             }
                         ]
                     }

@@ -17,8 +17,8 @@ Singleton {
     property bool settingsOpen: false
     property int settingsPage: 0
     // Places in the pages list of SettingsWindow, for panels that open a page directly.
-    readonly property int pageMonitors: 7
-    readonly property int pagePower: 12
+    readonly property int pageMonitors: 8
+    readonly property int pagePower: 13
     // Grows each time a notification card flies into the bell, so the bell can ring.
     property int bellRings: 0
     // "", wifi, bluetooth
