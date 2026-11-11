@@ -13,6 +13,7 @@ mod fonts;
 mod i18n;
 mod icons;
 mod jobs;
+mod meter;
 mod theme;
 mod widgets;
 

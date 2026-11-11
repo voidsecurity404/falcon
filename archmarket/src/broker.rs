@@ -170,39 +170,58 @@ fn handle(conn: UnixStream, token: &str) {
         return;
     }
     let cwd = req["cwd"].as_str().map(PathBuf::from).filter(|p| p.is_dir()).unwrap_or_else(|| PathBuf::from("/"));
-    let mut cmd = Command::new("/bin/sh");
-    cmd.arg("-c")
-        .arg(r#"exec "$@" 2>&1"#)
-        .arg("sh")
-        .arg("/usr/bin/pacman")
-        .args(&args[1..])
-        .current_dir(cwd)
-        .env_clear()
-        .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/bin")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped());
-    for k in ["LANG", "LC_ALL", "LC_MESSAGES", "TERM"] {
-        if let Some(v) = req["env"][k].as_str() {
-            cmd.env(k, v);
-        }
-    }
     BUSY.store(true, Ordering::SeqCst);
-    let Ok(mut child) = cmd.spawn() else {
+    let Ok((mut child, master)) = spawn_in_pty(&args[1..], &cwd) else {
         BUSY.store(false, Ordering::SeqCst);
         let _ = writeln!(out, "x 1");
         return;
     };
-    if let Some(stdout) = child.stdout.take() {
-        for chunk in BufReader::new(stdout).split(b'\n') {
-            let Ok(chunk) = chunk else { break };
-            let _ = out.write_all(b"o ");
-            let _ = out.write_all(&chunk);
-            let _ = out.write_all(b"\n");
-        }
+    // pacman draws its bars with \r; they pass through as they are and the
+    // store splits them. Read until the pty reports EIO: pacman has exited.
+    for chunk in BufReader::new(master).split(b'\n') {
+        let Ok(chunk) = chunk else { break };
+        let _ = out.write_all(b"o ");
+        let _ = out.write_all(&chunk);
+        let _ = out.write_all(b"\n");
     }
     let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(1);
     BUSY.store(false, Ordering::SeqCst);
     let _ = writeln!(out, "x {code}");
+}
+
+/// Runs pacman with its output on a pseudo terminal, so it prints its real
+/// progress bars (it shows no percentages when writing to a pipe).
+fn spawn_in_pty(args: &[String], cwd: &Path) -> std::io::Result<(Child, std::fs::File)> {
+    use std::os::fd::FromRawFd;
+    let mut master: libc::c_int = -1;
+    let mut slave: libc::c_int = -1;
+    let ws = libc::winsize { ws_row: 40, ws_col: 120, ws_xpixel: 0, ws_ypixel: 0 };
+    let rc = unsafe { libc::openpty(&mut master, &mut slave, std::ptr::null_mut(), std::ptr::null(), &ws) };
+    if rc != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    unsafe {
+        libc::fcntl(master, libc::F_SETFD, libc::FD_CLOEXEC);
+    }
+    let master = unsafe { std::fs::File::from_raw_fd(master) };
+    let slave = unsafe { std::fs::File::from_raw_fd(slave) };
+    let child = {
+        let mut cmd = Command::new("/usr/bin/pacman");
+        cmd.args(args)
+            .current_dir(cwd)
+            .env_clear()
+            .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/bin")
+            .env("LC_ALL", "C")
+            .env("TERM", "xterm-256color")
+            .env("COLUMNS", "120")
+            .stdin(Stdio::null())
+            .stdout(slave.try_clone()?)
+            .stderr(slave);
+        cmd.spawn()?
+        // `cmd` drops here with its copies of the slave, so the pty ends
+        // when pacman does
+    };
+    Ok((child, master))
 }
 
 /// The user side: `archmarket --sudo-proxy pacman ARGS…`, which yay runs in

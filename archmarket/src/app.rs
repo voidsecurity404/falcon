@@ -1136,13 +1136,20 @@ impl Market {
         let pal = self.pal.clone();
         let time = ui.input(|i| i.time);
         if let Some(job) = self.job_for(&it.name) {
-            let label = match (job.kind, &job.state) {
+            let word = match (job.kind, &job.state) {
                 (_, State::Queued) => t("Queued"),
                 (_, State::Waiting) => t("Waiting for pacman"),
                 (Kind::Remove, _) => t("Removing…"),
                 _ => t("Installing…"),
             };
-            let w = button_width(ui, label, true, h).max(150.0);
+            // the percentage is the point here, the steps are in the log below
+            let label = match (&job.state, job.progress) {
+                (State::Running, Some(p)) => format!("{word} {}%", (p * 100.0).floor() as i32),
+                _ => word.to_string(),
+            };
+            let label = label.as_str();
+            let widest = format!("{word} 100%");
+            let w = button_width(ui, &widest, true, h).max(150.0);
             let (rect, _) = ui.allocate_exact_size(vec2(w, h), Sense::hover());
             let p = ui.painter();
             p.rect_filled(rect, CornerRadius::same((h / 2.0) as u8), alpha(pal.accent, 0.14));
@@ -1700,12 +1707,6 @@ impl Market {
                             self.acts.push(Act::Url(format!("https://aur.archlinux.org/packages/{name}")));
                         }
                     });
-                    if let Some(job) = self.job_for(name) {
-                        ui.add_space(4.0);
-                        let (jr, _) = ui.allocate_exact_size(vec2(w, 24.0), Sense::hover());
-                        let stage = if job.stage.is_empty() { t("Starting").to_string() } else { job.stage.clone() };
-                        ui.painter().text(jr.left_center(), Align2::LEFT_CENTER, elide(ui, &stage, mono(12.0), w), mono(12.0), pal.muted);
-                    }
                     if it.repo == "aur" {
                         ui.add_space(8.0);
                         let g = wrap_galley(ui, t("AUR packages are written by users and built on this computer. Read the PKGBUILD on the AUR page if you do not know the author."), body(12.5), pal.text, w - 56.0, 4);
@@ -1941,7 +1942,10 @@ impl Market {
             };
             p.text(pos2(r.left() + 62.0, r.top() + 39.0), Align2::LEFT_TOP, elide(ui, &sub, body(12.5), w - 90.0), body(12.5), if matches!(job.state, State::Failed(_)) { pal.error } else { pal.muted });
             if job.active() {
-                progress(&p, &pal, Rect::from_min_size(pos2(r.left() + 62.0, r.top() + 66.0), vec2(w - 90.0, 4.0)), job.progress, time);
+                progress(&p, &pal, Rect::from_min_size(pos2(r.left() + 62.0, r.top() + 66.0), vec2(w - 136.0, 4.0)), job.progress, time);
+                if let (State::Running, Some(v)) = (&job.state, job.progress) {
+                    p.text(pos2(r.right() - 28.0, r.top() + 68.0), Align2::RIGHT_CENTER, format!("{}%", (v * 100.0).floor() as i32), semi(13.0), pal.accent);
+                }
             }
             if queued > 0 {
                 p.text(pos2(r.left() + 62.0, r.top() + 80.0), Align2::LEFT_TOP, tf("{} more in the queue", &queued.to_string()), body(11.5), pal.muted);

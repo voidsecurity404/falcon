@@ -230,6 +230,7 @@ impl Jobs {
             .arg(&log)
             .arg(&code)
             .args(&argv)
+            .env("LC_ALL", "C")
             .env(broker::ENV_SOCK, &h.sock)
             .env(broker::ENV_TOKEN, &h.token)
             .stdin(Stdio::null())
@@ -242,6 +243,7 @@ impl Jobs {
         let mut file = std::fs::File::open(&log).map_err(|e| e.to_string())?;
         let mut pos = 0u64;
         let mut partial = String::new();
+        let mut meter = crate::meter::Meter::new(job.aur || job.kind == Kind::Upgrade && argv.first().map(|a| a == "yay").unwrap_or(false));
         loop {
             let ended = code.exists();
             let mut chunk = Vec::new();
@@ -260,13 +262,20 @@ impl Jobs {
                 if !lines.is_empty() {
                     self.update(job.id, |j| {
                         for l in lines {
-                            if let Some(p) = step_progress(&l) {
-                                j.progress = Some(p);
+                            let was_bar = meter.last_was_bar;
+                            let is_bar = meter.feed(&l);
+                            meter.last_was_bar = is_bar;
+                            if meter.value() > 0.0 {
+                                j.progress = Some(meter.value());
                             }
                             if let Some(s) = stage_of(&l) {
                                 j.stage = s;
                             }
-                            j.log.push(l);
+                            // a bar redraws itself many times: keep only its newest state
+                            if is_bar && was_bar {
+                                j.log.pop();
+                            }
+                            j.log.push(l.trim_end().to_string());
                         }
                         let n = j.log.len();
                         if n > 4000 {
@@ -369,18 +378,12 @@ fn strip_ansi(s: &str) -> String {
     out
 }
 
-/// "(3/7) installing foo" → 3/7.
-fn step_progress(line: &str) -> Option<f32> {
-    let l = line.trim_start();
-    let inner = l.strip_prefix('(')?;
-    let close = inner.find(')')?;
-    let (a, b) = inner[..close].split_once('/')?;
-    let (a, b): (f32, f32) = (a.trim().parse().ok()?, b.trim().parse().ok()?);
-    (b > 0.0).then(|| (a / b).clamp(0.0, 1.0))
-}
-
 fn stage_of(line: &str) -> Option<String> {
-    let l = line.trim();
+    // drop a progress bar's tail: "(1/2) installing foo   [###--]  60%"
+    let l = match line.find(" [") {
+        Some(i) => line[..i].trim(),
+        None => line.trim(),
+    };
     if l.starts_with("::") || l.starts_with("==>") || l.starts_with('(') {
         let t = l.trim_start_matches(':').trim_start_matches("==>").trim();
         if !t.is_empty() && t.len() < 160 {
