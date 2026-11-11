@@ -1745,8 +1745,8 @@ LazyLoader {
         readonly property int groupHeight: 28
 
         title: "falcon settings"
-        implicitWidth: 1000
-        implicitHeight: 720
+        implicitWidth: 1240
+        implicitHeight: 760
         // The window is see-through: niri blurs what is behind it (cfg/rules.kdl), and the glass
         // below keeps a dark enough floor that text reads over a white window too.
         color: "transparent"

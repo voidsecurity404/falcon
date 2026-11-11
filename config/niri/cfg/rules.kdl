@@ -83,8 +83,8 @@ window-rule {
 window-rule {
     match title="^falcon settings$"
     open-floating true
-    default-column-width { fixed 1000; }
-    default-window-height { fixed 720; }
+    default-column-width { fixed 1240; }
+    default-window-height { fixed 760; }
     background-effect {
         blur true
     }

@@ -10,9 +10,12 @@ Rectangle {
     default property alias content: row.data
     property alias spacing: row.spacing
     property real wheelRest: 0
+    // The preview in Settings: no wheel, and some room even when empty.
+    property bool wheelEnabled: true
+    property real minWidth: 0
     signal scrolled(real x, int step)
 
-    implicitWidth: row.implicitWidth + 24
+    implicitWidth: Math.max(minWidth, row.implicitWidth + 24)
     implicitHeight: BarLayout.height
     radius: BarLayout.radius
     gradient: Gradient {
@@ -42,6 +45,7 @@ Rectangle {
         z: 10
 
         WheelHandler {
+            enabled: root.wheelEnabled
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
             onWheel: event => {
                 root.wheelRest += event.angleDelta.y !== 0 ? event.angleDelta.y : event.pixelDelta.y * 4;

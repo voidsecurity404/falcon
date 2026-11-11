@@ -11,12 +11,20 @@ import qs.services
 // be in any island: Settings → Panel moves them. A thin line separates the parts marked `sep`
 // from their neighbours. Parts with nothing to show (no timer, no music) take no room, and an
 // island with nothing to show is hidden by TopLayer.
+// With `preview` it is the copy in Settings → Panel (BarStudio): its parts take no clicks or
+// wheel, a part with nothing to show now is drawn as its faint icon, and pressing a part starts
+// dragging it in `studio`.
 GlassIsland {
     id: root
 
     property string zone: "left"
     property var screenInfo: null
-    readonly property string output: screenInfo ? screenInfo.name : ""
+    property bool preview: false
+    property var studio: null
+    readonly property string output: screenInfo ? screenInfo.name : Niri.focusedOutput
+    // Long titles are shortened in the preview, so the whole bar fits in the window.
+    readonly property int titleCap: preview ? Math.min(60, BarLayout.titleWidth) : BarLayout.titleWidth
+    readonly property int mediaCap: preview ? Math.min(56, BarLayout.mediaWidth) : BarLayout.mediaWidth
     readonly property var parts: BarLayout[zone] || []
     // Bumped when a part appears or goes, so the lines between parts follow.
     property int rev: 0
@@ -47,6 +55,17 @@ GlassIsland {
         return walk(root);
     }
 
+    // The slots in order, for the preview's drop place.
+    function slots() {
+        const out = [];
+        for (let i = 0; i < repeater.count; i++) {
+            const d = repeater.itemAt(i);
+            if (d)
+                out.push(d);
+        }
+        return out;
+    }
+
     function lineBefore(index) {
         rev;
         const me = repeater.itemAt(index);
@@ -61,6 +80,8 @@ GlassIsland {
     }
 
     spacing: BarLayout.spacing
+    wheelEnabled: !preview
+    minWidth: preview && parts.length === 0 ? 150 : 0
 
     Behavior on implicitWidth {
         NumberAnimation {
@@ -74,51 +95,112 @@ GlassIsland {
 
         model: root.parts
 
-        delegate: Row {
+        delegate: Item {
             id: slot
 
             required property string modelData
             required property int index
             readonly property bool shown: loader.item ? loader.item.shown : false
             readonly property bool sep: !!(BarLayout.byId[modelData] && BarLayout.byId[modelData].sep)
+            readonly property bool drawn: shown || root.preview
 
             anchors.verticalCenter: parent ? parent.verticalCenter : undefined
-            visible: shown
-            spacing: root.spacing
+            width: slotRow.implicitWidth
+            height: slotRow.implicitHeight
+            visible: drawn
+            opacity: root.studio && root.studio.dragId === modelData ? 0.3 : 1
             onShownChanged: root.rev++
             Component.onCompleted: root.rev++
             Component.onDestruction: root.rev++
 
-            BarSeparator {
-                visible: root.lineBefore(slot.index)
-                height: Math.round(BarLayout.buttonHeight * 0.6)
-            }
-            Loader {
-                id: loader
+            Row {
+                id: slotRow
 
-                anchors.verticalCenter: parent.verticalCenter
-                sourceComponent: ({
-                        menu: menuPart,
-                        workspaces: workspacesPart,
-                        window: windowPart,
-                        resources: resourcesPart,
-                        record: recordPart,
-                        timer: timerPart,
-                        clock: clockPart,
-                        weather: weatherPart,
-                        media: mediaPart,
-                        tools: toolsPart,
-                        tray: trayPart,
-                        claude: claudePart,
-                        privacy: privacyPart,
-                        updates: updatesPart,
-                        lang: langPart,
-                        status: statusPart,
-                        bell: bellPart,
-                        power: powerPart
-                    })[slot.modelData] || null
+                spacing: root.spacing
+
+                BarSeparator {
+                    visible: root.lineBefore(slot.index)
+                    height: Math.round(BarLayout.buttonHeight * 0.6)
+                }
+                Loader {
+                    id: loader
+
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: slot.shown
+                    sourceComponent: ({
+                            menu: menuPart,
+                            workspaces: workspacesPart,
+                            window: windowPart,
+                            resources: resourcesPart,
+                            record: recordPart,
+                            timer: timerPart,
+                            clock: clockPart,
+                            weather: weatherPart,
+                            media: mediaPart,
+                            tools: toolsPart,
+                            tray: trayPart,
+                            claude: claudePart,
+                            privacy: privacyPart,
+                            updates: updatesPart,
+                            lang: langPart,
+                            status: statusPart,
+                            bell: bellPart,
+                            power: powerPart
+                        })[slot.modelData] || null
+                }
+                // In the preview, a part with nothing to show now is still there to be moved.
+                BarButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: root.preview && !slot.shown
+                    icon: (BarLayout.byId[slot.modelData] || {}).icon || "panel"
+                    opacity: 0.45
+                }
+            }
+
+            // In the preview the part is only moved: this takes every press before the part sees it.
+            MouseArea {
+                id: grab
+
+                property point start: Qt.point(0, 0)
+
+                anchors.fill: parent
+                anchors.margins: -Math.round(root.spacing / 2)
+                visible: root.preview && !!root.studio
+                hoverEnabled: true
+                preventStealing: true
+                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                cursorShape: root.studio && root.studio.dragId !== "" ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                onContainsMouseChanged: {
+                    if (containsMouse)
+                        root.studio.hover(slot.modelData, slot);
+                    else
+                        root.studio.unhover(slot.modelData);
+                }
+                onPressed: mouse => start = Qt.point(mouse.x, mouse.y)
+                onPositionChanged: mouse => {
+                    if (!pressed)
+                        return;
+                    if (root.studio.dragId === "" && Math.hypot(mouse.x - start.x, mouse.y - start.y) > 5)
+                        root.studio.begin(slot.modelData);
+                    if (root.studio.dragId === slot.modelData)
+                        root.studio.moveTo(mapToItem(root.studio, mouse.x, mouse.y));
+                }
+                onReleased: {
+                    if (root.studio.dragId === slot.modelData)
+                        root.studio.drop();
+                }
+                onCanceled: root.studio.cancel()
             }
         }
+    }
+
+    // An empty island in the preview says where parts may go.
+    Label {
+        anchors.verticalCenter: parent.verticalCenter
+        visible: root.preview && root.parts.length === 0
+        text: Tr.t("Drop parts here")
+        size: 12
+        color: Qt.alpha(Theme.text, 0.5)
     }
 
     Component {
@@ -254,7 +336,7 @@ GlassIsland {
             }
             Label {
                 anchors.verticalCenter: parent.verticalCenter
-                width: Math.min(implicitWidth, BarLayout.titleWidth)
+                width: Math.min(implicitWidth, root.titleCap)
                 text: parent.focused ? parent.focused.title || parent.focused.app_id : ""
                 elide: Text.ElideRight
                 size: 13
@@ -507,7 +589,7 @@ GlassIsland {
             Item {
                 objectName: "media"
                 anchors.verticalCenter: parent.verticalCenter
-                width: BarLayout.mediaWidth
+                width: root.mediaCap
                 height: 30
 
                 Label {
