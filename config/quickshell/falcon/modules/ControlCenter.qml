@@ -1,13 +1,13 @@
 import QtQuick
 import Quickshell
-import Quickshell.Bluetooth
-import Quickshell.Networking
-import Quickshell.Services.UPower
 import qs.components
 import qs.services
 
-// Network, quick switches, levels, tools and power mode on glass. The panel drops down from the
-// status pill by growing its own size, because the blur region follows that and not a scale.
+// The control center's frame: its glass, the way it opens, and the Wi-Fi, Bluetooth and
+// recording pages. What the main page looks like belongs to the panel layout (style), each one
+// its own file: FalconControls, HaloControls, RailControls, StudioControls, WinControls,
+// MacControls, TermControls, OrbitControls. The frame grows its own size, never a scale,
+// because the blur region follows that.
 Rectangle {
     id: root
 
@@ -18,10 +18,36 @@ Rectangle {
     property bool embedded: false
     // The page sits at the bottom while the panel grows, so it seems to come up from below.
     property bool growUp: Settings.bottom
-    readonly property int panelWidth: 430
-    readonly property int padding: 16
-    readonly property real pageHeight: (Ui.controlPage === "" ? content.implicitHeight : pageLoader.implicitHeight) + padding * 2
+    readonly property string style: Settings.layout
+    readonly property bool onMain: Ui.controlPage === ""
+    // The orbit's main page is a circle, its other pages a rounded card.
+    readonly property bool round: style === "orbit" && onMain
+    readonly property int panelWidth: ({
+            falcon: 430,
+            halo: 400,
+            rail: 396,
+            studio: 446,
+            windows: 372,
+            macos: 336,
+            terminal: 470,
+            orbit: 420
+        })[style] || 430
+    readonly property int padding: onMain ? (({
+                windows: 0,
+                macos: 10,
+                terminal: 0,
+                orbit: 0
+            })[style] ?? 16) : 16
+    readonly property int baseRadius: ({
+            windows: 12,
+            macos: 18,
+            terminal: 6,
+            rail: 22
+        })[style] ?? 28
+    readonly property real pageHeight: (onMain ? content.height : pageLoader.implicitHeight) + padding * 2
     property real shownHeight: pageHeight
+    // How far below its place it still is, for the layouts that slide it up into place.
+    readonly property real offsetY: embedded ? 0 : style === "windows" ? (1 - reveal) * 40 : style === "macos" ? -(1 - reveal) * 10 : 0
 
     onShownChanged: {
         if (embedded) {
@@ -32,9 +58,16 @@ Rectangle {
         }
         revealAnimation.stop();
         revealAnimation.to = shown ? 1 : 0;
-        revealAnimation.duration = shown ? 420 : 220;
-        // Starts gently and settles without passing its size. Closing only speeds up.
-        revealAnimation.easing.bezierCurve = shown ? [0.2, 0, 0, 1, 1, 1] : [0.3, 0, 0.8, 0.15, 1, 1];
+        // Each layout opens in its own way: falcon and rail drop and settle, windows slides up
+        // quickly, macos pops, the console unrolls line by line, the orbit blooms from its middle.
+        const timing = ({
+                windows: [260, 160, [0.1, 0.9, 0.2, 1, 1, 1], [0.7, 0, 1, 0.5, 1, 1]],
+                macos: [240, 150, [0.3, 1.25, 0.4, 1, 1, 1], [0.4, 0, 1, 1, 1, 1]],
+                terminal: [300, 180, [0, 0, 1, 1, 1, 1], [0, 0, 1, 1, 1, 1]],
+                orbit: [620, 260, [0.2, 1.3, 0.35, 1, 1, 1], [0.5, 0, 0.9, 0.3, 1, 1]]
+            })[style] || [420, 220, [0.2, 0, 0, 1, 1, 1], [0.3, 0, 0.8, 0.15, 1, 1]];
+        revealAnimation.duration = shown ? timing[0] : timing[1];
+        revealAnimation.easing.bezierCurve = shown ? timing[2] : timing[3];
         revealAnimation.start();
     }
     onHeightChanged: Ui.controlHeight = height
@@ -56,30 +89,47 @@ Rectangle {
 
         GradientStop {
             position: 0
-            color: Qt.alpha(Theme.glassBase, Math.max(0.7, Theme.glassOpacity))
+            color: root.style === "orbit" ? Qt.alpha(Qt.tint(Theme.glassBase, Qt.alpha(Theme.accent, 0.16)), Math.max(0.74, Theme.glassOpacity)) : Qt.alpha(Theme.glassBase, Math.max(root.style === "windows" ? 0.86 : root.style === "terminal" ? 0.93 : root.style === "macos" ? 0.62 : 0.7, Theme.glassOpacity))
         }
         GradientStop {
             position: 1
-            color: Qt.alpha(Theme.glassBase, Math.max(0.58, Theme.glassOpacity))
+            color: Qt.alpha(Theme.glassBase, Math.max(root.style === "windows" ? 0.84 : root.style === "terminal" ? 0.93 : root.style === "macos" ? 0.56 : 0.58, Theme.glassOpacity))
         }
     }
 
-    function tool(name) {
-        Ui.popup = "";
-        Ui.run(name);
+    // How big the frame is at this point of opening.
+    readonly property real growWidth: {
+        if (round)
+            return panelWidth * reveal;
+        if (style === "macos")
+            return panelWidth * (0.94 + 0.06 * reveal);
+        if (style === "windows" || style === "terminal")
+            return panelWidth;
+        return panelWidth - 28 * (1 - reveal);
+    }
+    readonly property real growHeight: {
+        if (round)
+            return panelWidth * reveal;
+        if (style === "windows")
+            return shownHeight;
+        if (style === "macos")
+            return shownHeight * (0.88 + 0.12 * reveal);
+        // The console unrolls a line of text at a time.
+        if (style === "terminal")
+            return reveal >= 1 ? shownHeight : Math.min(shownHeight, Math.ceil(reveal * shownHeight / 22) * 22);
+        return shownHeight * reveal;
     }
 
-    // Grows less than twice the padding, so the contents are never cut at the sides.
-    width: embedded ? panelWidth : panelWidth - 28 * (1 - reveal)
-    height: embedded ? shownHeight : shownHeight * reveal
+    width: embedded ? panelWidth : growWidth
+    height: embedded ? shownHeight : growHeight
     clip: true
-    radius: 28
+    radius: round ? width / 2 : baseRadius
     border.width: embedded ? 0 : 1
-    border.color: Theme.panelEdge
+    border.color: style === "terminal" ? Qt.alpha(Theme.accent, 0.7) : style === "macos" ? Qt.alpha(Theme.text, 0.2) : Theme.panelEdge
     color: "transparent"
     // Stays dark enough for its text over a white window, whatever the panel opacity is.
     gradient: embedded ? null : glass
-    opacity: embedded ? 1 : Math.min(1, reveal * 2.5)
+    opacity: embedded ? 1 : style === "windows" || style === "macos" ? reveal : Math.min(1, reveal * 2.5)
     visible: embedded || reveal > 0
 
     NumberAnimation {
@@ -113,7 +163,7 @@ Rectangle {
     // Keeps its size while the panel grows, so nothing inside reflows.
     Item {
         x: (root.width - width) / 2
-        y: root.growUp ? root.height - height : 0
+        y: root.round ? (root.height - height) / 2 : root.growUp ? root.height - height : 0
         width: root.panelWidth
         height: root.pageHeight
 
@@ -155,17 +205,27 @@ Rectangle {
             }
         }
 
-        Column {
+        // The main page of this layout.
+        Loader {
             id: content
 
             x: root.padding
             y: root.padding
             width: parent.width - root.padding * 2
-            spacing: 10
+            height: item ? item.implicitHeight : 0
             visible: opacity > 0
-            opacity: Ui.controlPage === "" ? 1 : 0
+            opacity: root.onMain ? 1 : 0
+            sourceComponent: ({
+                    halo: haloPage,
+                    rail: railPage,
+                    studio: studioPage,
+                    windows: winPage,
+                    macos: macPage,
+                    terminal: termPage,
+                    orbit: orbitPage
+                })[root.style] || falconPage
             transform: Translate {
-                x: Ui.controlPage === "" ? 0 : -28
+                x: root.onMain ? 0 : -28
 
                 Behavior on x {
                     NumberAnimation {
@@ -180,331 +240,66 @@ Rectangle {
                     duration: 180
                 }
             }
+        }
+    }
 
-            // Tarmoq
-            Reveal {
-                shown: root.shown
-                calm: true
-                delay: 70
+    Component {
+        id: falconPage
 
-                Row {
-                    id: toggles
+        FalconControls {
+            shown: root.shown
+        }
+    }
+    Component {
+        id: haloPage
 
-                    readonly property var adapter: Bluetooth.defaultAdapter
-                    readonly property var wifiDevice: Networking.devices.values.find(d => d.type === DeviceType.Wifi) || null
-                    readonly property var wifiNet: wifiDevice ? wifiDevice.networks.values.find(n => n.connected) || null : null
-                    readonly property bool wired: Networking.devices.values.some(d => d.type === DeviceType.Wired && d.connected)
-                    readonly property var btDevice: adapter && adapter.enabled ? adapter.devices.values.find(d => d.connected) || null : null
+        HaloControls {
+            shown: root.shown
+        }
+    }
+    Component {
+        id: railPage
 
-                    width: parent.width
-                    spacing: 10
+        RailControls {
+            shown: root.shown
+        }
+    }
+    Component {
+        id: studioPage
 
-                    NetTile {
-                        icon: "wifi"
-                        title: Tr.t("Wi-Fi")
-                        on: Networking.wifiEnabled
-                        active: !!toggles.wifiNet
-                        sub: toggles.wifiNet ? toggles.wifiNet.name : !Networking.wifiEnabled ? Tr.t("Off") : toggles.wired ? Tr.t("Using cable") : Tr.t("Not connected")
-                        onOpen: Ui.controlPage = "wifi"
-                        onToggled: {
-                            if (Networking.wifiHardwareEnabled)
-                                Networking.wifiEnabled = !Networking.wifiEnabled;
-                        }
-                    }
-                    NetTile {
-                        icon: "bluetooth"
-                        title: Tr.t("Bluetooth")
-                        on: !!toggles.adapter && toggles.adapter.enabled
-                        active: !!toggles.btDevice
-                        sub: toggles.btDevice ? toggles.btDevice.name : !!toggles.adapter && toggles.adapter.enabled ? Tr.t("Not connected") : Tr.t("Off")
-                        onOpen: {
-                            if (toggles.adapter)
-                                Ui.controlPage = "bluetooth";
-                        }
-                        onToggled: {
-                            if (toggles.adapter)
-                                toggles.adapter.enabled = !toggles.adapter.enabled;
-                        }
-                    }
-                }
-            }
+        StudioControls {
+            shown: root.shown
+        }
+    }
+    Component {
+        id: winPage
 
-            // Tez tugmalar
-            Reveal {
-                shown: root.shown
-                calm: true
-                delay: 110
+        WinControls {
+            shown: root.shown
+        }
+    }
+    Component {
+        id: macPage
 
-                Row {
-                    width: parent.width
-                    spacing: 10
+        MacControls {
+            shown: root.shown
+        }
+    }
+    Component {
+        id: termPage
 
-                    QuickTile {
-                        columns: Power.chargeSupported ? 4 : 3
-                        icon: "coffee"
-                        title: Tr.t("Awake")
-                        on: Caffeine.enabled
-                        onClicked: {
-                            Caffeine.enabled = !Caffeine.enabled;
-                            Toasts.show(Caffeine.enabled ? Tr.t("Caffeine on") : Tr.t("Caffeine off"), Caffeine.enabled ? Tr.t("The screen stays on and unlocked") : Tr.t("It will lock when idle again"), "coffee");
-                        }
-                    }
-                    QuickTile {
-                        columns: Power.chargeSupported ? 4 : 3
-                        icon: "moon"
-                        title: Tr.t("Night")
-                        on: Night.enabled
-                        onClicked: Night.toggle()
-                    }
-                    QuickTile {
-                        columns: Power.chargeSupported ? 4 : 3
-                        icon: "bell"
-                        title: Tr.t("Silent")
-                        on: Toasts.doNotDisturb
-                        onClicked: Toasts.doNotDisturb = !Toasts.doNotDisturb
-                    }
-                    QuickTile {
-                        columns: 4
-                        visible: Power.chargeSupported
-                        icon: "charging"
-                        title: Tr.t("Up to {n}%").replace("{n}", Power.limitValue)
-                        on: Power.limitOn && !Power.needsSetup
-                        onClicked: {
-                            if (Power.needsSetup)
-                                Ui.popup = "";
-                            Power.toggleLimit();
-                        }
-                    }
-                }
-            }
+        TermControls {
+            shown: root.shown
+            reveal: root.reveal
+        }
+    }
+    Component {
+        id: orbitPage
 
-            // Ovoz va yorqinlik
-            Reveal {
-                shown: root.shown
-                calm: true
-                delay: 150
-
-                Rectangle {
-                    width: parent.width
-                    height: levels.height + 12
-                    radius: 24
-                    color: Qt.alpha(Theme.text, 0.05)
-
-                    Column {
-                        id: levels
-
-                        x: 10
-                        y: 6
-                        width: parent.width - 20
-
-                        LevelRow {
-                            width: parent.width
-                            visible: Audio.available
-                            icon: Audio.muted ? "mute" : "volume"
-                            dimmed: Audio.muted
-                            iconButton: true
-                            value: Audio.volume
-                            text: Audio.percent + "%"
-                            onMoved: value => Audio.setVolume(value)
-                            onIconClicked: Audio.toggleMute()
-                        }
-                        LevelRow {
-                            width: parent.width
-                            visible: Audio.micAvailable
-                            icon: Audio.micMuted ? "micOff" : "mic"
-                            dimmed: Audio.micMuted
-                            iconButton: true
-                            value: Audio.micVolume
-                            text: Audio.micPercent + "%"
-                            onMoved: value => Audio.setMicVolume(value)
-                            onIconClicked: Audio.toggleMicMute()
-                        }
-                        LevelRow {
-                            width: parent.width
-                            visible: Brightness.available
-                            icon: "sun"
-                            value: Brightness.percent / 100
-                            text: Brightness.percent + "%"
-                            onMoved: value => Brightness.setPercent(value * 100)
-                        }
-                    }
-                }
-            }
-
-            // Asboblar
-            Reveal {
-                shown: root.shown
-                calm: true
-                delay: 190
-
-                Grid {
-                    width: parent.width
-                    columns: 5
-                    rowSpacing: 10
-
-                    ToolButton {
-                        columns: 5
-                        icon: "screenshot"
-                        title: Tr.t("Screenshot")
-                        onClicked: Ui.region("copy")
-                    }
-                    ToolButton {
-                        columns: 5
-                        icon: "google"
-                        title: Tr.t("Google")
-                        onClicked: Ui.region("search")
-                    }
-                    ToolButton {
-                        columns: 5
-                        icon: "ocr"
-                        title: Tr.t("Text")
-                        onClicked: Ui.region("ocr")
-                    }
-                    ToolButton {
-                        columns: 5
-                        icon: "translate"
-                        title: Tr.t("Translate")
-                        onClicked: Ui.region("translate")
-                    }
-                    // Opens the recording choices, or stops what is being recorded.
-                    ToolButton {
-                        columns: 5
-                        icon: "record"
-                        title: Ui.recordBusy ? Tr.t("Stop") : Tr.t("Record")
-                        onClicked: {
-                            if (Ui.recordBusy)
-                                Ui.toggleRecording();
-                            else
-                                Ui.controlPage = "record";
-                        }
-                    }
-                    ToolButton {
-                        columns: 5
-                        icon: "color"
-                        title: Tr.t("Color")
-                        onClicked: root.tool("falcon-color")
-                    }
-                    ToolButton {
-                        columns: 5
-                        icon: "wallpaper"
-                        title: Tr.t("Wallpaper")
-                        onClicked: Ui.popup = "wallpapers"
-                    }
-                    ToolButton {
-                        columns: 5
-                        icon: "focus"
-                        title: Tr.t("Focus")
-                        onClicked: root.tool("falcon-zen")
-                    }
-                    ToolButton {
-                        columns: 5
-                        icon: "pin"
-                        title: Tr.t("Pin")
-                        onClicked: Ui.region("pin")
-                    }
-                    ToolButton {
-                        columns: 5
-                        icon: "game"
-                        title: Tr.t("Game")
-                        on: GameMode.enabled
-                        onClicked: GameMode.toggle()
-                    }
-                }
-            }
-
-            // Quvvat rejimi: tanlov belgisi sirpanadi
-            Reveal {
-                shown: root.shown
-                calm: true
-                delay: 230
-
-                Rectangle {
-                    id: power
-
-                    readonly property var modes: [
-                        {
-                            label: Tr.t("Saver"),
-                            value: PowerProfile.PowerSaver
-                        },
-                        {
-                            label: Tr.t("Balanced"),
-                            value: PowerProfile.Balanced
-                        },
-                        {
-                            label: Tr.t("Performance"),
-                            value: PowerProfile.Performance
-                        }
-                    ]
-                    readonly property int current: modes.findIndex(m => m.value === PowerProfiles.profile)
-
-                    width: parent.width
-                    height: 42
-                    radius: 21
-                    color: Qt.alpha(Theme.text, 0.05)
-
-                    Rectangle {
-                        x: 4 + Math.max(0, power.current) * (power.width - 8) / 3
-                        y: 4
-                        width: (power.width - 8) / 3
-                        height: 34
-                        radius: 17
-                        color: Theme.accent
-                        visible: power.current >= 0
-
-                        Behavior on x {
-                            NumberAnimation {
-                                duration: 380
-                                easing.type: Easing.BezierSpline
-                                easing.bezierCurve: [0.3, 1.4, 0.4, 1, 1, 1]
-                            }
-                        }
-                    }
-                    Row {
-                        x: 4
-                        y: 4
-
-                        Repeater {
-                            model: power.modes
-
-                            delegate: Item {
-                                id: profile
-
-                                required property var modelData
-                                required property int index
-
-                                readonly property bool usable: modelData.value !== PowerProfile.Performance || PowerProfiles.hasPerformanceProfile
-
-                                width: (power.width - 8) / 3
-                                height: 34
-                                opacity: usable ? 1 : 0.4
-
-                                Label {
-                                    anchors.centerIn: parent
-                                    text: profile.modelData.label
-                                    color: power.current === profile.index ? Theme.accentText : Theme.text
-                                    size: 12
-                                    font.weight: Font.Medium
-
-                                    Behavior on color {
-                                        ColorAnimation {
-                                            duration: 200
-                                        }
-                                    }
-                                }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        if (profile.usable)
-                                            PowerProfiles.profile = profile.modelData.value;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+        OrbitControls {
+            shown: root.shown
+            reveal: root.reveal
+            size: root.panelWidth
         }
     }
 }

@@ -123,6 +123,11 @@ ShellRoot {
         function control(): void {
             Ui.togglePopup("control");
         }
+        // The panel flyouts of some layouts: "calendar" (windows) and "apple" (macos).
+        function flyout(name: string): void {
+            if (["calendar", "apple"].includes(name))
+                Ui.togglePopup(name);
+        }
         function settings(): void {
             Ui.settingsOpen = !Ui.settingsOpen;
         }

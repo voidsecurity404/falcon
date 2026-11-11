@@ -2,8 +2,8 @@ import QtQuick
 import qs.components
 import qs.services
 
-// The studio layout's dashboard: the clock island lifts off the edge and grows into a card in
-// the middle of the screen, over a dimmed desktop. Closing flies it back into the clock.
+// The studio layout's dashboard (StudioDash, a cover flow of cards): the clock island lifts off
+// the edge and grows into a card in the middle of the screen, over a dimmed desktop. Closing flies it back into the clock.
 // Its own size and place animate, not a scale, because the blur region follows those.
 Item {
     id: root
@@ -82,19 +82,8 @@ Item {
                 anchors.fill: parent
                 active: Settings.layout === "studio"
                 asynchronous: true
-                sourceComponent: Backdrop {
-                    page: Ui.dashTab === 1 ? 1 : 0
-                    art: Ui.dashTab === 1 ? Media.art : ""
-                    playing: !!Media.player && Media.player.isPlaying
-                    bottomRadius: 32
-                }
-            }
-            Loader {
-                anchors.fill: parent
-                active: Settings.layout === "studio"
-                asynchronous: true
                 visible: root.shown || root.t > 0
-                sourceComponent: Dashboard {}
+                sourceComponent: StudioDash {}
             }
         }
     }

@@ -31,9 +31,14 @@ Singleton {
     // The whole panel design, panel.layout: "falcon" (three parts at the edge, the dashboard drops from
     // the clock island), "halo" (one capsule that turns into the dashboard and the control center),
     // "rail" (a column on the left, panels slide out of it) and "studio" (a modal dashboard and a
-    // control sidebar along the right edge). Only falcon can sit at the bottom or hug the corners.
-    readonly property string layout: ["falcon", "halo", "rail", "studio"].indexOf(get("panel.layout", "falcon")) >= 0 ? get("panel.layout", "falcon") : "falcon"
-    readonly property bool bottom: layout === "falcon" && get("panel.position", "top") === "bottom"
+    // control sidebar along the right edge), "windows" (a taskbar along the bottom with a start
+    // menu), "macos" (a menu bar with a notification center and a control center), "terminal" (a
+    // monospace bar with a console that drops down) and "orbit" (a floating pill at the bottom, the
+    // dashboard rises as a dome and the controls circle around a dial). Only falcon can hug the
+    // corners or choose its edge; windows and orbit always sit at the bottom.
+    readonly property var layouts: ["falcon", "halo", "rail", "studio", "windows", "macos", "terminal", "orbit"]
+    readonly property string layout: layouts.indexOf(get("panel.layout", "falcon")) >= 0 ? get("panel.layout", "falcon") : "falcon"
+    readonly property bool bottom: (layout === "falcon" && get("panel.position", "top") === "bottom") || layout === "windows" || layout === "orbit"
     // The side panels hug the screen's corners, which are rounded, or float away from the edge.
     readonly property bool hug: layout === "falcon" && get("panel.style", "hug") !== "float"
 

@@ -13,6 +13,8 @@ Rectangle {
     readonly property int sweepMax: 10
 
     property bool clearing: false
+    // Room on the right of Clear, for a button the host puts there.
+    property int clearMargin: 62
     property var clearingIds: []
 
     // Ids of the cards flying away, so that a header goes together with the last card of its app.
@@ -105,7 +107,7 @@ Rectangle {
     }
     Label {
         anchors.right: parent.right
-        anchors.rightMargin: 62
+        anchors.rightMargin: root.clearMargin
         height: 54
         verticalAlignment: Text.AlignVCenter
         opacity: Toasts.history.length > 0 && !root.clearing ? 1 : 0

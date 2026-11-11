@@ -2,7 +2,7 @@ import QtQuick
 import qs.components
 import qs.services
 
-// Top of the Panel page: the four panel designs as cards. Each card plays, on a small copy of the
+// Top of the Panel page: the eight panel designs as cards. Each card plays, on a small copy of the
 // desktop, how its panel looks and how its dashboard and control center open, so the difference is
 // seen before choosing. A click switches the whole panel at once.
 Column {
@@ -29,6 +29,26 @@ Column {
             id: "studio",
             name: Tr.t("Studio"),
             sub: Tr.t("The focused window's title. A dashboard in the middle, controls along the right edge")
+        },
+        {
+            id: "windows",
+            name: "Windows",
+            sub: Tr.t("A taskbar at the bottom with Start, quick settings and a clock flyout, like Windows 11")
+        },
+        {
+            id: "macos",
+            name: "macOS",
+            sub: Tr.t("A menu bar with the apple menu, a control center and a notification center")
+        },
+        {
+            id: "terminal",
+            name: Tr.t("Terminal"),
+            sub: Tr.t("A monospace bar. The dashboard drops down as a console and types itself in")
+        },
+        {
+            id: "orbit",
+            name: Tr.t("Orbit"),
+            sub: Tr.t("A floating pill at the bottom. A dome rises from it, the controls circle a dial")
         }
     ]
 
@@ -495,6 +515,480 @@ Column {
                                         color: Qt.alpha(index === 0 ? Theme.accent : Theme.text, index === 0 ? 0.45 : 0.14)
                                     }
                                 }
+                            }
+                        }
+                    }
+
+                    // ---------------- windows
+                    Item {
+                        anchors.fill: parent
+                        visible: card.modelData.id === "windows"
+
+                        // The taskbar with Start and apps in the middle.
+                        Glass {
+                            anchors.bottom: parent.bottom
+                            width: parent.width
+                            height: 16
+                            radius: 0
+
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 4
+
+                                Grid {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    columns: 2
+                                    spacing: 1
+
+                                    Repeater {
+                                        model: 4
+
+                                        Rectangle {
+                                            width: 3.5
+                                            height: 3.5
+                                            color: Theme.accent
+                                        }
+                                    }
+                                }
+                                Repeater {
+                                    model: 5
+
+                                    Rectangle {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 8
+                                        height: 8
+                                        radius: 2
+                                        color: Qt.alpha(Theme.text, 0.55)
+                                    }
+                                }
+                            }
+                            Line {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 22
+                            }
+                        }
+                        // Start slides up out of the bar.
+                        Glass {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            y: parent.height - 20 - height + (1 - card.dash) * 20
+                            width: 120
+                            height: 112
+                            radius: 6
+                            opacity: card.dash
+
+                            Grid {
+                                x: 12
+                                y: 14
+                                columns: 6
+                                spacing: 6
+
+                                Repeater {
+                                    model: 12
+
+                                    Rectangle {
+                                        width: 10
+                                        height: 10
+                                        radius: 3
+                                        color: Qt.alpha(Theme.accent, 0.5)
+                                    }
+                                }
+                            }
+                            Repeater {
+                                model: 3
+
+                                Line {
+                                    x: 12
+                                    y: 58 + index * 10
+                                    width: 60
+                                    opacity: 0.5
+                                }
+                            }
+                        }
+                        // Quick settings slide up over the right end.
+                        Glass {
+                            anchors.right: parent.right
+                            anchors.rightMargin: 6
+                            y: parent.height - 20 - height + (1 - card.ctrl) * 20
+                            width: 80
+                            height: 92
+                            radius: 6
+                            opacity: card.ctrl
+
+                            Grid {
+                                x: 8
+                                y: 8
+                                columns: 3
+                                spacing: 4
+
+                                Repeater {
+                                    model: 6
+
+                                    Rectangle {
+                                        width: 18
+                                        height: 12
+                                        radius: 3
+                                        color: index < 2 ? Theme.accent : Qt.alpha(Theme.text, 0.2)
+                                    }
+                                }
+                            }
+                            Line {
+                                x: 8
+                                y: 50
+                                width: 64
+                            }
+                            Line {
+                                x: 8
+                                y: 62
+                                width: 64
+                            }
+                        }
+                    }
+
+                    // ---------------- macos
+                    Item {
+                        anchors.fill: parent
+                        visible: card.modelData.id === "macos"
+
+                        Glass {
+                            width: parent.width
+                            height: 11
+                            radius: 0
+
+                            Icon {
+                                x: 5
+                                anchors.verticalCenter: parent.verticalCenter
+                                name: "apple"
+                                filled: true
+                                size: 8
+                            }
+                            Line {
+                                x: 18
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 18
+                                height: 2.5
+                            }
+                            Line {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 40
+                                height: 2.5
+                            }
+                        }
+                        // The notification center slides in from the right edge.
+                        Glass {
+                            x: parent.width - width - 4 + (1 - card.dash) * (width + 8)
+                            y: 15
+                            width: 92
+                            height: parent.height - 20
+                            radius: 8
+                            visible: card.dash > 0.001
+
+                            Column {
+                                x: 6
+                                y: 6
+                                spacing: 5
+
+                                Rectangle {
+                                    width: 80
+                                    height: 26
+                                    radius: 5
+                                    color: Qt.alpha(Theme.text, 0.14)
+                                }
+                                Row {
+                                    spacing: 4
+
+                                    Rectangle {
+                                        width: 38
+                                        height: 38
+                                        radius: 6
+                                        color: Qt.alpha(Theme.text, 0.14)
+                                    }
+                                    Rectangle {
+                                        width: 38
+                                        height: 38
+                                        radius: 19
+                                        color: Qt.alpha(Theme.text, 0.6)
+                                    }
+                                }
+                                Rectangle {
+                                    width: 80
+                                    height: 30
+                                    radius: 6
+                                    color: Qt.alpha(Theme.accent, 0.35)
+                                }
+                            }
+                        }
+                        // The control center pops under its icon.
+                        Glass {
+                            x: parent.width - width - 30
+                            y: 15
+                            width: 76 * (0.94 + 0.06 * card.ctrl)
+                            height: 90 * (0.88 + 0.12 * card.ctrl)
+                            radius: 7
+                            opacity: card.ctrl
+                            visible: card.ctrl > 0.001
+
+                            Grid {
+                                x: 5
+                                y: 5
+                                columns: 2
+                                spacing: 4
+
+                                Rectangle {
+                                    width: 31
+                                    height: 34
+                                    radius: 5
+                                    color: Qt.alpha(Theme.text, 0.14)
+                                }
+                                Rectangle {
+                                    width: 31
+                                    height: 34
+                                    radius: 5
+                                    color: Qt.alpha(Theme.text, 0.14)
+                                }
+                            }
+                            Rectangle {
+                                x: 5
+                                y: 46
+                                width: 66
+                                height: 9
+                                radius: 4.5
+                                color: Qt.alpha(Theme.text, 0.6)
+                            }
+                            Rectangle {
+                                x: 5
+                                y: 60
+                                width: 66
+                                height: 9
+                                radius: 4.5
+                                color: Qt.alpha(Theme.text, 0.6)
+                            }
+                        }
+                    }
+
+                    // ---------------- terminal
+                    Item {
+                        anchors.fill: parent
+                        visible: card.modelData.id === "terminal"
+
+                        Rectangle {
+                            width: parent.width
+                            height: 10
+                            color: Qt.alpha(Theme.glassBase, 0.92)
+
+                            Rectangle {
+                                width: 26
+                                height: parent.height
+                                color: Theme.accent
+                            }
+                            Rectangle {
+                                anchors.right: parent.right
+                                width: 22
+                                height: parent.height
+                                color: Theme.accent
+                            }
+                            Text {
+                                x: 32
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "1 [2] 3   cpu 12% mem 40%"
+                                font.family: Theme.mono
+                                font.pixelSize: 6
+                                color: Theme.text
+                            }
+                        }
+                        // The console drops across the screen and types its lines in.
+                        Rectangle {
+                            x: 4
+                            y: 10
+                            width: parent.width - 8
+                            height: 90 * Math.min(1, card.dash * 1.3)
+                            visible: height > 1
+                            clip: true
+                            color: Qt.alpha(Theme.glassBase, 0.94)
+                            border.width: 1
+                            border.color: Qt.alpha(Theme.accent, 0.6)
+
+                            Column {
+                                x: 8
+                                y: 6
+                                spacing: 3
+
+                                Repeater {
+                                    model: 7
+
+                                    Rectangle {
+                                        height: 3
+                                        width: [70, 110, 90, 130, 60, 100, 40][index] * Math.max(0, Math.min(1, card.dash * 3 - index * 0.25))
+                                        color: index === 0 ? Theme.accent : Qt.alpha(Theme.text, 0.6)
+                                    }
+                                }
+                            }
+                        }
+                        // The control box unrolls line by line on the right.
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.rightMargin: 4
+                            y: 10
+                            width: 96
+                            height: Math.ceil(card.ctrl * 10) * 9
+                            visible: height > 1
+                            clip: true
+                            color: Qt.alpha(Theme.glassBase, 0.94)
+                            border.width: 1
+                            border.color: Qt.alpha(Theme.accent, 0.6)
+
+                            Rectangle {
+                                width: parent.width
+                                height: 8
+                                color: Theme.accent
+                            }
+                            Column {
+                                x: 6
+                                y: 12
+                                spacing: 4
+
+                                Repeater {
+                                    model: 7
+
+                                    Rectangle {
+                                        height: 3
+                                        width: [50, 70, 60, 80, 40, 66, 30][index]
+                                        color: Qt.alpha(Theme.text, 0.6)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // ---------------- orbit
+                    Item {
+                        anchors.fill: parent
+                        visible: card.modelData.id === "orbit"
+
+                        Glass {
+                            id: pill
+
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            y: parent.height - height - 5
+                            width: 96
+                            height: 16
+                            radius: 8
+
+                            Rectangle {
+                                x: 3
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 11
+                                height: 11
+                                radius: 5.5
+                                color: Theme.accent
+                            }
+                            Row {
+                                x: 20
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 3
+
+                                Rectangle {
+                                    width: 9
+                                    height: 4
+                                    radius: 2
+                                    color: Theme.accent
+                                }
+                                Dot {
+                                    width: 4
+                                    height: 4
+                                }
+                                Dot {
+                                    width: 4
+                                    height: 4
+                                }
+                            }
+                            Rectangle {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 3
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 11
+                                height: 11
+                                radius: 5.5
+                                color: "transparent"
+                                border.width: 1.5
+                                border.color: Theme.accent
+                            }
+                        }
+                        // The dome inflates out of the pill.
+                        Glass {
+                            readonly property real d: card.dash
+
+                            x: pill.x + pill.width / 2 - width / 2
+                            y: pill.y - 4 - height
+                            width: 96 + 120 * d
+                            height: 2 + 118 * d
+                            topLeftRadius: 8 + 70 * d
+                            topRightRadius: 8 + 70 * d
+                            bottomLeftRadius: 8
+                            bottomRightRadius: 8
+                            visible: d > 0.01
+
+                            Rectangle {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                y: 26
+                                width: 50
+                                height: 50
+                                radius: 25
+                                color: "transparent"
+                                border.width: 3
+                                border.color: Theme.accent
+                                opacity: Math.max(0, parent.d * 2 - 1)
+                            }
+                            Repeater {
+                                model: 5
+
+                                Rectangle {
+                                    readonly property real a: (200 + index * 35) * Math.PI / 180
+                                    x: parent.width / 2 + Math.cos(a) * 46 * card.dash - 7
+                                    y: 51 + Math.sin(a) * 46 * card.dash - 7
+                                    width: 14
+                                    height: 14
+                                    radius: 7
+                                    color: Qt.alpha(Theme.text, 0.35)
+                                    opacity: Math.max(0, card.dash * 2 - 1)
+                                }
+                            }
+                        }
+                        // The controls bloom as a circle over the pill's right end.
+                        Glass {
+                            readonly property real d: card.ctrl
+
+                            x: pill.x + pill.width - 8 - width / 2
+                            y: pill.y - 50 - height / 2
+                            width: 92 * d
+                            height: 92 * d
+                            radius: width / 2
+                            visible: d > 0.01
+
+                            Repeater {
+                                model: 7
+
+                                Rectangle {
+                                    readonly property real a: (index * 360 / 7 - 90 - (1 - card.ctrl) * 80) * Math.PI / 180
+                                    x: 46 * card.ctrl + Math.cos(a) * 30 * card.ctrl - 5
+                                    y: 46 * card.ctrl + Math.sin(a) * 30 * card.ctrl - 5
+                                    width: 10
+                                    height: 10
+                                    radius: 5
+                                    color: index < 2 ? Theme.accent : Qt.alpha(Theme.text, 0.35)
+                                }
+                            }
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 26 * parent.d
+                                height: width
+                                radius: width / 2
+                                color: "transparent"
+                                border.width: 2
+                                border.color: Theme.accent
                             }
                         }
                     }
