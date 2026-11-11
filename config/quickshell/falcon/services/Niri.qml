@@ -14,6 +14,8 @@ Singleton {
     property string lastAppId: ""
     property string focusedOutput: ""
     property bool overview: false
+    // Whether the event stream's first ConfigLoaded, part of its opening state, has arrived.
+    property bool configSeen: false
     property var layoutNames: []
     property int layoutIndex: 0
 
@@ -33,6 +35,7 @@ Singleton {
     signal windowOpened(var window)
     signal windowGone(int id)
     signal configFailed
+    signal configLoaded
 
     onFocusedWindowIdChanged: {
         const w = windows[focusedWindowId];
@@ -161,6 +164,35 @@ Singleton {
         requests.flush();
     }
 
+    // Any action over the request socket, falling back to `niri msg` while it is not connected.
+    // Requests on the socket are handled in the order they were written.
+    function request(actionObject, fallback) {
+        if (!requests.connected) {
+            if (fallback)
+                action(...fallback);
+            return;
+        }
+        requests.write(JSON.stringify({
+            Action: actionObject
+        }) + "\n");
+        requests.flush();
+    }
+
+    function loadConfigFile() {
+        request({
+            LoadConfigFile: {}
+        }, ["load-config-file"]);
+    }
+
+    // Flips whether the window ignores the opacity of its window rule. See services/Sticky.qml.
+    function toggleRuleOpacity(windowId) {
+        request({
+            ToggleWindowRuleOpacity: {
+                id: windowId
+            }
+        }, ["toggle-window-rule-opacity", "--id", String(windowId)]);
+    }
+
     function focusWorkspace(index) {
         action("focus-workspace", String(index));
     }
@@ -251,8 +283,16 @@ Singleton {
                 Ui.popup = "";
         } else if (e.ScreenshotCaptured) {
             screenshotTaken(e.ScreenshotCaptured.path || "");
-        } else if (e.ConfigLoaded && e.ConfigLoaded.failed) {
-            configFailed();
+        } else if (e.ConfigLoaded) {
+            // The stream starts with the state of the last load, which is not a new one.
+            if (!configSeen) {
+                configSeen = true;
+                return;
+            }
+            if (e.ConfigLoaded.failed)
+                configFailed();
+            else
+                configLoaded();
         }
     }
 
@@ -263,6 +303,7 @@ Singleton {
         connected: true
         onConnectedChanged: {
             if (connected) {
+                root.configSeen = false;
                 write('"EventStream"\n');
                 flush();
             }
