@@ -414,6 +414,32 @@ def queue_thread():
         thread_timer = GLib.timeout_add(120, emit_thread)
 
 
+def clear_stale_mount(cmd):
+    """An sshfs mount whose link went away (USB unplugged, Wi-Fi changed) stays behind as
+    "transport endpoint is not connected", and kdeconnectd still counts it as mounted, so it
+    never mounts again. Such a mount is lazily unmounted first."""
+    try:
+        point = call(dev_path(cmd) + "/sftp", DEV + ".sftp", "mountPoint", reply="(s)")[0]
+    except GLib.Error:
+        return
+    try:
+        os.stat(point)
+        os.listdir(point)
+        return
+    except FileNotFoundError:
+        return
+    except OSError:
+        pass
+    for tool in ("fusermount3", "fusermount"):
+        if shutil.which(tool):
+            subprocess.run([tool, "-uz", point], capture_output=True, timeout=5)
+            break
+    try:
+        call(dev_path(cmd) + "/sftp", DEV + ".sftp", "unmount")
+    except GLib.Error:
+        pass
+
+
 def handle(cmd):
     global open_thread
     op = cmd.get("op", "")
@@ -464,13 +490,22 @@ def handle(cmd):
             call(dev_path(cmd) + "/notifications", DEV + ".notifications", "sendReply", "(ss)",
                  (cmd["replyId"], cmd["text"]))
         elif op == "mount":
+            clear_stale_mount(cmd)
             # Mounting waits for sshfs, so it runs without blocking the other commands.
             def mounted(source, res, data):
                 r = dict(result)
                 try:
                     ok = source.call_finish(res).unpack()[0]
                     point = call(dev_path(cmd) + "/sftp", DEV + ".sftp", "mountPoint", reply="(s)")[0]
-                    r.update(ok=ok, path=point)
+                    # The phone's own storage, not the bare "storage" folder above it.
+                    inner = os.path.join(point, "storage", "emulated", "0")
+                    found = False
+                    for _ in range(6):
+                        if ok and os.path.isdir(inner):
+                            found = True
+                            break
+                        time.sleep(0.5)
+                    r.update(ok=ok, path=inner if found else point)
                     if not ok:
                         r["error"] = call(dev_path(cmd) + "/sftp", DEV + ".sftp", "getMountError", reply="(s)")[0]
                 except GLib.Error as e:
