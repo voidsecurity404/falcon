@@ -1309,5 +1309,7 @@
  "{n} files": "Файлов: {n}",
  "{n} on the phone": "На телефоне: {n}",
  "No notifications from the phone yet": "С телефона пока нет уведомлений",
- "From the phone": "С телефона"
+ "From the phone": "С телефона",
+ "The wallpaper on screen cannot be deleted": "Обои, которые сейчас на экране, удалить нельзя",
+ "Press Delete again to delete the file for good": "Нажмите Delete ещё раз, чтобы удалить файл навсегда"
 }

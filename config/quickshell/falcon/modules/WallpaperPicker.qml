@@ -58,9 +58,15 @@ LazyLoader {
         }
         readonly property var files: filesOf(tab)
         readonly property int selected: markOf(tab)
-        onSelectedChanged: Ui.pickerSelected = selected
+        onSelectedChanged: {
+            Ui.pickerSelected = selected;
+            disarm();
+        }
         onFilesChanged: Ui.pickerFiles = files.length
-        onTabChanged: Ui.pickerTab = tab
+        onTabChanged: {
+            Ui.pickerTab = tab;
+            disarm();
+        }
         Component.onCompleted: {
             startAtCurrent();
             if (Ui.pickerOpenTab >= 0) {
@@ -215,6 +221,59 @@ LazyLoader {
             Wallpapers.chosen(path, tab === 0);
             Ui.popup = "";
             Ui.run("falcon-wallpaper", path);
+        }
+
+        // ------------------------------------------------ deleting a wallpaper from the disk
+        // Delete (or the trash button) arms the chosen wallpaper, a second press within 4 s deletes
+        // the file for good. The slice sinks away first, then the next one takes its place.
+        property string armed: ""
+        property string doomed: ""
+        property bool refused: false
+
+        function disarm() {
+            armed = "";
+            refused = false;
+        }
+
+        function askDelete() {
+            const path = files[selected];
+            if (!path || closing || doomed !== "")
+                return;
+            moved = true;
+            if (Wallpapers.isOnScreen(path)) {
+                armed = "";
+                refused = true;
+                armTimer.restart();
+                return;
+            }
+            if (armed === path) {
+                armed = "";
+                doomed = path;
+                sinkTimer.restart();
+                return;
+            }
+            refused = false;
+            armed = path;
+            armTimer.restart();
+        }
+
+        Timer {
+            id: armTimer
+
+            interval: 4000
+            onTriggered: root.disarm()
+        }
+
+        Timer {
+            id: sinkTimer
+
+            interval: 280
+            onTriggered: {
+                const at = root.selected;
+                Wallpapers.remove(root.doomed);
+                root.doomed = "";
+                root.choose(at);
+            }
         }
 
         // ------------------------------------------------ typing jumps to a wallpaper by name
@@ -447,7 +506,9 @@ LazyLoader {
             anchors.fill: parent
             focus: true
             Keys.onEscapePressed: {
-                if (root.query !== "")
+                if (root.armed !== "" || root.refused)
+                    root.disarm();
+                else if (root.query !== "")
                     root.search("");
                 else
                     Ui.popup = "";
@@ -473,6 +534,7 @@ LazyLoader {
             Keys.onBacktabPressed: root.setTab(1 - root.tab)
             Keys.onReturnPressed: root.apply(root.selected)
             Keys.onEnterPressed: root.apply(root.selected)
+            Keys.onDeletePressed: root.askDelete()
             // Ctrl+D, by the key's place so the Russian layout works too (D is 40 with the evdev offset).
             Keys.onPressed: event => {
                 if ((event.modifiers & Qt.ControlModifier) && (event.key === Qt.Key_D || event.nativeScanCode === 40)) {
@@ -653,6 +715,8 @@ LazyLoader {
 
             // Opens the download window, beside the tabs.
             Rectangle {
+                id: downloadButton
+
                 anchors.left: tabStrip.right
                 anchors.leftMargin: 10
                 anchors.verticalCenter: tabStrip.verticalCenter
@@ -687,6 +751,47 @@ LazyLoader {
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: Ui.popup = "wallget"
+                }
+            }
+
+            // Deletes the chosen wallpaper from the disk: red while waiting for the second press.
+            Rectangle {
+                readonly property bool lit: root.armed !== ""
+
+                anchors.left: downloadButton.right
+                anchors.leftMargin: 10
+                anchors.verticalCenter: tabStrip.verticalCenter
+                width: 54
+                height: 54
+                radius: 27
+                color: lit ? Qt.rgba(0.86, 0.2, 0.22, 0.85) : Qt.rgba(0, 0, 0, trashArea.containsMouse ? 0.6 : 0.45)
+                opacity: root.reveal * (root.files.length > 0 ? 1 : 0.4)
+                scale: trashArea.pressed ? 0.92 : 1
+
+                Behavior on color {
+                    ColorAnimation {
+                        duration: 150
+                    }
+                }
+                Behavior on scale {
+                    NumberAnimation {
+                        duration: 120
+                    }
+                }
+
+                Icon {
+                    anchors.centerIn: parent
+                    name: "trash"
+                    size: 20
+                    color: "white"
+                }
+                MouseArea {
+                    id: trashArea
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.askDelete()
                 }
             }
 
@@ -1015,6 +1120,38 @@ LazyLoader {
                                 }
                             }
 
+                            // Asks for the second press, or says why the wallpaper on screen stays.
+                            Rectangle {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                visible: (root.armed !== "" || root.refused) && deck.index === root.tab
+                                width: armRow.implicitWidth + 24
+                                height: 30
+                                radius: 15
+                                color: Qt.rgba(0.8, 0.2, 0.2, root.refused ? 0.45 : 0.7)
+                                border.width: 1
+                                border.color: Qt.rgba(1, 1, 1, 0.2)
+
+                                Row {
+                                    id: armRow
+
+                                    anchors.centerIn: parent
+                                    spacing: 7
+
+                                    Icon {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        name: root.refused ? "alert" : "trash"
+                                        size: 14
+                                        color: "white"
+                                    }
+                                    Label {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: root.refused ? Tr.t("The wallpaper on screen cannot be deleted") : Tr.t("Press Delete again to delete the file for good")
+                                        color: "white"
+                                        size: 14
+                                    }
+                                }
+                            }
+
                             Label {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 text: (deck.target + 1) + " / " + deck.files.length
@@ -1037,6 +1174,14 @@ LazyLoader {
                                 readonly property int slot: modelData
                                 readonly property string path: deck.files[slot] || ""
                                 readonly property bool chosen: slot === deck.target
+                                // Sinks away while its file is deleted; the next wallpaper rises into the slot.
+                                property real sink: root.doomed !== "" && path === root.doomed ? 1 : 0
+                                Behavior on sink {
+                                    NumberAnimation {
+                                        duration: 260
+                                        easing.type: Easing.InOutCubic
+                                    }
+                                }
                                 readonly property real w: {
                                     deck.tick;
                                     return deck.widthOf(slot);
@@ -1116,7 +1261,7 @@ LazyLoader {
                                 width: w + padX * 2
                                 height: root.sliceHeight + padY * 2 + reflectSize
                                 z: chosen ? 1000 : slot === deck.hovered ? 999 : 100 - Math.abs(slot - deck.target)
-                                opacity: Math.min(1, appear) * Math.min(1, way / 0.5) * edgeFade
+                                opacity: Math.min(1, appear) * Math.min(1, way / 0.5) * edgeFade * (1 - sink)
                                 visible: opacity > 0.005
 
                                 Component.onCompleted: {
@@ -1205,7 +1350,7 @@ LazyLoader {
                                     },
                                     Translate {
                                         x: deck.side * (1 - card.glide) * 560
-                                        y: (1 - card.appear) * 90
+                                        y: (1 - card.appear) * 90 + card.sink * 70
                                     }
                                 ]
 

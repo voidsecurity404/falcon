@@ -61,6 +61,36 @@ Singleton {
         currentChanged();
     }
 
+    // The wallpaper on screen now cannot be deleted: hyprlock and the next login read it.
+    function isOnScreen(path) {
+        return path !== "" && (path === currentLive || (currentLive === "" && path === currentImage));
+    }
+
+    // Deletes a wallpaper from the disk for good, with its small picture and a live one's first
+    // frame. Only files of the two lists are touched.
+    function remove(path) {
+        const live = liveFiles.indexOf(path) >= 0;
+        if ((!live && imageFiles.indexOf(path) < 0) || isOnScreen(path))
+            return false;
+        const name = nameOf(path);
+        const files = [path, stateDir + "/thumbs/" + name + ".jpg"];
+        if (live)
+            files.push(stateDir + "/live-posters/" + name.replace(/\.[^.]+$/, "") + ".jpg");
+        if (live) {
+            liveFiles = liveFiles.filter(f => f !== path);
+            if (lastLive === path) {
+                lastLive = "";
+                Saved.set("lastLive", "");
+            }
+        } else {
+            imageFiles = imageFiles.filter(f => f !== path);
+            if (Saved.get("lastImage", "") === path)
+                Saved.set("lastImage", "");
+        }
+        Quickshell.execDetached(["rm", "-f", "--"].concat(files));
+        return true;
+    }
+
     Component.onCompleted: {
         lastLive = Saved.get("lastLive", "");
         refresh();
