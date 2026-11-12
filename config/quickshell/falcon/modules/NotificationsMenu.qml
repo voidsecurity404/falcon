@@ -8,15 +8,16 @@ Flyout {
     id: root
 
     readonly property int tab: Ui.notificationsTab
-    readonly property var phoneRows: Phone.notifications.map(n => ({
+    readonly property var phoneRows: Phone.history.map(n => ({
                 id: n.id,
                 app: n.app || Tr.t("Phone"),
                 title: n.title || n.app,
                 sub: n.text,
-                time: Qt.formatTime(new Date(n.time * 1000), "hh:mm"),
-                replyId: n.replyId
+                time: n.time,
+                date: n.date,
+                replyId: n.active ? n.replyId : ""
             }))
-    readonly property string phoneEmpty: !Phone.installed ? Tr.t("KDE Connect is not installed") : !Phone.connected ? Tr.t("The phone is not connected") : Tr.t("No notifications on the phone")
+    readonly property string phoneEmpty: !Phone.installed ? Tr.t("KDE Connect is not installed") : Tr.t("No notifications from the phone yet")
 
     panelWidth: 380
     padding: 6
@@ -174,12 +175,12 @@ Flyout {
                     width: (strip.width - 12) / 2
                     height: strip.height
                     opacity: root.tab === 1 ? 1 : 0.3
-                    title: Phone.connected ? Phone.device.name : Tr.t("Phone")
+                    title: Phone.device ? Phone.device.name : Tr.t("Phone")
                     items: root.phoneRows
                     emptyText: root.phoneEmpty
                     emptyIcon: "phone"
-                    forgetIds: ids => Phone.dismiss(ids)
-                    timeOf: row => row.time
+                    forgetIds: ids => Phone.forget(ids)
+                    timeOf: row => Toasts.timeLabel(row)
                     replyTo: (row, text) => Phone.reply(row.replyId, text)
 
                     Behavior on opacity {

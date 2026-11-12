@@ -938,8 +938,12 @@ def schedule_state(delay=150):
 
 def on_signal(conn, sender, path, iface, name, params, data):
     if iface == "org.freedesktop.DBus" and name == "NameOwnerChanged":
-        if params.unpack()[0] != BUS_NAME:
+        bus_name, _old, new = params.unpack()
+        if bus_name != BUS_NAME:
             return
+        # kdeconnectd went away (crash or a restart): it is started again, the phone reconnects.
+        if not new and installed():
+            GLib.timeout_add_seconds(3, lambda: (start_daemon() if not daemon_running() else None, False)[1])
         schedule_state(300)
         return
     if iface == DEV + ".conversations" and name in ("conversationUpdated", "conversationCreated"):

@@ -950,7 +950,16 @@ GlassIsland {
             icon: "bell"
             lit: Ui.popup === "notifications"
             transformOrigin: Item.Top
-            onClicked: Ui.togglePopup("notifications")
+            onClicked: {
+                // It opens on the tab that has something new.
+                if (Ui.popup !== "notifications") {
+                    if (Toasts.unread === 0 && Phone.unread > 0)
+                        Ui.notificationsTab = 1;
+                    else if (Phone.unread === 0 && Toasts.unread > 0)
+                        Ui.notificationsTab = 0;
+                }
+                Ui.togglePopup("notifications");
+            }
 
             Connections {
                 target: Ui
@@ -1005,8 +1014,11 @@ GlassIsland {
                 }
             }
 
+            // This computer's unread ones and the phone's together.
             Rectangle {
-                visible: Toasts.unread > 0
+                readonly property int count: Toasts.unread + Phone.unread
+
+                visible: count > 0
                 x: bell.width - width + 1
                 y: 1
                 width: Math.max(15, badgeLabel.implicitWidth + 7)
@@ -1018,7 +1030,7 @@ GlassIsland {
                     id: badgeLabel
 
                     anchors.centerIn: parent
-                    text: Toasts.unread > 99 ? "99+" : Toasts.unread
+                    text: parent.count > 99 ? "99+" : parent.count
                     size: 10
                     font.weight: Font.Bold
                     color: Theme.pill

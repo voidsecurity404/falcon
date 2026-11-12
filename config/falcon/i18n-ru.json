@@ -1307,5 +1307,7 @@
  "not sent": "не отправлено",
  "{name} wants to pair. Check that the code matches the one on the phone: {code}": "{name} хочет сопрячься. Проверьте, что код совпадает с кодом на телефоне: {code}",
  "{n} files": "Файлов: {n}",
- "{n} on the phone": "На телефоне: {n}"
+ "{n} on the phone": "На телефоне: {n}",
+ "No notifications from the phone yet": "С телефона пока нет уведомлений",
+ "From the phone": "С телефона"
 }

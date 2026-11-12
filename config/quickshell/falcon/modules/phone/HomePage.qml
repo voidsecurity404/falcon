@@ -349,7 +349,7 @@ Item {
                             anchors.right: parent.right
                             anchors.top: parent.top
                             anchors.margins: -4
-                            readonly property int count: app.modelData.id === "notifications" ? Phone.notifications.length : 0
+                            readonly property int count: app.modelData.id === "notifications" ? Phone.unread : 0
                             visible: count > 0
                             width: Math.max(20, badge.implicitWidth + 10)
                             height: 20

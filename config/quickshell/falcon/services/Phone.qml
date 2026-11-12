@@ -29,7 +29,7 @@ Singleton {
     // The open SMS conversation: {thread, messages}.
     property var thread: null
     property int unread: 0
-    // Notification ids already counted, so a refresh does not count them again.
+    // The phone's notification ids with the text last seen for each.
     property var counted: ({})
 
     function has(plugin) {
@@ -108,32 +108,123 @@ Singleton {
         send("closeThread");
     }
 
+    // Every notification the phone has sent, newest first, kept until the user clears it here
+    // (closing it on the phone leaves it). Entries: {id, nid, device, app, title, text, icon,
+    // replyId, time, date, active}; `nid` is the phone's id while it is still on the phone.
+    property var history: []
+    property int nextId: 1
+    property bool historyLoaded: false
+    onHistoryChanged: saveHistory()
+    onUnreadChanged: saveHistory()
+
+    function saveHistory() {
+        if (historyLoaded)
+            Saved.set("phoneNotifications", {
+                history: history,
+                unread: unread
+            });
+    }
+
+    // Removes entries here and closes the ones still on the phone.
+    function forget(ids) {
+        const gone = history.filter(h => ids.includes(h.id));
+        const onPhone = gone.filter(h => h.active && device && h.device === device.id).map(h => h.nid);
+        if (onPhone.length > 0)
+            dismiss(onPhone);
+        history = history.filter(h => !ids.includes(h.id));
+        if (history.length === 0)
+            unread = 0;
+    }
+
+    function signature(n) {
+        return [n.app, n.title, n.text].join("\u0001");
+    }
+
     onNotificationsChanged: {
-        // New phone notifications raise the unread count of the phone tab.
+        const dev = device ? device.id : "";
+        const now = new Date();
+        const fresh = [];
         const next = {};
-        let fresh = 0;
         for (const n of notifications) {
-            next[n.id] = true;
-            if (!counted[n.id])
-                fresh += 1;
+            const sig = signature(n);
+            next[n.id] = sig;
+            // New, or the same notification with new text (a chat that got another message).
+            if (counted[n.id] !== sig)
+                fresh.push(n);
         }
-        const before = counted;
         counted = next;
-        // What the phone already had when it (re)connected is not news. It sends those a few
-        // seconds after the link is up, so the first seconds only set what counts as seen.
-        if (!initialised || !connected || settling.running)
+        if (!historyLoaded)
             return;
-        // A card for each new one; a click opens the bell's Phone tab.
-        for (const n of notifications.filter(n => !before[n.id]).slice(0, 3).reverse())
-            Toasts.passing(n.title || n.app, (n.title && n.app && n.title !== n.app ? n.app + " · " : "") + n.text, "phone", n.icon ? "file://" + n.icon : "", () => {
+        // What the phone already had when it (re)connected only goes into the list if it is not
+        // there yet; it arrives up to about 20 seconds after the link is up, and is not news.
+        const quiet = !initialised || !connected || settling.running;
+        // An entry is on the phone while the phone still shows that id with that text. Ids are
+        // handed out again when kdeconnectd restarts, so the text decides, not the id alone.
+        let list = history.map(h => {
+            const on = h.device === dev && next[h.nid] === signature(h);
+            return on === h.active ? h : Object.assign({}, h, {
+                active: on
+            });
+        });
+        const added = [];
+        for (const n of fresh.slice().reverse()) {
+            const sig = signature(n);
+            // Already listed under this id (after a shell restart, the saved list has it).
+            if (list.some(h => h.device === dev && h.nid === n.id && signature(h) === sig))
+                continue;
+            // Sent again after a reconnect and already in the list: it is on the phone again.
+            const known = quiet ? list.findIndex(h => h.device === dev && !h.active && signature(h) === sig) : -1;
+            if (known >= 0) {
+                list[known] = Object.assign({}, list[known], {
+                    nid: n.id,
+                    active: true,
+                    replyId: n.replyId
+                });
+                continue;
+            }
+            const entry = {
+                id: "p" + (nextId++),
+                nid: n.id,
+                device: dev,
+                app: n.app,
+                title: n.title || n.app,
+                text: n.text,
+                icon: n.icon,
+                replyId: n.replyId,
+                time: Qt.formatTime(now, "hh:mm"),
+                date: Qt.formatDate(now, "yyyy-MM-dd"),
+                active: true
+            };
+            list = [entry].concat(list);
+            // A notification that came while the list was being caught up is not news either.
+            if (!quiet)
+                added.push(entry);
+        }
+        history = list;
+        if (quiet || added.length === 0)
+            return;
+        // Each new one comes in as a card like this computer's, and flies into the bell.
+        for (const e of added.slice(-3))
+            Toasts.passing(e.title, (e.app && e.title !== e.app ? e.app + " · " : "") + e.text, "phone", e.icon ? "file://" + e.icon : "", () => {
                 Ui.notificationsTab = 1;
                 Ui.popup = "notifications";
             });
-        if (Ui.popup === "notifications" && Ui.notificationsTab === 1)
-            return;
-        unread += fresh;
+        if (!(Ui.popup === "notifications" && Ui.notificationsTab === 1))
+            unread += added.length;
     }
     property bool initialised: false
+    Component.onCompleted: {
+        const saved = Saved.get("phoneNotifications", null);
+        if (saved && Array.isArray(saved.history)) {
+            // Nothing is on the phone until it says so again.
+            history = saved.history.map(h => Object.assign({}, h, {
+                    active: false
+                }));
+            unread = saved.unread || 0;
+            nextId = history.reduce((top, h) => Math.max(top, parseInt(String(h.id).slice(1)) || 0), 0) + 1;
+        }
+        historyLoaded = true;
+    }
     onConnectedChanged: {
         if (connected)
             settling.restart();
@@ -142,7 +233,7 @@ Singleton {
     Timer {
         id: settling
 
-        interval: 8000
+        interval: 20000
     }
 
     Connections {
