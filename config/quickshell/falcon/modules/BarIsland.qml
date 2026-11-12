@@ -146,7 +146,8 @@ GlassIsland {
                             phone: phonePart,
                             status: statusPart,
                             bell: bellPart,
-                            power: powerPart
+                            power: powerPart,
+                            network: networkPart
                         })[slot.modelData] || (NetTools.has(slot.modelData) ? netPart : null)
                     onLoaded: {
                         if (item.netTool !== undefined)
@@ -912,8 +913,16 @@ GlassIsland {
             readonly property string badge: NetTools.badgeOf(netTool)
 
             objectName: netTool
-            lit: Ui.popup === "net" && NetTools.open === netTool
-            onClicked: NetTools.toggle(netTool)
+            lit: NetTools.menuOpen && NetTools.origin === netTool
+            onClicked: NetTools.click(netTool)
+            onHoveredChanged: {
+                if (root.preview || netTool === "")
+                    return;
+                if (hovered)
+                    NetTools.hoverEnter(netTool);
+                else
+                    NetTools.hoverExit(netTool);
+            }
             onNetToolChanged: {
                 if (netTool !== "" && !root.preview)
                     NetTools.watch(netTool, 1);
@@ -945,6 +954,53 @@ GlassIsland {
                     font.weight: Font.DemiBold
                     color: NetTools.colorOf(netButton.netTool)
                 }
+            }
+        }
+    }
+
+    // All network and security readings behind one button: pointing at it drops the hub, a page
+    // of tiles like the control center's. A dot warns when ARP, the firewall, the latency, the
+    // Wi-Fi or the logins found something.
+    Component {
+        id: networkPart
+
+        BarButton {
+            id: hubButton
+
+            readonly property bool shown: true
+
+            objectName: "network"
+            icon: "radar"
+            lit: NetTools.menuOpen && NetTools.origin === "network"
+            onClicked: NetTools.click("network")
+            onHoveredChanged: {
+                if (root.preview)
+                    return;
+                if (hovered)
+                    NetTools.hoverEnter("network");
+                else
+                    NetTools.hoverExit("network");
+            }
+            Component.onCompleted: {
+                if (!root.preview)
+                    NetTools.watchHub(1);
+            }
+            Component.onDestruction: {
+                if (!root.preview)
+                    NetTools.watchHub(-1);
+            }
+
+            Rectangle {
+                parent: hubButton
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.rightMargin: 5
+                anchors.topMargin: 5
+                visible: NetTools.alert !== ""
+                width: 7
+                height: 7
+                radius: 3.5
+                color: NetTools.stateColor(NetTools.alert)
             }
         }
     }

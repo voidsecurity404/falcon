@@ -408,6 +408,12 @@ LazyLoader {
                                 type: "toggle"
                             },
                             {
+                                key: "panel.netValues",
+                                label: Tr.t("Values beside network icons"),
+                                hint: Tr.t("Off: icons only, values in the menu that opens when you point at them"),
+                                type: "toggle"
+                            },
+                            {
                                 key: "appearance.panelOpacity",
                                 label: Tr.t("Panel opacity"),
                                 hint: Tr.t("Lower is more see-through"),

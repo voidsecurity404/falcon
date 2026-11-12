@@ -1494,5 +1494,11 @@
  "No network": "Нет сети",
  "Not an address": "Это не адрес",
  "Download": "Загрузка",
- "Upload": "Отдача"
+ "Upload": "Отдача",
+ "Values beside network icons": "Значения рядом с сетевыми значками",
+ "Off: icons only, values in the menu that opens when you point at them": "Выкл.: только значки, значения — в меню, которое открывается при наведении",
+ "Something needs a look: it is marked red": "Что-то требует внимания — отмечено красным",
+ "Worth a look: marked yellow": "Стоит проверить — отмечено жёлтым",
+ "All quiet": "Всё спокойно",
+ "A tile opens its table": "Плитка открывает подробную таблицу"
 }

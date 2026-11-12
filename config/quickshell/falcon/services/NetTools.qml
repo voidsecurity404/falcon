@@ -130,11 +130,34 @@ Singleton {
     property var last: ({})
     // How many bar parts show each tool.
     property var watched: ({})
-    // The tool whose menu is open, and a port check of one device from the devices menu.
+    // The menu: `origin` is the bar part it drops from ("network" for the hub, or a tool), `open`
+    // the tool whose table it shows ("" is the hub's page of tiles). Opened by pointing at a part
+    // (`byHover`) it closes again when the pointer leaves the part and the menu, and takes no keys;
+    // a click keeps it open.
     property string open: ""
+    property string origin: ""
+    property bool byHover: false
+    property bool overMenu: false
+    property string pointed: ""
     property string probeIp: ""
     property var probe: null
     property bool probing: false
+    // Values beside the icons on the bar; off, the bar shows icons only and the menu has the values.
+    readonly property bool showValues: Settings.get("panel.netValues", false) === true
+    // Readings the hub watches for its warning dot: a red one when any of them is bad.
+    readonly property var alertTools: ["arp", "firewall", "ping", "wifi", "logins"]
+    readonly property string alert: {
+        let worst = "";
+        for (const id of alertTools) {
+            const d = data[id];
+            if (d && d.state === "bad")
+                return "bad";
+            if (d && d.state === "warn")
+                worst = "warn";
+        }
+        return worst;
+    }
+    readonly property bool menuOpen: Ui.popup === "net"
 
     function has(id) {
         return !!byId[id];
@@ -145,12 +168,14 @@ Singleton {
     // Text beside the icon on the bar.
     function badgeOf(id) {
         const d = data[id];
-        return d && !(byId[id] || {}).quiet ? d.badge || "" : "";
+        return showValues && d && !(byId[id] || {}).quiet ? d.badge || "" : "";
+    }
+    function stateColor(state) {
+        return state === "good" ? Theme.good : state === "bad" ? Theme.error : state === "warn" ? Theme.warn : Theme.text;
     }
     function colorOf(id) {
         const d = data[id];
-        const s = d ? d.state : "";
-        return s === "good" ? Theme.good : s === "bad" ? Theme.error : s === "warn" ? Theme.warn : Theme.text;
+        return stateColor(d ? d.state : "");
     }
 
     function watch(id, step) {
@@ -160,19 +185,104 @@ Singleton {
         if (step > 0 && !data[id])
             refresh(id);
     }
+    // The hub on the bar keeps the readings of its warning dot fresh.
+    function watchHub(step) {
+        for (const id of alertTools)
+            watch(id, step);
+    }
 
-    function toggle(id) {
-        if (Ui.popup === "net" && open === id) {
-            Ui.popup = "";
-            return;
-        }
+    // Shows a tool's table, or the hub's tiles with "".
+    function show(id) {
         if (open !== id) {
             probe = null;
             probeIp = "";
         }
         open = id;
+        if (id === "")
+            refreshStale();
+        else
+            refresh(id);
+    }
+    // Opens the menu under a bar part: "network" for the hub, otherwise a tool.
+    function openFrom(part, hover) {
+        origin = part;
+        byHover = hover;
+        show(part === "network" ? "" : part);
         Ui.popup = "net";
-        refresh(id);
+    }
+    function click(part) {
+        if (menuOpen && origin === part) {
+            if (byHover)
+                byHover = false;
+            else
+                Ui.popup = "";
+            return;
+        }
+        openFrom(part, false);
+    }
+    // Kept for `desk netMenu`.
+    function toggle(id) {
+        click(id === "" ? "network" : id);
+    }
+    function hoverEnter(part) {
+        pointed = part;
+        closeTimer.stop();
+        if (menuOpen && origin === part)
+            return;
+        if (Ui.popup !== "" && !(menuOpen && byHover))
+            return;
+        openTimer.restart();
+    }
+    function hoverExit(part) {
+        if (pointed === part)
+            pointed = "";
+        openTimer.stop();
+        if (menuOpen && byHover)
+            closeTimer.restart();
+    }
+    function menuHovered(on) {
+        overMenu = on;
+        if (on)
+            closeTimer.stop();
+        else if (menuOpen && byHover)
+            closeTimer.restart();
+    }
+
+    // Every reading that is older than its interval, for the hub's tiles.
+    function refreshStale() {
+        const now = Date.now();
+        for (const t of tools)
+            if (t.every > 0 && (!data[t.id] || now - (last[t.id] || 0) >= t.every * 1000))
+                refresh(t.id);
+    }
+
+    Timer {
+        id: openTimer
+
+        interval: 220
+        onTriggered: {
+            if (root.pointed !== "" && (Ui.popup === "" || (root.menuOpen && root.byHover)))
+                root.openFrom(root.pointed, true);
+        }
+    }
+    Timer {
+        id: closeTimer
+
+        interval: 380
+        onTriggered: {
+            if (root.menuOpen && root.byHover && !root.overMenu && root.pointed === "")
+                Ui.popup = "";
+        }
+    }
+    Connections {
+        target: Ui
+
+        function onPopupChanged() {
+            if (Ui.popup !== "net") {
+                root.byHover = false;
+                root.overMenu = false;
+            }
+        }
     }
 
     function setBusy(id, on) {
@@ -267,7 +377,7 @@ Singleton {
         onTriggered: {
             const now = Date.now();
             for (const t of root.tools) {
-                const wanted = (root.watched[t.id] || 0) > 0 || (t.id === "speed" && Ui.popup === "net" && root.open === "speed");
+                const wanted = (root.watched[t.id] || 0) > 0 || (t.id === "speed" && root.menuOpen);
                 if (wanted && t.every > 0 && now - (root.last[t.id] || 0) >= t.every * 1000)
                     root.refresh(t.id);
             }

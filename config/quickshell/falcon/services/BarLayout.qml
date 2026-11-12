@@ -115,6 +115,12 @@ Singleton {
             home: "right"
         },
         {
+            id: "network",
+            title: "Network and security",
+            icon: "radar",
+            home: "right"
+        },
+        {
             id: "status",
             title: "Status",
             icon: "wifi",
@@ -271,7 +277,7 @@ Singleton {
     }
     function resetLook() {
         const panel = JSON.parse(JSON.stringify(Settings.user.panel || {}));
-        for (const key of ["joined", "height", "radius", "edgeGap", "sideGap", "spacing", "border", "workspaceStyle", "titleWidth", "mediaWidth"])
+        for (const key of ["joined", "netValues", "height", "radius", "edgeGap", "sideGap", "spacing", "border", "workspaceStyle", "titleWidth", "mediaWidth"])
             delete panel[key];
         Settings.set("panel", panel);
     }

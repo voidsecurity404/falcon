@@ -85,6 +85,7 @@
     "spacing": 8,
     "border": true,
     "joined": true,
+    "netValues": false,
     "workspaceStyle": "pills",
     "titleWidth": 280,
     "mediaWidth": 140,

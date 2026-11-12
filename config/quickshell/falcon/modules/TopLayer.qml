@@ -15,6 +15,8 @@ PanelWindow {
 
     readonly property bool isFocusedScreen: !!screen && (Niri.focusedOutput === "" || Niri.focusedOutput === screen.name)
     readonly property bool panelHere: Ui.topPanelOpen && isFocusedScreen
+    // A menu opened only by pointing takes no keys and lets clicks through around it.
+    readonly property bool grabs: panelHere && !(Ui.popup === "net" && NetTools.byHover)
     // Focus mode and the overview send the bar off the screen.
     readonly property bool barShown: !Ui.zen && !Niri.overview
     readonly property var leaveCurve: [0.4, 0, 0.9, 0.3, 1, 1]
@@ -179,7 +181,7 @@ PanelWindow {
     color: "transparent"
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.namespace: "falcon-top"
-    WlrLayershell.keyboardFocus: panelHere ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: grabs ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     // Faqat panellar orqasi xiralashadi, qolgan ekran toza qoladi.
     BackgroundEffect.blurRegion: Region {
@@ -256,6 +258,9 @@ PanelWindow {
         Region {
             item: card.visible && !card.flying ? card : null
         }
+        Region {
+            item: netMenu.visible ? netMenu : null
+        }
     }
 
     // Kofe rejimi: fokuslangan ekrandagi shu oyna tizimni uyg'oq ushlab turadi.
@@ -267,8 +272,8 @@ PanelWindow {
     MouseArea {
         id: catcher
 
-        width: root.panelHere ? parent.width : 0
-        height: root.panelHere ? parent.height : 0
+        width: root.grabs ? parent.width : 0
+        height: root.grabs ? parent.height : 0
         onClicked: Ui.popup = ""
     }
 
@@ -276,11 +281,13 @@ PanelWindow {
         id: keyScope
 
         anchors.fill: parent
-        focus: root.panelHere
+        focus: root.grabs
         // Esc steps back from a Wi-Fi or Bluetooth list before it closes the panel.
         Keys.onEscapePressed: {
             if (Ui.popup === "phone" && Ui.phonePage !== "")
                 Ui.phonePage = "";
+            else if (Ui.popup === "net" && NetTools.origin === "network" && NetTools.open !== "")
+                NetTools.show("");
             else if (Ui.controlPage !== "")
                 Ui.controlPage = "";
             else
@@ -425,7 +432,7 @@ PanelWindow {
     NetMenu {
         id: netMenu
 
-        x: root.under([NetTools.open], width, "right", root.layoutKey)
+        x: root.under([NetTools.origin], width, "right", root.layoutKey)
         y: root.popupTop
         shown: root.panelHere && Ui.popup === "net"
     }
