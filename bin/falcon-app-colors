@@ -5,12 +5,15 @@
   falcon-app-colors code   VS Code, VSCodium and editors built on them: a local "Falcon" theme
   falcon-app-colors telegram  Telegram Desktop: a Falcon.tdesktop-theme with the wallpaper behind chats
   falcon-app-colors spotify  Spotify through spicetify: the Falcon theme's color.ini, refreshed in place
-  falcon-app-colors gtk    Makes open GTK 3 and 4 apps read their colors again
-  falcon-app-colors after  Both of the above, run by falcon-apply after matugen
+  falcon-app-colors gtk    Makes open GTK 3 apps read their colors again
+  falcon-app-colors files  Reopens open Nautilus windows, the only way a libadwaita app takes new colors
+  falcon-app-colors after  gtk, then telegram, spotify and files in the background, run by falcon-apply
   falcon-app-colors setup  Points terminal tools and editors at these colors once (safe to repeat)
 """
 
 import colorsys
+import fcntl
+import time
 import configparser
 import re
 import shutil
@@ -276,7 +279,7 @@ def gtk():
     its name changes. So the colors go into a theme of their own on top of adw-gtk3, written
     into two folders, Falcon-a and Falcon-b, used in turn: switching to the other name makes
     open GTK 3 apps take the new colors at once. GTK 4 apps keep reading ~/.config/gtk-4.0/gtk.css,
-    which they do only when they open."""
+    which they do only when they open, see files()."""
     if not shutil.which("gsettings"):
         return
     dark = mode_is_dark()
@@ -299,6 +302,131 @@ def gtk():
     if user_css.exists() and (user_css.read_text().startswith("/* Avtomatik") or GTK_MARK in user_css.read_text()):
         write_atomic(user_css, f"{GTK_MARK}colors come from the Falcon-a/Falcon-b theme (falcon-app-colors gtk). */\n")
     gsettings("gtk-theme", name)
+
+
+NAUTILUS = "org.gnome.Nautilus"
+
+
+def niri_windows():
+    try:
+        out = subprocess.run(["niri", "msg", "-j", "windows"], capture_output=True, text=True, timeout=3).stdout
+        return json.loads(out)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return []
+
+
+def niri_action(*args):
+    subprocess.run(["niri", "msg", "action", *args], capture_output=True, timeout=3)
+
+
+def nautilus_pid():
+    res = subprocess.run(["pgrep", "-xu", str(os.getuid()), "nautilus"], capture_output=True, text=True)
+    pids = res.stdout.split()
+    return int(pids[0]) if pids else None
+
+
+def disk_traffic(pid):
+    try:
+        io = dict(line.split(": ") for line in Path(f"/proc/{pid}/io").read_text().splitlines())
+        return int(io["rchar"]) + int(io["wchar"])
+    except (OSError, KeyError, ValueError):
+        return 0
+
+
+def nautilus_busy(pid):
+    """A copy or move in progress lives inside Nautilus and would die with it. GIO copies
+    move megabytes a second, while an idle Nautilus moves almost nothing."""
+    before = disk_traffic(pid)
+    time.sleep(1)
+    return disk_traffic(pid) - before > 2_000_000
+
+
+def nautilus_locations():
+    """Each window's tabs as URIs, from Nautilus' own org.freedesktop.FileManager1 service."""
+    try:
+        import gi
+        gi.require_version("Gio", "2.0")
+        from gi.repository import Gio, GLib
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION)
+        reply = bus.call_sync("org.freedesktop.FileManager1", "/org/freedesktop/FileManager1",
+                              "org.freedesktop.DBus.Properties", "Get",
+                              GLib.Variant("(ss)", ("org.freedesktop.FileManager1", "OpenWindowsWithLocations")),
+                              None, Gio.DBusCallFlags.NO_AUTO_START, 2000, None)
+        return [uris for uris in reply.unpack()[0].values() if uris]
+    except Exception:
+        return []
+
+
+def files():
+    """Nautilus is a libadwaita app: it reads ~/.config/gtk-4.0/gtk.css only when it starts, and
+    libadwaita ignores GTK themes, so no theme switch reaches it (both checked on 2026-11-12).
+    The only way to new colors is a new process. So open windows are noted with their folders,
+    workspaces and focus, Nautilus quits, and the same folders open again in their places.
+    Waits while it copies files, so a transfer is never cut."""
+    lock = open(STATE / ".files-recolor.lock", "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return  # another run is already waiting and will read the newest colors
+    deadline = time.time() + 600
+    while True:
+        old = [w for w in niri_windows() if w.get("app_id") == NAUTILUS]
+        pid = nautilus_pid()
+        if not old or not pid:
+            return
+        if not nautilus_busy(pid):
+            break
+        if time.time() > deadline:
+            return
+        time.sleep(15)
+    locations = nautilus_locations()
+    if not locations:
+        return
+    spaces = {s["id"]: s for s in json.loads(subprocess.run(["niri", "msg", "-j", "workspaces"],
+                                                             capture_output=True, text=True).stdout or "[]")}
+    focused = next((w for w in niri_windows() if w.get("is_focused")), None)
+    # Window order from niri and from Nautilus differ, so a window finds its folder by title.
+    def title_of(uri):
+        from urllib.parse import unquote, urlparse
+        path = unquote(urlparse(uri).path).rstrip("/")
+        return Path(path).name if path else ""
+    plans, left = [], list(old)
+    for uris in locations:
+        uri = uris[0]
+        match = next((w for w in left if title_of(uri) and title_of(uri) in (w.get("title") or "")), None)
+        match = match or (left[0] if left else None)
+        if match:
+            left.remove(match)
+        plans.append((uri, match))
+    subprocess.run(["nautilus", "-q"], capture_output=True, timeout=10)
+    for _ in range(60):
+        if not nautilus_pid():
+            break
+        time.sleep(0.05)
+    focus_new = None
+    seen = set()
+    for uri, was in plans:
+        niri_action("spawn", "--", "nautilus", "--new-window", uri)
+        new = None
+        for _ in range(100):
+            new = next((w for w in niri_windows() if w.get("app_id") == NAUTILUS and w["id"] not in seen), None)
+            if new:
+                break
+            time.sleep(0.05)
+        if not new:
+            continue
+        seen.add(new["id"])
+        if was:
+            space = spaces.get(was.get("workspace_id"))
+            if space and new.get("workspace_id") != space["id"]:
+                niri_action("move-window-to-workspace", "--window-id", str(new["id"]), "--focus", "false", str(space["idx"]))
+            if was.get("is_floating") != new.get("is_floating"):
+                niri_action("toggle-window-floating", "--id", str(new["id"]))
+            if focused and focused["id"] == was["id"]:
+                focus_new = new["id"]
+    target = focus_new if focus_new else (focused["id"] if focused else None)
+    if target is not None:
+        niri_action("focus-window", "--id", str(target))
 
 
 def json_settings(path, changes, only_if=None):
@@ -372,6 +500,8 @@ def main():
         gtk()
     elif what == "spotify":
         spotify()
+    elif what == "files":
+        files()
     elif what == "after":
         # Run by falcon-apply once matugen has written everything. Telegram's picture
         # takes a moment, so it goes on in the background.
@@ -382,7 +512,10 @@ def main():
                 try:
                     telegram()
                 finally:
-                    spotify()
+                    try:
+                        spotify()
+                    finally:
+                        files()
             finally:
                 os._exit(0)
     elif what == "setup":
