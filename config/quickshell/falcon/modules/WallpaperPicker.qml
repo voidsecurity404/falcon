@@ -308,9 +308,10 @@ LazyLoader {
         property var palette: []
         readonly property string chosenThumb: files.length > 0 ? Wallpapers.thumbOf(files[selected] || "") : ""
 
+        // As fast as the backdrop, so the frame and the dots change together with it.
         Behavior on tint {
             ColorAnimation {
-                duration: 420
+                duration: ambient.fadeMs
             }
         }
 
@@ -328,7 +329,8 @@ LazyLoader {
             Timer {
                 id: sampleLater
 
-                interval: 120
+                // One frame: steps in the same frame are read once, and the colors never trail the row.
+                interval: 16
                 onTriggered: {
                     sampler.want = root.chosenThumb;
                     if (sampler.want === "")
@@ -422,8 +424,8 @@ LazyLoader {
 
         // The blurred current wallpaper and a dim layer fade in together. It is already in memory,
         // and it is blurred once into a small texture.
-        // The backdrop follows the chosen slice: its picture, blurred, crossfades in a moment after
-        // the row stops, so the whole screen takes the mood of the wallpaper being looked at.
+        // The backdrop follows the chosen slice at once: its picture, blurred, fades in over the
+        // one before, so the whole screen takes the mood of the wallpaper being looked at.
         Item {
             anchors.fill: parent
             opacity: root.reveal
@@ -431,8 +433,42 @@ LazyLoader {
             Item {
                 id: ambient
 
-                property var sources: [Wallpapers.thumbOf(Wallpapers.currentLive || Wallpapers.currentImage), ""]
-                property int front: 0
+                // A stack of pictures, newest on top. Each new one fades in over the others, and once
+                // it covers the screen the ones under it go. The bottom one is always whole, so the
+                // desktop never shows through, however fast the row is scrolled.
+                property var layers: []
+                property var sourceOf: ({})
+                property int serial: 0
+                readonly property int fadeMs: 260
+
+                function show(src) {
+                    if (src === "" || (layers.length > 0 && sourceOf[layers[layers.length - 1]] === src))
+                        return;
+                    const key = ++serial;
+                    const map = Object.assign({}, sourceOf);
+                    map[key] = src;
+                    const next = layers.concat([key]);
+                    // Keep at most four: drop the oldest of the half faded ones, never the whole bottom one.
+                    while (next.length > 4)
+                        delete map[next.splice(1, 1)[0]];
+                    sourceOf = map;
+                    layers = next;
+                }
+                // `key` now covers the screen: everything under it can go.
+                function settled(key) {
+                    const at = layers.indexOf(key);
+                    if (at <= 0)
+                        return;
+                    const map = Object.assign({}, sourceOf);
+                    for (const old of layers.slice(0, at))
+                        delete map[old];
+                    layers = layers.slice(at);
+                    sourceOf = map;
+                }
+                function failed(key) {
+                    if (layers.length > 1)
+                        layers = layers.filter(k => k !== key);
+                }
 
                 anchors.fill: parent
                 layer.enabled: true
@@ -445,59 +481,60 @@ LazyLoader {
                     saturation: 0.2
                 }
 
-                Timer {
-                    id: ambientLater
-
-                    interval: 260
-                    onTriggered: {
-                        if (root.chosenThumb === "" || root.chosenThumb === ambient.sources[ambient.front])
-                            return;
-                        const next = ambient.sources.slice();
-                        next[1 - ambient.front] = root.chosenThumb;
-                        ambient.sources = next;
-                    }
-                }
+                Component.onCompleted: show(Wallpapers.thumbOf(Wallpapers.currentLive || Wallpapers.currentImage))
                 Connections {
                     target: root
                     function onChosenThumbChanged() {
-                        ambientLater.restart();
+                        ambient.show(root.chosenThumb);
                     }
                 }
 
                 Repeater {
-                    model: 2
+                    model: ScriptModel {
+                        values: ambient.layers
+                    }
 
                     delegate: Image {
-                        required property int index
+                        id: ambientImage
+
+                        required property var modelData
+                        // The first picture is there from the start, the opening fades it in with the rest.
+                        readonly property bool first: modelData === 1
 
                         anchors.fill: parent
-                        source: ambient.sources[index]
+                        z: modelData
+                        source: ambient.sourceOf[modelData] || ""
                         sourceSize: Wallpapers.thumbSize
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
-                        // The newer picture fades in on top while the older one stays whole under it, and
-                        // goes only once covered. Fading both at once let the desktop show through midway.
-                        z: ambient.front === index ? 1 : 0
-                        opacity: ambient.front === index ? 1 : 0
-                        // The newer picture takes the front once it is decoded.
+                        opacity: first ? 1 : 0
+
+                        function arrive() {
+                            if (first || fadeAnimation.running || opacity >= 1)
+                                return;
+                            fadeAnimation.start();
+                        }
                         onStatusChanged: {
-                            if (status === Image.Ready && index !== ambient.front && source == ambient.sources[index])
-                                ambient.front = index;
+                            if (status === Image.Ready)
+                                arrive();
+                            else if (status === Image.Error)
+                                ambient.failed(modelData);
+                        }
+                        // A picture already in memory is ready before the handler above is connected.
+                        Component.onCompleted: {
+                            if (status === Image.Ready)
+                                arrive();
                         }
 
-                        Behavior on opacity {
-                            SequentialAnimation {
-                                PauseAnimation {
-                                    duration: ambient.front === index ? 0 : 700
-                                }
-                                // Always from nothing: a picture taken back while it still waited to go
-                                // would otherwise pop in whole.
-                                NumberAnimation {
-                                    from: 0
-                                    duration: ambient.front === index ? 700 : 0
-                                    easing.type: Easing.InOutQuad
-                                }
-                            }
+                        NumberAnimation {
+                            id: fadeAnimation
+
+                            target: ambientImage
+                            property: "opacity"
+                            to: 1
+                            duration: ambient.fadeMs
+                            easing.type: Easing.OutCubic
+                            onFinished: ambient.settled(ambientImage.modelData)
                         }
                     }
                 }
@@ -1459,7 +1496,8 @@ LazyLoader {
                                     property real bend: deck.bend
                                     property real dim: (card.slot === deck.hovered ? 0.12 : 0.42) * (1 - card.mark)
                                     property real frame: (1 + 2 * card.mark)
-                                    property color frameColor: card.mark > 0.5 ? root.tint : "white"
+                                    // Blended, not switched halfway, so the frame never jumps from white to the tint.
+                                    property color frameColor: Qt.rgba(1 + (root.tint.r - 1) * card.mark, 1 + (root.tint.g - 1) * card.mark, 1 + (root.tint.b - 1) * card.mark, 1)
                                     property real frameAlpha: card.mark > 0.5 ? card.mark : Math.max(card.slot === deck.hovered ? 0.55 : 0.16, card.mark)
                                     property real texAspect: thumb.implicitHeight > 0 ? thumb.implicitWidth / thumb.implicitHeight : 0.85
                                     property real hiAspect: full.implicitHeight > 0 ? full.implicitWidth / full.implicitHeight : 16 / 9
