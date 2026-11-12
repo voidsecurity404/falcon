@@ -12,14 +12,40 @@ import qs.services
 // middle, snaps shut and stretches into the password field, and the clock rises into place.
 // Its last frame is exactly hyprlock's first (same picture from falcon-lock-bg, same places as in
 // hyprlock.conf), and hyprlock fades in over it, so the hand-over cannot be seen.
+// It waits under hyprlock while locked, and after the unlock plays backward: the clock sinks,
+// the field shrinks back into the badge, the lock springs open and the desktop clears up again.
 PanelWindow {
     id: root
 
     readonly property string outputName: screen ? screen.name : ""
     readonly property string picture: Lock.introDir + "/" + outputName + ".ppm"
-    readonly property bool playing: Lock.intro === "play" || Lock.intro === "hold"
+    readonly property bool playing: Lock.intro === "play" || Lock.intro === "hold" || Lock.intro === "out"
+    readonly property bool leaving: Lock.intro === "out"
     // Milliseconds into the show.
     property real ms: 0
+    // Milliseconds into the unlock. It drives ms backward in three steps, so the clock and field go
+    // first, the lock springs open on its own, and only then the background clears.
+    property real outMs: 0
+
+    onOutMsChanged: {
+        if (!leaving)
+            return;
+        const t = outMs;
+        if (t < 350)
+            ms = mix(Lock.introLength, 560, ease(t / 350));
+        else if (t < 560)
+            ms = mix(560, 380, (t - 350) / 210);
+        else
+            ms = mix(380, 0, (t - 560) / (Lock.outroLength - 560));
+    }
+
+    function ease(t) {
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+    // Eased share of the unlock between a and b milliseconds.
+    function outPart(a, b) {
+        return ease(Math.max(0, Math.min(1, (outMs - a) / (b - a))));
+    }
 
     // Eased share of the part of the show between a and b milliseconds.
     function part(a, b, curve) {
@@ -51,7 +77,8 @@ PanelWindow {
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: "falcon-lock-intro"
-    WlrLayershell.keyboardFocus: visible ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    // Keys typed right after the unlock go to the windows, not to the show.
+    WlrLayershell.keyboardFocus: visible && !leaving ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     Connections {
         target: Lock
@@ -62,8 +89,17 @@ PanelWindow {
                 grab.running = true;
             } else if (Lock.intro === "play") {
                 show.restart();
+            } else if (Lock.intro === "hold") {
+                // A lock started elsewhere: the show waits at its last frame, without a picture.
+                if (!show.running)
+                    root.ms = Lock.introLength;
+            } else if (Lock.intro === "out") {
+                show.stop();
+                root.outMs = 0;
+                outro.restart();
             } else if (Lock.intro === "") {
                 show.stop();
+                outro.stop();
                 root.ms = 0;
                 shot.source = "";
             }
@@ -97,6 +133,18 @@ PanelWindow {
         }
     }
 
+    // The same show backward, a little faster.
+    NumberAnimation {
+        id: outro
+
+        target: root
+        property: "outMs"
+        from: 0
+        to: Lock.outroLength
+        duration: Lock.outroLength
+        onFinished: Lock.outroDone()
+    }
+
     // Takes every key and click while it is up.
     MouseArea {
         anchors.fill: parent
@@ -113,6 +161,8 @@ PanelWindow {
 
         anchors.fill: parent
         visible: shot.status === Image.Ready
+        // Backward, the old picture fades as it clears, so the live desktop under it takes over.
+        opacity: root.leaving ? 1 - root.outPart(620, Lock.outroLength) : 1
         scale: root.mix(1, 1.07, root.part(0, 900, "inOut"))
 
         Image {
@@ -147,8 +197,8 @@ PanelWindow {
         cache: false
         asynchronous: false
         fillMode: Image.PreserveAspectCrop
-        opacity: root.part(120, 640, "inOut")
-        scale: root.mix(1.12, 1, root.part(120, 1000, "outQuint"))
+        opacity: root.leaving ? 1 - root.outPart(560, Lock.outroLength - 60) : root.part(120, 640, "inOut")
+        scale: root.leaving ? root.mix(1, 1.08, root.outPart(560, Lock.outroLength)) : root.mix(1.12, 1, root.part(120, 1000, "outQuint"))
         visible: root.playing
     }
 
@@ -162,7 +212,7 @@ PanelWindow {
         border.width: root.mix(18, 1, root.part(260, 950, "out"))
         border.color: Theme.accent
         opacity: 0.35 * (1 - root.part(260, 950, "inOut")) * (root.ms > 260 ? 1 : 0)
-        visible: root.playing
+        visible: root.playing && !root.leaving
     }
 
     // hyprlock.conf places its parts from the middle of the screen, y upward.

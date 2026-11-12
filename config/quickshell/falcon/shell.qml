@@ -72,6 +72,10 @@ ShellRoot {
         function lockAnimated(): void {
             Lock.animate();
         }
+        // hypridle's lock_cmd: the show waits under hyprlock and animates the unlock.
+        function lockStarted(): void {
+            Lock.lockStarted();
+        }
         function lockPreview(): void {
             Lock.preview = !Lock.preview;
         }

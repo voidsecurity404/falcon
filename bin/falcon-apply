@@ -332,7 +332,10 @@ def idle_conf(s):
     i = s["idle"]
     shell_lock = choice(s["session"], "lockScreen", ["hyprlock", "shell"]) == "shell"
     # If the shell does not answer, the session still gets locked by hyprlock.
-    hyprlock = "pgrep -u $(id -u) -x hyprlock || hyprlock"
+    # The shell is told first, in the background so it can never hold up the lock: its show then
+    # waits under hyprlock and animates the unlock.
+    notify = "(timeout 2 qs -c falcon ipc call desk lockStarted >/dev/null 2>&1 &); "
+    hyprlock = notify + "pgrep -u $(id -u) -x hyprlock || hyprlock"
     lock = f"qs -c falcon ipc call desk lock || {hyprlock}" if shell_lock else hyprlock
     out = [
         "# Generated file: change it in the Settings window.",
