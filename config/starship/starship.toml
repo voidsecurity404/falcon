@@ -32,7 +32,7 @@ Linux = ""
 [username]
 show_always = true
 style_user = "bold inverted blue"
-style_root = "bold inverted red"
+style_root = "bold inverted blue"
 format = "[$user]($style)"
 
 [directory]
