@@ -126,6 +126,13 @@ PanelWindow {
 
         width: 420
         height: column.implicitHeight + 56
+        Behavior on height {
+            enabled: root.reveal > 0.99
+            NumberAnimation {
+                duration: 240
+                easing.type: Easing.OutCubic
+            }
+        }
         x: Math.round((parent.width - width) / 2) + shake
         y: Math.round((parent.height - height) / 2 + (1 - root.reveal) * 24)
         opacity: root.reveal
@@ -248,10 +255,25 @@ PanelWindow {
                 }
                 Label {
                     anchors.centerIn: parent
-                    visible: field.text === ""
+                    opacity: field.text === "" ? 1 : 0
+                    scale: field.text === "" ? 1 : 0.92
+                    visible: opacity > 0
                     text: root.waiting ? Tr.t("Checking…") : (root.prompt !== "" && !/^password$/i.test(root.prompt) ? root.prompt : Tr.t("Password"))
                     color: Theme.muted
                     size: 14
+
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: 180
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                    Behavior on scale {
+                        NumberAnimation {
+                            duration: 220
+                            easing.type: Easing.OutCubic
+                        }
+                    }
                 }
             }
             Label {

@@ -20,6 +20,9 @@ if [[ ! -e "$theme/Main.qml" ]]; then
     sudo cp -a "$tmp/theme/Fonts/." /usr/share/fonts/sddm-astronaut/
 fi
 sudo sed -i 's|^ConfigFile=.*|ConfigFile=Themes/pixel_sakura.conf|' "$theme/metadata.desktop"
+# Falcon's way out of the login screen: Enter animates the form away and fades to black, where
+# the session's cover fades in. The theme still logs in by itself if this part fails to load.
+sudo python3 "$repo/config/sddm/falcon-theme-patch.py" "$theme"
 
 # The theme settings live in a file of this user, so a new wallpaper can change them without sudo.
 sudo install -d -m 755 -o "$USER" "$shared"

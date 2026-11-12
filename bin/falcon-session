@@ -37,10 +37,13 @@ TERMINALS = {"kitty": "--directory", "alacritty": "--working-directory", "foot":
 # These only name a runtime, so the app cannot be started from them.
 RUNTIMES = {"python", "python3", "node", "electron", "java", "bwrap", "sh", "bash", "zsh", "fish", "wine", "gjs"}
 HELPERS = {"kitten", "kitty"}
+# Picture-in-Picture windows belong to a video playing in a browser tab. No app brings them back
+# at start, so waiting for one only held the cover up and then started a second browser window.
+TRANSIENT_TITLES = {"picture-in-picture", "picture in picture", "картинка в картинке", "картинка-в-картинке"}
 
 SAVE_DELAY = 1.5        # after a change, so a burst of events writes once
 SAVE_EVERY = 30         # also catches a terminal changing folder, which sends no event
-SETTLE = 3.5            # an app may open several windows itself, such as a browser restoring its own
+SETTLE = 2.0            # an app may open several windows itself, such as a browser restoring its own
 COVER_WAIT = 2          # a cover that does not come up must not hold the windows back
 POLL = 0.05             # how often new windows are looked for while restoring
 LAUNCH_WAIT = 20        # a launch that opened nothing by then is given up
@@ -154,6 +157,10 @@ def zen_on():
         return False
 
 
+def transient(title):
+    return isinstance(title, str) and title.strip().lower() in TRANSIENT_TITLES
+
+
 def snapshot():
     workspaces = {w["id"]: w for w in niri_json("workspaces")}
     outputs = niri_json("outputs")
@@ -162,7 +169,7 @@ def snapshot():
     for w in niri_json("windows"):
         app = w.get("app_id") or ""
         space = workspaces.get(w.get("workspace_id"))
-        if not app or app in SKIP or not space or not w.get("pid"):
+        if not app or app in SKIP or not space or not w.get("pid") or transient(w.get("title")):
             continue
         exe = executable(w["pid"])
         if not exe:
@@ -521,7 +528,7 @@ def clean(item):
         "fullscreen": flag("fullscreen"), "active": flag("active"),
         "workspaceActive": flag("workspaceActive"), "focused": flag("focused"),
     }
-    if not out["app"] and not out["exe"]:
+    if (not out["app"] and not out["exe"]) or transient(out["title"]):
         return None
     if "x" in item and "y" in item:
         out["x"], out["y"] = number(item["x"], None), number(item["y"], None)
@@ -537,16 +544,19 @@ def own_windows():
     return [w for w in niri_json("windows") if (w.get("app_id") or "") not in SKIP]
 
 
-def open_cover():
+def open_cover(caption=True):
     if not (COVER_DIR / "shell.qml").exists() or not shutil.which("qs"):
         return None
     env = dict(os.environ, FALCON_COVER_FLAG=str(FLAG))
-    try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from falcon_tr import tr
-        env["FALCON_COVER_TEXT"] = tr("Restoring your windows")
-    except Exception:  # noqa: BLE001  the English text is used then
-        pass
+    if not caption:
+        env["FALCON_COVER_TEXT"] = " "
+    else:
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from falcon_tr import tr
+            env["FALCON_COVER_TEXT"] = tr("Restoring your windows")
+        except Exception:  # noqa: BLE001  the English text is used then
+            pass
     font = setting("appearance", "font", "")
     if isinstance(font, str) and font:
         env["FALCON_COVER_FONT"] = font
@@ -585,21 +595,51 @@ def wait_for_cover(cover):
         time.sleep(0.02)
 
 
-def restore(force):
-    if not force and not enabled():
-        return 0
+def welcome():
+    """At login with nothing to bring back, the cover still comes up out of the login screen's
+    black and opens onto the desktop, so the session never just appears."""
     if own_windows():
-        return 0
+        return
+    try:
+        FLAG.write_text(str(time.time()))
+    except OSError:
+        return
+    cover = open_cover(caption=False)
+    try:
+        wait_for_cover(cover)
+        # The cover's own rise from black takes 0.7 s; the shell and wallpaper come up meanwhile.
+        time.sleep(1.1)
+    finally:
+        FLAG.unlink(missing_ok=True)
+        close_cover(cover)
+
+
+def restore(force, greet=False):
+    """Returns 0. With `greet` (at login) the welcome cover shows when nothing is restored."""
+    shown = False
+    try:
+        shown = bring_back_saved(force)
+    finally:
+        if greet and not shown:
+            welcome()
+    return 0
+
+
+def bring_back_saved(force):
+    if not force and not enabled():
+        return False
+    if own_windows():
+        return False
     try:
         items = json.loads(FILE.read_text())
     except (OSError, ValueError):
-        return 0
+        return False
     if not isinstance(items, list) or not items:
-        return 0
+        return False
     # Set before anything slow, so the shell finds it when it starts.
     groups, wanted = plan(items)
     if not wanted:
-        return 0
+        return False
     try:
         FLAG.write_text(str(time.time()))
     except OSError:
@@ -611,7 +651,7 @@ def restore(force):
     finally:
         FLAG.unlink(missing_ok=True)
         close_cover(cover)
-    return 0
+    return True
 
 
 def plan(items):
@@ -687,7 +727,7 @@ def main():
             return watch()
         if args[:1] == ["run"]:
             try:
-                restore(False)
+                restore(False, greet=True)
             except Exception as error:  # noqa: BLE001  saving must keep working whatever restore met
                 print(f"restore failed: {error!r}", file=sys.stderr)
             return watch()

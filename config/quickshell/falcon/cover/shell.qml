@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Effects
+import QtQuick.Shapes
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -9,6 +10,10 @@ import Quickshell.Wayland
 // the whole shell takes most of a second, and apps start only once it is on screen. It shows the
 // wallpaper that is underneath with a clock, and when the flag file goes it fades away and quits,
 // revealing the desktop with every window already in place. A click lifts it early.
+//
+// Leaving is one value, `out`, from 0 to 1: the clock and caption float up and blur away, then a
+// soft round opening grows from the middle of the screen and shows the windows under it, while the
+// picture around it swells a little and blurs, as if the desktop came through a lens.
 ShellRoot {
     id: root
 
@@ -16,9 +21,41 @@ ShellRoot {
     readonly property string caption: Quickshell.env("FALCON_COVER_TEXT") || "Restoring your windows"
     readonly property string wallpaper: Quickshell.env("HOME") + "/.local/state/falcon/wallpaper"
     property bool leaving: false
+    property real out: 0
+    // The login screen ends in black, so the cover comes up out of black too.
+    property real dawn: 0
+
+    NumberAnimation on dawn {
+        from: 0
+        to: 1
+        duration: 700
+        easing.type: Easing.InOutQuad
+    }
 
     function leave() {
+        if (leaving)
+            return;
         leaving = true;
+        outAnimation.start();
+    }
+
+    // A part of `out` from a to b, eased out, or in and out with `smooth`.
+    function part(a, b, smooth) {
+        const t = Math.max(0, Math.min(1, (out - a) / (b - a)));
+        if (smooth)
+            return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        return 1 - Math.pow(1 - t, 3);
+    }
+
+    NumberAnimation {
+        id: outAnimation
+
+        target: root
+        property: "out"
+        from: 0
+        to: 1
+        duration: 1000
+        onFinished: Qt.quit()
     }
 
     Process {
@@ -32,7 +69,7 @@ ShellRoot {
     }
 
     Timer {
-        interval: 100
+        interval: 50
         repeat: true
         running: !root.leaving
         onTriggered: probe.running = true
@@ -43,12 +80,6 @@ ShellRoot {
         interval: 15000
         running: true
         onTriggered: root.leave()
-    }
-
-    Timer {
-        interval: 420
-        running: root.leaving
-        onTriggered: Qt.quit()
     }
 
     Variants {
@@ -73,17 +104,85 @@ ShellRoot {
                 WlrLayershell.namespace: "falcon-cover"
                 WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
+                // The opening: one soft disc drawn once and only scaled, so each frame costs no new
+                // drawing. Its edge is a quarter of its radius, so it stays soft as it grows.
+                readonly property real reach: Math.sqrt(width * width + height * height) / 2 / 0.75 + 40
+                readonly property real hole: root.part(0.1, 0.92, true) * reach
+
+                Item {
+                    id: opening
+
+                    anchors.fill: parent
+                    visible: false
+                    layer.enabled: root.leaving
+
+                    Shape {
+                        width: 1000
+                        height: 1000
+                        anchors.centerIn: parent
+                        scale: win.hole / 500
+
+                        ShapePath {
+                            strokeColor: "transparent"
+                            fillGradient: RadialGradient {
+                                centerX: 500
+                                centerY: 500
+                                centerRadius: 500
+                                focalX: 500
+                                focalY: 500
+
+                                GradientStop {
+                                    position: 0
+                                    color: "white"
+                                }
+                                GradientStop {
+                                    position: 0.72
+                                    color: "white"
+                                }
+                                GradientStop {
+                                    position: 1
+                                    color: "transparent"
+                                }
+                            }
+                            startX: 0
+                            startY: 0
+
+                            PathLine {
+                                x: 1000
+                                y: 0
+                            }
+                            PathLine {
+                                x: 1000
+                                y: 1000
+                            }
+                            PathLine {
+                                x: 0
+                                y: 1000
+                            }
+                            PathLine {
+                                x: 0
+                                y: 0
+                            }
+                        }
+                    }
+                }
+
                 Item {
                     id: veil
 
                     anchors.fill: parent
-                    opacity: root.leaving ? 0 : 1
-
-                    Behavior on opacity {
-                        NumberAnimation {
-                            duration: 380
-                            easing.type: Easing.InOutCubic
-                        }
+                    // A last fade, so no edge of the opening is left in a corner.
+                    opacity: 1 - root.part(0.85, 1, true)
+                    layer.enabled: root.leaving
+                    layer.effect: MultiEffect {
+                        maskEnabled: true
+                        maskSource: opening
+                        maskInverted: true
+                        maskThresholdMin: 0.5
+                        maskSpreadAtMin: 0.5
+                        blurEnabled: true
+                        blur: root.part(0.05, 0.9) * 0.7
+                        blurMax: 48
                     }
 
                     Rectangle {
@@ -99,11 +198,12 @@ ShellRoot {
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: false
                         cache: false
+                        scale: 1 + 0.07 * root.part(0, 1)
                     }
 
                     Rectangle {
                         anchors.fill: parent
-                        color: Qt.rgba(0, 0, 0, 0.28)
+                        color: Qt.rgba(0, 0, 0, 0.28 + 0.12 * root.part(0, 0.5))
                     }
 
                     Column {
@@ -111,11 +211,13 @@ ShellRoot {
 
                         property real intro: 0
 
+                        readonly property real gone: root.part(0, 0.34)
+
                         anchors.centerIn: parent
-                        anchors.verticalCenterOffset: (1 - intro) * 14 + (1 - veil.opacity) * -10
+                        anchors.verticalCenterOffset: (1 - intro) * 14 - gone * 34
                         spacing: 14
-                        opacity: intro
-                        scale: 0.96 + 0.04 * intro
+                        opacity: intro * (1 - gone)
+                        scale: (0.96 + 0.04 * intro) * (1 + 0.08 * gone)
                         // A soft shadow keeps the text readable over a busy picture.
                         layer.enabled: true
                         layer.effect: MultiEffect {
@@ -125,6 +227,8 @@ ShellRoot {
                             shadowBlur: 1
                             blurMax: 40
                             shadowVerticalOffset: 2
+                            blurEnabled: middle.gone > 0
+                            blur: middle.gone
                         }
 
                         NumberAnimation on intro {
@@ -157,6 +261,7 @@ ShellRoot {
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: root.caption
+                            visible: text.trim() !== ""
                             color: Qt.rgba(1, 1, 1, 0.78)
                             font.family: Quickshell.env("FALCON_COVER_FONT") || "Geist"
                             font.pixelSize: 15
@@ -196,6 +301,13 @@ ShellRoot {
                                 }
                             }
                         }
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        color: "black"
+                        opacity: 1 - root.dawn
+                        visible: opacity > 0
                     }
                 }
 
