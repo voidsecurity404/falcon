@@ -33,6 +33,7 @@ gnome-keyring
 nautilus
 gtk3
 qt6ct
+adw-gtk-theme
 # Clipboard, skrinshot, yozish, OCR
 wl-clipboard
 cliphist

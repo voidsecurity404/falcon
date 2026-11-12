@@ -3,9 +3,19 @@
 
   falcon-app-colors kde    KDE and Qt apps: ~/.config/kdeglobals and the Falcon color scheme
   falcon-app-colors code   VS Code, VSCodium and editors built on them: a local "Falcon" theme
+  falcon-app-colors telegram  Telegram Desktop: a Falcon.tdesktop-theme with the wallpaper behind chats
+  falcon-app-colors gtk    Makes open GTK 3 and 4 apps read their colors again
+  falcon-app-colors after  Both of the above, run by falcon-apply after matugen
+  falcon-app-colors setup  Points terminal tools and editors at these colors once (safe to repeat)
 """
 
+import colorsys
 import configparser
+import re
+import shutil
+import subprocess
+import tempfile
+import zipfile
 import json
 import os
 import sys
@@ -90,12 +100,223 @@ def code():
         write_atomic(folder / "themes" / "falcon.json", json.dumps(theme, indent=2) + "\n")
 
 
+# Telegram Desktop. Its palette (lib_ui's colors.palette) is read for its keys and
+# default colors; each literal default is moved onto the wallpaper's scheme: grays
+# along the surface-to-text ramp, pale tints onto a primary tint, reds to the error
+# color, yellows and oranges to yellow, other hues to the primary. Keys defined as
+# another key are left out, so Telegram derives them. Pictures and calls keep theirs.
+PALETTE_URL = "https://raw.githubusercontent.com/desktop-app/lib_ui/{rev}/ui/colors.palette"
+PALETTE_REV = "master"
+CACHE = Path(os.environ.get("XDG_CACHE_HOME") or HOME / ".cache") / "falcon"
+KEEP = re.compile(r"^(mediaview|call|groupCall|videoPlay|imageBg|shadowFg|slideFadeOut|boxDivider|historyPeer\d|historyPeerArchive|historyPeerSaved|historyPeerUserpic|.*Img|.*Userpic)")
+ON_ACCENT = re.compile(r"(FgActive|ActiveFg|activeButtonFg|activeButtonSecondaryFg|FgOnActive|Selected.*Active)")
+
+
+def palette_text():
+    path = CACHE / "telegram-colors.palette"
+    if not path.exists() or path.stat().st_size < 1000:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        res = subprocess.run(["curl", "-sfL", "--max-time", "20", "-o", str(path), PALETTE_URL.format(rev=PALETTE_REV)])
+        if res.returncode != 0:
+            path.unlink(missing_ok=True)
+            sys.exit("falcon-app-colors: Telegram's palette could not be downloaded")
+    return path.read_text()
+
+
+def rgba(text):
+    text = text.lstrip("#")
+    r, g, b = (int(text[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    a = int(text[6:8], 16) / 255 if len(text) == 8 else 1.0
+    return r, g, b, a
+
+
+def mix(one, two, t):
+    t = max(0.0, min(1.0, t))
+    return tuple(x + (y - x) * t for x, y in zip(one[:3], two[:3]))
+
+
+def hexa(color, alpha):
+    out = "#" + "".join(f"{round(max(0, min(1, x)) * 255):02x}" for x in color[:3])
+    return out if alpha >= 0.999 else out + f"{round(alpha * 255):02x}"
+
+
+def telegram_color(key, value, c):
+    r, g, b, a = rgba(value)
+    if KEEP.match(key):
+        return value
+    h, l, sat = colorsys.rgb_to_hls(r, g, b)
+    chroma = max(r, g, b) - min(r, g, b)
+    if chroma < 0.09:
+        if a < 0.999 and l < 0.3:
+            return value  # a shadow or a dark veil
+        if l > 0.85 and ON_ACCENT.search(key):
+            return hexa(c["onPrimary"], a)
+        return hexa(mix(c["surface"], c["text"], 1 - l), a)
+    if l > 0.82:
+        return hexa(mix(c["surface"], c["primary"], 0.12 + (1 - l) * 1.2), a)
+    deg = h * 360
+    if deg < 18 or deg > 335:
+        return hexa(c["error"], a)
+    if deg < 65:
+        return hexa(c["yellow"], a)
+    return hexa(c["primary"], a)
+
+
+def telegram():
+    c = {k: (rgba(v) if isinstance(v, str) else v) for k, v in json.loads((STATE / "apps.json").read_text()).items()}
+    lines = ["// Falcon: generated from the wallpaper by falcon-app-colors, do not edit by hand."]
+    for line in palette_text().splitlines():
+        m = re.match(r"^([A-Za-z0-9_]+):\s*(#[0-9a-fA-F]{6,8})\b", line)
+        if m:
+            lines.append(f"{m.group(1)}: {telegram_color(m.group(1), m.group(2), c)};")
+    # Message bubbles: incoming on a raised surface, outgoing on the primary container.
+    lines += [
+        f"msgInBg: {hexa(c['surfaceHigh'], 1)};",
+        f"msgOutBg: {hexa(c['primaryContainer'], 1)};",
+        f"historyTextOutFg: {hexa(c['onPrimaryContainer'], 1)};",
+        f"msgOutDateFg: {hexa(mix(c['primaryContainer'], c['onPrimaryContainer'], 0.65), 1)};",
+        f"historyOutIconFg: {hexa(c['onPrimaryContainer'], 1)};",
+        f"msgServiceBg: {hexa(c['surfaceLowest'], 0.6)};",
+        f"msgServiceFg: {hexa(c['text'], 1)};",
+    ]
+    out = STATE / "telegram" / "Falcon.tdesktop-theme"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        background = Path(tmp) / "background.jpg"
+        wall = STATE / "wallpaper"
+        if shutil.which("magick") and wall.exists():
+            veil = hexa(c["surface"], 1)
+            subprocess.run(["magick", str(wall.resolve()), "-resize", "1600x1600^", "-fill", veil,
+                            "-colorize", "55%" if c["dark"] else "35%", "-quality", "86", str(background)],
+                           capture_output=True)
+        part = out.with_name(out.name + ".falcon-tmp")
+        with zipfile.ZipFile(part, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("colors.tdesktop-theme", "\n".join(lines) + "\n")
+            if background.exists():
+                z.write(background, "background.jpg")
+        part.replace(out)
+    print(out)
+
+
+def mode_is_dark():
+    try:
+        return bool(json.loads((STATE / "apps.json").read_text()).get("dark", True))
+    except (OSError, ValueError):
+        return True
+
+
+def gsettings(key, value=None):
+    cmd = ["gsettings", "get" if value is None else "set", "org.gnome.desktop.interface", key]
+    res = subprocess.run(cmd + ([] if value is None else [value]), capture_output=True, text=True)
+    return res.stdout.strip().strip("'")
+
+
+GTK_MARK = "/* Falcon: "
+
+
+def gtk():
+    """GTK 3 apps read gtk.css in ~/.config only at start, but read their theme again whenever
+    its name changes. So the colors go into a theme of their own on top of adw-gtk3, written
+    into two folders, Falcon-a and Falcon-b, used in turn: switching to the other name makes
+    open GTK 3 apps take the new colors at once. GTK 4 apps keep reading ~/.config/gtk-4.0/gtk.css,
+    which they do only when they open."""
+    if not shutil.which("gsettings"):
+        return
+    dark = mode_is_dark()
+    base = Path("/usr/share/themes") / ("adw-gtk3-dark" if dark else "adw-gtk3") / "gtk-3.0" / "gtk.css"
+    user_css = CONFIG / "gtk-3.0" / "gtk.css"
+    colors = STATE / "gtk3-colors.css"
+    if not base.exists() or not colors.exists():
+        # Without adw-gtk3 the colors only reach apps through the user file, read at start.
+        if colors.exists():
+            write_atomic(user_css, colors.read_text())
+        gsettings("gtk-theme", "Adwaita-dark" if dark else "Adwaita")
+        return
+    current = gsettings("gtk-theme")
+    name = "Falcon-b" if current == "Falcon-a" else "Falcon-a"
+    css = f'{GTK_MARK}generated by falcon-app-colors, do not edit by hand. */\n@import url("file://{base}");\n\n{colors.read_text()}'
+    write_atomic(DATA / "themes" / name / "gtk-3.0" / "gtk.css", css)
+    write_atomic(DATA / "themes" / name / "index.theme",
+                 f"[Desktop Entry]\nType=X-GNOME-Metatheme\nName={name}\nComment=Falcon colors on adw-gtk3\n")
+    # The user file is read after the theme, so colors left there would hide the new ones.
+    if user_css.exists() and (user_css.read_text().startswith("/* Avtomatik") or GTK_MARK in user_css.read_text()):
+        write_atomic(user_css, f"{GTK_MARK}colors come from the Falcon-a/Falcon-b theme (falcon-app-colors gtk). */\n")
+    gsettings("gtk-theme", name)
+
+
+def json_settings(path, changes, only_if=None):
+    """Sets keys in a JSON settings file. A file with comments is left alone."""
+    try:
+        data = json.loads(path.read_text()) if path.exists() else {}
+    except ValueError:
+        print(f"skip {path}: not plain JSON")
+        return
+    if not isinstance(data, dict):
+        return
+    if only_if and not only_if(data):
+        return
+    if all(data.get(k) == v for k, v in changes.items()):
+        return
+    data.update(changes)
+    write_atomic(path, json.dumps(data, indent=4, ensure_ascii=False) + "\n")
+    print(f"set {path}")
+
+
+def setup():
+    # btop: its TTY theme draws with the terminal's 16 colors, which kitty takes from the wallpaper.
+    conf = CONFIG / "btop" / "btop.conf"
+    text = conf.read_text() if conf.exists() else ""
+    for key, value in (("color_theme", '"TTY"'), ("theme_background", "false")):
+        if re.search(rf"^{key}\s*=", text, re.M):
+            text = re.sub(rf"^{key}\s*=.*$", f"{key} = {value}", text, flags=re.M)
+        else:
+            text += f"{key} = {value}\n"
+    write_atomic(conf, text)
+    # micro: the Falcon scheme, also only terminal colors.
+    if (CONFIG / "micro" / "colorschemes" / "falcon.micro").exists():
+        json_settings(CONFIG / "micro" / "settings.json", {"colorscheme": "falcon"})
+    # Alacritty: imports the colors matugen writes.
+    conf = CONFIG / "alacritty" / "alacritty.toml"
+    if not conf.exists():
+        write_atomic(conf, '[general]\nimport = ["~/.config/alacritty/falcon-colors.toml"]\n\n'
+                           '[font]\nnormal = { family = "Geist Mono" }\nsize = 11\n\n[window]\npadding = { x = 12, y = 10 }\n')
+    elif "falcon-colors.toml" not in conf.read_text():
+        print(f"skip {conf}: add ~/.config/alacritty/falcon-colors.toml to general.import yourself")
+    # rofi
+    conf = CONFIG / "rofi" / "config.rasi"
+    if not conf.exists():
+        write_atomic(conf, '@theme "~/.config/rofi/falcon-colors.rasi"\n')
+    # VS Code and its relatives: pick the Falcon theme, unless another one was chosen on purpose.
+    for name in ("Code", "Code - OSS", "VSCodium", "Cursor", "Windsurf"):
+        user = CONFIG / name / "User"
+        if user.parent.is_dir():
+            json_settings(user / "settings.json", {"workbench.colorTheme": "Falcon"},
+                          only_if=lambda d: d.get("workbench.colorTheme") in (None, "Falcon", "Default Dark Modern",
+                                                                               "Default Light Modern", "Default Dark+"))
+
+
 def main():
     what = sys.argv[1] if len(sys.argv) > 1 else ""
     if what == "kde":
         kde()
     elif what == "code":
         code()
+    elif what == "telegram":
+        telegram()
+    elif what == "gtk":
+        gtk()
+    elif what == "after":
+        # Run by falcon-apply once matugen has written everything. Telegram's picture
+        # takes a moment, so it goes on in the background.
+        gtk()
+        if os.fork() == 0:
+            os.setsid()
+            try:
+                telegram()
+            finally:
+                os._exit(0)
+    elif what == "setup":
+        setup()
     else:
         print(__doc__.strip())
         sys.exit(0 if what in ("-h", "--help", "") else 1)

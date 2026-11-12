@@ -462,6 +462,9 @@ def colors(s, image=None):
     (STATE / "theme-key").write_text(theme_key(s))
     run_quiet("dconf", "write", "/org/gnome/desktop/interface/color-scheme", "'prefer-light'" if mode == "light" else "'prefer-dark'")
     claude_theme(mode)
+    # GTK 3 and Telegram read several of the files just written, so they go after matugen.
+    if shutil.which("falcon-app-colors"):
+        run_quiet("falcon-app-colors", "after")
     # The animated fastfetch logo: repaint it in terminals already open, and make the
     # frames the next terminal needs, in the background.
     if shutil.which("falcon-fetch"):

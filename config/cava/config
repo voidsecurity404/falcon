@@ -1,0 +1,9 @@
+# Falcon: colors are the terminal's own, so the bars follow the wallpaper with kitty.
+[general]
+framerate = 60
+bar_width = 2
+bar_spacing = 1
+
+[color]
+background = default
+foreground = blue

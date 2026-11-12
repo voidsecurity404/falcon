@@ -30,7 +30,7 @@ output_path = "~/.config/hypr/falcon-colors.conf"
 
 [templates.gtk3]
 input_path = "~/.config/matugen/templates/gtk.css"
-output_path = "~/.config/gtk-3.0/gtk.css"
+output_path = "~/.local/state/falcon/gtk3-colors.css"
 
 [templates.gtk4]
 input_path = "~/.config/matugen/templates/gtk.css"
@@ -79,3 +79,15 @@ output_path = "~/.config/mpv/script-opts/context_menu.conf"
 [templates.mpvuosc]
 input_path = "~/.config/matugen/templates/mpv-uosc.conf"
 output_path = "~/.config/mpv/script-opts/uosc.conf"
+
+[templates.apps]
+input_path = "~/.config/matugen/templates/apps.json"
+output_path = "~/.local/state/falcon/apps.json"
+
+[templates.alacritty]
+input_path = "~/.config/matugen/templates/alacritty.toml"
+output_path = "~/.config/alacritty/falcon-colors.toml"
+
+[templates.rofi]
+input_path = "~/.config/matugen/templates/rofi.rasi"
+output_path = "~/.config/rofi/falcon-colors.rasi"

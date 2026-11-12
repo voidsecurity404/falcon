@@ -44,6 +44,9 @@ targets=(
     .config/fastfetch/brand.txt
     .config/fastfetch/logos
     .config/fish/conf.d/falcon-fetch.fish
+    .config/fish/conf.d/falcon-colors.fish
+    .config/micro/colorschemes/falcon.micro
+    .config/cava/config
     .config/mpv
     .config/kitty/kitty.conf
     .config/kitty/falcon-colors.conf
@@ -246,7 +249,11 @@ do_it cp -a "$root/config/fastfetch/logos" "$HOME/.config/fastfetch/logos"
 do_it mkdir -p "$HOME/.config/mpv"
 do_it cp "$root/config/mpv/mpv.conf" "$root/config/mpv/input.conf" "$HOME/.config/mpv/"
 do_it mkdir -p "$HOME/.config/fish/conf.d"
-do_it cp "$root/config/fish/conf.d/falcon-fetch.fish" "$HOME/.config/fish/conf.d/falcon-fetch.fish"
+do_it cp "$root/config/fish/conf.d/falcon-fetch.fish" "$root/config/fish/conf.d/falcon-colors.fish" "$HOME/.config/fish/conf.d/"
+# Terminal tools and other apps take the wallpaper colors (bin/falcon-app-colors).
+do_it mkdir -p "$HOME/.config/micro/colorschemes" "$HOME/.config/cava"
+do_it cp "$root/config/micro/colorschemes/falcon.micro" "$HOME/.config/micro/colorschemes/"
+[[ -e "$HOME/.config/cava/config" ]] || do_it cp "$root/config/cava/config" "$HOME/.config/cava/config"
 # CachyOS config.fish o'z fish_greeting'ini conf.d dan keyin yozadi, shuning uchun
 # aylanadigan logo uchun salomlashuv config.fish oxirida qayta belgilanadi.
 fish_conf="$HOME/.config/fish/config.fish"
@@ -279,6 +286,7 @@ do_it cp -n "$root"/wallpapers/* "$HOME/Pictures/Wallpapers/"
 # fetches them at its first use.
 soft "$root/bin/falcon-ocr-models"
 soft "$root/bin/falcon-mpv-ui"
+soft "$root/bin/falcon-app-colors" setup
 # The translator for when Google cannot be used, about 4 GB.
 soft "$root/bin/falcon-translate-models"
 do_it cp -a "$root"/fonts/. "$HOME/.local/share/fonts/falcon/"
