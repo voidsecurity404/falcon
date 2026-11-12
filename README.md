@@ -107,6 +107,7 @@ Some routers keep Wi-Fi clients apart, so the two never see each other. Then plu
 ## Things that look after themselves
 
 - **Battery charge limit:** Settings → Battery and power, or the tile in the control center. Needs one setup with your password (`falcon-charge setup`). Laptops whose firmware has no limit do not show it. Undo: `falcon-charge setup --undo`.
+- **Internet that does not drop:** `falcon-net setup` (once, with your password) stops the cable and Wi-Fi on one network from taking each other's traffic, turns Wi-Fi power saving off, and repairs a connection that lost the internet by itself. Undo: `falcon-net setup --undo`.
 - **Power mode follows the charger.** A mode you choose by hand stays until the charger changes.
 - **System updates:** the panel shows how many wait. A click opens a terminal with the update, which asks before installing. Checking downloads no packages.
 - **Terminal greeting:** a new fish terminal shows fastfetch with the logo moving in place, in the theme's accent color. In kitty it keeps moving while you run commands and scroll, and moves with the text. Settings → Fastfetch picks one of 11 logos, 10 styles and 7 animations (spin, flip, swing, bounce, assemble, decode, aurora) with a live preview of each, the length of one loop, or turns the greeting off.

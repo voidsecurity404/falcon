@@ -103,6 +103,7 @@ targets=(
     .local/bin/falcon-scratch
     .local/bin/falcon-color
     .local/bin/falcon-charge
+    .local/bin/falcon-net
     .local/bin/falcon-updates
     .local/bin/falcon-privacy
     .local/bin/falcon-phone
@@ -383,6 +384,12 @@ fi
 if ((packages)) && compgen -G "/sys/class/power_supply/BAT*/charge_control_end_threshold" >/dev/null; then
     say "Setting up the battery charge limit"
     do_it "$HOME/.local/bin/falcon-charge" setup
+fi
+
+# The cable and Wi-Fi on one network took each other's traffic and the internet dropped.
+if ((packages)) && command -v nmcli >/dev/null; then
+    say "Keeping the internet from dropping"
+    do_it "$HOME/.local/bin/falcon-net" setup
 fi
 
 if command -v niri >/dev/null; then

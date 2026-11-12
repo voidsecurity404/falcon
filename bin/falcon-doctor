@@ -63,6 +63,12 @@ try:
 except (OSError, ValueError, KeyError):
     pass
 
+try:
+    net = json.loads(subprocess.run([str(HOME / ".local/bin/falcon-net"), "status"], capture_output=True, text=True, check=False).stdout)
+    report(all(net.values()), tr("Internet self-repair"), tr("Run once in a terminal: falcon-net setup"))
+except (OSError, ValueError):
+    pass
+
 models = subprocess.run([str(HOME / ".local/bin/falcon-ocr-models"), "status"], capture_output=True, text=True, check=False).stdout.strip()
 have, _, total = models.partition("/")
 report(have == total and bool(total), tr("Reading models of the translator: {models}", models=models), tr("Run: falcon-ocr-models"))

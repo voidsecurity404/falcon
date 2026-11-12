@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""Keeps the internet from dropping.
+
+  falcon-net status          prints which fixes are in place, as JSON
+  falcon-net setup           one time setup, asks for sudo, safe to repeat
+  falcon-net setup --undo    removes it
+
+When the cable and Wi-Fi are on the same network, Linux lets each card answer for the other's
+address. The router then sends one card's traffic to the other, and NetworkManager logs
+"conflict detected for IP address". The internet stops until NetworkManager restarts. The setup:
+
+- makes each card answer only for its own address (sysctl arp_ignore=1, arp_announce=2),
+- turns Wi-Fi power saving off, which drops Realtek cards on some routers,
+- checks the internet every 60 s instead of 300 s,
+- adds a NetworkManager dispatcher script that repairs a lost connection by itself: when the
+  internet is gone for 20 s while a card is connected, it asks for addresses again, and if that
+  does not help, it restarts NetworkManager. It tries twice, then waits until the internet is back.
+"""
+import json
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+from falcon_tr import tr
+
+SYSCTL = "/etc/sysctl.d/90-falcon-net.conf"
+NM_CONF = "/etc/NetworkManager/conf.d/90-falcon-net.conf"
+HEAL = "/etc/NetworkManager/dispatcher.d/90-falcon-net-heal"
+
+SYSCTL_TEXT = """# Written by falcon-net setup. Each network card answers ARP only for its own address,
+# so the cable and Wi-Fi on one network do not take each other's traffic.
+net.ipv4.conf.all.arp_ignore = 1
+net.ipv4.conf.default.arp_ignore = 1
+net.ipv4.conf.all.arp_announce = 2
+net.ipv4.conf.default.arp_announce = 2
+"""
+
+NM_TEXT = """# Written by falcon-net setup.
+[connection]
+# 2 turns Wi-Fi power saving off.
+wifi.powersave = 2
+
+[connectivity]
+interval = 60
+"""
+
+HEAL_TEXT = r"""#!/bin/sh
+# Written by falcon-net setup. Repairs a connection that is up but has no internet.
+[ "$2" = connectivity-change ] || exit 0
+state_dir="${FALCON_NET_STATE:-/run/falcon-net}"
+mkdir -p "$state_dir"
+case "$CONNECTIVITY_STATE" in
+    FULL) rm -f "$state_dir/tries"; exit 0 ;;
+    LIMITED | NONE) ;;
+    *) exit 0 ;;
+esac
+
+# NetworkManager waits for dispatcher scripts, so the repair runs on its own.
+(
+    exec 9>"$state_dir/lock"
+    flock -n 9 || exit 0
+    online() {
+        case "$(nmcli networking connectivity check 2>/dev/null)" in
+            full | portal) return 0 ;;
+        esac
+        return 1
+    }
+    connected() {
+        nmcli -t -f TYPE,STATE device 2>/dev/null | grep -Eq '^(ethernet|wifi):connected$'
+    }
+    sleep 20
+    online && exit 0
+    connected || exit 0
+    tries="$(cat "$state_dir/tries" 2>/dev/null || echo 0)"
+    [ "$tries" -ge 2 ] && exit 0
+    echo $((tries + 1)) >"$state_dir/tries"
+
+    logger -t falcon-net "no internet for 20 s, asking for addresses again"
+    ip neigh flush all
+    nmcli -t -f UUID,TYPE connection show --active 2>/dev/null | while IFS=: read -r uuid kind; do
+        case "$kind" in
+            *ethernet | *wireless) nmcli connection up uuid "$uuid" >/dev/null 2>&1 ;;
+        esac
+    done
+    sleep 15
+    online && { logger -t falcon-net "internet is back"; rm -f "$state_dir/tries"; exit 0; }
+
+    logger -t falcon-net "still no internet, restarting NetworkManager"
+    systemctl restart NetworkManager
+) </dev/null >/dev/null 2>&1 &
+exit 0
+"""
+
+
+def read(path):
+    try:
+        return Path(path).read_text()
+    except OSError:
+        return None
+
+
+def status():
+    def sysctl(name):
+        value = read(f"/proc/sys/net/ipv4/conf/all/{name}")
+        return int(value) if value and value.strip().isdigit() else -1
+
+    return {
+        "arp": sysctl("arp_ignore") == 1 and sysctl("arp_announce") == 2,
+        "config": read(NM_CONF) == NM_TEXT,
+        "heal": read(HEAL) == HEAL_TEXT,
+        "sysctlFile": read(SYSCTL) == SYSCTL_TEXT,
+    }
+
+
+def sudo(*cmd):
+    return subprocess.run(["sudo", *cmd], check=False).returncode == 0
+
+
+def wifi_cards():
+    out = subprocess.run(["nmcli", "-t", "-f", "DEVICE,TYPE", "device"], capture_output=True, text=True, check=False).stdout
+    return [line.split(":")[0] for line in out.splitlines() if line.endswith(":wifi")]
+
+
+def setup():
+    with tempfile.TemporaryDirectory() as tmp:
+        files = {SYSCTL: (SYSCTL_TEXT, "644"), NM_CONF: (NM_TEXT, "644"), HEAL: (HEAL_TEXT, "755")}
+        done = True
+        for target, (text, mode) in files.items():
+            source = Path(tmp) / Path(target).name
+            source.write_text(text)
+            done = done and sudo("install", "-D", "-o", "root", "-g", "root", "-m", mode, str(source), target)
+    # Applied now, without dropping the connection.
+    done = done and sudo("sysctl", "-q", "-p", SYSCTL)
+    done = done and sudo("nmcli", "general", "reload", "conf")
+    for card in wifi_cards():
+        if shutil.which("iw"):
+            sudo("iw", "dev", card, "set", "power_save", "off")
+    now = status()
+    if done and all(now.values()):
+        print(tr("Done. The internet repairs itself now."))
+        return 0
+    print(tr("Setup did not finish."), file=sys.stderr)
+    return 1
+
+
+def undo():
+    sudo("rm", "-f", SYSCTL, NM_CONF, HEAL)
+    sudo("rm", "-rf", "/run/falcon-net")
+    for name in ("arp_ignore", "arp_announce"):
+        for scope in ("all", "default"):
+            sudo("sysctl", "-q", "-w", f"net.ipv4.conf.{scope}.{name}=0")
+    sudo("nmcli", "general", "reload", "conf")
+    print(tr("Removed."))
+    return 0
+
+
+def main(args):
+    if args[:1] == ["status"]:
+        print(json.dumps(status()))
+        return 0
+    if args[:1] == ["setup"]:
+        if not shutil.which("sudo"):
+            print(tr("sudo is needed."), file=sys.stderr)
+            return 1
+        return undo() if args[1:] == ["--undo"] else setup()
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+sys.exit(main(sys.argv[1:]))
