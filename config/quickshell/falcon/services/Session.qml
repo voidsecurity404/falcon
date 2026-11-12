@@ -34,7 +34,7 @@ Singleton {
             name: Tr.t("Log out"),
             keywords: "logout quit выход",
             confirm: true,
-            run: () => root.leave("niri msg action quit --skip-confirmation")
+            run: () => root.leave("niri msg action quit --skip-confirmation", "logout")
         },
         {
             id: "reboot",
@@ -42,7 +42,7 @@ Singleton {
             name: Tr.t("Reboot"),
             keywords: "reboot restart перезагрузка",
             confirm: true,
-            run: () => root.leave("systemctl reboot")
+            run: () => root.leave("systemctl reboot", "reboot")
         },
         {
             id: "power",
@@ -50,7 +50,7 @@ Singleton {
             name: Tr.t("Shut down"),
             keywords: "shutdown poweroff выключение",
             confirm: true,
-            run: () => root.leave("systemctl poweroff")
+            run: () => root.leave("systemctl poweroff", "power")
         }
     ]
 
@@ -99,8 +99,101 @@ Singleton {
         }
     }
 
-    // The open windows are saved first, so they come back exactly as they are now.
-    function leave(command) {
-        Quickshell.execDetached(["sh", "-c", "\"$HOME/.local/bin/falcon-session\" save; " + command]);
+    // Leaving plays a farewell first (modules/LeaveShow.qml): the desktop is pictured, sinks
+    // back into black and the falcon of the boot screen beats its wings over a caption, then fades,
+    // and only on that black screen does the command run. Plymouth's shutdown screen then shows
+    // the same falcon in the same place. Meanwhile the open windows are saved, so they come back
+    // exactly as they are now.
+    //   phase: "" idle, "wait" for open menus to close, "grab" picturing the screens, "play" the farewell, "done" command sent.
+    property string phase: ""
+    property string kind: ""
+    property string command: ""
+    readonly property int showLength: 1650
+    property var shots: ({})
+    readonly property string shotDir: Quickshell.env("XDG_RUNTIME_DIR") + "/falcon-leave"
+
+    function leave(cmd, what) {
+        if (phase !== "")
+            return;
+        Ui.popup = "";
+        save.running = true;
+        if (!Settings.get("windows.animations", true)) {
+            command = cmd;
+            run();
+            return;
+        }
+        command = cmd;
+        kind = what || "power";
+        shots = {};
+        // The power menu closes first, so it is not in the picture.
+        phase = "wait";
+        settle.restart();
+    }
+
+    // Each screen reports its picture; the farewell starts once all have, or without them.
+    function screenReady(name, ok) {
+        const next = Object.assign({}, shots);
+        next[name] = ok;
+        shots = next;
+        if (phase === "grab" && Quickshell.screens.every(s => shots[s.name] !== undefined))
+            phase = "play";
+    }
+
+    // Called by a screen's show when it has faded to black.
+    function showDone() {
+        if (phase === "play")
+            run();
+    }
+
+    function run() {
+        // A preview (desk leavePreview) has no command: the desktop just comes back.
+        if (!command) {
+            phase = "";
+            return;
+        }
+        phase = "done";
+        // Saving is quick; the command waits for it, so it is never cut short.
+        Quickshell.execDetached(["sh", "-c", "i=0; while pgrep -f 'falcon-sessio[n] save' >/dev/null && [ $i -lt 60 ]; do sleep 0.05; i=$((i+1)); done; " + command]);
+        stuck.restart();
+    }
+
+    Process {
+        id: save
+
+        command: [Quickshell.env("HOME") + "/.local/bin/falcon-session", "save"]
+    }
+
+    Timer {
+        id: settle
+
+        interval: 260
+        onTriggered: {
+            root.phase = "grab";
+            failsafe.restart();
+        }
+    }
+    // No picture in time: the farewell plays on black.
+    Timer {
+        id: failsafe
+
+        interval: 1200
+        onTriggered: {
+            if (root.phase === "grab")
+                root.phase = "play";
+        }
+    }
+    // The system refused (an inhibitor, a policy): the desktop comes back.
+    Timer {
+        id: stuck
+
+        interval: 7000
+        onTriggered: {
+            if (root.phase === "done" && root.kind !== "logout") {
+                root.phase = "";
+                Toasts.show(Tr.t("Could not turn off"), Tr.t("The system refused the request"), "power");
+            } else if (root.phase === "done") {
+                root.phase = "";
+            }
+        }
     }
 }

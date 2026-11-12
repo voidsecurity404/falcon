@@ -1314,5 +1314,10 @@
  "No notifications from the phone yet": "С телефона пока нет уведомлений",
  "From the phone": "С телефона",
  "The wallpaper on screen cannot be deleted": "Обои, которые сейчас на экране, удалить нельзя",
- "Press Delete again to delete the file for good": "Нажмите Delete ещё раз, чтобы удалить файл навсегда"
+ "Press Delete again to delete the file for good": "Нажмите Delete ещё раз, чтобы удалить файл навсегда",
+ "Restarting": "Перезагрузка",
+ "Logging out": "Выход из системы",
+ "Shutting down": "Выключение",
+ "Could not turn off": "Не удалось выключить",
+ "The system refused the request": "Система отклонила запрос"
 }

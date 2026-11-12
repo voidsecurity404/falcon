@@ -43,6 +43,9 @@ ShellRoot {
                 LockIntro {
                     screen: perScreen.modelData
                 }
+                LeaveShow {
+                    screen: perScreen.modelData
+                }
             }
         }
     }
@@ -75,6 +78,10 @@ ShellRoot {
         // hypridle's lock_cmd: the show waits under hyprlock and animates the unlock.
         function lockStarted(): void {
             Lock.lockStarted();
+        }
+        // Plays the farewell of logout, reboot or power without running anything.
+        function leavePreview(kind: string): void {
+            Session.leave("", kind);
         }
         function lockPreview(): void {
             Lock.preview = !Lock.preview;
