@@ -20,6 +20,7 @@ import json
 import os
 import re
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -130,7 +131,7 @@ def thumb(row):
     path = CACHE / (hashlib.sha1(row["thumbUrl"].encode()).hexdigest() + ".jpg")
     if not path.exists():
         data = fetch(row["thumbUrl"], timeout=20)
-        tmp = path.with_suffix(".tmp")
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
         tmp.write_bytes(data)
         tmp.replace(path)
     return str(path)
@@ -192,7 +193,7 @@ def remember(key, path):
     known = index()
     known[key] = str(path)
     CACHE.mkdir(parents=True, exist_ok=True)
-    tmp = CACHE / "downloads.json.tmp"
+    tmp = CACHE / f"downloads.json.{os.getpid()}.tmp"
     tmp.write_text(json.dumps(known, ensure_ascii=False))
     tmp.replace(CACHE / "downloads.json")
 

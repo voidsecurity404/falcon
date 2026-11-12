@@ -42,7 +42,7 @@ def do_import(source):
                 json.loads(data or b"{}")
             dest = CONFIG / member.name
             dest.parent.mkdir(parents=True, exist_ok=True)
-            tmp = dest.with_name(dest.name + ".tmp")
+            tmp = dest.with_name(f"{dest.name}.{os.getpid()}.tmp")
             tmp.write_bytes(data)
             os.replace(tmp, dest)
     subprocess.run([str(HOME / ".local/bin/falcon-apply")], check=False)

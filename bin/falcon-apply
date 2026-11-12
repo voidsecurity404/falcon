@@ -90,6 +90,18 @@ def is_vm():
     return res.returncode == 0 and res.stdout.strip() in ("oracle", "vmware")
 
 
+# niri allows one environment block and no ~ in it, so it is written here with the full path.
+# GIO_EXTRA_MODULES loads falcon-gtk4-live into GTK 4 apps, so open ones take new colors.
+GIO_MODULES = Path.home() / ".local/lib/falcon/gio-modules"
+ENVIRONMENT = {
+    "QT_QPA_PLATFORM": "wayland",
+    "QT_WAYLAND_DISABLE_WINDOWDECORATION": "1",
+    "QT_QPA_PLATFORMTHEME": "qt6ct",
+    "ELECTRON_OZONE_PLATFORM_HINT": "auto",
+    "GIO_EXTRA_MODULES": str(GIO_MODULES),
+}
+
+
 def settings_kdl(s):
     w, k, p, a = s["windows"], s["keyboard"], s["pointer"], s["appearance"]
     out = ["// Generated file: change it in the Settings window or settings.json.", "input {", "    keyboard {", "        xkb {"]
@@ -141,6 +153,7 @@ def settings_kdl(s):
     else:
         out += ["blur {", "    off", "}", ""]
     out += ["overview {", f"    zoom {float(number(w, 'overviewZoom', 0.2, 0.75))}", "}", ""]
+    out += ["environment {"] + [f"    {name} {q(value)}" for name, value in ENVIRONMENT.items()] + ["}", ""]
     if not w["animations"]:
         out += ["animations {", "    off", "}", ""]
     else:
@@ -419,7 +432,8 @@ def write_if_changed(path, text):
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and path.read_text() == text:
         return False
-    tmp = path.with_name(path.name + ".tmp")
+    # Runs can overlap (a setting and a wallpaper's colors), so each has its own temporary file.
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     tmp.write_text(text)
     os.replace(tmp, path)
     return True

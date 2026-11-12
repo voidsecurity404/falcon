@@ -622,8 +622,7 @@ def font_file():
     path = ask_font()
     if path:
         try:
-            with open(memo, "w") as f:
-                f.write(path)
+            write_atomic(memo, path)
         except OSError:
             pass
     return path
@@ -955,10 +954,9 @@ def register(ident, shell, look, cw, ch, count):
         return
     data = {"ident": ident, "shell": shell, "tty": tty_path, "animation": look["animation"],
             "seconds": look["seconds"], "logo": LOGO, "cw": cw, "ch": ch, "count": count}
-    with open(os.path.join(runtime_dir(), f"img-{ident}.json"), "w") as f:
-        json.dump(data, f)
-    with open(os.path.join(runtime_dir(), "cell"), "w") as f:
-        json.dump({"cw": cw, "ch": ch}, f)
+    write_atomic(os.path.join(runtime_dir(), f"img-{ident}.json"), json.dumps(data))
+    # Terminals restored together write this at once, and --recolor may read it meanwhile.
+    write_atomic(os.path.join(runtime_dir(), "cell"), json.dumps({"cw": cw, "ch": ch}))
 
 
 def detach():

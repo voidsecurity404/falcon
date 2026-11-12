@@ -45,7 +45,7 @@ def read_settings():
 def write_settings(before, data):
     if before == data:
         return
-    tmp = SETTINGS.with_name(SETTINGS.name + ".monitors.tmp")
+    tmp = SETTINGS.with_name(f"{SETTINGS.name}.monitors.{os.getpid()}.tmp")
     tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
     os.replace(tmp, SETTINGS)
 

@@ -54,6 +54,6 @@ problem = refused()
 if problem:
     print(problem, file=sys.stderr)
     sys.exit(1)
-tmp = path.with_name(path.name + ".tmp")
+tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
 tmp.write_text(text)
 os.replace(tmp, path)

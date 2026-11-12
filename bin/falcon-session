@@ -235,7 +235,8 @@ def write(items):
     except OSError:
         pass
     STATE.mkdir(parents=True, exist_ok=True)
-    tmp = FILE.with_suffix(".tmp")
+    # `save` at logout can run while `watch` writes, so each has its own temporary file.
+    tmp = FILE.with_name(f"{FILE.name}.{os.getpid()}.tmp")
     tmp.write_text(text)
     os.replace(tmp, FILE)
 

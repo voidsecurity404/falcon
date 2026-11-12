@@ -156,7 +156,7 @@ def main():
         print(json.dumps({"error": "offline"}))
         return 0
     os.makedirs(CACHE, exist_ok=True)
-    temporary = path + ".tmp"
+    temporary = f"{path}.{os.getpid()}.tmp"
     with open(temporary, "w") as file:
         json.dump(found, file, ensure_ascii=False)
     os.replace(temporary, path)

@@ -14,8 +14,8 @@ reload() {
 case "${1:-status}" in
 on)
     mkdir -p "$(dirname "$file")"
-    printf '// game\nanimations {\n    off\n}\nlayout {\n    shadow {\n        off\n    }\n}\n' >"$file.tmp"
-    mv "$file.tmp" "$file"
+    printf '// game\nanimations {\n    off\n}\nlayout {\n    shadow {\n        off\n    }\n}\n' >"$file.$$.tmp"
+    mv "$file.$$.tmp" "$file"
     reload
     ;;
 off)
