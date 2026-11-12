@@ -309,10 +309,17 @@ def config_file(style, logo=True):
     except OSError:
         same = False
     if not same:
-        with open(path + ".tmp", "w") as f:
-            f.write(text)
-        os.replace(path + ".tmp", path)
+        write_atomic(path, text)
     return path
+
+
+def write_atomic(path, text):
+    """Terminals restored at login start together and write the same files; each writes its
+    own temporary file, so one never moves away another's."""
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w") as f:
+        f.write(text)
+    os.replace(tmp, path)
 
 
 def runtime_dir():
@@ -391,9 +398,7 @@ def logo_file():
     except OSError:
         same = False
     if not same:
-        with open(path + ".tmp", "w") as f:
-            f.write(text)
-        os.replace(path + ".tmp", path)
+        write_atomic(path, text)
     return path
 
 
