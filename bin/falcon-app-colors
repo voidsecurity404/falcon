@@ -4,6 +4,7 @@
   falcon-app-colors kde    KDE and Qt apps: ~/.config/kdeglobals and the Falcon color scheme
   falcon-app-colors code   VS Code, VSCodium and editors built on them: a local "Falcon" theme
   falcon-app-colors telegram  Telegram Desktop: a Falcon.tdesktop-theme with the wallpaper behind chats
+  falcon-app-colors spotify  Spotify through spicetify: the Falcon theme's color.ini, refreshed in place
   falcon-app-colors gtk    Makes open GTK 3 and 4 apps read their colors again
   falcon-app-colors after  Both of the above, run by falcon-apply after matugen
   falcon-app-colors setup  Points terminal tools and editors at these colors once (safe to repeat)
@@ -220,6 +221,40 @@ def telegram():
     print(out)
 
 
+# Spotify through spicetify: a Falcon theme whose color.ini is rewritten here. The
+# falcon-live-colors extension in Spotify reads colors.css again every 2 s, so
+# `spicetify refresh` (no restart) reaches an open Spotify.
+SPICETIFY = CONFIG / "spicetify"
+
+
+def spotify_colors(c):
+    def h(key):
+        return hexa(c[key], 1).lstrip("#")
+    rows = {
+        "text": h("text"), "subtext": h("muted"),
+        "main": h("surface"), "main-elevated": h("surfaceHigh"),
+        "highlight": h("surfaceHigh"), "highlight-elevated": h("surfaceHighest"),
+        "sidebar": h("surfaceLow"), "player": h("surfaceLowest"),
+        "card": h("surfaceContainer"), "shadow": "000000",
+        "selected-row": h("text"), "button": h("primary"), "button-active": h("primary"),
+        "button-disabled": h("outline"), "tab-active": h("surfaceHigh"),
+        "notification": h("primaryContainer"), "notification-error": h("error"),
+        "misc": h("outlineVariant"),
+    }
+    return "[falcon]\n" + "".join(f"{k:<20}= {v}\n" for k, v in rows.items())
+
+
+def spotify():
+    theme = SPICETIFY / "Themes" / "Falcon"
+    if not shutil.which("spicetify") or not theme.is_dir():
+        return
+    c = {k: (rgba(v) if isinstance(v, str) else v) for k, v in json.loads((STATE / "apps.json").read_text()).items()}
+    write_atomic(theme / "color.ini", spotify_colors(c))
+    res = subprocess.run(["spicetify", "config", "current_theme"], capture_output=True, text=True)
+    if res.stdout.strip() == "Falcon":
+        subprocess.run(["spicetify", "refresh", "-n", "-q"], capture_output=True)
+
+
 def mode_is_dark():
     try:
         return bool(json.loads((STATE / "apps.json").read_text()).get("dark", True))
@@ -308,6 +343,14 @@ def setup():
     conf = CONFIG / "rofi" / "config.rasi"
     if not conf.exists():
         write_atomic(conf, '@theme "~/.config/rofi/falcon-colors.rasi"\n')
+    # Spotify: needs spicetify-cli and a Spotify folder the user may write to.
+    if shutil.which("spicetify") and (SPICETIFY / "Themes" / "Falcon").is_dir():
+        spotify()
+        for key, value in (("current_theme", "Falcon"), ("color_scheme", "falcon"), ("inject_css", "1"),
+                           ("replace_colors", "1"), ("extensions", "falcon-live-colors.js")):
+            subprocess.run(["spicetify", "config", key, value, "-q"], capture_output=True)
+        res = subprocess.run(["spicetify", "backup", "apply", "-q"], capture_output=True, text=True)
+        print("spicetify:", "applied" if res.returncode == 0 else (res.stdout + res.stderr).strip()[-300:])
     # VS Code and its relatives: pick the Falcon theme, unless another one was chosen on purpose.
     for name in ("Code", "Code - OSS", "VSCodium", "Cursor", "Windsurf"):
         user = CONFIG / name / "User"
@@ -327,6 +370,8 @@ def main():
         telegram()
     elif what == "gtk":
         gtk()
+    elif what == "spotify":
+        spotify()
     elif what == "after":
         # Run by falcon-apply once matugen has written everything. Telegram's picture
         # takes a moment, so it goes on in the background.
@@ -334,7 +379,10 @@ def main():
         if os.fork() == 0:
             os.setsid()
             try:
-                telegram()
+                try:
+                    telegram()
+                finally:
+                    spotify()
             finally:
                 os._exit(0)
     elif what == "setup":

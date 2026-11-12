@@ -37,6 +37,8 @@ FILES = [
     ("config/fish/conf.d/falcon-colors.fish", ".config/fish/conf.d/falcon-colors.fish"),
     ("config/micro/colorschemes/falcon.micro", ".config/micro/colorschemes/falcon.micro"),
     ("config/cava/config", ".config/cava/config"),
+    ("config/spicetify/Themes/Falcon/user.css", ".config/spicetify/Themes/Falcon/user.css"),
+    ("config/spicetify/Extensions/falcon-live-colors.js", ".config/spicetify/Extensions/falcon-live-colors.js"),
     ("config/mpv/mpv.conf", ".config/mpv/mpv.conf"),
     ("config/mpv/input.conf", ".config/mpv/input.conf"),
     ("config/falcon/defaults.json", ".config/falcon/defaults.json"),

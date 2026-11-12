@@ -47,6 +47,8 @@ targets=(
     .config/fish/conf.d/falcon-colors.fish
     .config/micro/colorschemes/falcon.micro
     .config/cava/config
+    .config/spicetify/Themes/Falcon
+    .config/spicetify/Extensions/falcon-live-colors.js
     .config/mpv
     .config/kitty/kitty.conf
     .config/kitty/falcon-colors.conf
@@ -254,6 +256,9 @@ do_it cp "$root/config/fish/conf.d/falcon-fetch.fish" "$root/config/fish/conf.d/
 do_it mkdir -p "$HOME/.config/micro/colorschemes" "$HOME/.config/cava"
 do_it cp "$root/config/micro/colorschemes/falcon.micro" "$HOME/.config/micro/colorschemes/"
 [[ -e "$HOME/.config/cava/config" ]] || do_it cp "$root/config/cava/config" "$HOME/.config/cava/config"
+do_it mkdir -p "$HOME/.config/spicetify/Themes/Falcon" "$HOME/.config/spicetify/Extensions"
+do_it cp "$root/config/spicetify/Themes/Falcon/user.css" "$HOME/.config/spicetify/Themes/Falcon/"
+do_it cp "$root/config/spicetify/Extensions/falcon-live-colors.js" "$HOME/.config/spicetify/Extensions/"
 # CachyOS config.fish o'z fish_greeting'ini conf.d dan keyin yozadi, shuning uchun
 # aylanadigan logo uchun salomlashuv config.fish oxirida qayta belgilanadi.
 fish_conf="$HOME/.config/fish/config.fish"
