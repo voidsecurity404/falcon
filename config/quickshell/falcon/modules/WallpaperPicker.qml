@@ -475,6 +475,9 @@ LazyLoader {
                         sourceSize: Wallpapers.thumbSize
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
+                        // The newer picture fades in on top while the older one stays whole under it, and
+                        // goes only once covered. Fading both at once let the desktop show through midway.
+                        z: ambient.front === index ? 1 : 0
                         opacity: ambient.front === index ? 1 : 0
                         // The newer picture takes the front once it is decoded.
                         onStatusChanged: {
@@ -483,9 +486,17 @@ LazyLoader {
                         }
 
                         Behavior on opacity {
-                            NumberAnimation {
-                                duration: 700
-                                easing.type: Easing.InOutQuad
+                            SequentialAnimation {
+                                PauseAnimation {
+                                    duration: ambient.front === index ? 0 : 700
+                                }
+                                // Always from nothing: a picture taken back while it still waited to go
+                                // would otherwise pop in whole.
+                                NumberAnimation {
+                                    from: 0
+                                    duration: ambient.front === index ? 700 : 0
+                                    easing.type: Easing.InOutQuad
+                                }
                             }
                         }
                     }
@@ -847,8 +858,11 @@ LazyLoader {
                             return list;
                         }
 
+                        // True from a step until the row rests again. Slices sliding under a still pointer
+                        // while the row moves must not peek, or each one passing grew and pushed the row.
+                        property bool stepping: false
                         // A slice under the pointer opens a little, as a peek.
-                        readonly property int peekIndex: hovered !== target ? hovered : -1
+                        readonly property int peekIndex: hovered !== target && !stepping ? hovered : -1
                         readonly property real peek: Math.round(root.narrow * 0.38)
 
                         function restWidth(i) {
@@ -877,8 +891,11 @@ LazyLoader {
                                 c += peek;
                             return c;
                         }
+                        // A peeking slice grows evenly to both sides around its own middle: the camera takes
+                        // half of the peek, so the slices on each side move out by only half of it. Moving the
+                        // whole peek to one side pushed the last slice on that side past the edge, and it vanished.
                         function goal() {
-                            return target * stride + root.wide / 2 + (peekIndex >= 0 && peekIndex < target ? peek : 0);
+                            return target * stride + root.wide / 2 + (peekIndex >= 0 ? peek / 2 : 0);
                         }
                         property int lastPeek: -1
                         onPeekIndexChanged: {
@@ -909,6 +926,7 @@ LazyLoader {
                             camera = goal() - (unfold ? (root.wide - root.narrow) / 2 : 0);
                             cameraSpeed = 0;
                             moving = unfold;
+                            stepping = false;
                             tick++;
                         }
                         function retarget(from, to) {
@@ -936,6 +954,7 @@ LazyLoader {
                                 place(false);
                                 return;
                             }
+                            stepping = true;
                             retarget(from, target);
                         }
                         onFilesChanged: {
@@ -1003,6 +1022,8 @@ LazyLoader {
                                 deck.cameraSpeed = cam.v;
                                 deck.tick++;
                                 deck.moving = busy;
+                                if (!busy)
+                                    deck.stepping = false;
                             }
                         }
 
@@ -1195,13 +1216,14 @@ LazyLoader {
                                     return deck.width / 2 + deck.centerOf(slot) - deck.camera;
                                 }
                                 // Slices fade out toward the sides, before their edge reaches the screen's.
-                                // A peeking slice is judged by its width at rest: counted with the peek, the
-                                // last slice on each side faded out under the pointer, lost the hover, closed,
-                                // came back and shook.
+                                // Every slice is judged by its width at rest, never by a peek or a spring on its
+                                // way: counted with the peek, the last slice on each side faded out under the
+                                // pointer, lost the hover, closed, came back and shook, and a slice still closing
+                                // after a peek blinked at the edge.
                                 readonly property real edgeFade: {
                                     const half = deck.width / 2;
                                     const dist = Math.abs(middle - half);
-                                    const restW = slot === deck.peekIndex ? Math.max(root.narrow, w - deck.peek) : w;
+                                    const restW = Math.min(w, slot === deck.target ? root.wide : root.narrow);
                                     const zeroAt = Math.min(half * 1.2, half - restW / 2 - root.skewPx / 2 + 40);
                                     const start = Math.min(root.wide / 2 + 2 * deck.stride, zeroAt);
                                     if (dist <= start)
