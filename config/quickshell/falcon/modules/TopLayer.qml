@@ -15,8 +15,8 @@ PanelWindow {
 
     readonly property bool isFocusedScreen: !!screen && (Niri.focusedOutput === "" || Niri.focusedOutput === screen.name)
     readonly property bool panelHere: Ui.topPanelOpen && isFocusedScreen
-    // Focus mode sends the bar off the screen.
-    readonly property bool barShown: !Ui.zen
+    // Focus mode and the overview send the bar off the screen.
+    readonly property bool barShown: !Ui.zen && !Niri.overview
     readonly property var leaveCurve: [0.4, 0, 0.9, 0.3, 1, 1]
     readonly property var arriveCurve: [0.25, 1.25, 0.35, 1, 1, 1]
     readonly property int edgeGap: BarLayout.edgeGap
