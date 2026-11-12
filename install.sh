@@ -270,12 +270,22 @@ fi
 # Starship prompt (Nord Pills, the user's pick #5; matugen writes its colors), turned on in fish and zsh once.
 if ! grep -q "starship init fish" "$fish_conf" 2>/dev/null; then
     if ((dry)); then echo "  [dry-run] append starship init to $fish_conf"
-    else printf '\n# Starship prompt (Nord Pills)\nif status is-interactive\n    starship init fish | source\nend\n' >>"$fish_conf"; fi
+    else printf '\n# Starship prompt (Nord Pills)\nif status is-interactive\n    starship init fish | source\n    # Transient prompt: finished commands keep only "❯ command"\n    function starship_transient_prompt_func\n        starship module character\n    end\n    enable_transience\nend\n' >>"$fish_conf"; fi
 fi
 zsh_conf="$HOME/.zshrc"
 if [[ -e "$zsh_conf" ]] && ! grep -q "starship init zsh" "$zsh_conf"; then
     if ((dry)); then echo "  [dry-run] append starship init to $zsh_conf"
-    else printf '\n# Starship prompt (Nord Pills) — turn off powerlevel10k from the CachyOS config first\n(( $+functions[prompt_powerlevel9k_teardown] )) && prompt_powerlevel9k_teardown\neval "$(starship init zsh)"\n' >>"$zsh_conf"; fi
+    else printf '\n# Starship prompt (Nord Pills) — turn off powerlevel10k from the CachyOS config first\n(( $+functions[prompt_powerlevel9k_teardown] )) && prompt_powerlevel9k_teardown\neval "$(starship init zsh)"\n' >>"$zsh_conf"
+        cat >>"$zsh_conf" <<'ZSH'
+# Transient prompt: finished commands keep only "❯ command"
+autoload -Uz add-zle-hook-widget
+_falcon_full_prompt=$PROMPT
+_falcon_transient() { PROMPT='$(starship module character)'; RPROMPT=''; zle .reset-prompt }
+_falcon_restore() { PROMPT=$_falcon_full_prompt }
+add-zle-hook-widget line-finish _falcon_transient
+precmd_functions+=(_falcon_restore)
+ZSH
+    fi
 fi
 do_it cp -a "$root/config/hypr/." "$HOME/.config/hypr/"
 do_it cp -a "$root/bin/." "$HOME/.local/bin/"
