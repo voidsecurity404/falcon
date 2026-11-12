@@ -320,6 +320,10 @@ ShellRoot {
         function phone(): void {
             Ui.togglePopup("phone");
         }
+        // Opens or closes the menu of a network part (lan, wan, ports, …) under it.
+        function netMenu(tool: string): void {
+            NetTools.toggle(tool);
+        }
         function phonePage(name: string): void {
             Ui.popup = "phone";
             Ui.phonePage = name;

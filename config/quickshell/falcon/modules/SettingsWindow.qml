@@ -402,6 +402,12 @@ LazyLoader {
                         title: Tr.t("Look"),
                         items: [
                             {
+                                key: "panel.joined",
+                                label: Tr.t("One joined bar"),
+                                hint: Tr.t("Off: three separate glass islands"),
+                                type: "toggle"
+                            },
+                            {
                                 key: "appearance.panelOpacity",
                                 label: Tr.t("Panel opacity"),
                                 hint: Tr.t("Lower is more see-through"),

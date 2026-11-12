@@ -59,7 +59,7 @@ Singleton {
     readonly property bool recordBusy: recording || recordCountdown > 0
 
     // The menus that drop from the bar.
-    readonly property bool topPanelOpen: ["calendar", "player", "system", "notifications", "control", "tray", "claude", "phone"].includes(popup)
+    readonly property bool topPanelOpen: ["calendar", "player", "system", "notifications", "control", "tray", "claude", "phone", "net"].includes(popup)
 
     // Choosing a part of the screen: "" closed, "wait" lets panels close first, "grab" pictures
     // the screens, "select" shows them.

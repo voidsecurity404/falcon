@@ -69,7 +69,8 @@ PanelWindow {
             system: system,
             notifications: notifications,
             control: control,
-            phone: phoneMenu
+            phone: phoneMenu,
+            net: netMenu
         };
         return {
             left: rect(left),
@@ -123,7 +124,7 @@ PanelWindow {
             for (const child of item.children)
                 walk(child);
         };
-        for (const part of [left, center, right, calendar, player, system, notifications, phoneMenu])
+        for (const part of [left, center, right, calendar, player, system, notifications, phoneMenu, netMenu])
             walk(part);
         return found;
     }
@@ -183,15 +184,19 @@ PanelWindow {
     // Faqat panellar orqasi xiralashadi, qolgan ekran toza qoladi.
     BackgroundEffect.blurRegion: Region {
         Region {
-            item: left.visible && left.opacity > 0.05 ? left : null
+            item: strip.visible && strip.opacity > 0.05 ? strip : null
+            radius: strip.radius
+        }
+        Region {
+            item: !BarLayout.joined && left.visible && left.opacity > 0.05 ? left : null
             radius: left.radius
         }
         Region {
-            item: center.visible && center.opacity > 0.05 ? center : null
+            item: !BarLayout.joined && center.visible && center.opacity > 0.05 ? center : null
             radius: center.radius
         }
         Region {
-            item: right.visible && right.opacity > 0.05 ? right : null
+            item: !BarLayout.joined && right.visible && right.opacity > 0.05 ? right : null
             radius: right.radius
         }
         Region {
@@ -219,6 +224,10 @@ PanelWindow {
             radius: phoneMenu.radius
         }
         Region {
+            item: netMenu.visible ? netMenu : null
+            radius: netMenu.radius
+        }
+        Region {
             item: card.visible && card.opacity > 0.05 ? card : null
             radius: card.radius
         }
@@ -231,6 +240,9 @@ PanelWindow {
     mask: Region {
         Region {
             item: catcher
+        }
+        Region {
+            item: root.barShown && strip.visible ? strip : null
         }
         Region {
             item: root.barShown ? left : null
@@ -276,10 +288,23 @@ PanelWindow {
         }
     }
 
+    // The joined bar: one plate from side to side under the three islands, which then draw none.
+    GlassIsland {
+        id: strip
+
+        x: root.sideGap
+        y: root.edgeGap - root.centerOut * 60
+        width: parent.width - 2 * root.sideGap
+        opacity: 1 - root.centerOut
+        visible: BarLayout.joined && root.centerOut < 1
+        onScrolled: (x, step) => root.scrollAt(strip.x + x, step)
+    }
+
     BarIsland {
         id: left
 
         zone: "left"
+        plain: BarLayout.joined
         x: root.sideGap
         y: root.edgeGap - root.leftOut * 60
         opacity: 1 - root.leftOut
@@ -292,6 +317,7 @@ PanelWindow {
         id: center
 
         zone: "center"
+        plain: BarLayout.joined
         x: Math.round((parent.width - width) / 2)
         y: root.edgeGap - root.centerOut * 60
         opacity: 1 - root.centerOut
@@ -304,6 +330,7 @@ PanelWindow {
         id: right
 
         zone: "right"
+        plain: BarLayout.joined
         x: parent.width - width - root.sideGap
         y: root.edgeGap - root.rightOut * 60
         opacity: Math.min(1, (1 - root.rightOut) * 3)
@@ -392,6 +419,15 @@ PanelWindow {
         y: root.popupTop - 24 * (1 - reveal)
         maxHeight: root.height - root.popupTop - 12
         shown: root.panelHere && Ui.popup === "phone"
+    }
+
+    // A network or security reading, under its part.
+    NetMenu {
+        id: netMenu
+
+        x: root.under([NetTools.open], width, "right", root.layoutKey)
+        y: root.popupTop
+        shown: root.panelHere && Ui.popup === "net"
     }
 
     // The control center drops from the status part.

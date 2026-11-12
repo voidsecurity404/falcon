@@ -13,23 +13,32 @@ Rectangle {
     // The preview in Settings: no wheel, and some room even when empty.
     property bool wheelEnabled: true
     property real minWidth: 0
+    // In the joined bar one long plate lies under all islands, so they draw none of their own.
+    property bool plain: false
     signal scrolled(real x, int step)
 
     implicitWidth: Math.max(minWidth, row.implicitWidth + 24)
     implicitHeight: BarLayout.height
     radius: BarLayout.radius
-    gradient: Gradient {
-        GradientStop {
-            position: 0
-            color: Theme.glassTop
+    color: "transparent"
+
+    Rectangle {
+        anchors.fill: parent
+        visible: !root.plain
+        radius: root.radius
+        gradient: Gradient {
+            GradientStop {
+                position: 0
+                color: Theme.glassTop
+            }
+            GradientStop {
+                position: 1
+                color: Theme.panel
+            }
         }
-        GradientStop {
-            position: 1
-            color: Theme.panel
-        }
+        border.width: BarLayout.border ? 1 : 0
+        border.color: Theme.panelEdge
     }
-    border.width: BarLayout.border ? 1 : 0
-    border.color: Theme.panelEdge
 
     Row {
         id: row

@@ -1,0 +1,578 @@
+#!/usr/bin/env python3
+"""Network and security readings for the top bar's pentest parts.
+
+`falcon-netscan TOOL [ARG]` prints one JSON object:
+  badge    short text shown on the bar beside the icon ("" for none)
+  state    "good", "warn", "bad" or "" (colors the badge)
+  title    heading of the menu
+  summary  one line under the heading
+  columns  names of the table's columns
+  rows     list of rows, each a list of cells; the first cell is copied on a click
+  error    a sentence when the reading failed
+
+Tools: lan, probe IP, wan, iface, wifi, aps, ports, conns, vpn, dns, ping, firewall, arp,
+tor, bt, hash, logins. Nothing here needs root, and nothing is sent anywhere except `wan`
+(ipinfo.io) and `tor` (check.torproject.org through the local Tor port).
+"""
+
+import base64
+import codecs
+import concurrent.futures as cf
+import hashlib
+import ipaddress
+import json
+import os
+import re
+import socket
+import subprocess
+import sys
+import time
+import urllib.parse
+import urllib.request
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+from falcon_tr import tr  # noqa: E402
+
+ENV = dict(os.environ, LC_ALL="C", LANG="C")
+STATE = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "falcon-netscan")
+OUI_FILES = ["/usr/share/hwdata/oui.txt", "/usr/share/misc/oui.txt"]
+
+
+def sh(*cmd, timeout=10):
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=ENV)
+        return out.stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def sh_json(*cmd):
+    try:
+        return json.loads(sh(*cmd) or "null")
+    except ValueError:
+        return None
+
+
+def result(title, summary="", columns=None, rows=None, badge="", state="", error=""):
+    return {"title": tr(title), "summary": summary, "columns": [tr(c) for c in columns or []],
+            "rows": rows or [], "badge": badge, "state": state, "error": tr(error) if error else ""}
+
+
+def default_route():
+    routes = sh_json("ip", "-j", "route", "show", "default") or []
+    routes.sort(key=lambda r: r.get("metric", 0))
+    return routes[0] if routes else None
+
+
+def networks():
+    """(interface, own address, network) of every IPv4 interface that is up, loopback left out."""
+    out = []
+    for link in sh_json("ip", "-j", "-4", "addr", "show", "up") or []:
+        if link.get("ifname") == "lo":
+            continue
+        for a in link.get("addr_info", []):
+            if a.get("family") == "inet":
+                net = ipaddress.ip_network(f"{a['local']}/{a['prefixlen']}", strict=False)
+                out.append((link["ifname"], a["local"], net))
+    return out
+
+
+_oui = None
+
+
+def vendor(mac):
+    global _oui
+    if not mac:
+        return ""
+    if int(mac.split(":")[0], 16) & 2:
+        return "random (private)"
+    if _oui is None:
+        _oui = {}
+        for path in OUI_FILES:
+            try:
+                with open(path, encoding="utf-8", errors="replace") as f:
+                    for line in f:
+                        m = re.match(r"^([0-9A-F]{6})\s+\(base 16\)\s+(.*)$", line)
+                        if m:
+                            _oui[m.group(1)] = m.group(2).strip()
+                break
+            except OSError:
+                pass
+    return _oui.get(mac.replace(":", "").upper()[:6], "")
+
+
+def hostname(ip):
+    try:
+        return socket.gethostbyaddr(ip)[0]
+    except OSError:
+        return ""
+
+
+def neighbours():
+    out = {}
+    for n in sh_json("ip", "-j", "-4", "neigh", "show") or []:
+        mac = n.get("lladdr")
+        if mac and "FAILED" not in n.get("state", []) and "INCOMPLETE" not in n.get("state", []):
+            out[n["dst"]] = (mac.lower(), n.get("dev", ""))
+    return out
+
+
+# ---- tools ---------------------------------------------------------------------------------
+
+def tool_lan(_arg):
+    """Wakes every address of the local networks with one UDP packet, which makes the kernel
+    ask for its MAC (ARP), then reads the neighbour table: the devices that answered."""
+    nets = networks()
+    if not nets:
+        return result("Devices on the network", error="No network")
+    seen_nets = set()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setblocking(False)
+    own = {ip for _, ip, _ in nets}
+    for _, _, net in nets:
+        if net in seen_nets or net.num_addresses > 4096:
+            continue
+        seen_nets.add(net)
+        for host in net.hosts():
+            try:
+                sock.sendto(b"", (str(host), 9))
+            except OSError:
+                pass
+    sock.close()
+    time.sleep(2.2)
+    route = default_route() or {}
+    gateway = route.get("gateway", "")
+    found = {ip: v for ip, v in neighbours().items()
+             if any(ipaddress.ip_address(ip) in n for n in seen_nets) and ip not in own}
+    # Reverse lookups may hang for seconds: names not known within 2 s are left out.
+    pool = cf.ThreadPoolExecutor(32)
+    jobs = {ip: pool.submit(hostname, ip) for ip in found}
+    cf.wait(jobs.values(), timeout=2)
+    names = {ip: j.result() if j.done() else "" for ip, j in jobs.items()}
+    pool.shutdown(wait=False, cancel_futures=True)
+    rows = []
+    for ip in sorted(found, key=lambda a: ipaddress.ip_address(a)):
+        mac, dev = found[ip]
+        label = names.get(ip, "")
+        label = "" if label == "_gateway" else label
+        if ip == gateway:
+            label = (label + " · " if label else "") + tr("gateway")
+        rows.append([ip, mac, vendor(mac) or "—", label or "—"])
+    for name, ip, _ in nets:
+        mac = read(f"/sys/class/net/{name}/address")
+        rows.append([ip, mac, tr("this computer ({name})", name=name), socket.gethostname()])
+    count = len(found)
+    return result("Devices on the network", tr("{n} devices besides this computer · {nets}", n=count,
+                  nets=", ".join(str(n) for n in seen_nets)),
+                  ["IP", "MAC", "Vendor", "Name"], rows, badge=str(count))
+
+
+COMMON_PORTS = {21: "ftp", 22: "ssh", 23: "telnet", 25: "smtp", 53: "dns", 80: "http", 110: "pop3",
+                135: "msrpc", 139: "netbios", 143: "imap", 443: "https", 445: "smb", 548: "afp",
+                554: "rtsp", 631: "ipp", 1716: "kdeconnect", 1883: "mqtt", 1900: "upnp",
+                3306: "mysql", 3389: "rdp", 5000: "upnp/http", 5353: "mdns", 5432: "postgres",
+                5555: "adb", 5900: "vnc", 6379: "redis", 7000: "airplay", 8000: "http-alt",
+                8008: "chromecast", 8080: "http-proxy", 8443: "https-alt", 8888: "http-alt",
+                9100: "printer", 27017: "mongodb", 49152: "upnp"}
+
+
+def tool_probe(ip):
+    """Tries a TCP connection to common ports of one device on the local network."""
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return result("Ports", error="Not an address")
+    if not addr.is_private:
+        return result("Ports", error="Only devices on the local network are checked")
+
+    def knock(port):
+        s = socket.socket()
+        s.settimeout(0.8)
+        try:
+            return port if s.connect_ex((ip, port)) == 0 else None
+        finally:
+            s.close()
+
+    with cf.ThreadPoolExecutor(32) as pool:
+        open_ports = [p for p in pool.map(knock, COMMON_PORTS) if p]
+    rows = [[str(p), COMMON_PORTS[p]] for p in sorted(open_ports)]
+    return result("Ports", tr("{ip}: {n} open of {all} checked", ip=ip, n=len(rows), all=len(COMMON_PORTS)),
+                  ["Port", "Service"], rows, badge=str(len(rows)))
+
+
+def tool_wan(_arg):
+    try:
+        req = urllib.request.Request("https://ipinfo.io/json", headers={"User-Agent": "curl/8"})
+        with urllib.request.urlopen(req, timeout=6) as r:
+            info = json.load(r)
+    except Exception:
+        return result("Public address", error="Offline", state="bad", badge="—")
+    rows = [[info.get(k, "—"), tr(label)] for k, label in
+            [("ip", "Address"), ("hostname", "Host name"), ("city", "City"), ("region", "Region"),
+             ("country", "Country"), ("org", "Provider"), ("loc", "Coordinates"), ("timezone", "Time zone")]
+            if info.get(k)]
+    return result("Public address", f"{info.get('ip', '')} · {info.get('org', '')}",
+                  ["Value", "What"], rows, badge=info.get("ip", ""))
+
+
+def read(path):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def tool_iface(_arg):
+    route = default_route() or {}
+    rows = []
+    for link in sh_json("ip", "-j", "addr", "show") or []:
+        name = link.get("ifname", "")
+        if name == "lo":
+            continue
+        v4 = [f"{a['local']}/{a['prefixlen']}" for a in link.get("addr_info", []) if a.get("family") == "inet"]
+        v6 = [a["local"] for a in link.get("addr_info", []) if a.get("family") == "inet6" and a.get("scope") == "global"]
+        rows.append([", ".join(v4) or "—", name, link.get("address", "—"), link.get("operstate", "").lower(),
+                     ", ".join(v6) or "—"])
+    main = ""
+    for name, ip, net in networks():
+        if name == route.get("dev"):
+            main = ip
+            rows.insert(0, [str(net.network_address), tr("network"), tr("{n} hosts", n=net.num_addresses - 2),
+                            tr("broadcast {a}", a=net.broadcast_address), tr("gateway {a}", a=route.get("gateway", "—"))])
+            break
+    return result("Interfaces", tr("{dev} · gateway {gw}", dev=route.get("dev", "—"), gw=route.get("gateway", "—")),
+                  ["IPv4", "Interface", "MAC", "State", "IPv6"], rows, badge=main)
+
+
+def wifi_lines(rescan="no"):
+    out = sh("nmcli", "-t", "-e", "yes", "-f", "ACTIVE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,SECURITY",
+             "dev", "wifi", "list", "--rescan", rescan, timeout=20)
+    rows = []
+    for line in out.splitlines():
+        parts = re.split(r"(?<!\\):", line)
+        if len(parts) < 8:
+            continue
+        rows.append([p.replace("\\:", ":") for p in parts])
+    return rows
+
+
+def tool_wifi(_arg):
+    for active, ssid, bssid, chan, freq, rate, signal, sec in wifi_lines():
+        if active == "yes":
+            band = "5 GHz" if freq.startswith("5") else "6 GHz" if freq.startswith("6") else "2.4 GHz"
+            rows = [[ssid, tr("Name")], [bssid, tr("Access point (BSSID)")], [chan + " · " + band, tr("Channel")],
+                    [freq, tr("Frequency")], [rate, tr("Speed")], [signal + "%", tr("Signal")],
+                    [sec or tr("open"), tr("Security")]]
+            state = "bad" if not sec else "warn" if "WEP" in sec or sec == "WPA1" else ""
+            return result("Wi-Fi", f"{ssid} · {signal}% · {sec or tr('open')}", ["Value", "What"], rows,
+                          badge=signal + "%", state=state)
+    return result("Wi-Fi", error="Not connected to Wi-Fi", badge="—")
+
+
+def tool_aps(_arg):
+    rows = []
+    open_count = 0
+    for active, ssid, bssid, chan, freq, rate, signal, sec in wifi_lines("auto"):
+        weak = not sec or "WEP" in sec
+        open_count += weak
+        rows.append([bssid, ssid or tr("(hidden)"), chan, signal + "%", sec or "OPEN", "●" if active == "yes" else ""])
+    rows.sort(key=lambda r: -int(r[3].rstrip("%") or 0))
+    return result("Nearby Wi-Fi", tr("{n} access points · {o} open or WEP", n=len(rows), o=open_count),
+                  ["BSSID", "SSID", "Ch", "Signal", "Security", ""], rows, badge=str(len(rows)),
+                  state="warn" if open_count else "")
+
+
+def process_of(text):
+    m = re.search(r'users:\(\("([^"]+)",pid=(\d+)', text)
+    return f"{m.group(1)} ({m.group(2)})" if m else "—"
+
+
+def tool_ports(_arg):
+    rows = []
+    exposed = 0
+    for line in sh("ss", "-tulnpH").splitlines():
+        f = line.split()
+        if len(f) < 5:
+            continue
+        local = f[4]
+        public = not re.match(r"^(127\.|\[::1\]|::1|\[?fe80)", local) and "%lo" not in local
+        exposed += public and [local, f[0], process_of(line), tr("network")] not in rows
+        row = [local, f[0], process_of(line), tr("network") if public else tr("local only")]
+        if row in rows:
+            continue
+        rows.append(row)
+    rows.sort(key=lambda r: r[3] != tr("network"))
+    return result("Listening ports", tr("{n} open · {e} reachable from the network", n=len(rows), e=exposed),
+                  ["Address", "Proto", "Program", "Reach"], rows, badge=str(exposed),
+                  state="warn" if exposed else "good")
+
+
+def tool_conns(_arg):
+    rows = []
+    for line in sh("ss", "-tunpH", "state", "established").splitlines():
+        f = line.split()
+        if len(f) < 5:
+            continue
+        rows.append([f[4], f[3], f[0], process_of(line)])
+    return result("Connections", tr("{n} established", n=len(rows)), ["Remote address", "Local address", "Proto", "Program"],
+                  rows, badge=str(len(rows)))
+
+
+VPN_PREFIX = ("tun", "tap", "wg", "ppp", "tailscale", "zt", "nordlynx", "proton", "mullvad", "ipsec")
+
+
+def tool_vpn(_arg):
+    rows = []
+    for link in sh_json("ip", "-j", "addr", "show", "up") or []:
+        name = link.get("ifname", "")
+        if name.startswith(VPN_PREFIX):
+            ips = [a["local"] for a in link.get("addr_info", []) if a.get("family") == "inet"]
+            rows.append([name, tr("interface"), ", ".join(ips) or "—"])
+    for line in sh("nmcli", "-t", "-f", "NAME,TYPE,DEVICE", "connection", "show", "--active").splitlines():
+        parts = line.split(":")
+        if len(parts) >= 3 and parts[1] in ("vpn", "wireguard"):
+            rows.append([parts[0], parts[1], parts[2] or "—"])
+    route = default_route() or {}
+    through = route.get("dev", "").startswith(VPN_PREFIX)
+    on = bool(rows)
+    return result("VPN", tr("On · traffic goes through {dev}" if on else "Off · traffic goes through {dev}",
+                            dev=route.get("dev", "—")),
+                  ["Name", "Kind", "Address"], rows, badge="ON" if on else "OFF",
+                  state="good" if on and through else "warn" if on else "bad")
+
+
+def tool_dns(_arg):
+    rows = []
+    for line in sh("resolvectl", "dns").splitlines():
+        m = re.match(r"^(Global|Link \d+ \(([^)]+)\)):\s*(.*)$", line)
+        if m:
+            for server in m.group(3).split():
+                if server not in [r[0] for r in rows]:
+                    rows.append([server, m.group(2) or tr("global")])
+    if not rows:
+        for line in read("/etc/resolv.conf").splitlines():
+            if line.startswith("nameserver"):
+                rows.append([line.split()[1], "resolv.conf"])
+    t = time.monotonic()
+    try:
+        socket.getaddrinfo("example.com", 80)
+        ms = tr("{n} ms", n=round((time.monotonic() - t) * 1000))
+    except OSError:
+        ms = tr("failed")
+    servers = sorted({r[0] for r in rows})
+    return result("DNS", tr("{n} servers · example.com resolved in {ms}", n=len(servers), ms=ms), ["Server", "Interface"],
+                  rows, badge=servers[0] if servers else "—")
+
+
+def ping_one(host):
+    out = sh("ping", "-c", "3", "-i", "0.3", "-W", "1", "-q", host, timeout=8)
+    loss = re.search(r"(\d+(?:\.\d+)?)% packet loss", out)
+    rtt = re.search(r"= [\d.]+/([\d.]+)/([\d.]+)/([\d.]+)", out)
+    return (f"{float(rtt.group(1)):.0f} ms" if rtt else "—",
+            f"{float(rtt.group(3)):.1f} ms" if rtt else "—",
+            (loss.group(1) + "%") if loss else "100%")
+
+
+def tool_ping(_arg):
+    route = default_route() or {}
+    targets = [(route.get("gateway", ""), tr("gateway")), ("1.1.1.1", "Cloudflare"), ("8.8.8.8", "Google"),
+               ("9.9.9.9", "Quad9")]
+    targets = [t for t in targets if t[0]]
+    with cf.ThreadPoolExecutor(len(targets)) as pool:
+        res = list(pool.map(lambda t: ping_one(t[0]), targets))
+    rows = [[host, name, avg, jitter, loss] for (host, name), (avg, jitter, loss) in zip(targets, res)]
+    internet = [r for r in rows[1:] if r[2] != "—"]
+    badge = internet[0][2] if internet else "—"
+    ms = float(badge.split()[0]) if internet else 999
+    return result("Latency", tr("Average of 3 pings each"), ["Host", "Name", "Average", "Jitter", "Loss"], rows,
+                  badge=badge, state="bad" if not internet else "warn" if ms > 120 else "good")
+
+
+def tool_firewall(_arg):
+    rows = []
+    on = False
+    for unit in ["firewalld", "ufw", "nftables", "iptables", "opensnitchd"]:
+        state = sh("systemctl", "is-active", unit).strip() or "missing"
+        if state == "active":
+            on = True
+        if state != "inactive" or unit in ("firewalld", "ufw"):
+            rows.append([unit, tr(state)])
+    zone = sh("firewall-cmd", "--get-default-zone").strip()
+    if zone:
+        rows.append([zone, tr("default zone")])
+        active = sh("firewall-cmd", "--get-active-zones")
+        for line in active.splitlines():
+            if line and not line.startswith(" "):
+                rows.append([line.strip(), tr("active zone")])
+    return result("Firewall", tr("Protected" if on else "No firewall is running"), ["Service", "State"], rows,
+                  badge="ON" if on else "OFF", state="good" if on else "bad")
+
+
+def tool_arp(_arg):
+    """Watches for ARP spoofing: the gateway's MAC changing, or one MAC answering for many addresses."""
+    route = default_route() or {}
+    gateway = route.get("gateway", "")
+    table = neighbours()
+    os.makedirs(STATE, exist_ok=True)
+    memory_file = os.path.join(STATE, "arp.json")
+    try:
+        memory = json.load(open(memory_file))
+    except (OSError, ValueError):
+        memory = {}
+    rows = []
+    alarms = 0
+    gw_mac = table.get(gateway, ("", ""))[0]
+    if gateway and gw_mac:
+        old = memory.get(gateway)
+        if old and old != gw_mac:
+            rows.append([gateway, tr("gateway MAC changed {old} → {new}", old=old, new=gw_mac), tr("ALARM")])
+            alarms += 1
+        else:
+            rows.append([gateway, tr("gateway {a}", a=gw_mac), "ok"])
+        memory[gateway] = gw_mac
+    by_mac = {}
+    for ip, (mac, _) in table.items():
+        by_mac.setdefault(mac, []).append(ip)
+    for mac, ips in by_mac.items():
+        if len(ips) > 1:
+            bad = gateway in ips
+            alarms += bad
+            rows.append([mac, tr("answers for {ips}", ips=", ".join(sorted(ips))), tr("ALARM" if bad else "check")])
+    tmp = f"{memory_file}.{os.getpid()}.tmp"
+    json.dump(memory, open(tmp, "w"))
+    os.replace(tmp, memory_file)
+    return result("ARP watch", tr("Possible spoofing!") if alarms else tr("Clean · {n} neighbours", n=len(table)),
+                  ["Address", "Finding", "Level"], rows, badge="!" if alarms else "OK",
+                  state="bad" if alarms else "good")
+
+
+def tool_tor(_arg):
+    rows = []
+    service = sh("systemctl", "is-active", "tor").strip() or "missing"
+    rows.append([tr(service), tr("tor service")])
+    port = None
+    for p in (9050, 9150):
+        s = socket.socket()
+        s.settimeout(0.5)
+        if s.connect_ex(("127.0.0.1", p)) == 0:
+            port = p
+        s.close()
+        if port:
+            break
+    rows.append([str(port) if port else tr("closed"), tr("SOCKS port")])
+    exit_ip = ""
+    if port:
+        out = sh("curl", "-s", "-m", "12", "--socks5-hostname", f"127.0.0.1:{port}",
+                 "https://check.torproject.org/api/ip", timeout=15)
+        try:
+            info = json.loads(out)
+            exit_ip = info.get("IP", "")
+            rows.append([exit_ip, tr("exit address")])
+            rows.append([tr("yes" if info.get("IsTor") else "no"), tr("goes through Tor")])
+        except ValueError:
+            rows.append([tr("no answer"), "check.torproject.org"])
+    on = bool(exit_ip)
+    return result("Tor", tr("Working · exit {ip}", ip=exit_ip) if on else tr("Not running" if not port else "Port open, no circuit"),
+                  ["Value", "What"], rows, badge="ON" if on else "OFF", state="good" if on else "")
+
+
+def tool_bt(_arg):
+    if not sh("bluetoothctl", "show").strip():
+        return result("Bluetooth nearby", error="Bluetooth is off", badge="—")
+    sh("bluetoothctl", "--timeout", "6", "scan", "on", timeout=10)
+    rows = []
+    paired = set(re.findall(r"Device (\S+)", sh("bluetoothctl", "devices", "Paired")))
+    connected = set(re.findall(r"Device (\S+)", sh("bluetoothctl", "devices", "Connected")))
+    for line in sh("bluetoothctl", "devices").splitlines():
+        m = re.match(r"Device (\S+) (.*)", line)
+        if not m:
+            continue
+        mac, name = m.groups()
+        info = sh("bluetoothctl", "info", mac, timeout=3)
+        rssi = re.search(r"RSSI: (?:0x[0-9a-f]+ \()?(-?\d+)", info)
+        kind = re.search(r"Icon: (\S+)", info)
+        state = tr("connected" if mac in connected else "paired" if mac in paired else "seen")
+        rows.append([mac, name, kind.group(1) if kind else "—", (rssi.group(1) + " dBm") if rssi else "—", state])
+    rows.sort(key=lambda r: (r[4] != tr("connected"), r[3] == "—", r[3]))
+    return result("Bluetooth nearby", tr("{n} devices", n=len(rows)), ["MAC", "Name", "Kind", "RSSI", "State"],
+                  rows, badge=str(len(rows)))
+
+
+def tool_hash(_arg):
+    """Encodings and hashes of the clipboard's text, for CTF and quick checks."""
+    text = sh("wl-paste", "-n", "-t", "text/plain", timeout=3)
+    if not text:
+        return result("Encode and hash", error="The clipboard holds no text")
+    data = text.encode()
+    rows = []
+
+    def add(label, fn):
+        try:
+            value = fn()
+            if value is not None and value != "":
+                rows.append([value, tr(label)])
+        except Exception:
+            pass
+
+    def unb64(s):
+        s = s.strip()
+        raw = base64.b64decode(s + "=" * (-len(s) % 4), altchars=b"-_" if "-" in s or "_" in s else None)
+        return raw.decode("utf-8")
+
+    add("Base64", lambda: base64.b64encode(data).decode())
+    add("Base64 decoded", lambda: unb64(text))
+    add("Hex", lambda: data.hex())
+    add("Hex decoded", lambda: bytes.fromhex(re.sub(r"[\s:]|0x", "", text)).decode("utf-8"))
+    add("URL encoded", lambda: urllib.parse.quote(text, safe=""))
+    add("URL decoded", lambda: (lambda d: d if d != text else None)(urllib.parse.unquote(text)))
+    add("ROT13", lambda: codecs.encode(text, "rot13"))
+    add("Binary", lambda: " ".join(f"{b:08b}" for b in data[:64]))
+    if text.count(".") == 2 and text.startswith("ey"):
+        head, body, _ = text.strip().split(".")
+        add("JWT header", lambda: unb64(head))
+        add("JWT payload", lambda: unb64(body))
+    for name in ("md5", "sha1", "sha256", "sha512"):
+        add(name.upper(), lambda n=name: hashlib.new(n, data).hexdigest())
+    shown = text if len(text) <= 60 else text[:57] + "…"
+    return result("Encode and hash", tr("Clipboard: {clip}", clip=shown.replace("\n", " ")), ["Result", "Kind"], rows)
+
+
+def tool_logins(_arg):
+    rows = []
+    for line in sh("who").splitlines():
+        f = line.split()
+        if len(f) >= 2:
+            source = f[-1] if f[-1].startswith("(") else ""
+            rows.append([f[0], f[1], " ".join(f[2:4]), source.strip("()") or tr("local")])
+    sshd = sh("systemctl", "is-active", "sshd").strip()
+    failed = 0
+    log = sh("journalctl", "-q", "--since", "-24h", "-t", "sshd", "-t", "sudo", "-t", "su",
+             "--grep", "Failed password|authentication failure|Invalid user", "-o", "cat", timeout=8)
+    failed = len([l for l in log.splitlines() if l.strip()])
+    remote = [r for r in rows if r[3] != tr("local") and not r[3].startswith(":")]
+    rows.append([tr(sshd), "sshd", "", tr("SSH server")])
+    rows.append([str(failed), tr("failed logins"), "", tr("last 24 h")])
+    return result("Sessions and logins", tr("SSH {s} · {n} failed in 24 h", s=tr(sshd), n=failed), ["User", "Terminal", "Since", "From"],
+                  rows, badge=str(failed) if failed else "OK",
+                  state="bad" if remote else "warn" if failed else "good")
+
+
+TOOLS = {name[5:]: fn for name, fn in globals().items() if name.startswith("tool_")}
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] not in TOOLS:
+        print("usage: falcon-netscan " + "|".join(sorted(TOOLS)) + " [ARG]", file=sys.stderr)
+        return 2
+    try:
+        out = TOOLS[sys.argv[1]](sys.argv[2] if len(sys.argv) > 2 else "")
+    except Exception as e:  # one broken reading must not leave the menu empty
+        out = result(sys.argv[1], error=f"{type(e).__name__}: {e}")
+    out["tool"] = sys.argv[1]
+    print(json.dumps(out, ensure_ascii=False), flush=True)
+    os._exit(0)  # lookups still waiting must not hold the answer back
+
+
+if __name__ == "__main__":
+    sys.exit(main())

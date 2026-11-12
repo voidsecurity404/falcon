@@ -106,6 +106,7 @@ targets=(
     .local/bin/falcon-net
     .local/bin/falcon-updates
     .local/bin/falcon-privacy
+    .local/bin/falcon-netscan
     .local/bin/falcon-phone
     .local/bin/falcon-monitors
     .config/falcon/tmux.conf

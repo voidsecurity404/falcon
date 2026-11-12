@@ -262,9 +262,17 @@ Item {
                         layer.smooth: true
                         layer.textureSize: Qt.size(Math.ceil(width), Math.ceil(height))
 
+                        GlassIsland {
+                            x: root.edge
+                            y: Math.max(8, BarLayout.edgeGap)
+                            width: stage.width - 2 * root.edge
+                            visible: BarLayout.joined
+                            wheelEnabled: false
+                        }
                         BarIsland {
                             id: previewLeft
 
+                            plain: BarLayout.joined
                             zone: "left"
                             preview: true
                             studio: root
@@ -274,6 +282,7 @@ Item {
                         BarIsland {
                             id: previewRight
 
+                            plain: BarLayout.joined
                             zone: "right"
                             preview: true
                             studio: root
@@ -283,6 +292,7 @@ Item {
                         BarIsland {
                             id: previewCenter
 
+                            plain: BarLayout.joined
                             zone: "center"
                             preview: true
                             studio: root
@@ -312,7 +322,10 @@ Item {
                     readonly property bool aimed: root.dragId !== "" && root.dropZone === "hidden"
 
                     width: parent.width
-                    height: Math.max(84, hiddenFlow.y + hiddenFlow.implicitHeight + 12)
+                    readonly property var plainHidden: BarLayout.hidden.filter(id => !(BarLayout.byId[id] || {}).net)
+                    readonly property var netHidden: BarLayout.hidden.filter(id => !!(BarLayout.byId[id] || {}).net)
+
+                    height: Math.max(84, (netHidden.length > 0 ? netFlow.y + netFlow.implicitHeight : hiddenFlow.y + hiddenFlow.implicitHeight) + 12)
                     radius: 14
                     color: aimed ? Qt.alpha(Theme.error, 0.1) : Qt.alpha(Theme.glassBase, 0.35)
                     border.width: 1
@@ -343,7 +356,38 @@ Item {
                         spacing: 6
 
                         Repeater {
-                            model: BarLayout.hidden
+                            model: hiddenBox.plainHidden
+
+                            delegate: Chip {
+                                required property string modelData
+
+                                partId: modelData
+                            }
+                        }
+                    }
+                    // Network and security readings, kept apart so the ordinary parts stay easy to find.
+                    Label {
+                        id: netTitle
+
+                        visible: hiddenBox.netHidden.length > 0
+                        x: 12
+                        y: hiddenFlow.y + Math.max(hiddenFlow.implicitHeight, 20) + 12
+                        text: Tr.t("Network and security")
+                        size: 11
+                        font.weight: Font.Medium
+                        color: Theme.muted
+                    }
+                    Flow {
+                        id: netFlow
+
+                        visible: netTitle.visible
+                        x: 10
+                        y: netTitle.y + netTitle.height + 8
+                        width: hiddenBox.width - 20
+                        spacing: 6
+
+                        Repeater {
+                            model: hiddenBox.netHidden
 
                             delegate: Chip {
                                 required property string modelData
@@ -353,7 +397,7 @@ Item {
                         }
                     }
                     Label {
-                        visible: BarLayout.hidden.length === 0
+                        visible: hiddenBox.plainHidden.length === 0
                         x: 12
                         y: hiddenFlow.y + 7
                         text: root.dragId !== "" ? Tr.t("Drop here to take it off the bar") : Tr.t("Everything is on the bar")

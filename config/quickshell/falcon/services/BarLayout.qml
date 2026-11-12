@@ -133,10 +133,19 @@ Singleton {
             home: "right"
         }
     ]
+    // The network and security parts, one per reading of NetTools. They start hidden.
+    readonly property var netParts: NetTools.tools.map(t => ({
+                id: t.id,
+                title: t.title,
+                icon: t.icon,
+                home: "right",
+                net: true
+            }))
+    readonly property var allParts: catalog.concat(netParts)
     readonly property var zones: ["left", "center", "right"]
     readonly property var byId: {
         const out = {};
-        for (const part of catalog)
+        for (const part of allParts)
             out[part.id] = part;
         return out;
     }
@@ -144,7 +153,7 @@ Singleton {
     readonly property var left: clean("left")
     readonly property var center: clean("center")
     readonly property var right: clean("right")
-    readonly property var hidden: catalog.map(p => p.id).filter(id => !left.includes(id) && !center.includes(id) && !right.includes(id))
+    readonly property var hidden: allParts.map(p => p.id).filter(id => !left.includes(id) && !center.includes(id) && !right.includes(id))
 
     // Sizes, kept in a range the bar still works in.
     readonly property int height: clamp(Settings.get("panel.height", 42), 30, 60)
@@ -153,6 +162,8 @@ Singleton {
     readonly property int sideGap: clamp(Settings.get("panel.sideGap", 10), 0, 60)
     readonly property int spacing: clamp(Settings.get("panel.spacing", 8), 0, 24)
     readonly property bool border: Settings.get("panel.border", true)
+    // One long glass bar holding all three islands, or three separate islands.
+    readonly property bool joined: Settings.get("panel.joined", true) === true
     readonly property int buttonHeight: Math.max(22, Math.min(36, height - 12))
     readonly property string workspaceStyle: Settings.get("panel.workspaceStyle", "pills")
     readonly property int titleWidth: clamp(Settings.get("panel.titleWidth", 280), 60, 600)
@@ -260,7 +271,7 @@ Singleton {
     }
     function resetLook() {
         const panel = JSON.parse(JSON.stringify(Settings.user.panel || {}));
-        for (const key of ["height", "radius", "edgeGap", "sideGap", "spacing", "border", "workspaceStyle", "titleWidth", "mediaWidth"])
+        for (const key of ["joined", "height", "radius", "edgeGap", "sideGap", "spacing", "border", "workspaceStyle", "titleWidth", "mediaWidth"])
             delete panel[key];
         Settings.set("panel", panel);
     }

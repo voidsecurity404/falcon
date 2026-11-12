@@ -17,6 +17,7 @@ Singleton {
     property color outline: "#3a4652"
     property color error: "#ffb4ab"
     readonly property color good: "#8fd6a0"
+    readonly property color warn: "#f1c96b"
 
     readonly property string sans: Settings.get("appearance.font", "Geist")
     readonly property string mono: Settings.get("appearance.monoFont", "Geist Mono")

@@ -147,7 +147,11 @@ GlassIsland {
                             status: statusPart,
                             bell: bellPart,
                             power: powerPart
-                        })[slot.modelData] || null
+                        })[slot.modelData] || (NetTools.has(slot.modelData) ? netPart : null)
+                    onLoaded: {
+                        if (item.netTool !== undefined)
+                            item.netTool = slot.modelData;
+                    }
                 }
                 // In the preview, a part with nothing to show now is still there to be moved.
                 BarButton {
@@ -895,6 +899,56 @@ GlassIsland {
 
     // The phone through KDE Connect: a click opens the phone window. A dot shows it is connected,
     // and the number of the phone's notifications not yet seen rides on it.
+    // A network or security reading (NetTools): its icon colored by the reading's state, and a
+    // short value beside it. A click opens its menu under it.
+    Component {
+        id: netPart
+
+        BarButton {
+            id: netButton
+
+            property string netTool: ""
+            readonly property bool shown: true
+            readonly property string badge: NetTools.badgeOf(netTool)
+
+            objectName: netTool
+            lit: Ui.popup === "net" && NetTools.open === netTool
+            onClicked: NetTools.toggle(netTool)
+            onNetToolChanged: {
+                if (netTool !== "" && !root.preview)
+                    NetTools.watch(netTool, 1);
+            }
+            Component.onDestruction: {
+                if (netTool !== "" && !root.preview)
+                    NetTools.watch(netTool, -1);
+            }
+
+            Row {
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 5
+
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: NetTools.iconOf(netButton.netTool)
+                    size: 16
+                    color: NetTools.colorOf(netButton.netTool)
+                    opacity: NetTools.busy[netButton.netTool] && !NetTools.data[netButton.netTool] ? 0.5 : 1
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: netButton.badge !== ""
+                    // Traffic changes every 2 s: a steady width keeps the bar from shifting.
+                    width: netButton.netTool === "speed" ? Math.max(implicitWidth, 86) : implicitWidth
+                    text: netButton.badge
+                    size: 11
+                    font.family: Theme.mono
+                    font.weight: Font.DemiBold
+                    color: NetTools.colorOf(netButton.netTool)
+                }
+            }
+        }
+    }
+
     Component {
         id: phonePart
 

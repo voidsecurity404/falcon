@@ -84,6 +84,7 @@
     "sideGap": 10,
     "spacing": 8,
     "border": true,
+    "joined": true,
     "workspaceStyle": "pills",
     "titleWidth": 280,
     "mediaWidth": 140,
