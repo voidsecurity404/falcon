@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Gives root's shell (bash, reached with `sudo su` or `sudo -i`) the same Starship
+# prompt as the user: ~/.config/starship.toml is linked, so one file serves both,
+# and the colors are kitty's palette slots, so they follow the wallpaper live.
+# Finished commands keep only "❯ command", like fish and zsh.
+set -euo pipefail
+[[ $EUID -eq 0 ]] || exec sudo "$0" "$@"
+user=${SUDO_USER:-$(logname 2>/dev/null || true)}
+[[ -n $user && $user != root ]] || { echo "Run it with sudo from your own account." >&2; exit 1; }
+home=$(getent passwd "$user" | cut -d: -f6)
+mkdir -p /root/.config
+ln -sfn "$home/.config/starship.toml" /root/.config/starship.toml
+rc=/root/.bashrc
+if ! grep -q falcon-starship "$rc" 2>/dev/null; then
+    cat >>"$rc" <<'EOF'
+
+# falcon-starship: the user's Starship prompt, finished commands keep only "❯ command"
+if [[ $- == *i* ]] && command -v starship >/dev/null; then
+    eval "$(starship init bash)"
+    _falcon_ps0() {
+        local cmd
+        cmd=$(HISTTIMEFORMAT='' history 1 | sed 's/^ *[0-9]*\*\? *//')
+        # blank line + pill line + the "❯ command" line(s)
+        local rows=$(( 3 + (${#cmd} + 1) / ${COLUMNS:-80} ))
+        printf '\e[%dA\r\e[J\e[1;34m❯\e[0m %s' "$rows" "$cmd"
+    }
+    PS0='$(_falcon_ps0)\n'
+fi
+EOF
+fi
+echo "Root's prompt is Starship now. Open a new 'sudo su'."

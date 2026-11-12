@@ -72,6 +72,7 @@ targets=(
     .local/bin/falcon-wallget
     .local/bin/falcon-keys
     .local/bin/falcon-fetch
+    .local/bin/falcon-root-prompt
     .local/bin/falcon-shot
     .local/bin/falcon-wallpaper
     .local/bin/falcon-widgets-place
@@ -290,6 +291,8 @@ ZSH
 fi
 do_it cp -a "$root/config/hypr/." "$HOME/.config/hypr/"
 do_it cp -a "$root/bin/." "$HOME/.local/bin/"
+# Root's bash (sudo su) gets the same Starship prompt.
+command -v starship >/dev/null && soft sudo "$HOME/.local/bin/falcon-root-prompt"
 # The Telegram remote control is a Go program, so it is built here. falcon-apply starts it once it is turned on.
 do_it mkdir -p "$HOME/.config/systemd/user"
 do_it cp "$root/config/systemd/falcon-remote.service" "$HOME/.config/systemd/user/"
