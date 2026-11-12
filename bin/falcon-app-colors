@@ -269,6 +269,51 @@ def gsettings(key, value=None):
 
 
 GTK_MARK = "/* Falcon: "
+ICON_BASE = Path("/usr/share/icons/Adwaita/scalable")
+ICON_DIRS = {"places": "Places", "mimetypes": "MimeTypes", "devices": "Devices"}
+HEX = re.compile(r"#([0-9a-fA-F]{6})\b")
+
+
+def tint(hexcolor, hue, strength):
+    """Moves a blue of Adwaita's icons to the theme's hue, keeping its lightness, so folders
+    keep their shading. Grays, whites and other hues (trash green, red marks) stay."""
+    r, g, b = (int(hexcolor[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    if s < 0.25 or not 0.5 <= h <= 0.69:
+        return None
+    r, g, b = colorsys.hls_to_rgb(hue, l, s * strength)
+    return "%02x%02x%02x" % tuple(round(c * 255) for c in (r, g, b))
+
+
+def icons(name):
+    """Writes an icon theme with Adwaita's colored folder and file icons in the wallpaper's hue.
+    Open GTK 3 apps read icons again when the icon theme's name changes, as with the theme."""
+    if not ICON_BASE.exists():
+        return False
+    try:
+        primary = json.loads((STATE / "apps.json").read_text())["primary"].lstrip("#")
+    except (OSError, ValueError, KeyError):
+        return False
+    r, g, b = (int(primary[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    hue, _, sat = colorsys.rgb_to_hls(r, g, b)
+    strength = min(1.0, 0.35 + sat * 0.75)
+    root = DATA / "icons" / name
+    if root.exists():
+        shutil.rmtree(root)
+    sections = []
+    for sub in ICON_DIRS:
+        out = root / "scalable" / sub
+        out.mkdir(parents=True)
+        for svg in (ICON_BASE / sub).glob("*.svg"):
+            text = svg.read_text()
+            new = HEX.sub(lambda m: "#" + (tint(m.group(1), hue, strength) or m.group(1)), text)
+            (out / svg.name).write_text(new)
+        sections.append(f"[scalable/{sub}]\nContext={ICON_DIRS[sub]}\nSize=128\nMinSize=8\nMaxSize=512\nType=Scalable\n")
+    dirs = ",".join(f"scalable/{sub}" for sub in ICON_DIRS)
+    (root / "index.theme").write_text(
+        f"[Icon Theme]\nName={name}\nComment=Adwaita in the wallpaper's colors (falcon-app-colors)\n"
+        f"Inherits=Adwaita,AdwaitaLegacy,hicolor\nHidden=true\nDirectories={dirs}\n\n" + "\n".join(sections))
+    return True
 
 
 def gtk():
@@ -298,6 +343,8 @@ def gtk():
     # The user file is read after the theme, so colors left there would hide the new ones.
     if user_css.exists() and (user_css.read_text().startswith("/* Avtomatik") or GTK_MARK in user_css.read_text()):
         write_atomic(user_css, f"{GTK_MARK}colors come from the Falcon-a/Falcon-b theme (falcon-app-colors gtk). */\n")
+    if icons(name):
+        gsettings("icon-theme", name)
     gsettings("gtk-theme", name)
 
 
