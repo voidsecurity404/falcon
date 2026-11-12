@@ -128,7 +128,7 @@
     "enabled": true,
     "pinned": [
       "firefox",
-      "org.gnome.Nautilus",
+      "thunar",
       "kitty"
     ]
   },

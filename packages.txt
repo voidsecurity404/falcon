@@ -31,7 +31,9 @@ hyprpolkitagent
 xdg-desktop-portal-gnome
 xdg-desktop-portal-gtk
 gnome-keyring
-nautilus
+thunar
+thunar-volman
+tumbler
 gtk3
 qt6ct
 adw-gtk-theme

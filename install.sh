@@ -319,6 +319,8 @@ do_it cp -n "$root"/wallpapers/* "$HOME/Pictures/Wallpapers/"
 soft "$root/bin/falcon-ocr-models"
 soft "$root/bin/falcon-mpv-ui"
 soft "$root/bin/falcon-app-colors" setup
+# Folders open in Thunar, a GTK 3 app that takes new wallpaper colors while open.
+command -v thunar >/dev/null && soft xdg-mime default thunar.desktop inode/directory
 # The translator for when Google cannot be used, about 4 GB.
 soft "$root/bin/falcon-translate-models"
 do_it cp -a "$root"/fonts/. "$HOME/.local/share/fonts/falcon/"

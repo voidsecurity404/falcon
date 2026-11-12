@@ -237,7 +237,7 @@ def reset():
     try:
         wait(lambda: not windows(), 2.5)
     except AssertionError:
-        sh("pkill -x kitty; pkill -f nautilus")
+        sh("pkill -x kitty; pkill -x thunar")
         wait(lambda: not windows(), 4, "oynalar yopilmadi")
     niri("focus-workspace", 1)
     move(1000, 600)

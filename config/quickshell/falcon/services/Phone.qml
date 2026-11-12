@@ -297,7 +297,7 @@ Singleton {
         if (e.op === "mount") {
             // A file manager on purpose: folders open in the terminal by default here.
             if (e.ok && e.path)
-                Quickshell.execDetached(["sh", "-c", 'if command -v nautilus >/dev/null; then exec nautilus --new-window "$1"; else exec xdg-open "$1"; fi', "sh", e.path]);
+                Quickshell.execDetached(["sh", "-c", 'if command -v thunar >/dev/null; then exec thunar "$1"; else exec xdg-open "$1"; fi', "sh", e.path]);
             else
                 Toasts.show(Tr.t("Could not open the phone's files"), e.error || "", "alert");
         } else if (e.op === "share" && e.ok) {

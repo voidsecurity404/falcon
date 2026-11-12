@@ -284,7 +284,7 @@ ACTIONS = {
     "scratch": ("Scratchpad terminal", f'spawn "{SCRIPTS}falcon-scratch"', False),
     "sticky": ("Sticky window", "spawn " + desk("sticky"), False),
     "browser": ("Browser", f'spawn-sh "exec {SCRIPTS}falcon-raise \'firefox|chrom|brave|zen|helium\' gtk-launch \\"$(xdg-settings get default-web-browser)\\""', False),
-    "files": ("Files", f'spawn "{SCRIPTS}falcon-raise" "nautilus" "nautilus"', False),
+    "files": ("Files", f'spawn "{SCRIPTS}falcon-raise" "^thunar$" "thunar"', False),
     "notes": ("Notes", f'spawn "{SCRIPTS}falcon-raise" "obsidian" "obsidian"', False),
     "close": ("Close window", "close-window", False),
     "widthCycle": ("Column width", "switch-preset-column-width", True),
