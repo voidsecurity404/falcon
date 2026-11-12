@@ -205,6 +205,7 @@ ShellRoot {
                 widgetEdit: Widgets.editMode,
                 widgetsLive: Widgets.shownNow,
                 widgetHover: Widgets.hoverId,
+                widgetPointer: Widgets.pointer.id,
                 widgets: Widgets.items,
                 widgetRects: Widgets.rects,
                 spectrumWanted: Spectrum.wanted,

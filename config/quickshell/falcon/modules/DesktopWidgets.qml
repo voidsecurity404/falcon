@@ -42,6 +42,15 @@ PanelWindow {
             menuOpen = false;
     }
 
+    Connections {
+        target: Widgets
+        function onEditModeChanged() {
+            root.resetArmed = false;
+            if (Widgets.editMode)
+                root.menuOpen = false;
+        }
+    }
+
     // Tahrirda vidjet shishasi shu qatlamda, orqasi xiralashadi.
     BackgroundEffect.blurRegion: Region {
         Region {
@@ -63,7 +72,7 @@ PanelWindow {
             readonly property int index: Widgets.ids.indexOf(modelData)
 
             item: hosts.count > index && index >= 0 ? hosts.itemAt(index) : null
-            radius: 22
+            radius: item ? 22 * item.factor : 22
         }
     }
 
@@ -217,9 +226,19 @@ PanelWindow {
         }
     }
 
-    // Tahrirlash paneli
+    property bool resetArmed: false
+
+    Timer {
+        id: resetDisarm
+
+        interval: 3500
+        onTriggered: root.resetArmed = false
+    }
+
+    // Tahrirlash paneli. Above the widgets, whose own z is 1 to 10, so the gallery covers them.
     Item {
         anchors.fill: parent
+        z: 100
         focus: Widgets.editMode
         Keys.onEscapePressed: {
             if (Widgets.galleryOpen)
@@ -259,14 +278,23 @@ PanelWindow {
                 Repeater {
                     model: [
                         {
-                            label: Tr.t("Add widget"),
+                            label: Widgets.galleryOpen ? Tr.t("Close gallery") : Tr.t("Add widget"),
                             main: false,
                             run: () => Widgets.galleryOpen = !Widgets.galleryOpen
                         },
                         {
-                            label: Tr.t("Reset layout"),
+                            label: root.resetArmed ? Tr.t("Press again to reset") : Tr.t("Reset layout"),
                             main: false,
-                            run: () => Widgets.reset()
+                            danger: root.resetArmed,
+                            run: () => {
+                                if (root.resetArmed) {
+                                    root.resetArmed = false;
+                                    Widgets.reset();
+                                } else {
+                                    root.resetArmed = true;
+                                    resetDisarm.restart();
+                                }
+                            }
                         },
                         {
                             label: Tr.t("Done"),
@@ -283,7 +311,7 @@ PanelWindow {
                         width: barLabel.implicitWidth + 28
                         height: 36
                         radius: 12
-                        color: modelData.main ? Theme.accent : Qt.alpha(Theme.text, barArea.containsMouse ? 0.14 : 0.07)
+                        color: modelData.main ? Theme.accent : modelData.danger ? Theme.error : Qt.alpha(Theme.text, barArea.containsMouse ? 0.14 : 0.07)
                         scale: barArea.pressed ? 0.95 : 1
 
                         Behavior on scale {
@@ -297,7 +325,7 @@ PanelWindow {
 
                             anchors.centerIn: parent
                             text: barButton.modelData.label
-                            color: barButton.modelData.main ? Theme.accentText : Theme.text
+                            color: barButton.modelData.main ? Theme.accentText : barButton.modelData.danger ? Theme.pill : Theme.text
                             size: 13
                         }
                         MouseArea {

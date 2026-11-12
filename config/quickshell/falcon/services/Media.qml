@@ -40,7 +40,7 @@ Singleton {
     ColorQuantizer {
         id: quantizer
 
-        source: Ui.topPanelOpen ? root.art : ""
+        source: Ui.topPanelOpen || Widgets.musicLive ? root.art : ""
         depth: 3
         rescaleSize: 64
     }

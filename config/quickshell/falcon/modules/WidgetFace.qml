@@ -79,7 +79,9 @@ PanelWindow {
 
     // The overview shows the backdrop around the workspaces, so widgets leave it there. The blur must go too.
     BackgroundEffect.blurRegion: Region {
-        regions: Niri.overview || !root.wanted ? [] : blurs.instances
+        // In edit mode the clickable copies draw the glass; a face's blur left behind would stay at the
+        // old place while a widget is dragged.
+        regions: Niri.overview || !root.wanted || Widgets.editMode ? [] : blurs.instances
     }
     Variants {
         id: blurs
@@ -96,7 +98,7 @@ PanelWindow {
             readonly property int index: Widgets.ids.indexOf(modelData)
 
             item: hosts.count > index && index >= 0 ? hosts.itemAt(index) : null
-            radius: 22
+            radius: item ? 22 * item.factor : 22
         }
     }
 

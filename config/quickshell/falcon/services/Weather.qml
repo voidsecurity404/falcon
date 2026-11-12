@@ -89,7 +89,8 @@ Singleton {
                 hours.push({
                     time: time,
                     temp: Math.round(h.temperature_2m[i]),
-                    code: h.weather_code[i]
+                    code: h.weather_code[i],
+                    rain: h.precipitation_probability ? (h.precipitation_probability[i] || 0) : 0
                 });
         }
         hourly = hours;
@@ -99,7 +100,8 @@ Singleton {
                     date: new Date(date + "T12:00").getTime(),
                     code: d.weather_code[i],
                     max: Math.round(d.temperature_2m_max[i]),
-                    min: Math.round(d.temperature_2m_min[i])
+                    min: Math.round(d.temperature_2m_min[i]),
+                    rain: d.precipitation_probability_max ? (d.precipitation_probability_max[i] || 0) : 0
                 }));
         sunrise = new Date(d.sunrise[0]).getTime();
         sunset = new Date(d.sunset[0]).getTime();
@@ -108,7 +110,7 @@ Singleton {
     Process {
         id: fetch
 
-        command: ["curl", "-fsS", "--max-time", "8", "https://api.open-meteo.com/v1/forecast?latitude=" + Settings.weatherLat + "&longitude=" + Settings.weatherLon + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,is_day&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&forecast_days=6&timezone=auto&temperature_unit=" + Settings.get("weather.unit", "celsius")]
+        command: ["curl", "-fsS", "--max-time", "8", "https://api.open-meteo.com/v1/forecast?latitude=" + Settings.weatherLat + "&longitude=" + Settings.weatherLon + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,is_day&hourly=temperature_2m,weather_code,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_probability_max&forecast_days=6&timezone=auto&temperature_unit=" + Settings.get("weather.unit", "celsius")]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {

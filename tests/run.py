@@ -4260,21 +4260,21 @@ def rect(wid):
 def _():
     widgets_fresh()
     ok("falcon-widgets" in layers())
-    ok({w["type"] for w in st()["widgets"]} >= {"stack", "month", "rings", "cover", "sky"})
+    ok({w["type"] for w in st()["widgets"]} >= {"clock", "calendar", "system", "player", "weather"})
 
 
 @case("Vidjetni sichqoncha bilan sudraydi: joyi o'zgaradi, faylga saqlanadi, to'rga yopishadi")
 def _():
     widgets_fresh()
     widget_edit()
-    r = rect("month")
+    r = rect("calendar")
     sx, sy = r["x"] + r["w"] // 2, r["y"] + r["h"] // 2
     drag(sx, sy, sx - 300, sy + 150)
     time.sleep(0.8)
-    n = rect("month")
+    n = rect("calendar")
     ok(abs(n["x"] - (r["x"] - 300)) <= 24 and abs(n["y"] - (r["y"] + 150)) <= 24, (r, n))
     ok(n["x"] % 16 == 0 or n["y"] % 16 == 0, n)
-    saved_layout = next(w for w in widget_layout() if w["id"] == "month")
+    saved_layout = next(w for w in widget_layout() if w["id"] == "calendar")
     ok(saved_layout["fx"] < 0.98)
 
 
@@ -4379,7 +4379,7 @@ feature("widgets2", "Vidjetlar: qimirlamaslik, tejamkorlik, tushish joyi")
 @case("Ish stoli almashganda vidjet surilmaydi: sirpanish paytida ham joyida")
 def _():
     settings(widgets__opacity=0.5)
-    r = rect("month")
+    r = rect("calendar")
     area = f"{r['x']},{r['y'] + 40} {r['w']},60"
     a = shot("wf1", area)
     niri("focus-workspace", 2)
@@ -4405,29 +4405,29 @@ def _():
 @case("Tortayotganda tushish joyi ko'rinadi, qo'yib yuborganda aynan shu yerga tushadi")
 def _():
     widget_edit()
-    r = rect("month")
+    r = rect("calendar")
     sx, sy = r["x"] + r["w"] // 2, r["y"] + r["h"] // 2
     move(sx, sy)
     sh(["ydotool", "click", "0x40"])
     time.sleep(0.15)
     move(sx - 205, sy + 103)
     time.sleep(0.3)
-    held = rect("month")
+    held = rect("calendar")
     sh(["ydotool", "click", "0x80"])
     time.sleep(0.9)
-    final = rect("month")
+    final = rect("calendar")
     ok(final["x"] % 16 == 0 and abs(final["x"] - held["x"]) <= 16, (held, final))
     ok(final["y"] % 16 == 0 and abs(final["y"] - held["y"]) <= 16, (held, final))
 
 
-@case("Musiqa vidjeti ustiga borsa bosiladigan nusxa chiqadi, chiqsa yo'qoladi")
+@case("Pleer vidjeti ustida ko'rsatkich yuzga yetkaziladi, chiqsa tozalanadi")
 def _():
     widgets_fresh()
-    r = rect("cover")
+    r = rect("player")
     move(r["x"] + r["w"] // 2, r["y"] + r["h"] // 2)
-    wait(lambda: st()["widgetHover"] == "cover", 3, "nusxa chiqmadi")
+    wait(lambda: st()["widgetPointer"] == "player", 3, "ko'rsatkich yetmadi")
     move(640, 300)
-    wait(lambda: st()["widgetHover"] == "", 3, "nusxa yo'qolmadi")
+    wait(lambda: st()["widgetPointer"] == "", 3, "ko'rsatkich qoldi")
 
 
 @case("Eslatma yozadi: faylga saqlanadi va yuzida ham ko'rinadi")
@@ -4440,11 +4440,11 @@ def _():
     note = HOME / ".config/falcon/note.txt"
     note.unlink(missing_ok=True)
     layout = widget_layout() or []
-    WIDGETS_FILE.write_text(json.dumps([{"id": "sticky", "type": "sticky", "fx": 0.5, "fy": 0.4, "size": "m"}]))
+    WIDGETS_FILE.write_text(json.dumps([{"id": "notes", "type": "notes", "fx": 0.5, "fy": 0.4, "size": "m"}]))
     sh("pkill -u $(id -u) -x qs")
     wait(lambda: "falcon-top" in layers(), 12)
     time.sleep(1.5)
-    r = rect("sticky")
+    r = rect("notes")
     move(r["x"] + 100, r["y"] + 100)
     time.sleep(0.5)
     click(r["x"] + 100, r["y"] + 100)
@@ -4620,24 +4620,51 @@ def _():
     ipc("timer", "0")
 
 
-feature("cookie", "Cookie soat vidjeti")
+feature("widgetset", "Yangi vidjetlar to'plami")
 
 WIDGETS = HOME / ".config/falcon/widgets.json"
+WIDGET_FORMS = {
+    "clock": ["wide", "stacked", "compact"], "calendar": ["month", "wide"], "focus": ["round", "wide"],
+    "weather": ["large", "wide", "compact"], "player": ["wide", "square"], "system": ["wide", "tall", "compact"],
+    "power": ["wide", "square"], "controls": ["wide", "tall"], "notes": ["wide", "tall"],
+    "tasks": ["tall", "wide"], "apps": ["grid", "row"], "phone": ["wide", "square"]}
 
 
-@case("Ikkala ko'rinish ham xatosiz chiziladi")
+@case("Har bir vidjetning har bir shakli xatosiz chiziladi")
 def _():
     before = WIDGETS.read_text() if WIDGETS.exists() else None
-    WIDGETS.write_text(json.dumps([
-        {"id": "c1", "type": "cookie", "fx": 0.3, "fy": 0.4, "size": "m", "form": "cookie"},
-        {"id": "c2", "type": "cookie", "fx": 0.7, "fy": 0.4, "size": "m", "form": "flower"}]))
+    for shape in range(3):
+        items = [{"id": t, "type": t, "fx": (i % 4) / 3, "fy": (i // 4) / 2, "size": "m", "form": forms[shape % len(forms)]}
+                 for i, (t, forms) in enumerate(WIDGET_FORMS.items())]
+        WIDGETS.write_text(json.dumps(items))
+        try:
+            sh("pkill -x qs")
+            time.sleep(3)
+            wait(lambda: "falcon-top" in layers(), 12, "panel qaytmadi")
+            wait(lambda: len(st()["widgets"]) == len(WIDGET_FORMS), 5, "vidjetlar o'qilmadi")
+            ipc("widgets")
+            time.sleep(1.5)
+            ipc("widgets")
+            log = sh("qs log -c falcon").stdout
+            ok("modules/widgets/" not in log and "is not a type" not in log, log[-2000:])
+        finally:
+            if before is None:
+                WIDGETS.unlink(missing_ok=True)
+            else:
+                WIDGETS.write_text(before)
+    sh("pkill -x qs")
+    time.sleep(3)
+
+
+@case("Eski vidjet turlari bo'lgan joylashuv standart vidjetlarga qaytadi")
+def _():
+    before = WIDGETS.read_text() if WIDGETS.exists() else None
+    WIDGETS.write_text(json.dumps([{"id": "vinyl", "type": "vinyl", "fx": 0.1, "fy": 0.1, "size": "m"}]))
     try:
         sh("pkill -x qs")
         time.sleep(3)
         wait(lambda: "falcon-top" in layers(), 12, "panel qaytmadi")
-        wait(lambda: len(st()["widgets"]) == 2, 5, "vidjetlar o'qilmadi")
-        log = sh("qs log -c falcon").stdout
-        ok("cookie.qml" not in log, "cookie.qml xatosi bor")
+        wait(lambda: {w["type"] for w in st()["widgets"]} >= {"clock", "calendar"}, 5, "standartga qaytmadi")
     finally:
         if before is None:
             WIDGETS.unlink(missing_ok=True)

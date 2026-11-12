@@ -10,7 +10,10 @@ Item {
     property int bottomSpace: 80
     readonly property alias panel: panel
     readonly property bool open: Widgets.galleryOpen
-    readonly property var shown: Widgets.galleryGroup === "all" ? Widgets.catalog : Widgets.catalog.filter(c => c.group === Widgets.galleryGroup)
+    readonly property var shown: {
+        const list = Widgets.catalog.filter(c => c.group === Widgets.galleryGroup);
+        return list.length > 0 ? list : Widgets.catalog;
+    }
     // Stays on until the closing fade has ended, then the previews are destroyed.
     readonly property bool alive: open || panel.opacity > 0
 

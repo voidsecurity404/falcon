@@ -12,310 +12,131 @@ Singleton {
 
     readonly property var catalog: [
         {
-            type: "stack",
-            title: Tr.t("Stacked clock"),
-            blurb: Tr.t("Bold hours over thin minutes, right on the wallpaper"),
+            type: "clock",
+            title: Tr.t("Clock"),
+            blurb: Tr.t("Large time with the date, weather and a running minute"),
             icon: "clock",
             group: "time",
-            forms: [{ name: "stacked", w: 270, h: 330 }, { name: "line", w: 470, h: 170 }, { name: "small", w: 250, h: 120 }],
+            forms: [{ name: "wide", w: 480, h: 250 }, { name: "stacked", w: 300, h: 380 }, { name: "compact", w: 340, h: 150 }],
             plate: false
         },
         {
-            type: "flip",
-            title: Tr.t("Flip clock"),
-            blurb: Tr.t("Cards that turn over every minute"),
-            icon: "clock",
-            group: "time",
-            forms: [{ name: "wide", w: 420, h: 170 }, { name: "small", w: 290, h: 120 }],
-            solid: true,
-            plate: false
-        },
-        {
-            type: "orbit",
-            title: Tr.t("Orbit clock"),
-            blurb: Tr.t("Hours, minutes and seconds as three rings"),
-            icon: "clock",
-            group: "time",
-            forms: [{ name: "round", w: 220, h: 220 }, { name: "wide", w: 360, h: 170 }],
-            plate: true
-        },
-        {
-            type: "dial",
-            title: Tr.t("Dial"),
-            blurb: Tr.t("Classic hands with a ticking second"),
-            icon: "clock",
-            group: "time",
-            forms: [{ name: "round", w: 230, h: 230 }],
-            plate: true
-        },
-        {
-            type: "cookie",
-            title: Tr.t("Cookie clock"),
-            blurb: Tr.t("Hands on a wavy Material shape"),
-            icon: "clock",
-            group: "time",
-            forms: [{ name: "cookie", w: 240, h: 240 }, { name: "flower", w: 240, h: 240 }],
-            solid: true,
-            plate: false
-        },
-        {
-            type: "matrix",
-            title: Tr.t("Dot matrix clock"),
-            blurb: Tr.t("Glowing digits made of dots"),
-            icon: "clock",
-            group: "time",
-            forms: [{ name: "wide", w: 420, h: 156 }],
-            plate: true
-        },
-        {
-            type: "world",
-            title: Tr.t("World time"),
-            blurb: Tr.t("Moscow, London, New York and Tokyo"),
-            icon: "clock",
-            group: "time",
-            forms: [{ name: "wide", w: 340, h: 206 }, { name: "compact", w: 430, h: 96 }],
-            plate: true
-        },
-        {
-            type: "dayprogress",
-            title: Tr.t("Time passing"),
-            blurb: Tr.t("How much of the day, week, month and year is gone"),
-            icon: "timer",
-            group: "time",
-            forms: [{ name: "wide", w: 320, h: 196 }, { name: "compact", w: 400, h: 104 }],
-            plate: true
-        },
-        {
-            type: "month",
-            title: Tr.t("Month"),
-            blurb: Tr.t("The whole month with today marked"),
+            type: "calendar",
+            title: Tr.t("Calendar"),
+            blurb: Tr.t("Month you can leaf through, with today and the week number"),
             icon: "calendar",
-            group: "date",
-            forms: [{ name: "month", w: 300, h: 316 }],
+            group: "time",
+            forms: [{ name: "month", w: 330, h: 340 }, { name: "wide", w: 540, h: 300 }],
+            interactive: true,
             plate: true
         },
         {
-            type: "datecard",
-            title: Tr.t("Date card"),
-            blurb: Tr.t("A calendar page in the wallpaper color"),
-            icon: "calendar",
-            group: "date",
-            forms: [{ name: "square", w: 176, h: 176 }, { name: "wide", w: 310, h: 130 }],
-            solid: true,
-            plate: false
-        },
-        {
-            type: "weekstrip",
-            title: Tr.t("Week"),
-            blurb: Tr.t("Seven days in a row"),
-            icon: "calendar",
-            group: "date",
-            forms: [{ name: "wide", w: 430, h: 124 }],
+            type: "focus",
+            title: Tr.t("Focus timer"),
+            blurb: Tr.t("Pomodoro rounds and quick timers with a live ring"),
+            icon: "focus",
+            group: "time",
+            forms: [{ name: "round", w: 270, h: 320 }, { name: "wide", w: 490, h: 190 }],
+            interactive: true,
             plate: true
         },
         {
-            type: "yeardots",
-            title: Tr.t("Year in dots"),
-            blurb: Tr.t("A dot for each day of the year"),
-            icon: "widgets",
-            group: "date",
-            forms: [{ name: "wide", w: 400, h: 196 }, { name: "tall", w: 216, h: 340 }],
-            plate: true
-        },
-        {
-            type: "sky",
-            title: Tr.t("Sky"),
-            blurb: Tr.t("The temperature on a sky of the current weather"),
-            icon: "sun",
-            group: "weather",
-            forms: [{ name: "wide", w: 320, h: 160 }, { name: "tall", w: 190, h: 236 }, { name: "compact", w: 240, h: 96 }],
-            solid: true,
-            plate: false
-        },
-        {
-            type: "forecast",
-            title: Tr.t("Forecast"),
-            blurb: Tr.t("The coming days with their temperature range"),
-            icon: "cloud",
-            group: "weather",
-            forms: [{ name: "wide", w: 370, h: 236 }, { name: "across", w: 440, h: 156 }],
-            plate: true
-        },
-        {
-            type: "hourly",
-            title: Tr.t("By the hour"),
-            blurb: Tr.t("How the temperature changes in the next 24 hours"),
+            type: "weather",
+            title: Tr.t("Weather"),
+            blurb: Tr.t("Now, the next hours with rain chance and the coming days"),
             icon: "cloudSun",
             group: "weather",
-            forms: [{ name: "wide", w: 430, h: 186 }],
+            forms: [{ name: "large", w: 440, h: 440 }, { name: "wide", w: 460, h: 210 }, { name: "compact", w: 280, h: 140 }],
             plate: true
         },
         {
-            type: "sunpath",
-            title: Tr.t("Sun path"),
-            blurb: Tr.t("Where the sun is between sunrise and sunset"),
-            icon: "sun",
-            group: "weather",
-            forms: [{ name: "wide", w: 320, h: 186 }],
+            type: "player",
+            title: Tr.t("Player"),
+            blurb: Tr.t("Cover, seek bar and controls of what is playing"),
+            icon: "music",
+            group: "music",
+            forms: [{ name: "wide", w: 470, h: 200 }, { name: "square", w: 310, h: 360 }],
+            uses: "music",
+            interactive: true,
             plate: true
         },
         {
-            type: "moon",
-            title: Tr.t("Moon"),
-            blurb: Tr.t("The moon as it looks tonight"),
-            icon: "moon",
-            group: "weather",
-            forms: [{ name: "wide", w: 300, h: 150 }, { name: "tall", w: 190, h: 226 }],
-            plate: true
-        },
-        {
-            type: "rings",
-            title: Tr.t("System rings"),
-            blurb: Tr.t("Processor, memory and temperature"),
+            type: "system",
+            title: Tr.t("System monitor"),
+            blurb: Tr.t("Processor graph, memory, temperature, disk and network"),
             icon: "chip",
             group: "system",
-            forms: [{ name: "wide", w: 340, h: 180 }, { name: "round", w: 190, h: 190 }],
+            forms: [{ name: "wide", w: 460, h: 230 }, { name: "tall", w: 260, h: 350 }, { name: "compact", w: 330, h: 140 }],
             uses: "system",
             plate: true
         },
         {
-            type: "cpugraph",
-            title: Tr.t("Processor graph"),
-            blurb: Tr.t("Load of the last two minutes"),
-            icon: "chip",
-            group: "system",
-            forms: [{ name: "wide", w: 360, h: 170 }, { name: "compact", w: 270, h: 96 }],
-            uses: "system",
-            plate: true
-        },
-        {
-            type: "memgrid",
-            title: Tr.t("Memory"),
-            blurb: Tr.t("Used memory as a field of blocks"),
-            icon: "chip",
-            group: "system",
-            forms: [{ name: "wide", w: 300, h: 176 }, { name: "compact", w: 370, h: 88 }],
-            uses: "system",
-            plate: true
-        },
-        {
-            type: "storage",
-            title: Tr.t("Disk"),
-            blurb: Tr.t("How full the disk is and what is free"),
-            icon: "system",
-            group: "system",
-            forms: [{ name: "round", w: 186, h: 196 }, { name: "wide", w: 310, h: 110 }],
-            uses: "system",
-            plate: true
-        },
-        {
-            type: "liquidbattery",
-            title: Tr.t("Battery"),
-            blurb: Tr.t("A level of liquid that moves while charging"),
+            type: "power",
+            title: Tr.t("Battery and power"),
+            blurb: Tr.t("Charge, time left and the power mode in one press"),
             icon: "battery",
             group: "system",
-            forms: [{ name: "tall", w: 176, h: 246 }, { name: "wide", w: 310, h: 120 }],
+            forms: [{ name: "wide", w: 440, h: 200 }, { name: "square", w: 260, h: 280 }],
             uses: "system",
+            interactive: true,
             plate: true
         },
         {
-            type: "netspeed",
-            title: Tr.t("Network"),
-            blurb: Tr.t("Download and upload speed"),
-            icon: "wifi",
+            type: "controls",
+            title: Tr.t("Quick controls"),
+            blurb: Tr.t("Volume, brightness and the main switches"),
+            icon: "settings",
             group: "system",
-            forms: [{ name: "wide", w: 350, h: 170 }, { name: "compact", w: 290, h: 88 }],
-            plate: true
-        },
-        {
-            type: "vinyl",
-            title: Tr.t("Record player"),
-            blurb: Tr.t("The cover on a record that spins with the music"),
-            icon: "music",
-            group: "music",
-            forms: [{ name: "wide", w: 420, h: 176 }, { name: "tall", w: 236, h: 350 }],
-            uses: "music",
+            forms: [{ name: "wide", w: 520, h: 230 }, { name: "tall", w: 270, h: 410 }],
             interactive: true,
             plate: true
         },
         {
-            type: "cover",
-            title: Tr.t("Album cover"),
-            blurb: Tr.t("The whole widget is the cover of the track"),
-            icon: "music",
-            group: "music",
-            forms: [{ name: "square", w: 260, h: 260 }, { name: "wide", w: 430, h: 140 }],
-            solid: true,
-            uses: "music",
-            interactive: true,
-            plate: false
-        },
-        {
-            type: "equalizer",
-            title: Tr.t("Equalizer"),
-            blurb: Tr.t("Bars that move with the sound"),
-            icon: "volume",
-            group: "music",
-            forms: [{ name: "wide", w: 370, h: 156 }, { name: "compact", w: 270, h: 88 }],
-            uses: "music",
-            plate: true
-        },
-        {
-            type: "sticky",
-            title: Tr.t("Sticky note"),
-            blurb: Tr.t("A paper note you can write on"),
+            type: "notes",
+            title: Tr.t("Notes"),
+            blurb: Tr.t("A note you write right on the desktop, saved as you type"),
             icon: "note",
             group: "tools",
-            forms: [{ name: "wide", w: 280, h: 250 }, { name: "tall", w: 230, h: 340 }, { name: "short", w: 420, h: 170 }],
-            solid: true,
+            forms: [{ name: "wide", w: 360, h: 270 }, { name: "tall", w: 270, h: 380 }],
             interactive: true,
             typing: true,
-            plate: false
+            plate: true
         },
         {
-            type: "checklist",
-            title: Tr.t("Checklist"),
-            blurb: Tr.t("Tasks you can add and tick off"),
+            type: "tasks",
+            title: Tr.t("Tasks"),
+            blurb: Tr.t("A list to add to and tick off, with progress"),
             icon: "check",
             group: "tools",
-            forms: [{ name: "wide", w: 300, h: 320 }, { name: "short", w: 430, h: 210 }],
+            forms: [{ name: "tall", w: 330, h: 360 }, { name: "wide", w: 460, h: 250 }],
             interactive: true,
             typing: true,
             plate: true
         },
         {
-            type: "pomodoro",
-            title: Tr.t("Pomodoro"),
-            blurb: Tr.t("Work and break rounds with one press"),
-            icon: "focus",
+            type: "apps",
+            title: Tr.t("Apps"),
+            blurb: Tr.t("Your pinned apps, started with one press"),
+            icon: "widgets",
             group: "tools",
-            forms: [{ name: "round", w: 216, h: 246 }, { name: "wide", w: 330, h: 116 }],
+            forms: [{ name: "grid", w: 320, h: 220 }, { name: "row", w: 460, h: 104 }],
             interactive: true,
             plate: true
         },
         {
-            type: "quote",
-            title: Tr.t("Quote of the day"),
-            blurb: Tr.t("A new thought every day"),
-            icon: "sparkle",
+            type: "phone",
+            title: Tr.t("Phone"),
+            blurb: Tr.t("Battery, notifications and actions of your phone"),
+            icon: "phone",
             group: "tools",
-            forms: [{ name: "wide", w: 430, h: 170 }, { name: "tall", w: 266, h: 290 }],
-            plate: true
-        },
-        {
-            type: "claudering",
-            title: Tr.t("Claude limits"),
-            blurb: Tr.t("The 5 hour and weekly limits as rings"),
-            icon: "sparkle",
-            group: "tools",
-            forms: [{ name: "wide", w: 340, h: 170 }, { name: "compact", w: 300, h: 92 }],
+            forms: [{ name: "wide", w: 440, h: 210 }, { name: "square", w: 270, h: 300 }],
+            interactive: true,
             plate: true
         }
     ]
     readonly property var groups: [
         { id: "all", title: Tr.t("All") },
         { id: "time", title: Tr.t("Time") },
-        { id: "date", title: Tr.t("Calendar") },
         { id: "weather", title: Tr.t("Weather") },
         { id: "system", title: Tr.t("System") },
         { id: "music", title: Tr.t("Music") },
@@ -327,42 +148,18 @@ Singleton {
             l: 1.2
         })
     readonly property var defaults: [
-        {
-            id: "stack",
-            type: "stack",
-            fx: 0.02,
-            fy: 0.97,
-            size: "m"
-        },
-        {
-            id: "month",
-            type: "month",
-            fx: 0.985,
-            fy: 0.02,
-            size: "m"
-        },
-        {
-            id: "rings",
-            type: "rings",
-            fx: 0.985,
-            fy: 0.97,
-            size: "m"
-        },
-        {
-            id: "cover",
-            type: "cover",
-            fx: 0.985,
-            fy: 0.5,
-            size: "m"
-        },
-        {
-            id: "sky",
-            type: "sky",
-            fx: 0.02,
-            fy: 0.02,
-            size: "m"
-        }
+        { id: "clock", type: "clock", fx: 0.02, fy: 0.97, size: "m" },
+        { id: "calendar", type: "calendar", fx: 0.985, fy: 0.02, size: "m" },
+        { id: "system", type: "system", fx: 0.985, fy: 0.97, size: "m" },
+        { id: "player", type: "player", fx: 0.985, fy: 0.55, size: "m" },
+        { id: "weather", type: "weather", fx: 0.02, fy: 0.02, size: "m", form: "wide" }
     ]
+
+    // Where the pointer is over a widget's clickable copy, in the widget's own pixels. The face draws
+    // the widget, so it reads this to show hover and press, which the see-through copy cannot.
+    property var pointer: ({ id: "", x: -1, y: -1, down: false })
+    // Small state both copies of a widget share, such as the month a calendar shows. Not saved.
+    property var shared: ({})
 
     property var items: []
     // Delegates follow this list, so moving a widget does not rebuild it.
@@ -538,16 +335,83 @@ Singleton {
         let n = 1;
         while (get(type + (n > 1 ? "-" + n : "")))
             n++;
+        const id = type + (n > 1 ? "-" + n : "");
+        const spot = freeSpot(type);
         apply(items.concat([
             {
-                id: type + (n > 1 ? "-" + n : ""),
+                id: id,
                 type: type,
-                fx: 0.5,
-                fy: 0.4,
-                size: "m"
+                fx: spot.fx,
+                fy: spot.fy,
+                size: "m",
+                form: ""
             }
         ]), true);
         remember();
+        return id;
+    }
+
+    // The place where a new widget covers the least of the others, nearest to the middle.
+    function freeSpot(type) {
+        const screen = Quickshell.screens.find(s => s.name === Niri.focusedOutput) || Quickshell.screens[0];
+        const form = info(type).forms[0];
+        if (!screen)
+            return { fx: 0.5, fy: 0.4 };
+        const spanX = Math.max(1, screen.width - 32 - form.w);
+        const spanY = Math.max(1, screen.height - bottomInset - topInset - form.h);
+        const taken = Object.keys(rects).filter(id => !!get(id)).map(id => rects[id]);
+        let best = null;
+        for (let i = 0; i <= 20; i++) {
+            for (let j = 0; j <= 20; j++) {
+                const fx = i / 20, fy = j / 20;
+                const x = 16 + fx * spanX, y = topInset + fy * spanY;
+                let cover = 0;
+                for (const r of taken) {
+                    const w = Math.min(x + form.w + 16, r.x + r.w) - Math.max(x - 16, r.x);
+                    const h = Math.min(y + form.h + 16, r.y + r.h) - Math.max(y - 16, r.y);
+                    if (w > 0 && h > 0)
+                        cover += w * h;
+                }
+                const far = Math.hypot(fx - 0.5, fy - 0.45);
+                const score = cover * 10 + far;
+                if (!best || score < best.score)
+                    best = { fx: fx, fy: fy, score: score };
+            }
+        }
+        return best;
+    }
+
+    // Edit mode's shape button: the next form of this widget.
+    function cycleForm(id) {
+        const w = get(id);
+        const i = w ? info(w.type) : null;
+        if (!i || i.forms.length < 2)
+            return;
+        const at = i.forms.indexOf(formOf(w));
+        update(id, { form: i.forms[(at + 1) % i.forms.length].name });
+        remember();
+    }
+
+    function setPointer(id, x, y) {
+        if (pointer.id === id && pointer.x === x && pointer.y === y)
+            return;
+        pointer = { id: id, x: x, y: y, down: id !== "" && pointer.down };
+    }
+
+    function setPointerDown(down) {
+        if (pointer.down !== down)
+            pointer = { id: pointer.id, x: pointer.x, y: pointer.y, down: down };
+    }
+
+    function share(id, key, value) {
+        const next = Object.assign({}, shared);
+        next[id + "/" + key] = value;
+        shared = next;
+    }
+
+    function sharedValue(id, key, fallback) {
+        const v = shared[id + "/" + key];
+        return v === undefined ? fallback : v;
     }
 
     function remove(id) {
@@ -737,12 +601,16 @@ Singleton {
         atomicWrites: true
         onLoaded: {
             let list = null;
+            let raw = null;
             try {
-                list = root.validated(JSON.parse(text()));
+                raw = JSON.parse(text());
+                list = root.validated(raw);
             } catch (e) {
                 list = null;
             }
-            root.apply(list === null ? root.defaults : list, false);
+            // A layout made only of widget types that no longer exist starts again from the defaults.
+            const gone = list !== null && list.length === 0 && Array.isArray(raw) && raw.length > 0;
+            root.apply(list === null || gone ? root.defaults : list, gone);
             root.loaded = true;
         }
         onLoadFailed: {

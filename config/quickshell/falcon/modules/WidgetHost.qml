@@ -168,6 +168,23 @@ Item {
         id: hover
 
         enabled: !host.isFace && !Widgets.editMode
+        // The face draws this widget, so it is told where the pointer is to show hover itself.
+        onPointChanged: host.tellPointer()
+        onHoveredChanged: host.tellPointer()
+    }
+    HoverHandler {
+        id: editHover
+
+        enabled: !host.isFace && Widgets.editMode
+    }
+
+    function tellPointer() {
+        if (isFace || !interactive)
+            return;
+        if (hover.hovered)
+            Widgets.setPointer(widgetId, hover.point.position.x / factor, hover.point.position.y / factor);
+        else if (Widgets.pointer.id === widgetId)
+            Widgets.setPointer("", -1, -1);
     }
 
     // Tushish joyi: qo'yib yuborganda vidjet aynan shu yerga tushadi.
@@ -231,6 +248,8 @@ Item {
                 layer.mipmap: true
                 opacity: status === Loader.Ready ? reshapeOpacity : 0
                 onLoaded: {
+                    if ("widgetId" in item)
+                        item.widgetId = host.widgetId;
                     if ("form" in item)
                         item.form = Qt.binding(() => host.shownForm ? host.shownForm.name : "");
                 }
@@ -279,57 +298,134 @@ Item {
         }
     }
 
-    Row {
+    // Edit tools: shape, size and remove, on the widget under the pointer.
+    Rectangle {
+        id: tools
+
+        readonly property bool shown: !host.isFace && Widgets.editMode && !host.dragging && (editHover.hovered || mover.pressed)
+
         anchors.top: parent.top
         anchors.right: parent.right
-        anchors.margins: 8
-        spacing: 5
-        visible: !host.isFace && Widgets.editMode && !host.dragging
+        anchors.margins: 10
+        width: toolRow.implicitWidth + 8
+        height: 38
+        radius: 19
+        color: Qt.alpha(Theme.pill, 0.92)
+        border.width: 1
+        border.color: Theme.panelEdge
+        opacity: shown ? 1 : 0
+        scale: shown ? 1 : 0.9
+        visible: opacity > 0
+        transformOrigin: Item.TopRight
 
-        Rectangle {
-            width: sizeLabel.implicitWidth + 16
-            height: 26
-            radius: 13
-            color: sizeArea.containsMouse ? Theme.accent : Theme.pill
-
-            Label {
-                id: sizeLabel
-
-                anchors.centerIn: parent
-                text: host.entry ? host.entry.size.toUpperCase() : ""
-                color: sizeArea.containsMouse ? Theme.accentText : Theme.text
-                size: 11
-                font.weight: Font.DemiBold
-            }
-            MouseArea {
-                id: sizeArea
-
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: Widgets.cycleSize(host.widgetId)
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 140
             }
         }
-        Rectangle {
-            width: 26
-            height: 26
-            radius: 13
-            color: removeArea.containsMouse ? Theme.error : Theme.pill
+        Behavior on scale {
+            NumberAnimation {
+                duration: 200
+                easing.type: Easing.OutBack
+            }
+        }
+
+        component Tool: Rectangle {
+            id: tool
+
+            property string icon: ""
+            property string text: ""
+            property bool danger: false
+            signal pressed
+
+            width: text !== "" ? toolText.implicitWidth + 22 : 30
+            height: 30
+            radius: 15
+            color: toolArea.containsMouse ? (danger ? Theme.error : Theme.accent) : Qt.alpha(Theme.text, 0.08)
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
 
             Icon {
                 anchors.centerIn: parent
-                name: "close"
+                visible: tool.text === ""
+                name: tool.icon
+                size: 14
+                color: toolArea.containsMouse ? (tool.danger ? Theme.pill : Theme.accentText) : Theme.text
+            }
+            Label {
+                id: toolText
+
+                anchors.centerIn: parent
+                visible: tool.text !== ""
+                text: tool.text
                 size: 12
-                color: removeArea.containsMouse ? Theme.pill : Theme.text
+                font.weight: Font.DemiBold
+                color: toolArea.containsMouse ? Theme.accentText : Theme.text
             }
             MouseArea {
-                id: removeArea
+                id: toolArea
 
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: Widgets.remove(host.widgetId)
+                onClicked: tool.pressed()
             }
+        }
+
+        Row {
+            id: toolRow
+
+            anchors.centerIn: parent
+            spacing: 4
+
+            Tool {
+                visible: !!host.info && host.info.forms.length > 1
+                icon: "widgets"
+                onPressed: Widgets.cycleForm(host.widgetId)
+            }
+            Tool {
+                text: host.entry ? ({ s: "S", m: "M", l: "L" })[host.entry.size] : ""
+                onPressed: Widgets.cycleSize(host.widgetId)
+            }
+            Tool {
+                icon: "trash"
+                danger: true
+                onPressed: Widgets.remove(host.widgetId)
+            }
+        }
+    }
+
+    // The widget's name while it is moved or pointed at.
+    Rectangle {
+        anchors.left: parent.left
+        anchors.bottom: parent.bottom
+        anchors.margins: 10
+        width: nameLabel.implicitWidth + 22
+        height: 28
+        radius: 14
+        color: Qt.alpha(Theme.pill, 0.92)
+        border.width: 1
+        border.color: Theme.panelEdge
+        opacity: tools.shown || host.dragging ? 1 : 0
+        visible: opacity > 0
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 140
+            }
+        }
+
+        Label {
+            id: nameLabel
+
+            anchors.centerIn: parent
+            text: host.info ? host.info.title : ""
+            size: 12
+            font.weight: Font.Medium
         }
     }
 }
