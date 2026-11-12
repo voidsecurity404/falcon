@@ -96,6 +96,14 @@ The mini app has five tabs: an overview like btop (processor, every core, memory
 
 How it works: `falcon-remote` (Go, `remote/` in the repo) is a user service that starts at boot, before login. It serves the mini app on `127.0.0.1` and opens a Cloudflare quick tunnel, because Telegram opens mini apps only over https; the address changes on every start and the bot moves its menu button to it. Every request carries the data Telegram signs when the app opens, and the computer checks that signature with the bot token and that it comes from your ID, so the address alone gives nobody access. Needs `cloudflared` and, to build, `go`. `falcon-remote-build` rebuilds it after a change.
 
+## Phone (KDE Connect)
+
+The phone button on the bar opens a phone-shaped window that does what KDE Connect does: the phone's battery and signal, ring it, ping, send files (pick them or drop them on the card), browse its storage in the file manager, send text or a link, share the clipboard, read and answer SMS, control its media player and volume, move a pointer and type on it, run commands both ways, and switch each KDE Connect feature on or off. The bell's menu has two tabs: this computer's notifications and the phone's; a phone message that takes a reply can be answered from there, and swiping a card dismisses it on the phone.
+
+Install `kdeconnect` and `sshfs` (in `packages.txt`), open ports 1714-1764 in the firewall, install KDE Connect on the phone (F-Droid or Play) and pair from the window. `falcon-phone` talks to `kdeconnectd` over D-Bus.
+
+Some routers keep Wi-Fi clients apart, so the two never see each other. Then plug the phone in by USB with USB debugging on: `falcon-phone` carries KDE Connect through `adb` and the window says Connected by USB. Pairing is still checked by KDE Connect's own encryption.
+
 ## Things that look after themselves
 
 - **Battery charge limit:** Settings → Battery and power, or the tile in the control center. Needs one setup with your password (`falcon-charge setup`). Laptops whose firmware has no limit do not show it. Undo: `falcon-charge setup --undo`.

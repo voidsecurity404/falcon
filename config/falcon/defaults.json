@@ -75,7 +75,7 @@
       "privacy",
       "updates",
       "lang",
-      "status",
+      "phone", "status",
       "bell"
     ],
     "height": 42,

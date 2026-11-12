@@ -23,6 +23,10 @@ Singleton {
     property int bellRings: 0
     // "", wifi, bluetooth
     property string controlPage: ""
+    // The bell's menu: 0 this computer's notifications, 1 the phone's.
+    property int notificationsTab: 0
+    // The page open in the phone window, "" for its home screen.
+    property string phonePage: ""
     property var trayItem: null
     // The bar of the focused screen, for `desk state`.
     property var barLayer: null
@@ -55,7 +59,7 @@ Singleton {
     readonly property bool recordBusy: recording || recordCountdown > 0
 
     // The menus that drop from the bar.
-    readonly property bool topPanelOpen: ["calendar", "player", "system", "notifications", "control", "tray", "claude"].includes(popup)
+    readonly property bool topPanelOpen: ["calendar", "player", "system", "notifications", "control", "tray", "claude", "phone"].includes(popup)
 
     // Choosing a part of the screen: "" closed, "wait" lets panels close first, "grab" pictures
     // the screens, "select" shows them.

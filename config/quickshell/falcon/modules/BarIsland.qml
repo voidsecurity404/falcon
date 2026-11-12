@@ -143,6 +143,7 @@ GlassIsland {
                             privacy: privacyPart,
                             updates: updatesPart,
                             lang: langPart,
+                            phone: phonePart,
                             status: statusPart,
                             bell: bellPart,
                             power: powerPart
@@ -887,6 +888,49 @@ GlassIsland {
                     visible: !status.showNetwork && !status.showVolume && !status.showBattery && !Caffeine.enabled && !GameMode.enabled
                     name: "sun"
                     size: 16
+                }
+            }
+        }
+    }
+
+    // The phone through KDE Connect: a click opens the phone window. A dot shows it is connected,
+    // and the number of the phone's notifications not yet seen rides on it.
+    Component {
+        id: phonePart
+
+        BarButton {
+            id: phoneButton
+
+            readonly property bool shown: Phone.installed
+
+            objectName: "phone"
+            icon: "phone"
+            lit: Ui.popup === "phone"
+            color: Qt.alpha(Theme.text, Phone.connected ? 1 : 0.5)
+            onClicked: Ui.togglePopup("phone")
+
+            // On the button itself: inside its content it would change the button's width.
+            Rectangle {
+                parent: phoneButton
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.rightMargin: Phone.unread > 0 ? 0 : 5
+                anchors.topMargin: Phone.unread > 0 ? 0 : 5
+                visible: Phone.connected
+                width: Phone.unread > 0 ? Math.max(14, phoneCount.implicitWidth + 6) : 6
+                height: Phone.unread > 0 ? 14 : 6
+                radius: height / 2
+                color: Phone.unread > 0 ? Theme.accent : Theme.good
+
+                Label {
+                    id: phoneCount
+
+                    anchors.centerIn: parent
+                    visible: Phone.unread > 0
+                    text: Phone.unread > 9 ? "9+" : Phone.unread
+                    size: 9
+                    font.weight: Font.Bold
+                    color: Theme.accentText
                 }
             }
         }

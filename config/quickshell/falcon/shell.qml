@@ -138,6 +138,16 @@ ShellRoot {
         function state(): string {
             return JSON.stringify({
                 popup: Ui.popup,
+                notificationsTab: Ui.notificationsTab,
+                phonePage: Ui.phonePage,
+                phone: {
+                    installed: Phone.installed,
+                    running: Phone.running,
+                    connected: Phone.connected,
+                    usb: !!(Phone.device && Phone.device.usb),
+                    notifications: Phone.notifications.length,
+                    unread: Phone.unread
+                },
                 region: Ui.regionPhase,
                 regionAction: Ui.regionAction,
                 zen: Ui.zen,
@@ -286,6 +296,19 @@ ShellRoot {
         }
         function claude(): void {
             Ui.togglePopup("claude");
+        }
+        // The phone window, optionally on a page: files, sms, media, remote, commands, settings, notifications.
+        function phone(): void {
+            Ui.togglePopup("phone");
+        }
+        function phonePage(name: string): void {
+            Ui.popup = "phone";
+            Ui.phonePage = name;
+        }
+        // The bell's menu on a tab: 0 this computer, 1 the phone.
+        function notificationsTab(tab: int): void {
+            Ui.notificationsTab = tab;
+            Ui.popup = "notifications";
         }
         function sticky(): void {
             Sticky.toggle();

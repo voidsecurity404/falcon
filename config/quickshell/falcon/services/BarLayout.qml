@@ -109,6 +109,12 @@ Singleton {
             home: "right"
         },
         {
+            id: "phone",
+            title: "Phone",
+            icon: "phone",
+            home: "right"
+        },
+        {
             id: "status",
             title: "Status",
             icon: "wifi",

@@ -76,6 +76,24 @@ Singleton {
         });
     }
 
+    // A card that is not kept in this computer's history: the phone's notifications, which
+    // have their own tab. `image` is a picture path shown instead of the icon.
+    function passing(title, sub, icon, image, run) {
+        if (doNotDisturb)
+            return;
+        enqueue({
+            title: title,
+            sub: String(sub || "").replace(/\s+/g, " ").trim(),
+            icon: icon || "bell",
+            image: image || "",
+            value: -1,
+            key: "",
+            notification: null,
+            sticky: false,
+            run: run || null
+        });
+    }
+
     // Battery warnings show in focus mode too. An urgent one stays until it is clicked or the charger is plugged in.
     function batteryAlert(title, sub, urgent) {
         enqueue({

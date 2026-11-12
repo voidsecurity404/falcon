@@ -1,0 +1,994 @@
+#!/usr/bin/env python3
+"""Bridge between the shell and the KDE Connect daemon (kdeconnectd) over D-Bus.
+
+falcon-phone serve
+    Reads one JSON command per line on stdin and prints one JSON event per line on stdout.
+    Events: {"type": "state", ...} whenever anything about the phones changes,
+    {"type": "thread", ...} with the messages of an opened SMS conversation,
+    {"type": "result", "op": ..., "ok": bool, ...} after a command.
+    It ends when stdin closes, so it dies with the shell.
+
+falcon-phone status
+    Prints the state once.
+"""
+
+import json
+import os
+import re
+import select
+import shutil
+import socket
+import subprocess
+import sys
+import threading
+import time
+
+from gi.repository import Gio, GLib
+
+BUS_NAME = "org.kde.kdeconnect"
+DAEMON_PATH = "/modules/kdeconnect"
+DEV = "org.kde.kdeconnect.device"
+PROPS = "org.freedesktop.DBus.Properties"
+
+RUNTIME = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "falcon-phone")
+SEEN_FILE = os.path.join(RUNTIME, "seen.json")
+CONFIG = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
+DATA = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
+
+# Keys of the remote keyboard that are not letters, as KDE Connect numbers them.
+SPECIAL_KEYS = {
+    "Backspace": 1, "Tab": 2, "Left": 4, "Up": 5, "Right": 6, "Down": 7, "PageUp": 8,
+    "PageDown": 9, "Home": 10, "End": 11, "Enter": 12, "Delete": 13, "Escape": 14,
+}
+
+bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+
+
+def emit(obj):
+    sys.stdout.write(json.dumps(obj, ensure_ascii=False) + "\n")
+    sys.stdout.flush()
+
+
+def call(path, iface, method, sig=None, args=(), timeout=4000, reply=None):
+    params = GLib.Variant(sig, tuple(args)) if sig else None
+    result = bus.call_sync(BUS_NAME, path, iface, method, params,
+                           GLib.VariantType(reply) if reply else None,
+                           Gio.DBusCallFlags.NONE, timeout, None)
+    return result.unpack() if result is not None else ()
+
+
+def props(path, iface):
+    try:
+        return call(path, PROPS, "GetAll", "(s)", (iface,), reply="(a{sv})")[0]
+    except GLib.Error:
+        return {}
+
+
+def daemon_running():
+    try:
+        owner = bus.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+                              "NameHasOwner", GLib.Variant("(s)", (BUS_NAME,)), None,
+                              Gio.DBusCallFlags.NONE, 1000, None).unpack()[0]
+        return owner
+    except GLib.Error:
+        return False
+
+
+def installed():
+    return any(os.path.exists(os.path.join(d, "kdeconnectd"))
+               for d in ("/usr/bin", "/usr/lib", "/usr/lib/kdeconnect", "/usr/libexec"))
+
+
+def start_daemon():
+    """Bus activation starts kdeconnectd when it is installed."""
+    try:
+        bus.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+                      "StartServiceByName", GLib.Variant("(su)", (BUS_NAME, 0)), None,
+                      Gio.DBusCallFlags.NONE, 8000, None)
+        return True
+    except GLib.Error:
+        return False
+
+
+# When each phone notification was first seen, since KDE Connect does not say.
+def load_seen():
+    try:
+        with open(SEEN_FILE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+seen = load_seen()
+
+
+def save_seen():
+    os.makedirs(RUNTIME, exist_ok=True)
+    tmp = SEEN_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(seen, f)
+    os.replace(tmp, SEEN_FILE)
+
+
+# Contact names from the vCards the contacts plugin keeps.
+contact_cache = {}
+
+
+def digits(number):
+    d = re.sub(r"\D", "", number or "")
+    return d[-9:] if len(d) >= 9 else d
+
+
+def contacts(device):
+    folder = os.path.join(DATA, "kpeoplevcard", "kdeconnect-" + device)
+    try:
+        stamp = os.stat(folder).st_mtime
+    except OSError:
+        return {}
+    cached = contact_cache.get(device)
+    if cached and cached[0] == stamp:
+        return cached[1]
+    names = {}
+    try:
+        for entry in os.scandir(folder):
+            if not entry.name.endswith(".vcf"):
+                continue
+            try:
+                text = open(entry.path, encoding="utf-8", errors="replace").read()
+            except OSError:
+                continue
+            name = ""
+            phones = []
+            for line in text.splitlines():
+                key, _, value = line.partition(":")
+                key = key.split(";")[0].upper()
+                if key == "FN":
+                    name = value.strip()
+                elif key == "TEL":
+                    phones.append(value.strip())
+            for p in phones:
+                if name and digits(p):
+                    names[digits(p)] = name
+    except OSError:
+        pass
+    contact_cache[device] = (stamp, names)
+    return names
+
+
+def name_for(device, address):
+    return contacts(device).get(digits(address), "")
+
+
+def notifications(path):
+    base = path + "/notifications"
+    try:
+        ids = call(base, DEV + ".notifications", "activeNotifications", reply="(as)")[0]
+    except GLib.Error:
+        return []
+    now = int(time.time())
+    out = []
+    for nid in ids:
+        p = props(base + "/" + nid, DEV + ".notifications.notification")
+        if not p:
+            continue
+        key = path.rsplit("/", 1)[-1] + "/" + nid
+        if key not in seen:
+            seen[key] = now
+        icon = p.get("iconPath", "") if p.get("hasIcon") else ""
+        out.append({
+            "id": nid,
+            "app": p.get("appName", ""),
+            "title": p.get("title", "") or p.get("appName", ""),
+            "text": p.get("text", "") or p.get("ticker", ""),
+            "dismissable": bool(p.get("dismissable", False)),
+            "replyId": p.get("replyId", ""),
+            "icon": icon if icon and os.path.exists(icon) else "",
+            "time": seen[key],
+        })
+    out.sort(key=lambda n: n["time"], reverse=True)
+    return out
+
+
+def message(device, m):
+    event, body, addresses, date, mtype, read, thread, uid, sub, attachments = m
+    addr = [a[0] for a in addresses]
+    return {
+        "thread": thread,
+        "uid": uid,
+        "body": body,
+        "addresses": addr,
+        "name": ", ".join(name_for(device, a) or a for a in addr),
+        "date": date,
+        "sent": mtype == 2 or mtype == 4 or mtype == 6,
+        "failed": mtype == 5,
+        "read": bool(read),
+        "attachments": len(attachments),
+    }
+
+
+def conversations(device, path):
+    try:
+        raw = call(path, DEV + ".conversations", "activeConversations", reply="(av)")[0]
+    except GLib.Error:
+        return []
+    out = []
+    for item in raw:
+        try:
+            out.append(message(device, item))
+        except (ValueError, TypeError):
+            continue
+    out.sort(key=lambda m: m["date"], reverse=True)
+    return out
+
+
+def media(path):
+    p = props(path + "/mprisremote", DEV + ".mprisremote")
+    if not p:
+        return None
+    art = p.get("localAlbumArtUrl", "")
+    return {
+        "players": list(p.get("playerList", [])),
+        "player": p.get("player", ""),
+        "title": p.get("title", ""),
+        "artist": p.get("artist", ""),
+        "album": p.get("album", ""),
+        "playing": bool(p.get("isPlaying", False)),
+        "length": p.get("length", 0),
+        "position": p.get("position", 0),
+        "volume": p.get("volume", 0),
+        "canSeek": bool(p.get("canSeek", False)),
+        "art": art if art.startswith("file://") else "",
+    }
+
+
+def json_bytes(value):
+    try:
+        return json.loads(bytes(value).decode() or "null")
+    except (ValueError, TypeError):
+        return None
+
+
+def device_state(device):
+    path = DAEMON_PATH + "/devices/" + device
+    p = props(path, DEV)
+    if not p:
+        return None
+    loaded = []
+    try:
+        loaded = list(call(path, DEV, "loadedPlugins", reply="(as)")[0])
+    except GLib.Error:
+        pass
+    state = {
+        "id": device,
+        "name": p.get("name", ""),
+        "type": p.get("type", "phone"),
+        "reachable": bool(p.get("isReachable", False)),
+        "paired": bool(p.get("isPaired", False)),
+        "pairRequested": bool(p.get("isPairRequested", False)),
+        "pairRequestedByPeer": bool(p.get("isPairRequestedByPeer", False)),
+        "verificationKey": p.get("verificationKey", ""),
+        "connection": p.get("connectionDescription", ""),
+        "addresses": list(p.get("reachableAddresses", [])),
+        "plugins": loaded,
+        "supported": list(p.get("supportedPlugins", [])),
+    }
+    if not (state["paired"] and state["reachable"]):
+        return state
+    if "kdeconnect_battery" in loaded:
+        b = props(path + "/battery", DEV + ".battery")
+        state["battery"] = {"charge": b.get("charge", -1), "charging": bool(b.get("isCharging", False)),
+                            "has": bool(b.get("hasBattery", False))}
+    if "kdeconnect_connectivity_report" in loaded:
+        c = props(path + "/connectivity_report", DEV + ".connectivity_report")
+        state["cell"] = {"type": c.get("cellularNetworkType", ""), "strength": c.get("cellularNetworkStrength", -1)}
+    if "kdeconnect_notifications" in loaded:
+        state["notifications"] = notifications(path)
+    if "kdeconnect_mprisremote" in loaded:
+        state["media"] = media(path)
+    if "kdeconnect_remotesystemvolume" in loaded:
+        sinks = json_bytes(props(path + "/remotesystemvolume", DEV + ".remotesystemvolume").get("sinks", b""))
+        state["sinks"] = sinks if isinstance(sinks, list) else []
+    if "kdeconnect_remotecommands" in loaded:
+        cmds = json_bytes(props(path + "/remotecommands", DEV + ".remotecommands").get("commands", b""))
+        state["phoneCommands"] = cmds if isinstance(cmds, dict) else {}
+    if "kdeconnect_sftp" in loaded:
+        try:
+            mounted = call(path + "/sftp", DEV + ".sftp", "isMounted", reply="(b)")[0]
+            point = call(path + "/sftp", DEV + ".sftp", "mountPoint", reply="(s)")[0]
+        except GLib.Error:
+            mounted, point = False, ""
+        state["sftp"] = {"mounted": mounted, "mountPoint": point}
+    if "kdeconnect_clipboard" in loaded:
+        state["clipboardAuto"] = not props(path + "/clipboard", DEV + ".clipboard").get("isAutoShareDisabled", False)
+    if "kdeconnect_sms" in loaded:
+        state["conversations"] = conversations(device, path)
+    if "kdeconnect_runcommand" in loaded:
+        state["pcCommands"] = read_pc_commands(device)
+    return state
+
+
+def full_state():
+    if not installed():
+        return {"type": "state", "installed": False, "running": False, "devices": []}
+    running = daemon_running()
+    devices = []
+    name = ""
+    if running:
+        try:
+            ids = call(DAEMON_PATH, "org.kde.kdeconnect.daemon", "devices", "(bb)", (False, False), reply="(as)")[0]
+        except GLib.Error:
+            ids = []
+        for d in ids:
+            s = device_state(d)
+            if s:
+                devices.append(s)
+        try:
+            name = call(DAEMON_PATH, "org.kde.kdeconnect.daemon", "announcedName", reply="(s)")[0]
+        except GLib.Error:
+            pass
+    # Paired and reachable phones first, then paired ones, then the rest.
+    for d in devices:
+        d["usb"] = bridge.carries(d)
+    devices.sort(key=lambda d: (not (d["paired"] and d["reachable"]), not d["paired"], d["name"].lower()))
+    save_seen()
+    return {"type": "state", "installed": True, "running": running, "name": name, "devices": devices}
+
+
+# Commands the phone may run on this computer (the runcommand plugin's config).
+def pc_commands_file(device):
+    return os.path.join(CONFIG, "kdeconnect", device, "kdeconnect_runcommand", "config")
+
+
+def read_pc_commands(device):
+    try:
+        text = open(pc_commands_file(device), encoding="utf-8").read()
+    except OSError:
+        return {}
+    m = re.search(r'^commands=(.*)$', text, re.M)
+    if not m:
+        return {}
+    value = m.group(1).strip()
+    if value.startswith('"') and value.endswith('"'):
+        value = value[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+    if value.startswith("@ByteArray(") and value.endswith(")"):
+        value = value[len("@ByteArray("):-1]
+    try:
+        cmds = json.loads(value or "{}")
+    except ValueError:
+        return {}
+    return cmds if isinstance(cmds, dict) else {}
+
+
+def write_pc_commands(device, cmds):
+    path = pc_commands_file(device)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    raw = "@ByteArray(" + json.dumps(cmds, ensure_ascii=False, separators=(",", ":")) + ")"
+    line = 'commands="' + raw.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    try:
+        text = open(path, encoding="utf-8").read()
+    except OSError:
+        text = "[General]\n"
+    if re.search(r"^commands=", text, re.M):
+        text = re.sub(r"^commands=.*$", lambda _: line, text, flags=re.M)
+    else:
+        if "[General]" not in text:
+            text = "[General]\n" + text
+        text = text.replace("[General]\n", "[General]\n" + line + "\n", 1)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(tmp, path)
+    bus.emit_signal(None, "/kdeconnect/" + device + "/kdeconnect_runcommand", "org.kde.kdeconnect.config",
+                    "configChanged", None)
+
+
+# ---- commands from the shell ----
+
+def dev_path(cmd):
+    return DAEMON_PATH + "/devices/" + cmd["device"]
+
+
+def file_uris(paths):
+    return [p if "://" in p else GLib.filename_to_uri(os.path.abspath(os.path.expanduser(p)), None) for p in paths]
+
+
+threads = {}  # (device, thread) -> {uid: message}
+open_thread = None
+thread_timer = 0
+
+
+def emit_thread():
+    global thread_timer
+    thread_timer = 0
+    if not open_thread:
+        return False
+    device, thread = open_thread
+    msgs = sorted(threads.get(open_thread, {}).values(), key=lambda m: m["date"])
+    emit({"type": "thread", "device": device, "thread": thread, "messages": msgs})
+    return False
+
+
+def queue_thread():
+    global thread_timer
+    if not thread_timer:
+        thread_timer = GLib.timeout_add(120, emit_thread)
+
+
+def handle(cmd):
+    global open_thread
+    op = cmd.get("op", "")
+    result = {"type": "result", "op": op, "ok": True, "tag": cmd.get("tag", "")}
+    try:
+        if op == "refresh":
+            schedule_state(0)
+            return
+        if op == "start":
+            result["ok"] = start_daemon()
+        elif op == "rename":
+            call(DAEMON_PATH, "org.kde.kdeconnect.daemon", "setAnnouncedName", "(s)", (cmd["name"],))
+        elif op == "discover":
+            call(DAEMON_PATH, "org.kde.kdeconnect.daemon", "forceOnNetworkChange")
+        elif op == "pair":
+            call(dev_path(cmd), DEV, "requestPairing")
+        elif op == "unpair":
+            call(dev_path(cmd), DEV, "unpair")
+        elif op == "accept":
+            call(dev_path(cmd), DEV, "acceptPairing")
+        elif op == "reject":
+            call(dev_path(cmd), DEV, "cancelPairing")
+        elif op == "ring":
+            call(dev_path(cmd) + "/findmyphone", DEV + ".findmyphone", "ring")
+        elif op == "ping":
+            text = cmd.get("text", "")
+            if text:
+                call(dev_path(cmd) + "/ping", DEV + ".ping", "sendPing", "(s)", (text,))
+            else:
+                call(dev_path(cmd) + "/ping", DEV + ".ping", "sendPing")
+        elif op == "share":
+            uris = file_uris(cmd["paths"])
+            call(dev_path(cmd) + "/share", DEV + ".share", "shareUrls", "(as)", (uris,))
+            result["count"] = len(uris)
+        elif op == "shareText":
+            call(dev_path(cmd) + "/share", DEV + ".share", "shareText", "(s)", (cmd["text"],))
+        elif op == "shareUrl":
+            call(dev_path(cmd) + "/share", DEV + ".share", "shareUrl", "(s)", (cmd["url"],))
+        elif op == "clipboard":
+            call(dev_path(cmd) + "/clipboard", DEV + ".clipboard", "sendClipboard")
+        elif op == "dismiss":
+            for nid in cmd["ids"]:
+                try:
+                    call(dev_path(cmd) + "/notifications/" + nid, DEV + ".notifications.notification", "dismiss")
+                except GLib.Error:
+                    pass
+        elif op == "reply":
+            call(dev_path(cmd) + "/notifications", DEV + ".notifications", "sendReply", "(ss)",
+                 (cmd["replyId"], cmd["text"]))
+        elif op == "mount":
+            # Mounting waits for sshfs, so it runs without blocking the other commands.
+            def mounted(source, res, data):
+                r = dict(result)
+                try:
+                    ok = source.call_finish(res).unpack()[0]
+                    point = call(dev_path(cmd) + "/sftp", DEV + ".sftp", "mountPoint", reply="(s)")[0]
+                    r.update(ok=ok, path=point)
+                    if not ok:
+                        r["error"] = call(dev_path(cmd) + "/sftp", DEV + ".sftp", "getMountError", reply="(s)")[0]
+                except GLib.Error as e:
+                    r.update(ok=False, error=e.message)
+                emit(r)
+                schedule_state()
+            bus.call(BUS_NAME, dev_path(cmd) + "/sftp", DEV + ".sftp", "mountAndWait", None,
+                     GLib.VariantType("(b)"), Gio.DBusCallFlags.NONE, 30000, None, mounted, None)
+            return
+        elif op == "unmount":
+            call(dev_path(cmd) + "/sftp", DEV + ".sftp", "unmount")
+        elif op == "media":
+            call(dev_path(cmd) + "/mprisremote", DEV + ".mprisremote", "sendAction", "(s)", (cmd["action"],))
+        elif op == "mediaPlayer":
+            call(dev_path(cmd) + "/mprisremote", PROPS, "Set", "(ssv)",
+                 (DEV + ".mprisremote", "player", GLib.Variant("s", cmd["player"])))
+        elif op == "mediaVolume":
+            call(dev_path(cmd) + "/mprisremote", PROPS, "Set", "(ssv)",
+                 (DEV + ".mprisremote", "volume", GLib.Variant("i", int(cmd["value"]))))
+        elif op == "mediaSeek":
+            call(dev_path(cmd) + "/mprisremote", PROPS, "Set", "(ssv)",
+                 (DEV + ".mprisremote", "position", GLib.Variant("i", int(cmd["value"]))))
+        elif op == "mediaRefresh":
+            call(dev_path(cmd) + "/mprisremote", DEV + ".mprisremote", "requestPlayerList")
+        elif op == "volume":
+            call(dev_path(cmd) + "/remotesystemvolume", DEV + ".remotesystemvolume", "sendVolume", "(si)",
+                 (cmd["name"], int(cmd["value"])))
+        elif op == "mute":
+            call(dev_path(cmd) + "/remotesystemvolume", DEV + ".remotesystemvolume", "sendMuted", "(sb)",
+                 (cmd["name"], bool(cmd["value"])))
+        elif op == "phoneCommand":
+            call(dev_path(cmd) + "/remotecommands", DEV + ".remotecommands", "triggerCommand", "(s)", (cmd["key"],))
+        elif op == "pcCommands":
+            write_pc_commands(cmd["device"], cmd["commands"])
+        elif op in ("mouse", "click", "scroll", "key"):
+            body = {}
+            if op == "mouse":
+                body = {"dx": float(cmd["dx"]), "dy": float(cmd["dy"])}
+            elif op == "click":
+                body = {cmd.get("button", "singleclick"): True}
+            elif op == "scroll":
+                body = {"scroll": True, "dx": 0.0, "dy": float(cmd["dy"])}
+            else:
+                key = cmd.get("key", "")
+                if key in SPECIAL_KEYS:
+                    body = {"specialKey": SPECIAL_KEYS[key]}
+                else:
+                    body = {"key": key}
+            variant = GLib.Variant("(a{sv})", ({k: (GLib.Variant("b", v) if isinstance(v, bool) else
+                                                    GLib.Variant("d", v) if isinstance(v, float) else
+                                                    GLib.Variant("i", v) if isinstance(v, int) else
+                                                    GLib.Variant("s", v)) for k, v in body.items()},))
+            bus.call_sync(BUS_NAME, dev_path(cmd) + "/remotecontrol", DEV + ".remotecontrol", "sendCommand",
+                          variant, None, Gio.DBusCallFlags.NONE, 2000, None)
+            return
+        elif op == "plugin":
+            call(dev_path(cmd), DEV, "setPluginEnabled", "(sb)", (cmd["plugin"], bool(cmd["enabled"])))
+        elif op == "sms":
+            addresses = [GLib.Variant("(s)", (a,)) for a in cmd["addresses"]]
+            # QDBus marshals ConversationAddress as a struct of one string.
+            call(dev_path(cmd), DEV + ".conversations", "sendWithoutConversation", "(avsav)",
+                 (addresses, cmd["text"], []))
+        elif op == "smsReply":
+            call(dev_path(cmd), DEV + ".conversations", "replyToConversation", "(xsav)",
+                 (int(cmd["thread"]), cmd["text"], []))
+        elif op == "smsSync":
+            call(dev_path(cmd), DEV + ".conversations", "requestAllConversationThreads")
+        elif op == "openThread":
+            open_thread = (cmd["device"], int(cmd["thread"]))
+            threads.setdefault(open_thread, {})
+            emit_thread()
+            call(dev_path(cmd), DEV + ".conversations", "requestConversation", "(xii)",
+                 (int(cmd["thread"]), 0, int(cmd.get("count", 40))))
+            return
+        elif op == "closeThread":
+            open_thread = None
+            return
+        else:
+            result.update(ok=False, error="unknown op")
+    except (GLib.Error, KeyError, ValueError, TypeError) as e:
+        result.update(ok=False, error=getattr(e, "message", str(e)))
+    emit(result)
+    schedule_state()
+
+
+# ---- USB bridge ----
+#
+# Some routers keep Wi-Fi clients apart, so the phone and the computer never see each other.
+# With the phone on a USB cable (USB debugging on) the bridge carries KDE Connect through adb:
+# `adb forward` reaches the phone's port 1716, a small relay on this computer's own address
+# passes connections to it, and a discovery packet in the phone's name tells kdeconnectd to
+# connect to the relay. kdeconnectd ignores packets from 127.0.0.1 and ports outside
+# 1716-1764, hence the own address and the port. The pairing is still checked by TLS as usual.
+
+ANDROID_APP = "org.kde.kdeconnect_tp"
+IDS_FILE = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "falcon", "phone-ids.json")
+
+
+def adb(serial, *args, timeout=8):
+    try:
+        return subprocess.run(["adb", "-s", serial, *args] if serial else ["adb", *args],
+                              capture_output=True, text=True, timeout=timeout).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def local_addresses():
+    try:
+        data = json.loads(subprocess.run(["ip", "-4", "-j", "addr"], capture_output=True, text=True, timeout=3).stdout)
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return []
+    out = []
+    for link in data:
+        for a in link.get("addr_info", []):
+            if a.get("family") == "inet" and not a.get("local", "").startswith("127."):
+                out.append(a["local"])
+    return out
+
+
+def load_ids():
+    try:
+        with open(IDS_FILE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_ids(ids):
+    os.makedirs(os.path.dirname(IDS_FILE), exist_ok=True)
+    with open(IDS_FILE, "w") as f:
+        json.dump(ids, f)
+
+
+def probe_id(port):
+    """The phone's KDE Connect id is the name in its TLS certificate. It sends that certificate
+    to whoever connects, so a throwaway TLS server reads it."""
+    tmp = os.path.join(RUNTIME, "probe")
+    os.makedirs(tmp, exist_ok=True)
+    key, cert = os.path.join(tmp, "k.pem"), os.path.join(tmp, "c.pem")
+    if not os.path.exists(cert):
+        subprocess.run(["openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1",
+                        "-nodes", "-keyout", key, "-out", cert, "-days", "3650", "-subj", "/CN=falcon-probe"],
+                       capture_output=True, timeout=15)
+    tls = socket.socket()
+    tls.bind(("127.0.0.1", 0))
+    tls_port = tls.getsockname()[1]
+    tls.close()
+    server = subprocess.Popen(["openssl", "s_server", "-accept", "127.0.0.1:%d" % tls_port, "-verify", "1",
+                               "-cert", cert, "-key", key, "-naccept", "1"],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    # s_server quits when its stdin ends, so the pipe stays open until the phone is done.
+    found = ""
+    lines = []
+    ready_event = threading.Event()
+
+    def collect():
+        for line in server.stdout:
+            lines.append(line)
+            if line.startswith("ACCEPT"):
+                ready_event.set()
+        ready_event.set()
+    reader = threading.Thread(target=collect, daemon=True)
+    reader.start()
+    try:
+        if not ready_event.wait(8):
+            raise OSError("openssl did not start")
+        phone = socket.create_connection(("127.0.0.1", port), timeout=5)
+        hello = {"id": int(time.time() * 1000), "type": "kdeconnect.identity",
+                 "body": {"deviceId": "falconprobe" + "0" * 22, "deviceName": "probe",
+                          "deviceType": "desktop", "protocolVersion": 8, "tcpPort": 1716}}
+        phone.sendall((json.dumps(hello) + "\n").encode())
+        local = socket.create_connection(("127.0.0.1", tls_port), timeout=5)
+        end = time.time() + 5
+        while time.time() < end:
+            ready, _, _ = select.select([phone, local], [], [], 0.3)
+            done = False
+            for s in ready:
+                data = s.recv(65536)
+                if not data:
+                    done = True
+                    break
+                (local if s is phone else phone).sendall(data)
+            if done:
+                break
+        phone.close()
+        local.close()
+    except OSError:
+        pass
+    # It prints the certificate as it exits after its one connection; killed, its buffer is lost.
+    try:
+        server.stdin.close()
+        server.wait(timeout=4)
+    except (OSError, subprocess.TimeoutExpired):
+        server.kill()
+    reader.join(timeout=2)
+    text = "".join(lines)
+    m = re.search(r"subject=.*?CN\s*=\s*([0-9a-zA-Z_]+)", text)
+    if m and not m.group(1).startswith("falcon"):
+        found = m.group(1)
+    return found
+
+
+class Bridge:
+    """Ports, as KDE Connect uses them: the link itself on 1716 of the phone, reached through
+    MAIN_PORTS here; files and notification icons on 1739-1764, each side serving them on the
+    first free port. The phone's are reached through PHONE_PAYLOAD here (each held here so this
+    computer's kdeconnectd never takes them); this computer's go back through `adb reverse` on
+    PC_PAYLOAD, which also keeps the phone off them."""
+
+    MAIN_PORTS = range(1730, 1739)
+    PHONE_PAYLOAD = range(1739, 1752)
+    PC_PAYLOAD = range(1752, 1765)
+
+    def __init__(self):
+        self.serial = ""
+        self.forwards = {}  # phone port -> local adb port
+        self.servers = []
+        self.relay_port = 0
+        self.address = ""
+        self.device = ""
+        self.name = ""
+        self.active = False
+        self.reversed = False
+        self.lock = threading.Lock()
+
+    def pipe(self, a, b):
+        try:
+            while True:
+                ready, _, _ = select.select([a, b], [], [])
+                for s in ready:
+                    data = s.recv(65536)
+                    if not data:
+                        return
+                    (b if s is a else a).sendall(data)
+        except OSError:
+            pass
+        finally:
+            a.close()
+            b.close()
+
+    def forward(self, phone_port):
+        """A local port that reaches this port of the phone, made on first use."""
+        with self.lock:
+            local = self.forwards.get(phone_port)
+            if local:
+                return local
+            out = adb(self.serial, "forward", "tcp:0", "tcp:%d" % phone_port, timeout=5).strip()
+            if not out.isdigit():
+                return 0
+            self.forwards[phone_port] = int(out)
+            return int(out)
+
+    def serve(self, server, phone_port):
+        while True:
+            try:
+                client, peer = server.accept()
+            except OSError:
+                return
+            # Only kdeconnectd on this computer may use it.
+            if peer[0] not in local_addresses():
+                client.close()
+                continue
+            local = self.forward(phone_port)
+            try:
+                upstream = socket.create_connection(("127.0.0.1", local), timeout=5)
+            except OSError:
+                client.close()
+                continue
+            threading.Thread(target=self.pipe, args=(client, upstream), daemon=True).start()
+
+    def listen(self, address, port, phone_port):
+        server = socket.socket()
+        try:
+            server.bind((address, port))
+        except OSError:
+            server.close()
+            return False
+        server.listen(8)
+        self.servers.append(server)
+        threading.Thread(target=self.serve, args=(server, phone_port), daemon=True).start()
+        return True
+
+    def open_relay(self, address):
+        if self.servers and self.address == address:
+            return True
+        self.close_relay()
+        self.address = address
+        self.relay_port = next((p for p in self.MAIN_PORTS if self.listen(address, p, 1716)), 0)
+        if not self.relay_port:
+            self.close_relay()
+            return False
+        for p in self.PHONE_PAYLOAD:
+            self.listen(address, p, p)
+        return True
+
+    def close_relay(self):
+        for server in self.servers:
+            try:
+                server.close()
+            except OSError:
+                pass
+        self.servers = []
+        self.relay_port = 0
+
+    def reverse(self):
+        if self.reversed:
+            return
+        for p in self.PC_PAYLOAD:
+            adb(self.serial, "reverse", "tcp:%d" % p, "tcp:%d" % p, timeout=5)
+        self.reversed = True
+
+    def release(self):
+        """Gives back every adb port this bridge took."""
+        self.close_relay()
+        if self.serial:
+            for local in self.forwards.values():
+                adb(self.serial, "forward", "--remove", "tcp:%d" % local, timeout=3)
+            if self.reversed:
+                for p in self.PC_PAYLOAD:
+                    adb(self.serial, "reverse", "--remove", "tcp:%d" % p, timeout=3)
+        self.forwards = {}
+        self.reversed = False
+
+    def phone_serial(self):
+        for line in adb("", "devices").splitlines()[1:]:
+            parts = line.split()
+            if len(parts) >= 2 and parts[1] == "device":
+                if ANDROID_APP in adb(parts[0], "shell", "pm", "path", ANDROID_APP, timeout=5):
+                    return parts[0]
+        return ""
+
+    def tick(self, devices):
+        """Called every few seconds with the current device list."""
+        if not shutil.which("adb"):
+            return
+        if any(d["paired"] and d["reachable"] and not self.carries(d) for d in devices):
+            if self.active:
+                self.release()
+            self.active = False
+            return
+        serial = self.phone_serial()
+        if not serial:
+            if self.serial:
+                self.close_relay()
+                self.forwards = {}
+                self.reversed = False
+            self.serial, self.active = "", False
+            return
+        if serial != self.serial:
+            self.release()
+            self.serial = serial
+        main = self.forward(1716)
+        if not main:
+            return
+        ids = load_ids()
+        if serial not in ids:
+            found = probe_id(main)
+            if not found:
+                return
+            ids[serial] = found
+            save_ids(ids)
+        self.device = ids[serial]
+        if not self.name:
+            self.name = adb(serial, "shell", "getprop", "ro.product.model", timeout=4).strip() or "Phone"
+        addresses = local_addresses()
+        if not addresses or not self.open_relay(addresses[0]):
+            return
+        self.reverse()
+        self.active = True
+        known = next((d for d in devices if d["id"] == self.device), None)
+        if known and known["reachable"]:
+            return
+        packet = {"id": int(time.time() * 1000), "type": "kdeconnect.identity",
+                  "body": {"deviceId": self.device, "deviceName": self.name, "deviceType": "phone",
+                           "protocolVersion": 8, "tcpPort": self.relay_port}}
+        try:
+            u = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            u.bind((self.address, 0))
+            u.sendto((json.dumps(packet) + "\n").encode(), (self.address, 1716))
+            u.close()
+        except OSError:
+            pass
+
+    def carries(self, device):
+        return self.active and device["id"] == self.device
+
+
+bridge = Bridge()
+
+
+def bridge_tick():
+    # adb can take a moment, so it runs beside the main loop.
+    def work():
+        try:
+            devices = json.loads(last_state).get("devices", []) if last_state else []
+            was = bridge.active
+            bridge.tick(devices)
+            if was != bridge.active:
+                GLib.idle_add(lambda: (schedule_state(0), False)[1])
+        except Exception:
+            pass
+    if daemon_running():
+        threading.Thread(target=work, daemon=True).start()
+    return True
+
+
+# ---- state on change ----
+
+state_timer = 0
+last_state = None
+
+
+def send_state():
+    global state_timer, last_state
+    state_timer = 0
+    s = full_state()
+    text = json.dumps(s, ensure_ascii=False, sort_keys=True)
+    if text != last_state:
+        last_state = text
+        emit(s)
+    return False
+
+
+def schedule_state(delay=150):
+    global state_timer
+    if state_timer:
+        GLib.source_remove(state_timer)
+    state_timer = GLib.timeout_add(delay, send_state)
+
+
+def on_signal(conn, sender, path, iface, name, params, data):
+    if iface == "org.freedesktop.DBus" and name == "NameOwnerChanged":
+        if params.unpack()[0] != BUS_NAME:
+            return
+        schedule_state(300)
+        return
+    if iface == DEV + ".conversations" and name in ("conversationUpdated", "conversationCreated"):
+        try:
+            device = path.rsplit("/", 1)[-1]
+            m = message(device, params.unpack()[0])
+            key = (device, m["thread"])
+            if key in threads:
+                threads[key][m["uid"]] = m
+                if key == open_thread:
+                    queue_thread()
+        except (ValueError, TypeError, IndexError):
+            pass
+        schedule_state(400)
+        return
+    if iface == DEV + ".conversations" and name == "conversationLoaded":
+        queue_thread()
+        return
+    # Every other signal of the daemon may change what is shown.
+    schedule_state()
+
+
+def on_stdin(source, condition):
+    if condition & (GLib.IO_HUP | GLib.IO_ERR):
+        loop.quit()
+        return False
+    line = sys.stdin.readline()
+    if not line:
+        loop.quit()
+        return False
+    line = line.strip()
+    if line:
+        try:
+            handle(json.loads(line))
+        except ValueError:
+            emit({"type": "result", "op": "", "ok": False, "error": "bad json"})
+    return True
+
+
+def quiet_popups():
+    """The shell shows the phone's notifications itself, in their own tab; kdeconnectd's own
+    popups for them would land in this computer's history as well. KNotification reads a
+    per-user override of an event's actions from this file."""
+    path = os.path.join(CONFIG, "kdeconnect.notifyrc")
+    try:
+        text = open(path, encoding="utf-8").read()
+    except OSError:
+        text = ""
+    if re.search(r"^\[Event/notification\]", text, re.M):
+        return
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(("\n" if text and not text.endswith("\n") else "") + "[Event/notification]\nAction=\n")
+
+
+def serve():
+    global loop
+    bus.signal_subscribe(BUS_NAME, None, None, None, None, Gio.DBusSignalFlags.NONE, on_signal, None)
+    bus.signal_subscribe("org.freedesktop.DBus", "org.freedesktop.DBus", "NameOwnerChanged",
+                         "/org/freedesktop/DBus", BUS_NAME, Gio.DBusSignalFlags.NONE, on_signal, None)
+    if installed():
+        quiet_popups()
+        if not daemon_running():
+            start_daemon()
+    send_state()
+    # The battery and media position are pushed by the phone, a slow refresh covers the rest.
+    GLib.timeout_add_seconds(20, lambda: (schedule_state(0), True)[1])
+    bridge_tick()
+    GLib.timeout_add_seconds(6, bridge_tick)
+    GLib.io_add_watch(sys.stdin.fileno(), GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR, on_stdin)
+    loop = GLib.MainLoop()
+    loop.run()
+    bridge.release()
+
+
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "status":
+        print(json.dumps(full_state(), ensure_ascii=False, indent=2))
+        return
+    if len(sys.argv) > 1 and sys.argv[1] == "serve":
+        serve()
+        return
+    print(__doc__.strip())
+    sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

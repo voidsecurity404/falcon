@@ -104,6 +104,7 @@ targets=(
     .local/bin/falcon-charge
     .local/bin/falcon-updates
     .local/bin/falcon-privacy
+    .local/bin/falcon-phone
     .local/bin/falcon-monitors
     .config/falcon/tmux.conf
     .config/falcon/emoji.json

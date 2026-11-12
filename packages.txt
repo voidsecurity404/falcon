@@ -81,6 +81,12 @@ cloudflared
 rust
 expac
 yay
+# Telefon: KDE Connect (falcon-phone), telefon fayllari uchun sshfs, fayl tanlash uchun zenity,
+# routerda Wi-Fi mijozlari ajratilgan bo'lsa USB orqali ulanish uchun adb
+kdeconnect
+sshfs
+zenity
+android-tools
 # Key sounds (falcon-keysounds)
 python-evdev
 libcanberra

@@ -5204,6 +5204,42 @@ def _():
         proc.wait(5)
         wait(lambda: not market_windows(), 5, "yopilmadi")
 
+feature("phone", "Telefon (KDE Connect)")
+
+
+@case("falcon-phone status to'g'ri JSON beradi")
+def _():
+    out = json.loads(sh([str(LBIN / "falcon-phone"), "status"]))
+    ok(out["type"] == "state" and isinstance(out["devices"], list), out)
+
+
+@case("Bardagi telefon tugmasi telefon oynasini ochadi, Esc sahifadan uyga, keyin yopadi")
+def _():
+    if "phone" not in st()["bar"]["items"]:
+        raise Skip("kdeconnect o'rnatilmagan")
+    click_part("phone")
+    wait(lambda: st()["popup"] == "phone", 3, "telefon oynasi ochilmadi")
+    ipc("phonePage", "settings")
+    time.sleep(0.6)
+    key("esc")
+    time.sleep(0.4)
+    ok(st()["popup"] == "phone" and st()["phonePage"] == "", "Esc sahifadan uyga qaytmadi")
+    key("esc")
+    wait(lambda: st()["popup"] == "", 3, "yopilmadi")
+
+
+@case("Qo'ng'iroq menyusida Telefon yorlig'i bosiladi")
+def _():
+    ipc("notificationsTab", "0")
+    wait(lambda: st()["popup"] == "notifications", 3, "menyu ochilmadi")
+    time.sleep(0.5)
+    x, y, w, h = st()["bar"]["items"]["tabPhone"]
+    click(x + w // 2, y + h // 2)
+    time.sleep(0.5)
+    ok(st()["notificationsTab"] == 1, st()["notificationsTab"])
+    ipc("close")
+
+
 def main():
     global GOOD
     args = sys.argv[1:]

@@ -68,7 +68,8 @@ PanelWindow {
             player: player,
             system: system,
             notifications: notifications,
-            control: control
+            control: control,
+            phone: phoneMenu
         };
         return {
             left: rect(left),
@@ -122,7 +123,7 @@ PanelWindow {
             for (const child of item.children)
                 walk(child);
         };
-        for (const part of [left, center, right, calendar, player, system, notifications])
+        for (const part of [left, center, right, calendar, player, system, notifications, phoneMenu])
             walk(part);
         return found;
     }
@@ -214,6 +215,10 @@ PanelWindow {
             radius: notifications.radius
         }
         Region {
+            item: phoneMenu.visible ? phoneMenu : null
+            radius: phoneMenu.radius
+        }
+        Region {
             item: card.visible && card.opacity > 0.05 ? card : null
             radius: card.radius
         }
@@ -262,7 +267,9 @@ PanelWindow {
         focus: root.panelHere
         // Esc steps back from a Wi-Fi or Bluetooth list before it closes the panel.
         Keys.onEscapePressed: {
-            if (Ui.controlPage !== "")
+            if (Ui.popup === "phone" && Ui.phonePage !== "")
+                Ui.phonePage = "";
+            else if (Ui.controlPage !== "")
                 Ui.controlPage = "";
             else
                 Ui.popup = "";
@@ -375,6 +382,16 @@ PanelWindow {
         x: root.under(["claude"], width, "right", root.layoutKey)
         y: root.popupTop
         shown: root.panelHere && Ui.popup === "claude"
+    }
+
+    // The phone window drops from the phone part.
+    PhoneMenu {
+        id: phoneMenu
+
+        x: root.under(["phone"], width, "right", root.layoutKey)
+        y: root.popupTop - 24 * (1 - reveal)
+        maxHeight: root.height - root.popupTop - 12
+        shown: root.panelHere && Ui.popup === "phone"
     }
 
     // The control center drops from the status part.

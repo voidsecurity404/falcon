@@ -5,8 +5,18 @@ import qs.services
 
 // Notification history: the newest is on top and the list scrolls.
 // A card can be dragged sideways to dismiss it. Clear sends all of them away, top one first.
+// The bell's menu shows two of these: this computer's history and the phone's notifications.
 Rectangle {
     id: root
+
+    // Entries: {id, app, title, sub, time, date}, and replyId for a phone message that takes a reply.
+    property var items: Toasts.history
+    property string title: Tr.t("Notifications")
+    property string emptyText: Tr.t("No notifications yet")
+    property string emptyIcon: "bell"
+    property var forgetIds: ids => Toasts.forget(ids)
+    property var timeOf: row => Toasts.timeLabel(row)
+    property var replyTo: null
 
     readonly property int sweepStep: 35
     readonly property int sweepTime: 280
@@ -21,7 +31,7 @@ Rectangle {
     // Notifications of one app stay together. The app with the newest one comes first.
     readonly property var groups: {
         const all = [];
-        for (const item of Toasts.history) {
+        for (const item of root.items) {
             let group = all.find(g => g.app === item.app);
             if (!group) {
                 group = {
@@ -90,7 +100,7 @@ Rectangle {
         id: clearTimer
 
         onTriggered: {
-            Toasts.forget(root.clearingIds);
+            root.forgetIds(root.clearingIds);
             root.clearing = false;
         }
     }
@@ -99,7 +109,7 @@ Rectangle {
         x: 18
         height: 54
         verticalAlignment: Text.AlignVCenter
-        text: Tr.t("Notifications")
+        text: root.title
         size: 15
         font.weight: Font.Medium
     }
@@ -108,7 +118,7 @@ Rectangle {
         anchors.rightMargin: 18
         height: 54
         verticalAlignment: Text.AlignVCenter
-        opacity: Toasts.history.length > 0 && !root.clearing ? 1 : 0
+        opacity: root.items.length > 0 && !root.clearing ? 1 : 0
         visible: opacity > 0
         text: Tr.t("Clear")
         color: clearArea.containsMouse ? Theme.text : Theme.muted
@@ -133,7 +143,7 @@ Rectangle {
     Column {
         anchors.centerIn: parent
         spacing: 10
-        opacity: Toasts.history.length === 0 ? 1 : 0
+        opacity: root.items.length === 0 ? 1 : 0
         visible: opacity > 0
 
         Behavior on opacity {
@@ -144,13 +154,13 @@ Rectangle {
 
         Icon {
             anchors.horizontalCenter: parent.horizontalCenter
-            name: "bell"
+            name: root.emptyIcon
             size: 30
             color: Qt.alpha(Theme.text, 0.3)
         }
         Label {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: Tr.t("No notifications yet")
+            text: root.emptyText
             color: Qt.alpha(Theme.text, 0.45)
             size: 13
         }
@@ -296,7 +306,7 @@ Rectangle {
                 ScriptAction {
                     script: {
                         if (fly.swiped)
-                            Toasts.forget([note.modelData]);
+                            root.forgetIds([note.modelData]);
                     }
                 }
             }
@@ -315,7 +325,7 @@ Rectangle {
 
                 visible: !note.isHeader
                 width: parent.width
-                height: noteText.implicitHeight + 20
+                height: noteText.implicitHeight + 20 + (replyBox.visible ? replyBox.height + 8 : 0)
                 radius: 14
                 color: Qt.alpha(Theme.text, 0.06)
                 opacity: 1 - 0.9 * Math.min(1, Math.abs(x) / Math.max(1, width))
@@ -379,7 +389,7 @@ Rectangle {
                             id: noteTime
 
                             anchors.right: parent.right
-                            text: note.row.title ? Toasts.timeLabel(note.row) : ""
+                            text: note.row.title ? root.timeOf(note.row) : ""
                             color: Theme.muted
                             size: 12
                         }
@@ -393,6 +403,90 @@ Rectangle {
                         wrapMode: Text.Wrap
                         maximumLineCount: 3
                         elide: Text.ElideRight
+                    }
+                }
+
+                // A phone message that takes a reply: Reply opens a field, Enter sends.
+                Label {
+                    anchors.right: parent.right
+                    anchors.rightMargin: 12
+                    anchors.bottom: noteText.bottom
+                    visible: !!note.row.replyId && !!root.replyTo && !replyBox.visible
+                    text: Tr.t("Reply")
+                    color: replyArea.containsMouse ? Theme.text : Theme.accent
+                    size: 12
+
+                    MouseArea {
+                        id: replyArea
+
+                        anchors.fill: parent
+                        anchors.margins: -6
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            replyBox.visible = true;
+                            replyField.forceActiveFocus();
+                        }
+                    }
+                }
+                Rectangle {
+                    id: replyBox
+
+                    x: 10
+                    y: noteText.y + noteText.implicitHeight + 8
+                    width: parent.width - 20
+                    height: 34
+                    radius: 10
+                    visible: false
+                    color: Qt.alpha(Theme.text, 0.07)
+                    border.width: 1
+                    border.color: replyField.activeFocus ? Qt.alpha(Theme.accent, 0.7) : "transparent"
+
+                    TextInput {
+                        id: replyField
+
+                        anchors.fill: parent
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 34
+                        verticalAlignment: TextInput.AlignVCenter
+                        color: Theme.text
+                        font.family: Theme.sans
+                        font.pixelSize: 13 * Theme.fontScale
+                        clip: true
+                        onAccepted: {
+                            if (text.trim() === "")
+                                return;
+                            root.replyTo(note.row, text);
+                            text = "";
+                            replyBox.visible = false;
+                        }
+                        Keys.onEscapePressed: {
+                            text = "";
+                            replyBox.visible = false;
+                        }
+
+                        Label {
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: replyField.text === ""
+                            text: Tr.t("Reply…")
+                            color: Theme.muted
+                            size: 13
+                        }
+                    }
+                    Icon {
+                        anchors.right: parent.right
+                        anchors.rightMargin: 10
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "send"
+                        size: 15
+                        color: Theme.accent
+
+                        MouseArea {
+                            anchors.fill: parent
+                            anchors.margins: -6
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: replyField.accepted()
+                        }
                     }
                 }
             }
