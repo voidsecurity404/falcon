@@ -45,6 +45,7 @@ targets=(
     .config/fastfetch/logos
     .config/fish/conf.d/falcon-fetch.fish
     .config/fish/conf.d/falcon-colors.fish
+    .config/starship.toml
     .config/micro/colorschemes/falcon.micro
     .config/cava/config
     .config/spicetify/Themes/Falcon
@@ -265,6 +266,17 @@ fish_conf="$HOME/.config/fish/config.fish"
 if ! grep -q falcon_greeting "$fish_conf" 2>/dev/null; then
     if ((dry)); then echo "  [dry-run] append fish_greeting to $fish_conf"
     else printf '\n# Falcon: spinning fastfetch logo (conf.d/falcon-fetch.fish)\nfunction fish_greeting\n    falcon_greeting\nend\n' >>"$fish_conf"; fi
+fi
+# Starship prompt (Nord Pills, the user's pick #5), turned on in fish and zsh once.
+do_it cp "$root/config/starship/starship.toml" "$HOME/.config/starship.toml"
+if ! grep -q "starship init fish" "$fish_conf" 2>/dev/null; then
+    if ((dry)); then echo "  [dry-run] append starship init to $fish_conf"
+    else printf '\n# Starship prompt (Nord Pills)\nif status is-interactive\n    starship init fish | source\nend\n' >>"$fish_conf"; fi
+fi
+zsh_conf="$HOME/.zshrc"
+if [[ -e "$zsh_conf" ]] && ! grep -q "starship init zsh" "$zsh_conf"; then
+    if ((dry)); then echo "  [dry-run] append starship init to $zsh_conf"
+    else printf '\n# Starship prompt (Nord Pills) — turn off powerlevel10k from the CachyOS config first\n(( $+functions[prompt_powerlevel9k_teardown] )) && prompt_powerlevel9k_teardown\neval "$(starship init zsh)"\n' >>"$zsh_conf"; fi
 fi
 do_it cp -a "$root/config/hypr/." "$HOME/.config/hypr/"
 do_it cp -a "$root/bin/." "$HOME/.local/bin/"
