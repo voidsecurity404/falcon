@@ -154,6 +154,9 @@ def telegram_color(key, value, c):
         return hexa(mix(c["surface"], c["text"], 1 - l), a)
     if l > 0.82:
         return hexa(mix(c["surface"], c["primary"], 0.12 + (1 - l) * 1.2), a)
+    if l < 0.32 and sat < 0.5:
+        # A dark tinted color is a surface in Telegram's own theme, not an accent.
+        return hexa(mix(mix(c["surface"], c["text"], 1 - l), c["primary"], 0.1), a)
     deg = h * 360
     if deg < 18 or deg > 335:
         return hexa(c["error"], a)
@@ -178,6 +181,25 @@ def telegram():
         f"historyOutIconFg: {hexa(c['onPrimaryContainer'], 1)};",
         f"msgServiceBg: {hexa(c['surfaceLowest'], 0.6)};",
         f"msgServiceFg: {hexa(c['text'], 1)};",
+        # The current chat: a primary container, not a bright accent bar.
+        f"dialogsBgActive: {hexa(c['primaryContainer'], 1)};",
+        f"dialogsNameFgActive: {hexa(c['onPrimaryContainer'], 1)};",
+        f"dialogsTextFgActive: {hexa(c['onPrimaryContainer'], 1)};",
+        f"dialogsDateFgActive: {hexa(c['onPrimaryContainer'], 1)};",
+        f"dialogsDraftFgActive: {hexa(c['onPrimaryContainer'], 1)};",
+        f"dialogsOnlineBadgeFgActive: {hexa(c['onPrimaryContainer'], 1)};",
+        f"dialogsSendingIconFgActive: {hexa(c['onPrimaryContainer'], 0.6)};",
+        # The folders bar: dark in every Telegram theme, so it is set here by role.
+        f"sideBarBg: {hexa(c['surfaceLowest'], 1)};",
+        f"sideBarBgActive: {hexa(c['surfaceHigh'], 1)};",
+        f"sideBarBgRipple: {hexa(c['surfaceContainer'], 1)};",
+        f"sideBarTextFg: {hexa(c['muted'], 1)};",
+        f"sideBarIconFg: {hexa(c['muted'], 1)};",
+        f"sideBarTextFgActive: {hexa(c['primary'], 1)};",
+        f"sideBarIconFgActive: {hexa(c['primary'], 1)};",
+        f"sideBarBadgeBg: {hexa(c['primary'], 1)};",
+        f"sideBarBadgeFg: {hexa(c['onPrimary'], 1)};",
+        f"sideBarBadgeBgMuted: {hexa(c['outline'], 1)};",
     ]
     out = STATE / "telegram" / "Falcon.tdesktop-theme"
     out.parent.mkdir(parents=True, exist_ok=True)
