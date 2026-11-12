@@ -267,7 +267,8 @@ if ! grep -q falcon_greeting "$fish_conf" 2>/dev/null; then
     if ((dry)); then echo "  [dry-run] append fish_greeting to $fish_conf"
     else printf '\n# Falcon: spinning fastfetch logo (conf.d/falcon-fetch.fish)\nfunction fish_greeting\n    falcon_greeting\nend\n' >>"$fish_conf"; fi
 fi
-# Starship prompt (Nord Pills, the user's pick #5; matugen writes its colors), turned on in fish and zsh once.
+# Starship prompt (Nord Pills, the user's pick #5; colors are kitty's palette slots), turned on in fish and zsh once.
+do_it cp "$root/config/starship/starship.toml" "$HOME/.config/starship.toml"
 if ! grep -q "starship init fish" "$fish_conf" 2>/dev/null; then
     if ((dry)); then echo "  [dry-run] append starship init to $fish_conf"
     else printf '\n# Starship prompt (Nord Pills)\nif status is-interactive\n    starship init fish | source\n    # Transient prompt: finished commands keep only "❯ command"\n    function starship_transient_prompt_func\n        starship module character\n    end\n    enable_transience\nend\n' >>"$fish_conf"; fi

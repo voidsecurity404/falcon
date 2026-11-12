@@ -91,7 +91,3 @@ output_path = "~/.config/alacritty/falcon-colors.toml"
 [templates.rofi]
 input_path = "~/.config/matugen/templates/rofi.rasi"
 output_path = "~/.config/rofi/falcon-colors.rasi"
-
-[templates.starship]
-input_path = "~/.config/matugen/templates/starship.toml"
-output_path = "~/.config/starship.toml"

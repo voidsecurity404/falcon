@@ -1,0 +1,85 @@
+# Starship — Nord Pills layout (the user's pick #5).
+# Colors are the terminal's own palette slots, not hex: kitty takes them from the
+# wallpaper and repaints everything already on screen when the wallpaper changes.
+# Pills use "inverted", so the pill is the palette color and its text is the
+# terminal background: readable in dark and light mode alike.
+#   blue = primary, cyan = secondary, purple = tertiary (templates/kitty.conf)
+# Nerd Font glyphs are \uXXXX escapes so they survive editing.
+#    = left round cap    = right round cap
+"$schema" = 'https://starship.rs/config-schema.json'
+
+add_newline = true
+
+format = """
+[](blue)$os$username[](blue) \
+[](cyan)$directory[](cyan)\
+$git_branch$git_status\
+$rust$python$nodejs\
+$cmd_duration \
+[](bright-black)$time[](bright-black)
+$character"""
+
+[os]
+disabled = false
+style = "bold inverted blue"
+format = "[$symbol ]($style)"
+
+[os.symbols]
+Arch = ""
+CachyOS = ""
+Linux = ""
+
+[username]
+show_always = true
+style_user = "bold inverted blue"
+style_root = "bold inverted red"
+format = "[$user]($style)"
+
+[directory]
+style = "bold inverted cyan"
+format = "[ $path]($style)[$read_only]($read_only_style)"
+read_only = " "
+read_only_style = "bold inverted cyan"
+truncation_length = 4
+truncation_symbol = "…/"
+home_symbol = "~"
+
+[git_branch]
+symbol = ""
+style = "bold inverted purple"
+format = " [](purple)[$symbol $branch]($style)"
+
+[git_status]
+style = "bold inverted purple"
+format = "[( $all_status$ahead_behind)]($style)[](purple)"
+
+[rust]
+symbol = ""
+style = "bold inverted green"
+format = " [](green)[$symbol $version]($style)[](green)"
+
+[python]
+symbol = ""
+style = "bold inverted green"
+format = " [](green)[$symbol $version]($style)[](green)"
+
+[nodejs]
+symbol = ""
+style = "bold inverted green"
+format = " [](green)[$symbol $version]($style)[](green)"
+
+[cmd_duration]
+min_time = 2000
+style = "bold inverted yellow"
+format = " [](yellow)[ $duration]($style)[](yellow)"
+
+[time]
+disabled = false
+time_format = "%H:%M"
+style = "bold inverted bright-black"
+format = "[ $time]($style)"
+
+[character]
+success_symbol = "[❯](bold blue)"
+error_symbol = "[❯](bold red)"
+vimcmd_symbol = "[❮](bold purple)"
