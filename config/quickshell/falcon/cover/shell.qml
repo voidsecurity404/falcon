@@ -22,14 +22,16 @@ ShellRoot {
     readonly property string wallpaper: Quickshell.env("HOME") + "/.local/state/falcon/wallpaper"
     property bool leaving: false
     property real out: 0
-    // The login screen ends in black, so the cover comes up out of black too.
+    // The cover fades in over whatever is there: black right after the login screen, or the
+    // wallpaper if awww was quicker. A black veil fading out would darken a wallpaper already
+    // shown, which looked like a stall.
     property real dawn: 0
 
     NumberAnimation on dawn {
         from: 0
         to: 1
-        duration: 700
-        easing.type: Easing.InOutQuad
+        duration: 450
+        easing.type: Easing.OutCubic
     }
 
     function leave() {
@@ -172,7 +174,7 @@ ShellRoot {
 
                     anchors.fill: parent
                     // A last fade, so no edge of the opening is left in a corner.
-                    opacity: 1 - root.part(0.85, 1, true)
+                    opacity: root.dawn * (1 - root.part(0.85, 1, true))
                     layer.enabled: root.leaving
                     layer.effect: MultiEffect {
                         maskEnabled: true
@@ -303,12 +305,6 @@ ShellRoot {
                         }
                     }
 
-                    Rectangle {
-                        anchors.fill: parent
-                        color: "black"
-                        opacity: 1 - root.dawn
-                        visible: opacity > 0
-                    }
                 }
 
                 MouseArea {

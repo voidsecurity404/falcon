@@ -75,6 +75,9 @@ PY
 show() {
     wait_daemon
     read -r kind seconds < <(transition)
+    # At login the screen is black and awww starts empty (--no-cache), so the first picture
+    # fades in instead of the usual effect.
+    [[ -n "${FIRST_FADE:-}" ]] && { kind=fade; seconds=$FIRST_FADE; }
     awww img "$1" --transition-type "$kind" --transition-pos 0.5,1.0 --transition-duration "$seconds" --transition-fps 60
     # The shell draws its own sliding copy (parallax) and plays the same effect on it.
     qs -c falcon ipc call desk wallpaperShown "$1" "${2:-false}" >/dev/null 2>&1 || true
@@ -179,7 +182,7 @@ case "${1:-}" in
         if [[ -f "$video" ]] && command -v mpvpaper >/dev/null; then
             image="$(poster "$video")"
             ln -sfn "$image" "$link"
-            show "$image" true
+            FIRST_FADE=0.6 show "$image" true
             [[ -f "$state/colors.json" ]] || colors "$image"
             sleep "$seconds"
             play "$video"
@@ -189,7 +192,7 @@ case "${1:-}" in
         [[ -f "$image" ]] || image="$(first_image)"
         [[ -n "$image" ]] || exit 0
         ln -sfn "$image" "$link"
-        show "$image"
+        FIRST_FADE=0.6 show "$image"
         [[ -f "$state/colors.json" ]] || colors "$image"
         ;;
     --reshow)

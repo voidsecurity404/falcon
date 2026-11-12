@@ -59,7 +59,7 @@ SETTLE_OTHER = 0.8      # other apps open one window per start, so the next star
 BROWSERS = {"firefox", "firefox-esr", "librewolf", "zen", "zen-browser", "floorp", "waterfox", "chromium",
             "chrome", "google-chrome", "google-chrome-stable", "brave", "brave-browser", "vivaldi", "vivaldi-stable",
             "opera", "thorium-browser", "microsoft-edge", "microsoft-edge-stable", "telegram", "Telegram"}
-COVER_WAIT = 2          # a cover that does not come up must not hold the windows back
+COVER_WAIT = 1.5          # a cover that does not come up must not hold the windows back
 POLL = 0.05             # how often new windows are looked for while restoring
 LAUNCH_WAIT = 12        # a first launch that opened nothing by then is given up
 RELAUNCH_WAIT = 1.8     # a second launch for more windows of a running app answers fast or not at all
@@ -766,9 +766,9 @@ def plan(items):
 
 
 class CoverGate:
-    """Whether the cover is on screen yet, looked at without waiting. Slow apps such as browsers
-    start at once, since they take over a second to show a window; terminals open a window in a
-    fraction of that, so they wait for the cover, which keeps any window from showing before it."""
+    """Whether the cover is on screen yet, looked at without waiting. Apps start once it is: at a
+    cold boot the cover, the shell, a browser and a messenger loading together kept the cover
+    away for a second, so the panel and windows showed and then were covered."""
 
     def __init__(self, cover):
         self.cover = cover
@@ -826,7 +826,7 @@ def bring_back(groups, wanted, gate=None):
                 settled |= ready
                 debug("settled early", sorted(ready))
         for group in groups.values():
-            if group.terminal and not group.launched and gate and not gate.up():
+            if not group.launched and gate and not gate.up():
                 continue
             if group.due(now):
                 # A browser brings back its own windows; starting it again would only open an

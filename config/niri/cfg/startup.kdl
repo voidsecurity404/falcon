@@ -1,4 +1,5 @@
-spawn-at-startup "awww-daemon"
+// No cache: the last picture would pop up at once; falcon-wallpaper --restore fades it in.
+spawn-at-startup "awww-daemon" "--no-cache"
 spawn-at-startup "~/.local/bin/falcon-wallpaper" "--restore"
 spawn-at-startup "~/.local/bin/falcon-shell"
 spawn-at-startup "wl-paste" "--watch" "cliphist" "store"
