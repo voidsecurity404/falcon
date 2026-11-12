@@ -131,6 +131,17 @@ Singleton {
         onTriggered: fetch.running = true
     }
 
+    // A new place or unit asks again at once instead of waiting for the half hour.
+    readonly property string query: Settings.weatherLat + "," + Settings.weatherLon + "," + Settings.get("weather.unit", "celsius")
+    onQueryChanged: placeChanged.restart()
+
+    Timer {
+        id: placeChanged
+
+        interval: 600
+        onTriggered: if (Settings.get("weather.enabled", true)) fetch.running = true
+    }
+
     Timer {
         interval: 1800000
         repeat: true
