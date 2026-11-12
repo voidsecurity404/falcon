@@ -45,8 +45,8 @@ Settings → Appearance → Language: Automatic, English or Русский. Auto
 | `Mod+S` | Sticky window: visible on every workspace, it stays in place while the workspaces slide under it (a video in it holds its frame for the slide). Press again to put it back among the columns |
 | `Alt+Tab` | Recent windows spread like cards, each showing how the window last looked |
 | `Mod+B` / `Mod+E` / `Mod+N` | Browser, files, notes: focus if open, otherwise launch |
-| `Mod+X` | Lock screen |
-| `Mod+H` / `Mod+L` | Previous or next column |
+| `Mod+L` | Lock screen |
+| `Mod+H` / `Mod+Right` | Previous or next column |
 | `Mod+J` / `Mod+K` | Next or previous workspace |
 | `Mod+1..9` | Go to a workspace by number |
 | `Mod+Ctrl+H/L` | Move a column |

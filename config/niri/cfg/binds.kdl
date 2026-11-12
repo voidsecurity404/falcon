@@ -12,7 +12,6 @@ binds {
     Alt+Grave { spawn "qs" "-c" "falcon" "ipc" "call" "desk" "switcher" "1" "true"; }
     Alt+Shift+Grave { spawn "qs" "-c" "falcon" "ipc" "call" "desk" "switcher" "-1" "true"; }
     Mod+H { focus-column-left; }
-    Mod+L { focus-column-right; }
     Mod+Left { focus-column-left; }
     Mod+Right { focus-column-right; }
     Mod+Ctrl+H { move-column-left; }

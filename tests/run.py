@@ -413,17 +413,17 @@ def _():
 feature("columns", "Ustunlar va lenta")
 
 
-@case("Mod+H va Mod+L ustunlar orasida yuradi")
+@case("Mod+H va Mod+Right ustunlar orasida yuradi")
 def _():
     a = term("a"); b = term("b")
     key("mod", "h"); wait(lambda: focused()["id"] == a)
-    key("mod", "l"); wait(lambda: focused()["id"] == b)
+    key("mod", "right"); wait(lambda: focused()["id"] == b)
 
 
-@case("Chetdagi ustunda Mod+L hech narsani buzmaydi")
+@case("Chetdagi ustunda Mod+Right hech narsani buzmaydi")
 def _():
     a = term("a")
-    key("mod", "l"); key("mod", "l")
+    key("mod", "right"); key("mod", "right")
     ok(focused()["id"] == a)
 
 
@@ -2211,10 +2211,10 @@ def need_pw():
         raise Skip("parol berilmagan")
 
 
-@case("Mod+X bloklaydi")
+@case("Mod+L bloklaydi")
 def _():
     need_pw()
-    key("mod", "x")
+    key("mod", "l")
     wait(locked, 4)
     time.sleep(1)
     unlock()
@@ -2223,7 +2223,7 @@ def _():
 @case("logind holati ham 'locked' bo'ladi")
 def _():
     need_pw()
-    key("mod", "x"); wait(locked, 4); time.sleep(0.8)
+    key("mod", "l"); wait(locked, 4); time.sleep(0.8)
     sid = sh("loginctl list-sessions --no-legend | awk -v u=$(id -un) '$3==u && $4==\"seat0\"{print $1}'").stdout.strip()
     ok("LockedHint=yes" in sh(f"loginctl show-session {sid} -p LockedHint").stdout)
     unlock()
@@ -2232,7 +2232,7 @@ def _():
 @case("Noto'g'ri parol ochmaydi")
 def _():
     need_pw()
-    key("mod", "x"); wait(locked, 4); time.sleep(0.8)
+    key("mod", "l"); wait(locked, 4); time.sleep(0.8)
     typ("notogri-parol"); key("enter")
     time.sleep(3)
     ok(locked())
@@ -2242,7 +2242,7 @@ def _():
 @case("Bo'sh Enter ochmaydi")
 def _():
     need_pw()
-    key("mod", "x"); wait(locked, 4); time.sleep(0.8)
+    key("mod", "l"); wait(locked, 4); time.sleep(0.8)
     key("enter"); time.sleep(1)
     ok(locked())
     unlock()
@@ -2252,17 +2252,17 @@ def _():
 def _():
     need_pw()
     setvol(0.5)
-    key("mod", "x"); wait(locked, 4); time.sleep(0.8)
+    key("mod", "l"); wait(locked, 4); time.sleep(0.8)
     key("volup"); time.sleep(0.5)
     ok(vol() > 0.5, vol())
     unlock()
 
 
-@case("Qayta Mod+X ikkinchi nusxa ochmaydi")
+@case("Qayta Mod+L ikkinchi nusxa ochmaydi")
 def _():
     need_pw()
-    key("mod", "x"); wait(locked, 4); time.sleep(0.5)
-    key("mod", "x"); time.sleep(1)
+    key("mod", "l"); wait(locked, 4); time.sleep(0.5)
+    key("mod", "l"); time.sleep(1)
     ok(len(sh("pgrep -u $(id -u) -x hyprlock").stdout.split()) == 1)
     unlock()
 
