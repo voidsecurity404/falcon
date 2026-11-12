@@ -27,6 +27,14 @@ Singleton {
     property var introReady: ({})
     readonly property int introLength: 1150
     readonly property int outroLength: 1050
+    // True once hyprlock fully covers the show: its placeholder is then hidden, so the first frame
+    // after the unlock shows an empty field like the one just typed into, not "Password" again.
+    property bool covered: false
+
+    onIntroChanged: {
+        if (intro === "" || intro === "wait")
+            covered = false;
+    }
 
     function lock() {
         Ui.popup = "";
@@ -158,8 +166,10 @@ Singleton {
             if (code === 0) {
                 if (root.intro === "")
                     root.intro = "hold";
-                if (root.intro === "hold")
+                if (root.intro === "hold") {
                     waiter.running = true;
+                    coverDelay.restart();
+                }
             } else if (watch.tries > 25) {
                 if (root.intro === "hold")
                     root.intro = "";
@@ -169,7 +179,13 @@ Singleton {
         }
     }
 
-    // Ends with hyprlock: the unlock. hyprlock has already faded out over the show by then.
+    Timer {
+        id: coverDelay
+        interval: 1500
+        onTriggered: root.covered = root.intro === "hold"
+    }
+
+    // Ends with hyprlock: the unlock. hyprlock vanishes at once (no fadeOut), uncovering the show.
     Process {
         id: waiter
         command: ["sh", "-c", 'pidwait -u "$(id -u)" -x hyprlock 2>/dev/null || while pgrep -u "$(id -u)" -x hyprlock >/dev/null; do sleep 0.3; done']

@@ -335,7 +335,7 @@ PanelWindow {
                 font.family: "Geist"
                 font.pixelSize: 15
                 renderType: Text.NativeRendering
-                opacity: root.part(780, 1080, "out")
+                opacity: Lock.covered ? 0 : root.part(780, 1080, "out")
             }
         }
 
