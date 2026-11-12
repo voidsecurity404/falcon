@@ -204,11 +204,86 @@ Singleton {
         if (saved && saved.session === session) {
             ids = saved.ids || [];
         }
+        pipPlace = Saved.get("pipPlace", null);
         loaded = true;
         // A shell reloaded in place left its rules loaded and its toggles set, which this one
         // cannot know. Emptying the file first makes niri forget them.
         writeConfig(null, "");
         writeConfig(null);
+    }
+
+    // Firefox names the window after the interface language.
+    function isPip(title) {
+        return /^(Picture-in-Picture|Картинка в картинке)$/i.test(title || "");
+    }
+
+    // The last place of a picture-in-picture window, so the next one opens there, also after a
+    // reboot. Remembered a moment after it stops moving, not while niri first places it.
+    property var pipPlace: null
+    property double pipSettledAt: 0
+
+    function pipMoved() {
+        if (Date.now() < pipSettledAt)
+            return;
+        for (const id in Niri.windows) {
+            const w = Niri.windows[id];
+            const where = w && w.is_floating && w.layout && w.layout.tile_pos_in_workspace_view;
+            if (!where || !isPip(w.title))
+                continue;
+            const size = w.layout.window_size || w.layout.tile_size || [0, 0];
+            const next = { x: Math.round(where[0]), y: Math.round(where[1]), w: Math.round(size[0]), h: Math.round(size[1]) };
+            const old = pipPlace;
+            if (!old || old.x !== next.x || old.y !== next.y || old.w !== next.w || old.h !== next.h) {
+                pipPlace = next;
+                pipSave.restart();
+            }
+            return;
+        }
+    }
+
+    function placePip(id) {
+        const p = pipPlace;
+        // Ignored while niri and the shell put it in place.
+        pipSettledAt = Date.now() + 900;
+        if (!p || !(p.w > 40) || !(p.h > 40))
+            return;
+        Niri.action("set-window-width", "--id", String(id), String(p.w));
+        Niri.action("set-window-height", "--id", String(id), String(p.h));
+        Niri.action("move-floating-window", "--id", String(id), "-x", String(p.x), "-y", String(p.y));
+        // Once more after the app took the new size, which niri may answer by moving it.
+        pipAgain.windowId = id;
+        pipAgain.restart();
+    }
+
+    Timer {
+        id: pipAgain
+
+        property int windowId: -1
+
+        interval: 350
+        // niri takes the place inside the working area (below the panel's reserved strip) but
+        // reports it in the whole view, so the first move lands off by that strip; it is read
+        // back and corrected by the difference.
+        onTriggered: {
+            const p = root.pipPlace;
+            const w = Niri.windows[windowId];
+            const where = w && w.layout && w.layout.tile_pos_in_workspace_view;
+            if (!p || !where)
+                return;
+            const dx = Math.round(where[0]) - p.x;
+            const dy = Math.round(where[1]) - p.y;
+            if (dx !== 0 || dy !== 0) {
+                root.pipSettledAt = Date.now() + 600;
+                Niri.action("move-floating-window", "--id", String(windowId), "-x", String(p.x - dx), "-y", String(p.y - dy));
+            }
+        }
+    }
+
+    Timer {
+        id: pipSave
+
+        interval: 800
+        onTriggered: Saved.set("pipPlace", root.pipPlace)
     }
 
     function toggle() {
@@ -219,7 +294,7 @@ Singleton {
             ids = ids.filter(x => x !== id);
             // Back into its place among the columns. A picture-in-picture window stays floating.
             const w = Niri.windows[id];
-            if (!w || w.title !== "Picture-in-Picture")
+            if (!w || !root.isPip(w.title))
                 Niri.action("move-window-to-tiling", "--id", String(id));
             Toasts.show(Tr.t("Sticky off"), Tr.t("The window stays on this workspace"), "check");
         } else {
@@ -393,6 +468,7 @@ Singleton {
             }
             // A window that turned floating, opened, or closed may start or stop matching the rule.
             root.reconcile();
+            root.pipMoved();
             // The app ids are known only once windows are listed.
             root.writeConfig(null);
         }
@@ -422,8 +498,10 @@ Singleton {
                 root.loadDone();
         }
         function onWindowOpened(window) {
-            if (window.title === "Picture-in-Picture")
+            if (root.isPip(window.title)) {
+                root.placePip(window.id);
                 root.add(window.id);
+            }
         }
         function onWindowGone(id) {
             root.ids = root.ids.filter(x => x !== id);

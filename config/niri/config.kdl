@@ -15,6 +15,8 @@ include "generated/zen.kdl"
 include optional=true "generated/sticky.kdl"
 // Written by game mode (bin/falcon-game): animations and shadows off. Empty when off.
 include optional=true "generated/game.kdl"
+// Written by falcon-session while windows come back after login: animations off. Empty otherwise.
+include optional=true "generated/restore.kdl"
 
 // O'z qo'shimchalaringiz shu faylga yoziladi, yangilanishda tegilmaydi.
 include "cfg/user.kdl"

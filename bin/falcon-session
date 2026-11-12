@@ -31,6 +31,17 @@ FLAG = Path(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}") / "
 COVER = "falcon-cover"
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
 COVER_DIR = CONFIG / "quickshell/falcon/cover"
+# While windows come back niri's animations are off, so each window lands at once in its place
+# and size and nothing is still sliding when the cover lifts. Included optionally by config.kdl.
+QUIET = CONFIG / "niri/generated/restore.kdl"
+REPORT = STATE / "restore.log"
+DEBUG = bool(os.environ.get("FALCON_SESSION_DEBUG"))
+T0 = time.monotonic()
+
+
+def debug(*words):
+    if DEBUG:
+        print(f"{time.monotonic() - T0:6.3f}", *words, file=sys.stderr)
 SKIP = {"org.quickshell", "falcon-scratch", "falcon-tool", "com.gabm.satty"}
 # Folder option of each terminal. Their windows are separate processes, so the next can start at once.
 TERMINALS = {"kitty": "--directory", "alacritty": "--working-directory", "foot": "--working-directory"}
@@ -43,10 +54,15 @@ TRANSIENT_TITLES = {"picture-in-picture", "picture in picture", "картинк�
 
 SAVE_DELAY = 1.5        # after a change, so a burst of events writes once
 SAVE_EVERY = 30         # also catches a terminal changing folder, which sends no event
-SETTLE = 2.0            # an app may open several windows itself, such as a browser restoring its own
+SETTLE = 1.5            # a browser restores its own windows, so more of them may still come
+SETTLE_OTHER = 0.8      # other apps open one window per start, so the next start follows soon
+BROWSERS = {"firefox", "firefox-esr", "librewolf", "zen", "zen-browser", "floorp", "waterfox", "chromium",
+            "chrome", "google-chrome", "google-chrome-stable", "brave", "brave-browser", "vivaldi", "vivaldi-stable",
+            "opera", "thorium-browser", "microsoft-edge", "microsoft-edge-stable", "telegram", "Telegram"}
 COVER_WAIT = 2          # a cover that does not come up must not hold the windows back
 POLL = 0.05             # how often new windows are looked for while restoring
-LAUNCH_WAIT = 20        # a launch that opened nothing by then is given up
+LAUNCH_WAIT = 12        # a first launch that opened nothing by then is given up
+RELAUNCH_WAIT = 1.8     # a second launch for more windows of a running app answers fast or not at all
 RESTORE_WAIT = 60
 IGNORED_EVENTS = {"KeyboardLayoutsChanged", "KeyboardLayoutSwitched", "OverviewOpenedOrClosed", "ConfigLoaded",
                   "ScreenshotCaptured", "CastsChanged", "CastStartedOrChanged", "CastStopped", "WindowUrgencyChanged",
@@ -120,8 +136,11 @@ def action(*args):
         request = REQUESTS[args[0]](options, words)
     except (KeyError, IndexError, ValueError):
         request = None
+    t = time.monotonic()
     if request and ask({"Action": request}) == "Handled":
+        debug("action", args[0], f"{(time.monotonic() - t) * 1000:.1f} ms")
         return
+    debug("fallback", args)
     subprocess.run(["niri", "msg", "action", *args], capture_output=True, check=False)
 
 
@@ -233,6 +252,8 @@ def shutting_down():
 
 def watch():
     STATE.mkdir(parents=True, exist_ok=True)
+    # A restore that was killed midway must not leave the animations off.
+    quiet(False)
     lock = (STATE / "session.lock").open("w")
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -333,8 +354,13 @@ class Group:
         self.command = command
         self.items = []
         self.launched = 0.0
+        self.launches = 0
         self.arrived = 0.0
         self.got_window = False
+
+    @property
+    def browser(self):
+        return bool(self.items) and self.items[0].get("exe") in BROWSERS
 
     @property
     def terminal(self):
@@ -346,6 +372,7 @@ class Group:
         for item in (self.items if self.terminal else self.items[:1]):
             action("spawn", "--", *(launch_command(item) or self.command))
         self.launched = now
+        self.launches += 1
         self.got_window = False
 
     def due(self, now):
@@ -358,8 +385,8 @@ class Group:
                 self.items.clear()
             return False
         if self.got_window:
-            return now - self.arrived >= SETTLE
-        return now - self.launched >= LAUNCH_WAIT
+            return now - self.arrived >= (SETTLE if self.browser else SETTLE_OTHER)
+        return now - self.launched >= (LAUNCH_WAIT if self.launches == 1 else RELAUNCH_WAIT)
 
 
 def pick(group, window):
@@ -418,6 +445,37 @@ def place(bound, ranks, outputs):
             spaces = None
 
 
+def quiet(on):
+    """Turns niri's animations off for the restore, or back to the user's own."""
+    try:
+        if on:
+            QUIET.parent.mkdir(parents=True, exist_ok=True)
+            QUIET.write_text("// restore: written by falcon-session while windows come back\nanimations {\n    off\n}\n")
+        elif QUIET.exists() and QUIET.read_text():
+            QUIET.write_text("")
+        else:
+            return
+    except OSError:
+        return
+    ask({"Action": {"LoadConfigFile": {}}})
+
+
+def fix_floating(bound):
+    """niri takes a floating place inside the working area (under the panel's reserved strip) but
+    reports it in the whole view, so a window lands off by that strip; each one is read back and
+    moved by the difference."""
+    current = {w["id"]: w for w in niri_json("windows")}
+    for window_id, item in bound.items():
+        if not item.get("floating") or "x" not in item or window_id not in current:
+            continue
+        where = (current[window_id].get("layout") or {}).get("tile_pos_in_workspace_view")
+        if not where:
+            continue
+        dx, dy = round(where[0] - item["x"]), round(where[1] - item["y"])
+        if dx or dy:
+            action("move-floating-window", "--id", window_id, "-x", int(item["x"] - dx), "-y", int(item["y"] - dy))
+
+
 def float_window(window_id, item):
     action("move-window-to-floating", "--id", window_id)
     if item.get("width") and item.get("height"):
@@ -427,11 +485,18 @@ def float_window(window_id, item):
         action("move-floating-window", "--id", window_id, "-x", int(item["x"]), "-y", int(item["y"]))
 
 
-def arrange_columns(bound, ranks):
-    """Rebuilds columns of each workspace. Moving a column needs focus, so a right one is left alone."""
+def space_of(item, ranks):
+    return item.get("output", ""), ranks[item.get("output", ""), item.get("workspace", 1)]
+
+
+def arrange_columns(bound, ranks, only=None):
+    """Rebuilds columns of each workspace (or of the workspaces in `only`). Moving a column needs
+    focus, which costs a frame each, so windows already in their place are left alone."""
     current = {w["id"]: w for w in niri_json("windows")}
     spaces = {}
     for window_id, item in bound.items():
+        if only is not None and space_of(item, ranks) not in only:
+            continue
         if not item.get("floating") and window_id in current:
             spaces.setdefault((item.get("output", ""), ranks[item.get("output", ""), item.get("workspace", 1)]), []).append((window_id, item))
     for members in spaces.values():
@@ -452,6 +517,9 @@ def arrange_columns(bound, ranks):
             continue
         for window_id, _ in members:
             column, row = wanted[window_id]
+            here = next((w for w in niri_json("windows") if w["id"] == window_id), None)
+            if here and tuple((here.get("layout") or {}).get("pos_in_scrolling_layout") or [0, 0]) == (column, row):
+                continue
             action("focus-window", "--id", window_id)
             if row == 1:
                 action("move-column-to-index", column)
@@ -460,7 +528,7 @@ def arrange_columns(bound, ranks):
                 action("consume-or-expel-window-left", "--id", window_id)
 
 
-def fix_sizes(bound, outputs):
+def fix_sizes(bound, outputs, only=None, ranks=None):
     """Returns whether any size had to change."""
     changed = False
     current = {w["id"]: w for w in niri_json("windows")}
@@ -470,6 +538,8 @@ def fix_sizes(bound, outputs):
         columns[key] = columns.get(key, 0) + 1
     for window_id, item in bound.items():
         if item.get("floating") or item.get("fullscreen") or window_id not in current or not item.get("width"):
+            continue
+        if only is not None and space_of(item, ranks) not in only:
             continue
         layout = current[window_id].get("layout") or {}
         tile = layout.get("window_size") or layout.get("tile_size") or [0, 0]
@@ -636,28 +706,55 @@ def bring_back_saved(force):
         return False
     if not isinstance(items, list) or not items:
         return False
-    # Set before anything slow, so the shell finds it when it starts.
-    groups, wanted = plan(items)
-    if not wanted:
+    started = time.monotonic()
+    entries = [i for i in map(clean, items) if i]
+    if not entries:
         return False
+    # The cover starts first and comes up while the plan is made.
     try:
         FLAG.write_text(str(time.time()))
     except OSError:
         pass
     cover = open_cover()
+    quiet(True)
+    back = 0
+    covered = lifted = None
+    groups, wanted = {}, []
     try:
-        wait_for_cover(cover)
-        bring_back(groups, wanted)
+        groups, wanted = plan(entries)
+        if wanted:
+            debug("planned")
+            gate = CoverGate(cover)
+            back = bring_back(groups, wanted, gate)
+            covered = gate.up_at
+            lifted = time.monotonic()
     finally:
+        quiet(False)
         FLAG.unlink(missing_ok=True)
         close_cover(cover)
-    return True
+        report(started, covered, lifted, len(wanted), back, groups)
+    return bool(wanted)
+
+
+def report(started, covered, lifted, wanted, back, groups):
+    """One line per restore in restore.log, to judge the speed after a real boot: the time from
+    the start until the cover starts to lift, with every window in place."""
+    missing = sum(len(g.items) for g in groups.values())
+    line = (f"{time.strftime('%Y-%m-%d %H:%M:%S')} restored {back}/{wanted} windows in "
+            f"{((lifted or time.monotonic()) - started):.2f} s (cover up after {((covered or started) - started):.2f} s)"
+            + (f", {missing} not back" if missing else "") + "\n")
+    try:
+        old = REPORT.read_text().splitlines(keepends=True)[-29:] if REPORT.exists() else []
+        REPORT.write_text("".join(old) + line)
+    except OSError:
+        pass
+    print(line.strip(), file=sys.stderr)
 
 
 def plan(items):
     groups = {}
     wanted = []
-    for item in map(clean, items):
+    for item in items:
         if not item:
             continue
         command = launch_command(item)
@@ -668,10 +765,37 @@ def plan(items):
     return groups, wanted
 
 
-def bring_back(groups, wanted):
+class CoverGate:
+    """Whether the cover is on screen yet, looked at without waiting. Slow apps such as browsers
+    start at once, since they take over a second to show a window; terminals open a window in a
+    fraction of that, so they wait for the cover, which keeps any window from showing before it."""
+
+    def __init__(self, cover):
+        self.cover = cover
+        self.start = time.monotonic()
+        self.up_at = None if cover else self.start
+
+    def up(self):
+        if self.up_at is not None:
+            return True
+        now = time.monotonic()
+        if self.cover.poll() is not None or now - self.start >= COVER_WAIT:
+            self.up_at = now
+        else:
+            try:
+                if any(layer.get("namespace") == COVER for layer in niri_json("layers")):
+                    self.up_at = now
+                    debug("cover up")
+            except (OSError, ValueError, subprocess.CalledProcessError):
+                pass
+        return self.up_at is not None
+
+
+def bring_back(groups, wanted, gate=None):
     ranks = workspace_ranks(wanted)
     outputs = niri_json("outputs")
     bound = {}
+    settled = set()
     start = time.monotonic()
     while time.monotonic() - start < RESTORE_WAIT and any(g.items for g in groups.values()):
         now = time.monotonic()
@@ -684,6 +808,7 @@ def bring_back(groups, wanted):
             if not group or not group.items:
                 continue
             item = pick(group, window)
+            debug("window", app, repr(window.get("title"))[:40])
             bound[window["id"]] = item
             group.arrived = now
             group.got_window = True
@@ -692,27 +817,56 @@ def bring_back(groups, wanted):
                 float_window(window["id"], item)
         if arrived:
             place(bound, ranks, outputs)
+            # A workspace whose windows are all in is put in order now, while slower apps start.
+            waiting = {space_of(i, ranks) for g in groups.values() for i in g.items}
+            ready = {space_of(i, ranks) for i in bound.values()} - waiting - settled
+            if ready:
+                arrange_columns(bound, ranks, ready)
+                fix_sizes(bound, outputs, ready, ranks)
+                settled |= ready
+                debug("settled early", sorted(ready))
         for group in groups.values():
+            if group.terminal and not group.launched and gate and not gate.up():
+                continue
             if group.due(now):
+                # A browser brings back its own windows; starting it again would only open an
+                # empty one, so whatever it did not bring back is let go.
+                if group.got_window and group.browser:
+                    debug("browser done", group.command, len(group.items))
+                    group.items.clear()
+                    continue
                 # A launch that opened nothing costs that window, not the rest of the app.
                 if group.launched and not group.got_window:
+                    # The app is up but opens no more windows (a dialog, a viewer, a single-window
+                    # app), so the rest of its saved windows cannot come back either.
+                    if group.launches > 1:
+                        debug("gave up", group.command, len(group.items))
+                        group.items.clear()
+                        continue
                     group.items.pop(0)
                     if not group.items:
                         continue
+                debug("launch", group.command)
                 group.launch(now)
         if not any(g.items for g in groups.values()):
             break
         time.sleep(POLL)
 
-    # Sizes settle only after the app answers, so they get a second look.
-    time.sleep(0.1)
+    debug("all windows in")
+    # Sizes settle only after the app answers, so they get a second look. With animations off
+    # nothing has to finish moving, so the waits are only for the apps' answers.
+    time.sleep(0.06)
     arrange_columns(bound, ranks)
+    debug("columns")
     if fix_sizes(bound, outputs):
-        time.sleep(0.12)
+        time.sleep(0.1)
         fix_sizes(bound, outputs)
+    debug("sizes")
+    fix_floating(bound)
     restore_focus(bound, outputs)
-    # The last focus change scrolls the view, which should end before the cover lifts.
-    time.sleep(0.12)
+    time.sleep(0.05)
+    debug("arranged")
+    return len(bound)
 
 
 def main():
