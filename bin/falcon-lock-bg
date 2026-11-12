@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Writes the lock screen background: the wallpaper blurred and darkened once, so hyprlock and the
+# shell's lock animation show exactly the same picture and the hand-over between them is seamless.
+#   falcon-lock-bg [IMAGE]   IMAGE defaults to the current wallpaper; does nothing when up to date
+set -euo pipefail
+
+state="${XDG_STATE_HOME:-$HOME/.local/state}/falcon"
+src="$(readlink -f "${1:-$state/wallpaper}" 2>/dev/null || true)"
+out="$state/lock-bg.jpg"
+stamp="$state/lock-bg.src"
+[[ -n "$src" && -f "$src" ]] || exit 0
+if [[ -f "$out" && "$(cat "$stamp" 2>/dev/null)" == "$src" && "$out" -nt "$src" ]]; then
+    exit 0
+fi
+tmp="$out.$$.jpg"
+# Small, blurred, then back to screen size: smooth like hyprlock's blur and far faster.
+magick "$src[0]" -resize 1920x1080^ -resize 20% -blur 0x9 -resize 500% \
+    -evaluate multiply 0.72 -quality 92 "$tmp"
+mv -f "$tmp" "$out"
+printf '%s\n' "$src" >"$stamp"

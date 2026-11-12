@@ -278,7 +278,8 @@ ACTIONS = {
     "wallpapers": ("Wallpaper and color", "spawn " + desk("wallpapers"), False),
     "settings": ("Settings", "spawn " + desk("settings"), False),
     "zen": ("Focus mode", f'spawn "{SCRIPTS}falcon-zen"', False),
-    "lock": ("Lock screen", 'spawn "loginctl" "lock-session"', False),
+    # The shell plays its locking show first; without the shell it locks at once.
+    "lock": ("Lock screen", 'spawn-sh "qs -c falcon ipc call desk lockAnimated || loginctl lock-session"', False),
     "overview": ("Overview", "toggle-overview", False),
     "scratch": ("Scratchpad terminal", f'spawn "{SCRIPTS}falcon-scratch"', False),
     "sticky": ("Sticky window", "spawn " + desk("sticky"), False),

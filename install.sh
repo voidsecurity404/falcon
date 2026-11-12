@@ -86,6 +86,7 @@ targets=(
     .local/bin/falcon-session
     .local/bin/falcon-region
     .local/bin/falcon-region-windows
+    .local/bin/falcon-lock-bg
     .local/bin/falcon-lens
     .local/bin/falcon-image-translate
     .local/bin/falcon-backup

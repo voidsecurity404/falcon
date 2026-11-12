@@ -18,7 +18,7 @@ Singleton {
             name: Tr.t("Lock screen"),
             keywords: "lock блокировка",
             confirm: false,
-            run: () => Quickshell.execDetached(["loginctl", "lock-session"])
+            run: () => Lock.animate()
         },
         {
             id: "sleep",

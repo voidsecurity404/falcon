@@ -40,6 +40,9 @@ ShellRoot {
                 RegionSelector {
                     screen: perScreen.modelData
                 }
+                LockIntro {
+                    screen: perScreen.modelData
+                }
             }
         }
     }
@@ -64,6 +67,10 @@ ShellRoot {
 
         function lock(): void {
             Lock.lock();
+        }
+        // Mod+L: the locking show, then hyprlock.
+        function lockAnimated(): void {
+            Lock.animate();
         }
         function lockPreview(): void {
             Lock.preview = !Lock.preview;
