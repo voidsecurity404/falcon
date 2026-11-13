@@ -73,11 +73,12 @@ def store(memory, monitors, connected):
         who = identity(output)
         if memory["owners"].get(name) != who:
             continue
-        if monitors.get(name):
-            profile = json.loads(json.dumps(monitors[name]))
-            # Forced on while alone. "Off when docked" still holds for the next time a display is plugged in.
-            if len(connected) == 1 and (memory["profiles"].get(who) or {}).get("off"):
-                profile["off"] = True
+        profile = json.loads(json.dumps(monitors.get(name) or {}))
+        # Forced on while alone. "Off when docked" still holds for the next time a display is
+        # plugged in, also when "off" was its only setting and nothing is left on the port.
+        if len(connected) == 1 and (memory["profiles"].get(who) or {}).get("off"):
+            profile["off"] = True
+        if profile:
             memory["profiles"][who] = profile
         else:
             memory["profiles"].pop(who, None)
