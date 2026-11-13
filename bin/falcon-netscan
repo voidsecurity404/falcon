@@ -18,6 +18,7 @@ tor, bt, hash, logins. Nothing here needs root, and nothing is sent anywhere exc
 import base64
 import codecs
 import concurrent.futures as cf
+import datetime
 import hashlib
 import ipaddress
 import json
@@ -538,13 +539,27 @@ def tool_hash(_arg):
     return result("Encode and hash", tr("Clipboard: {clip}", clip=shown.replace("\n", " ")), ["Result", "Kind"], rows)
 
 
+def login_time(fields):
+    """who prints "Nov 13 09:59" in the C locale, or "2026-11-13 09:59": both become "13.11 09:59"."""
+    words = [w for w in fields if not w.startswith("(")]
+    # The year is added so Feb 29 parses too.
+    year = str(datetime.date.today().year)
+    for fmt, count, extra in (("%Y %b %d %H:%M", 3, [year]), ("%Y-%m-%d %H:%M", 2, [])):
+        try:
+            when = datetime.datetime.strptime(" ".join(extra + words[:count]), fmt)
+        except ValueError:
+            continue
+        return when.strftime("%d.%m %H:%M")
+    return " ".join(words)
+
+
 def tool_logins(_arg):
     rows = []
     for line in sh("who").splitlines():
         f = line.split()
         if len(f) >= 2:
             source = f[-1] if f[-1].startswith("(") else ""
-            rows.append([f[0], f[1], " ".join(f[2:4]), source.strip("()") or tr("local")])
+            rows.append([f[0], f[1], login_time(f[2:5]), source.strip("()") or tr("local")])
     sshd = sh("systemctl", "is-active", "sshd").strip()
     failed = 0
     log = sh("journalctl", "-q", "--since", "-24h", "-t", "sshd", "-t", "sudo", "-t", "su",

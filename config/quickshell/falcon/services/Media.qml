@@ -12,7 +12,19 @@ Singleton {
         const list = players;
         return list.find(p => p.isPlaying) || (list.length > 0 ? list[0] : null);
     }
-    readonly property real progress: player && player.lengthSupported && player.length > 0 ? player.position / player.length : 0
+    // A player going away briefly reports undefined position and length.
+    readonly property real progress: {
+        const p = player;
+        try {
+            if (!p || !p.lengthSupported)
+                return 0;
+            const length = Number(p.length) || 0;
+            const position = Number(p.position) || 0;
+            return length > 0 ? Math.max(0, Math.min(1, position / length)) : 0;
+        } catch (e) {
+            return 0;
+        }
+    }
     readonly property string art: player ? player.trackArtUrl : ""
     // Browsers put the artist into the title as well: "Artist - Song".
     readonly property string title: {

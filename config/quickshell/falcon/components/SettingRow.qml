@@ -378,12 +378,15 @@ Item {
                         Settings.set(root.item.key, next);
                 }
 
+                // Too long to fit while not being edited: the label below shows it shortened instead.
+                readonly property bool overflows: !activeFocus && !field.secret && contentWidth > width - leftPadding - rightPadding
+
                 anchors.fill: parent
                 leftPadding: 11
                 rightPadding: 11
                 verticalAlignment: TextInput.AlignVCenter
                 clip: true
-                color: Theme.text
+                color: overflows ? "transparent" : Theme.text
                 font.family: Theme.mono
                 font.pixelSize: 13
                 selectByMouse: true
@@ -409,6 +412,18 @@ Item {
                             input.text = String(root.value);
                     }
                 }
+            }
+            // A long path cut in the middle of a word looked broken: keep its end, mark the cut.
+            Text {
+                x: 11
+                width: parent.width - 22
+                anchors.verticalCenter: parent.verticalCenter
+                visible: input.overflows
+                text: input.text
+                elide: Text.ElideLeft
+                color: Theme.text
+                font.family: Theme.mono
+                font.pixelSize: 13
             }
             Label {
                 x: 11

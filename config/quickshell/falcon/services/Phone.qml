@@ -22,7 +22,8 @@ Singleton {
     }
     readonly property bool connected: !!device && device.paired && device.reachable
     readonly property var notifications: connected && device.notifications ? device.notifications : []
-    readonly property var battery: connected ? device.battery || null : null
+    // kdeconnectd says -1 before the phone has sent its charge: that is no reading yet.
+    readonly property var battery: connected && device.battery && device.battery.charge >= 0 ? device.battery : null
     readonly property var media: connected ? device.media || null : null
     readonly property var conversations: connected && device.conversations ? device.conversations : []
     readonly property var pairRequests: devices.filter(d => d.pairRequestedByPeer)

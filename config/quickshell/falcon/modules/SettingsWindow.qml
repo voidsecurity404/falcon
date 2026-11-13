@@ -410,7 +410,7 @@ LazyLoader {
                             {
                                 key: "panel.netValues",
                                 label: Tr.t("Values beside network icons"),
-                                hint: Tr.t("Off: icons only, values in the menu that opens when you point at them"),
+                                hint: Tr.t("Off: icons only, values in the menu a click opens"),
                                 type: "toggle"
                             },
                             {

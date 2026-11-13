@@ -1020,15 +1020,14 @@ GlassIsland {
             onClicked: Ui.togglePopup("phone")
 
             // On the button itself: inside its content it would change the button's width.
+            // A count starts at the icon's middle and grows outward, so it never hides the icon.
             Rectangle {
                 parent: phoneButton
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.rightMargin: Phone.unread > 0 ? 0 : 5
-                anchors.topMargin: Phone.unread > 0 ? 0 : 5
+                x: Phone.unread > 0 ? Math.round(phoneButton.width * 0.5) : phoneButton.width - width - 5
+                y: Phone.unread > 0 ? 0 : 5
                 visible: Phone.connected
-                width: Phone.unread > 0 ? Math.max(14, phoneCount.implicitWidth + 6) : 6
-                height: Phone.unread > 0 ? 14 : 6
+                width: Phone.unread > 0 ? Math.max(13, phoneCount.implicitWidth + 6) : 6
+                height: Phone.unread > 0 ? 13 : 6
                 radius: height / 2
                 color: Phone.unread > 0 ? Theme.accent : Theme.good
 
@@ -1129,11 +1128,12 @@ GlassIsland {
                 readonly property int count: Toasts.unread + Phone.unread
 
                 visible: count > 0
-                x: bell.width - width + 1
-                y: 1
-                width: Math.max(15, badgeLabel.implicitWidth + 7)
-                height: 15
-                radius: 7.5
+                // Grows to the right from the icon's middle: a two-digit count used to cover the bell.
+                x: Math.round(bell.width * 0.5)
+                y: 0
+                width: Math.max(13, badgeLabel.implicitWidth + 6)
+                height: 13
+                radius: 6.5
                 color: Theme.error
 
                 Label {
@@ -1141,7 +1141,7 @@ GlassIsland {
 
                     anchors.centerIn: parent
                     text: parent.count > 99 ? "99+" : parent.count
-                    size: 10
+                    size: 9
                     font.weight: Font.Bold
                     color: Theme.pill
                 }

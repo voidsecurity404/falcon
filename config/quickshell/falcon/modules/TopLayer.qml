@@ -221,6 +221,14 @@ PanelWindow {
             radius: notifications.radius
         }
         Region {
+            item: trayMenu.visible ? trayMenu : null
+            radius: trayMenu.radius
+        }
+        Region {
+            item: claudePanel.visible ? claudePanel : null
+            radius: claudePanel.radius
+        }
+        Region {
             item: phoneMenu.visible ? phoneMenu : null
             radius: phoneMenu.radius
         }
@@ -450,12 +458,16 @@ PanelWindow {
     }
 
     TrayMenu {
+        id: trayMenu
+
         x: root.under(["trayRow"], width, "right", root.layoutKey)
         y: root.popupTop
         shown: root.panelHere && Ui.popup === "tray"
     }
 
     ClaudePanel {
+        id: claudePanel
+
         x: root.under(["claude"], width, "right", root.layoutKey)
         y: root.popupTop
         shown: root.panelHere && Ui.popup === "claude"

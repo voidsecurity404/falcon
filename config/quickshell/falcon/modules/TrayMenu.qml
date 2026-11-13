@@ -39,8 +39,20 @@ Rectangle {
 
     width: 300
     height: column.implicitHeight + 16
-    radius: 15
-    color: Theme.pill
+    radius: 18
+    // The same glass as the other menus under the bar, dark enough to read over a white window.
+    border.width: 1
+    border.color: Theme.panelEdge
+    gradient: Gradient {
+        GradientStop {
+            position: 0
+            color: Qt.alpha(Theme.glassBase, Math.max(0.72, Theme.glassOpacity))
+        }
+        GradientStop {
+            position: 1
+            color: Qt.alpha(Theme.glassBase, Math.max(0.6, Theme.glassOpacity))
+        }
+    }
     visible: shown
     onShownChanged: {
         if (!shown)

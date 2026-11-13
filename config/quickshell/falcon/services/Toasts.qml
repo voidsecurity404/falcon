@@ -83,7 +83,7 @@ Singleton {
             return;
         enqueue({
             title: title,
-            sub: String(sub || "").replace(/\s+/g, " ").trim(),
+            sub: plain(sub).replace(/\s+/g, " ").trim(),
             icon: icon || "bell",
             image: image || "",
             value: -1,
@@ -250,7 +250,13 @@ Singleton {
     }
 
     function bodyOf(n) {
-        return n.body.replace(/<[^>]*>/g, "").replace(/\s+/g, " ");
+        return plain(n.body).replace(/\s+/g, " ");
+    }
+
+    // Notification text may carry markup (the phone's come with <br/>): line breaks stay, tags
+    // and the common entities become plain text.
+    function plain(text) {
+        return String(text || "").replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]*>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&");
     }
 
     // An app can replace a notification still on the screen, and the server then reports no new

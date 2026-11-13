@@ -141,30 +141,41 @@ LazyLoader {
             onClicked: Ui.popup = ""
         }
 
+        // Glass like the app menu. Only the opacity animates: the blur region follows the card's
+        // own size, so a scale would leave a blurred rim around it.
+        BackgroundEffect.blurRegion: Region {
+            item: card.opacity > 0.3 ? card : null
+            radius: card.radius
+        }
+
         Rectangle {
+            id: card
+
             anchors.horizontalCenter: parent.horizontalCenter
             y: Math.round(parent.height * 0.17)
             width: Math.min(680, parent.width - 40)
             height: column.implicitHeight
-            radius: 17
-            color: Theme.pill
+            radius: 20
+            border.width: 1
+            border.color: Theme.panelEdge
+            // Dark enough for its text over a white window, whatever the panel opacity is.
+            gradient: Gradient {
+                GradientStop {
+                    position: 0
+                    color: Qt.alpha(Theme.glassBase, Math.max(0.74, Theme.glassOpacity))
+                }
+                GradientStop {
+                    position: 1
+                    color: Qt.alpha(Theme.glassBase, Math.max(0.64, Theme.glassOpacity))
+                }
+            }
 
             opacity: 0
-            scale: 0.98
-            Component.onCompleted: {
-                opacity = 1;
-                scale = 1;
-            }
+            Component.onCompleted: opacity = 1
 
             Behavior on opacity {
                 NumberAnimation {
                     duration: 150
-                }
-            }
-            Behavior on scale {
-                NumberAnimation {
-                    duration: 200
-                    easing.type: Easing.OutCubic
                 }
             }
 

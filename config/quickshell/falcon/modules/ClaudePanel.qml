@@ -2,11 +2,9 @@ import QtQuick
 import qs.components
 import qs.services
 
-// Opens from the limit indicator in the status pill.
-Rectangle {
+// Opens from the Claude part of the bar: the same glass menu as the others.
+Flyout {
     id: root
-
-    property bool shown: false
 
     component Meter: Column {
         id: meter
@@ -66,38 +64,13 @@ Rectangle {
         }
     }
 
-    width: 320
-    height: content.implicitHeight + 36
-    radius: 17
-    color: Theme.pill
-    opacity: shown ? 1 : 0
-    scale: shown ? 1 : 0.94
-    transformOrigin: Item.TopRight
-    visible: opacity > 0
-
-    Behavior on opacity {
-        NumberAnimation {
-            duration: 170
-        }
-    }
-    Behavior on scale {
-        NumberAnimation {
-            duration: 300
-            easing.type: Easing.BezierSpline
-            easing.bezierCurve: [0.3, 1.3, 0.4, 1, 1, 1]
-        }
-    }
-
-    MouseArea {
-        anchors.fill: parent
-    }
+    panelWidth: 320
+    padding: 18
 
     Column {
         id: content
 
-        x: 18
-        y: 18
-        width: parent.width - 36
+        width: parent.width
         spacing: 18
 
         Label {

@@ -120,8 +120,8 @@ Rectangle {
         required property var modelData
         required property int index
         readonly property var reading: NetTools.data[modelData.id] || null
-        readonly property string state: reading ? reading.state || "" : ""
-        readonly property color tone: NetTools.stateColor(state)
+        readonly property string readingState: reading ? reading.state || "" : ""
+        readonly property color tone: NetTools.stateColor(readingState)
 
         // A tile left alone in the last row takes the whole row.
         readonly property bool alone: index === NetTools.tools.length - 1 && NetTools.tools.length % 4 === 1
@@ -129,7 +129,7 @@ Rectangle {
         width: alone ? home.width : (home.width - 10 * 3) / 4
         height: 86
         radius: 22
-        color: state === "bad" || state === "warn" ? Qt.alpha(tone, tileArea.containsMouse ? 0.2 : 0.12) : Qt.alpha(Theme.text, tileArea.containsMouse ? 0.12 : 0.06)
+        color: readingState === "bad" || readingState === "warn" ? Qt.alpha(tone, tileArea.containsMouse ? 0.2 : 0.12) : Qt.alpha(Theme.text, tileArea.containsMouse ? 0.12 : 0.06)
         scale: tileArea.pressed ? 0.95 : 1
         opacity: 0
         transform: Translate {
@@ -198,13 +198,13 @@ Rectangle {
             width: 30
             height: 30
             radius: 15
-            color: Qt.alpha(tile.state !== "" ? tile.tone : Theme.text, 0.14)
+            color: Qt.alpha(tile.readingState !== "" ? tile.tone : Theme.text, 0.14)
 
             Icon {
                 anchors.centerIn: parent
                 name: tile.modelData.icon
                 size: 16
-                color: tile.state !== "" ? tile.tone : Theme.text
+                color: tile.readingState !== "" ? tile.tone : Theme.text
             }
         }
         // A reading still on its way.
@@ -244,11 +244,11 @@ Rectangle {
             y: 63
             width: parent.width - 24
             // Bluetooth and the clipboard are read only when their table opens.
-            text: tile.reading ? (tile.reading.error ? "—" : tile.reading.badge || "→") : tile.modelData.every > 0 ? "…" : Tr.t("open")
+            text: tile.reading ? (tile.reading.error ? "—" : tile.reading.badge || "→") : tile.modelData.every > 0 ? "…" : Tr.t("Open")
             size: 12
             font.family: Theme.mono
             font.weight: Font.DemiBold
-            color: tile.state !== "" ? tile.tone : Theme.text
+            color: tile.readingState !== "" ? tile.tone : Theme.text
             elide: Text.ElideRight
         }
         MouseArea {
@@ -433,7 +433,7 @@ Rectangle {
                     x: 46
                     width: parent.width - x - 16
                     anchors.verticalCenter: parent.verticalCenter
-                    text: !root.info ? (root.tool === "lan" ? Tr.t("Looking for devices…") : root.tool === "bt" ? Tr.t("Scanning for 6 seconds…") : Tr.t("Reading…")) : root.info.error || root.info.summary || ""
+                    text: !root.info ? (root.tool === "lan" ? Tr.t("Looking for devices…") : root.tool === "bt" ? Tr.t("Scanning for 6 seconds…") : Tr.t("Reading…")) : Tr.capitalized(root.info.error || root.info.summary || "")
                     size: 13
                     font.weight: Font.Medium
                     color: root.info && root.info.error ? Theme.error : Theme.text
@@ -576,7 +576,7 @@ Rectangle {
                     spacing: 6
 
                     Label {
-                        text: NetTools.probing ? Tr.t("Checking the ports of {ip}…").replace("{ip}", NetTools.probeIp) : NetTools.probe ? (NetTools.probe.error || NetTools.probe.summary) : ""
+                        text: NetTools.probing ? Tr.t("Checking the ports of {ip}…").replace("{ip}", NetTools.probeIp) : NetTools.probe ? Tr.capitalized(NetTools.probe.error || NetTools.probe.summary || "") : ""
                         size: 12
                         font.weight: Font.DemiBold
                     }

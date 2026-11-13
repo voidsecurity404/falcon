@@ -225,14 +225,14 @@ Column {
                     id: bigClip
 
                     // 24 columns of 9 px and 14 rows of 19 px, scaled to the preview's lines.
-                    readonly property string clip: root.clipOf(root.logo, root.animation)
+                    readonly property string clipFile: root.clipOf(root.logo, root.animation)
 
                     height: 14 * term.lineHeight
                     width: Math.round(216 * height / 266)
 
                     Image {
                         anchors.fill: parent
-                        visible: bigClip.clip === ""
+                        visible: bigClip.clipFile === ""
                         source: root.stillOf(root.logo)
                         smooth: true
                         mipmap: true
@@ -240,8 +240,8 @@ Column {
                     }
                     AnimatedImage {
                         anchors.fill: parent
-                        visible: bigClip.clip !== ""
-                        source: bigClip.clip
+                        visible: bigClip.clipFile !== ""
+                        source: bigClip.clipFile
                         playing: root.live
                         smooth: true
                         mipmap: true
@@ -265,7 +265,7 @@ Column {
             }
 
             Label {
-                visible: root.clipsBusy && bigClip.clip === "" && root.stillOf(root.logo) === ""
+                visible: root.clipsBusy && bigClip.clipFile === "" && root.stillOf(root.logo) === ""
                 anchors.centerIn: parent
                 text: Tr.t("Preparing the animations…")
                 color: Qt.alpha(root.sample.foreground, 0.7)
@@ -458,7 +458,7 @@ Column {
 
                     required property var modelData
                     readonly property bool chosen: root.animation === modelData.id
-                    readonly property string clip: root.clipOf(root.logo, modelData.id)
+                    readonly property string clipFile: root.clipOf(root.logo, modelData.id)
 
                     width: (animGrid.width - animGrid.spacing * (animGrid.columns - 1)) / animGrid.columns
                     height: 176
@@ -472,7 +472,7 @@ Column {
                         y: 12
                         height: 116
                         width: Math.round(216 * height / 266)
-                        visible: card.clip === ""
+                        visible: card.clipFile === ""
                         opacity: 0.5
                         source: root.stillOf(root.logo)
                         smooth: true
@@ -484,8 +484,8 @@ Column {
                         y: 12
                         height: 116
                         width: Math.round(216 * height / 266)
-                        visible: card.clip !== ""
-                        source: card.clip
+                        visible: card.clipFile !== ""
+                        source: card.clipFile
                         playing: root.live
                         smooth: true
                         mipmap: true
@@ -528,7 +528,7 @@ Column {
                     }
 
                     Label {
-                        visible: card.clip === "" && root.stillOf(root.logo) === ""
+                        visible: card.clipFile === "" && root.stillOf(root.logo) === ""
                         anchors.horizontalCenter: parent.horizontalCenter
                         y: 60
                         text: "…"

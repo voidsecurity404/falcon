@@ -133,7 +133,7 @@ Item {
                 spacing: 3
 
                 Label {
-                    text: Weather.describe(Weather.code)
+                    text: Tr.capitalized(Weather.describe(Weather.code))
                     size: root.compact ? 14 : 17
                     font.weight: Font.DemiBold
                     font.capitalization: Font.Capitalize
@@ -154,7 +154,7 @@ Item {
         Label {
             visible: !root.large && !root.compact
             y: tempRow.y + tempRow.height - 4
-            text: Weather.describe(Weather.code) + " · " + Tr.t("Feels like") + " " + Weather.feels + "°"
+            text: Tr.capitalized(Weather.describe(Weather.code)) + " · " + Tr.t("Feels like") + " " + Weather.feels + "°"
             width: parent.width
             size: 13
             font.weight: Font.Medium

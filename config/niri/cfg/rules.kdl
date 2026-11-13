@@ -151,6 +151,7 @@ layer-rule {
     match namespace="^falcon-power$"
     match namespace="^falcon-polkit$"
     match namespace="^falcon-keys$"
+    match namespace="^falcon-clipboard$"
     match namespace="^falcon-top$"
     match namespace="^falcon-dock$"
     background-effect {

@@ -1496,7 +1496,7 @@
  "Download": "Загрузка",
  "Upload": "Отдача",
  "Values beside network icons": "Значения рядом с сетевыми значками",
- "Off: icons only, values in the menu that opens when you point at them": "Выкл.: только значки, значения — в меню, которое открывается при наведении",
+ "Off: icons only, values in the menu a click opens": "Выкл.: только значки, значения — в меню, которое открывается по нажатию",
  "Something needs a look: it is marked red": "Что-то требует внимания — отмечено красным",
  "Worth a look: marked yellow": "Стоит проверить — отмечено жёлтым",
  "All quiet": "Всё спокойно",

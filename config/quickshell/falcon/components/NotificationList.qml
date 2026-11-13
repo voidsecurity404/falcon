@@ -397,7 +397,7 @@ Rectangle {
                     Label {
                         width: parent.width
                         visible: text !== ""
-                        text: note.row.sub || ""
+                        text: Toasts.plain(note.row.sub).trim()
                         color: Theme.muted
                         size: 12
                         wrapMode: Text.Wrap
