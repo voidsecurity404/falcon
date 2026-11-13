@@ -449,6 +449,25 @@ PanelWindow {
             }
         }
 
+        // The list scrolls, which nothing showed: rows were simply cut at the bottom edge.
+        Rectangle {
+            readonly property real track: scroller.height - 8
+
+            x: scroller.x + scroller.width + 12
+            y: scroller.y + 4 + scroller.visibleArea.yPosition * track
+            width: 4
+            height: Math.max(24, scroller.visibleArea.heightRatio * track)
+            radius: 2
+            color: Qt.alpha(Theme.text, scroller.moving ? 0.45 : 0.22)
+            visible: scroller.contentHeight > scroller.height + 1
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: 200
+                }
+            }
+        }
+
         Label {
             anchors.centerIn: scroller
             visible: root.filter !== "" && root.laidOut.every(c => c.length === 0)

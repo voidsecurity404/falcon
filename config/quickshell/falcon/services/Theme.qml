@@ -16,8 +16,11 @@ Singleton {
     property color muted: "#a9b1bb"
     property color outline: "#3a4652"
     property color error: "#ffb4ab"
-    readonly property color good: "#8fd6a0"
-    readonly property color warn: "#f1c96b"
+    // Fixed hues that keep their meaning. In light mode they are darker, the pale ones could not
+    // be read on light glass.
+    readonly property bool lightMode: text.hslLightness < 0.5
+    readonly property color good: lightMode ? "#1e7a3c" : "#8fd6a0"
+    readonly property color warn: lightMode ? "#8a5f00" : "#f1c96b"
 
     readonly property string sans: Settings.get("appearance.font", "Geist")
     readonly property string mono: Settings.get("appearance.monoFont", "Geist Mono")
@@ -35,7 +38,9 @@ Singleton {
     // The accent turned around the color wheel, for meters that stand next to each other.
     function hueShift(color, turn) {
         const hue = color.hslHue < 0 ? 0.58 : color.hslHue;
-        return Qt.hsla((hue + turn) % 1, Math.max(0.55, color.hslSaturation), Math.max(0.62, color.hslLightness), 1);
+        // Light enough on dark glass, dark enough on light glass.
+        const lightness = lightMode ? Math.min(0.42, color.hslLightness) : Math.max(0.62, color.hslLightness);
+        return Qt.hsla((hue + turn) % 1, Math.max(0.55, color.hslSaturation), lightness, 1);
     }
 
     readonly property int fontSmall: 12

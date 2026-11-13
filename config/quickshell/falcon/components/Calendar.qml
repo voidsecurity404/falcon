@@ -40,7 +40,7 @@ Column {
         rowSpacing: 3
 
         Repeater {
-            model: [1, 2, 3, 4, 5, 6, 0].map(d => Tr.locale.dayName(d, Locale.ShortFormat))
+            model: [1, 2, 3, 4, 5, 6, 0].map(d => Tr.capitalized(Tr.locale.dayName(d, Locale.ShortFormat)))
 
             delegate: Label {
                 required property string modelData

@@ -9,7 +9,12 @@ Singleton {
     id: root
 
     property string summary: ""
-    readonly property bool hasData: summary !== ""
+    readonly property bool enabled: Settings.get("weather.enabled", true)
+    readonly property bool hasData: enabled && summary !== ""
+    // When the last answer came. A failed request keeps it for a while: a short drop of the
+    // network used to empty the weather everywhere until the next try.
+    property real fetchedAt: 0
+    readonly property int keepMs: 3 * 3600000
     property int temperature: 0
     property int feels: 0
     property int humidity: 0
@@ -79,6 +84,7 @@ Singleton {
         code = c.weather_code;
         isDay = c.is_day === 1;
         summary = temperature + "° " + describe(code);
+        fetchedAt = Date.now();
 
         const h = answer.hourly;
         const hours = [];
@@ -116,7 +122,8 @@ Singleton {
                 try {
                     root.read(JSON.parse(text));
                 } catch (e) {
-                    root.summary = "";
+                    if (Date.now() - root.fetchedAt > root.keepMs)
+                        root.summary = "";
                     retry.restart();
                 }
             }
@@ -128,7 +135,7 @@ Singleton {
         id: retry
 
         interval: 30000
-        onTriggered: fetch.running = true
+        onTriggered: if (root.enabled) fetch.running = true
     }
 
     // A new place or unit asks again at once instead of waiting for the half hour.
@@ -139,13 +146,13 @@ Singleton {
         id: placeChanged
 
         interval: 600
-        onTriggered: if (Settings.get("weather.enabled", true)) fetch.running = true
+        onTriggered: if (root.enabled) fetch.running = true
     }
 
     Timer {
         interval: 1800000
         repeat: true
-        running: Settings.get("weather.enabled", true)
+        running: root.enabled
         triggeredOnStart: true
         onTriggered: fetch.running = true
     }

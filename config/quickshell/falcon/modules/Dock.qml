@@ -22,7 +22,8 @@ PanelWindow {
         for (const key of Object.keys(Niri.windows)) {
             const w = Niri.windows[key];
             const id = w.app_id || "";
-            if (id === "")
+            // The shell's own windows (Settings) are not apps of the dock.
+            if (id === "" || id === "org.quickshell")
                 continue;
             (groups[id] = groups[id] || []).push(w);
         }
@@ -39,7 +40,9 @@ PanelWindow {
                 entry.execute();
             return;
         }
-        const now = windows.findIndex(w => w.is_focused);
+        // The windows' own is_focused is only their state when they last changed: niri reports a
+        // focus move through a separate event, which Niri keeps in focusedWindowId.
+        const now = windows.findIndex(w => w.id === Niri.focusedWindowId);
         const next = windows[(now + 1) % windows.length];
         Niri.action("focus-window", "--id", String(next.id));
     }
@@ -149,7 +152,7 @@ PanelWindow {
 
                     readonly property var entry: DesktopEntries.heuristicLookup(modelData)
                     readonly property var windows: root.running[modelData] || []
-                    readonly property bool focused: windows.some(w => w.is_focused)
+                    readonly property bool focused: windows.some(w => w.id === Niri.focusedWindowId)
 
                     width: 52
                     height: 56

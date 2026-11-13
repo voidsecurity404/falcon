@@ -115,8 +115,10 @@ Item {
                         font.family: Theme.display
                         size: 28
                     }
+                    // No reading yet: only the dash, a lone % under it looked broken.
                     Row {
                         anchors.horizontalCenter: parent.horizontalCenter
+                        visible: !!Phone.battery
                         spacing: 3
 
                         Icon {

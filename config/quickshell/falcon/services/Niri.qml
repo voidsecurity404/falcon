@@ -152,16 +152,13 @@ Singleton {
 
     // Same socket as moveWindowToWorkspaceId, so a move sent first is done first.
     function focusWorkspaceId(workspaceId) {
-        requests.write(JSON.stringify({
-            Action: {
-                FocusWorkspace: {
-                    reference: {
-                        Id: workspaceId
-                    }
+        request({
+            FocusWorkspace: {
+                reference: {
+                    Id: workspaceId
                 }
             }
-        }) + "\n");
-        requests.flush();
+        }, ["focus-workspace", String((workspaces.find(w => w.id === workspaceId) || {}).idx || 1)]);
     }
 
     // Any action over the request socket, falling back to `niri msg` while it is not connected.
@@ -224,6 +221,17 @@ Singleton {
                 focusedOutput = target.output || "";
                 workspaceFocused(target);
             }
+        } else if (e.WorkspaceUrgencyChanged) {
+            // The bar paints an urgent workspace red; niri reports it only through this event.
+            const change = e.WorkspaceUrgencyChanged;
+            workspaces = workspaces.map(w => w.id === change.id ? Object.assign({}, w, {
+                    is_urgent: change.urgent
+                }) : w);
+        } else if (e.WorkspaceActiveWindowChanged) {
+            const change = e.WorkspaceActiveWindowChanged;
+            workspaces = workspaces.map(w => w.id === change.workspace_id ? Object.assign({}, w, {
+                    active_window_id: change.active_window_id
+                }) : w);
         } else if (e.WindowsChanged) {
             const next = {};
             focusedWindowId = -1;

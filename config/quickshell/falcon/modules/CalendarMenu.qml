@@ -98,7 +98,7 @@ Flyout {
             rowSpacing: 2
 
             Repeater {
-                model: [1, 2, 3, 4, 5, 6, 0].map(d => Tr.locale.dayName(d, Locale.ShortFormat))
+                model: [1, 2, 3, 4, 5, 6, 0].map(d => Tr.capitalized(Tr.locale.dayName(d, Locale.ShortFormat)))
 
                 delegate: Label {
                     required property string modelData
@@ -158,7 +158,7 @@ Flyout {
             Repeater {
                 id: forecast
 
-                model: Weather.daily.slice(1, 5)
+                model: Weather.hasData ? Weather.daily.slice(1, 5) : []
 
                 delegate: Column {
                     required property var modelData
