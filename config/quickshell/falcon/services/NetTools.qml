@@ -131,14 +131,12 @@ Singleton {
     // How many bar parts show each tool.
     property var watched: ({})
     // The menu: `origin` is the bar part it drops from ("network" for the hub, or a tool), `open`
-    // the tool whose table it shows ("" is the hub's page of tiles). Opened by pointing at a part
-    // (`byHover`) it closes again when the pointer leaves the part and the menu, and takes no keys;
-    // a click keeps it open.
+    // the tool whose table it shows ("" is the hub's page of tiles). Only a click opens it; pointing
+    // at a part shows just its name (`tip`, after a short pause).
     property string open: ""
     property string origin: ""
-    property bool byHover: false
-    property bool overMenu: false
     property string pointed: ""
+    property string tip: ""
     property string probeIp: ""
     property var probe: null
     property bool probing: false
@@ -204,48 +202,40 @@ Singleton {
             refresh(id);
     }
     // Opens the menu under a bar part: "network" for the hub, otherwise a tool.
-    function openFrom(part, hover) {
+    function openFrom(part) {
         origin = part;
-        byHover = hover;
         show(part === "network" ? "" : part);
         Ui.popup = "net";
     }
+    // A click opens the part's menu, or closes it when it is already open from that part.
     function click(part) {
+        tip = "";
+        tipTimer.stop();
         if (menuOpen && origin === part) {
-            if (byHover)
-                byHover = false;
-            else
-                Ui.popup = "";
+            Ui.popup = "";
             return;
         }
-        openFrom(part, false);
+        openFrom(part);
     }
     // Kept for `desk netMenu`.
     function toggle(id) {
         click(id === "" ? "network" : id);
     }
+    // The part's name under it, never while a menu is open.
+    function titleOf(part) {
+        return part === "network" ? "Network and security" : (byId[part] || {}).title || "";
+    }
     function hoverEnter(part) {
         pointed = part;
-        closeTimer.stop();
-        if (menuOpen && origin === part)
-            return;
-        if (Ui.popup !== "" && !(menuOpen && byHover))
-            return;
-        openTimer.restart();
+        tip = "";
+        tipTimer.restart();
     }
     function hoverExit(part) {
-        if (pointed === part)
+        if (pointed === part) {
             pointed = "";
-        openTimer.stop();
-        if (menuOpen && byHover)
-            closeTimer.restart();
-    }
-    function menuHovered(on) {
-        overMenu = on;
-        if (on)
-            closeTimer.stop();
-        else if (menuOpen && byHover)
-            closeTimer.restart();
+            tip = "";
+            tipTimer.stop();
+        }
     }
 
     // Every reading that is older than its interval, for the hub's tiles.
@@ -257,31 +247,20 @@ Singleton {
     }
 
     Timer {
-        id: openTimer
+        id: tipTimer
 
-        interval: 220
+        interval: 450
         onTriggered: {
-            if (root.pointed !== "" && (Ui.popup === "" || (root.menuOpen && root.byHover)))
-                root.openFrom(root.pointed, true);
-        }
-    }
-    Timer {
-        id: closeTimer
-
-        interval: 380
-        onTriggered: {
-            if (root.menuOpen && root.byHover && !root.overMenu && root.pointed === "")
-                Ui.popup = "";
+            if (root.pointed !== "" && Ui.popup === "")
+                root.tip = root.pointed;
         }
     }
     Connections {
         target: Ui
 
         function onPopupChanged() {
-            if (Ui.popup !== "net") {
-                root.byHover = false;
-                root.overMenu = false;
-            }
+            if (Ui.popup !== "")
+                root.tip = "";
         }
     }
 

@@ -15,8 +15,7 @@ PanelWindow {
 
     readonly property bool isFocusedScreen: !!screen && (Niri.focusedOutput === "" || Niri.focusedOutput === screen.name)
     readonly property bool panelHere: Ui.topPanelOpen && isFocusedScreen
-    // A menu opened only by pointing takes no keys and lets clicks through around it.
-    readonly property bool grabs: panelHere && !(Ui.popup === "net" && NetTools.byHover)
+    readonly property bool grabs: panelHere
     // Focus mode and the overview send the bar off the screen.
     readonly property bool barShown: !Ui.zen && !Niri.overview
     readonly property var leaveCurve: [0.4, 0, 0.9, 0.3, 1, 1]
@@ -237,6 +236,10 @@ PanelWindow {
             item: levelPill.visible ? levelPill : null
             radius: levelPill.radius
         }
+        Region {
+            item: netTip.visible ? netTip : null
+            radius: netTip.radius
+        }
     }
 
     mask: Region {
@@ -344,6 +347,46 @@ PanelWindow {
         visible: root.rightOut < 1 && hasContent
         screenInfo: root.screen
         onScrolled: (x, step) => root.scrollAt(right.x + x, step)
+    }
+
+    // The name of a network part while the pointer rests on it; a click opens its menu.
+    Rectangle {
+        id: netTip
+
+        property string label: ""
+        readonly property bool wanted: NetTools.tip !== "" && root.barShown && root.isFocusedScreen
+        property real reveal: wanted ? 1 : 0
+
+        onWantedChanged: {
+            if (wanted)
+                label = Tr.t(NetTools.titleOf(NetTools.tip));
+        }
+
+        Behavior on reveal {
+            NumberAnimation {
+                duration: netTip.wanted ? 160 : 200
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        visible: reveal > 0.01
+        opacity: reveal
+        x: root.under([NetTools.tip || NetTools.pointed], width, "right", root.layoutKey)
+        y: root.popupTop - 6 * (1 - reveal)
+        width: tipText.implicitWidth + 24
+        height: 30
+        radius: 10
+        border.width: 1
+        border.color: Theme.panelEdge
+        color: Qt.alpha(Theme.glassBase, Math.max(0.72, Theme.glassOpacity))
+
+        Label {
+            id: tipText
+
+            anchors.centerIn: parent
+            text: netTip.label
+            size: 12
+        }
     }
 
     LevelPill {

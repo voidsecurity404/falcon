@@ -958,8 +958,8 @@ GlassIsland {
         }
     }
 
-    // All network and security readings behind one button: pointing at it drops the hub, a page
-    // of tiles like the control center's. A dot warns when ARP, the firewall, the latency, the
+    // All network and security readings behind one button: a click drops the hub, a page of
+    // tiles like the control center's; pointing only shows its name. A dot warns when ARP, the firewall, the latency, the
     // Wi-Fi or the logins found something.
     Component {
         id: networkPart

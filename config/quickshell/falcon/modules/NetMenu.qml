@@ -109,18 +109,9 @@ Rectangle {
         onTriggered: root.copied = ""
     }
 
-    // Opened by pointing, the menu stays while the pointer is over it.
-    HoverHandler {
-        onHoveredChanged: NetTools.menuHovered(hovered)
-    }
-
     // A click inside must not reach the catcher behind it, which closes the menu.
     MouseArea {
         anchors.fill: parent
-        onPressed: {
-            if (NetTools.byHover)
-                NetTools.byHover = false;
-        }
     }
 
     component Tile: Rectangle {
