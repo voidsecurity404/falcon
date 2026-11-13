@@ -53,7 +53,59 @@
     "edgeMargin": 0,
     "shadowSoftness": 34,
     "blurStrength": 3,
-    "overviewZoom": 0.46
+    "overviewZoom": 0.46,
+    "followScroll": 0,
+    "warpMode": "edge",
+    "widthPresets": "thirds",
+    "heightPresets": "thirds",
+    "border": 0,
+    "tabIndicator": "left",
+    "insertHint": true,
+    "emptyAbove": false,
+    "hotCorner": "top-left",
+    "titlebars": false,
+    "newFocus": true,
+    "floatPosition": "center",
+    "closeAnimation": "standard",
+    "closeDuration": 160,
+    "motionPreset": "smooth",
+    "motion": {
+      "workspace": {
+        "kind": "spring",
+        "damping": 1.0,
+        "stiffness": 800,
+        "duration": 300,
+        "curve": "smooth"
+      },
+      "view": {
+        "kind": "spring",
+        "damping": 1.0,
+        "stiffness": 700,
+        "duration": 300,
+        "curve": "smooth"
+      },
+      "move": {
+        "kind": "spring",
+        "damping": 1.0,
+        "stiffness": 700,
+        "duration": 300,
+        "curve": "smooth"
+      },
+      "resize": {
+        "kind": "spring",
+        "damping": 1.0,
+        "stiffness": 700,
+        "duration": 300,
+        "curve": "smooth"
+      },
+      "overview": {
+        "kind": "spring",
+        "damping": 1.0,
+        "stiffness": 800,
+        "duration": 300,
+        "curve": "smooth"
+      }
+    }
   },
   "panel": {
     "left": [
@@ -75,7 +127,8 @@
       "privacy",
       "updates",
       "lang",
-      "phone", "status",
+      "phone",
+      "status",
       "bell"
     ],
     "height": 42,

@@ -111,9 +111,10 @@ def settings_kdl(s):
         out.append("        natural-scroll")
     out += [f"        accel-profile {q('flat' if p['mouseFlat'] else 'adaptive')}", f"        accel-speed {float(number(p, 'mouseSpeed', -1, 1))}", "    }"]
     if w["focusFollowsMouse"]:
-        out.append('    focus-follows-mouse max-scroll-amount="0%"')
+        out.append(f'    focus-follows-mouse max-scroll-amount="{int(number(w, "followScroll", 0, 100))}%"')
     if w["warpMouse"]:
-        out.append("    warp-mouse-to-focus")
+        mode = choice(w, "warpMode", ["edge", "center-xy", "center-xy-always"])
+        out.append("    warp-mouse-to-focus" + ("" if mode == "edge" else f" mode={q(mode)}"))
     if w["autoBackForth"]:
         out.append("    workspace-auto-back-and-forth")
     out += ["}", "", "cursor {", f"    xcursor-theme {q(a['cursorTheme'])}", f"    xcursor-size {int(number(a, 'cursorSize', 8, 96))}"]
@@ -125,6 +126,18 @@ def settings_kdl(s):
     out += ["}", ""]
 
     out += ["layout {", f"    gaps {number(w, 'gaps', 0, 64)}"]
+    widths = PRESETS[choice(w, "widthPresets", list(PRESETS))]
+    heights = PRESETS[choice(w, "heightPresets", list(PRESETS))]
+    out += ["    preset-column-widths {"] + [f"        proportion {v}" for v in widths] + ["    }"]
+    out += ["    preset-window-heights {"] + [f"        proportion {v}" for v in heights] + ["    }"]
+    border = number(w, "border", 0, 16)
+    out += ["    border {", "        off" if border == 0 else f"        width {border}", "    }"]
+    tabs = choice(w, "tabIndicator", ["left", "right", "top", "bottom", "off"])
+    out += ["    tab-indicator {", "        off" if tabs == "off" else f"        position {q(tabs)}", "    }"]
+    if not w["insertHint"]:
+        out += ["    insert-hint {", "        off", "    }"]
+    if w["emptyAbove"]:
+        out.append("    empty-workspace-above-first")
     out.append(f"    center-focused-column {q(choice(w, 'centerFocused', ['never', 'on-overflow', 'always']))}")
     if w["centerSingle"]:
         out.append("    always-center-single-column")
@@ -141,11 +154,18 @@ def settings_kdl(s):
     else:
         out += ["blur {", "    off", "}", ""]
     out += ["overview {", f"    zoom {float(number(w, 'overviewZoom', 0.2, 0.75))}", "}", ""]
+    corner = choice(w, "hotCorner", ["off", "top-left", "top-right", "bottom-left", "bottom-right"])
+    out += ["gestures {", "    hot-corners {", f"        {corner}", "    }", "}", ""]
+    # Without it, GTK apps draw their own title bar with buttons.
+    if not w["titlebars"]:
+        out += ["prefer-no-csd", ""]
     if not w["animations"]:
         out += ["animations {", "    off", "}", ""]
     else:
         out += ["animations {", f"    slowdown {round(1 / number(w, 'animationSpeed', 0.1, 5), 3)}"]
         out += open_animation_kdl(w)
+        out += close_animation_kdl(w)
+        out += motion_kdl(w)
         out += ["}", ""]
 
     out += ["window-rule {", f"    geometry-corner-radius {number(w, 'radius', 0, 48)}", "}", ""]
@@ -171,23 +191,121 @@ OPEN_ANIMATIONS = ["standard", "fade", "pop", "rise", "drop", "zoom", "unfold", 
                    "glitch", "dissolve", "blinds", "swing"]
 
 
+# Proportions for Mod+R and Mod+Shift+R, by the name chosen in Settings.
+PRESETS = {
+    "thirds": [0.33333, 0.5, 0.66667],
+    "quarters": [0.25, 0.5, 0.75],
+    "halves": [0.5, 1.0],
+    "mixed": [0.33333, 0.5, 0.66667, 1.0],
+}
+
+# The motions of niri other than opening and closing: setting name, niri name.
+MOTIONS = [
+    ("workspace", "workspace-switch"),
+    ("view", "horizontal-view-movement"),
+    ("move", "window-movement"),
+    ("resize", "window-resize"),
+    ("overview", "overview-open-close"),
+]
+
+CURVES = {
+    "smooth": '"cubic-bezier" 0.2 0.0 0.0 1.0',
+    "quad": '"ease-out-quad"',
+    "cubic": '"ease-out-cubic"',
+    "expo": '"ease-out-expo"',
+    "linear": '"linear"',
+}
+
+# Ready sets of all motions. "smooth" is the old fixed look of cfg/layout.kdl.
+def _spring(damping, stiffness):
+    return {"kind": "spring", "damping": damping, "stiffness": stiffness}
+
+
+def _ease(duration, curve):
+    return {"kind": "ease", "duration": duration, "curve": curve}
+
+
+MOTION_PRESETS = {
+    "smooth": {"workspace": _spring(1.0, 800), "view": _spring(1.0, 700), "move": _spring(1.0, 700),
+               "resize": _spring(1.0, 700), "overview": _spring(1.0, 800)},
+    "snappy": {name: _spring(1.0, 1400) for name, _ in MOTIONS},
+    "bouncy": {"workspace": _spring(0.82, 700), "view": _spring(0.75, 600), "move": _spring(0.7, 560),
+               "resize": _spring(0.75, 600), "overview": _spring(0.85, 700)},
+    "calm": {name: _ease(380, "smooth") for name, _ in MOTIONS},
+}
+
+
+def motion_kdl(w):
+    preset = choice(w, "motionPreset", list(MOTION_PRESETS) + ["custom"])
+    out = []
+    for name, niri_name in MOTIONS:
+        if preset == "custom":
+            spec = w["motion"].get(name) if isinstance(w.get("motion"), dict) else None
+            if not isinstance(spec, dict):
+                raise Bad(tr("windows.motion.{name} must be an object", name=name))
+        else:
+            spec = MOTION_PRESETS[preset][name]
+        kind = choice(spec, "kind", ["spring", "ease", "off"])
+        out.append(f"    {niri_name} {{")
+        if kind == "off":
+            out.append("        off")
+        elif kind == "spring":
+            damping = float(number(spec, "damping", 0.1, 1))
+            stiffness = int(number(spec, "stiffness", 50, 3000))
+            out.append(f"        spring damping-ratio={damping} stiffness={stiffness} epsilon=0.0001")
+        else:
+            out.append(f"        duration-ms {int(number(spec, 'duration', 30, 3000))}")
+            out.append(f"        curve {CURVES[choice(spec, 'curve', list(CURVES))]}")
+        out.append("    }")
+    return out
+
+
+def close_animation_kdl(w):
+    """window-close: niri's fade, or one of the opening looks played backward."""
+    look = choice(w, "closeAnimation", OPEN_ANIMATIONS + ["random"])
+    ms = int(number(w, "closeDuration", 60, 2000))
+    if look == "standard":
+        return ["    window-close {", f"        duration-ms {ms}", '        curve "ease-out-quad"', "    }"]
+    return shader_kdl("window-close", "close_color", look, ms, "1.0 - niri_clamped_progress")
+
+
+def shader_kdl(node, function, look, ms, progress):
+    source = (NIRI / "shaders/window-open.glsl").read_text()
+    if look == "random":
+        pick = f"1.0 + floor(niri_random_seed * {float(len(OPEN_ANIMATIONS) - 1)})"
+    else:
+        pick = f"{float(OPEN_ANIMATIONS.index(look))}"
+    body = source + f"\nvec4 {function}(vec3 coords_geo, vec3 size_geo) {{\n" \
+        f"    return fo_pick({pick}, coords_geo.xy, size_geo.xy, {progress});\n}}\n"
+    if '"#' in body:
+        raise Bad("window-open.glsl must not contain \"#")
+    lines = [f"    {node} {{", f"        duration-ms {ms}", '        curve "linear"', '        custom-shader r#"']
+    return lines + [l for l in body.splitlines()] + ['"#', "    }"]
+
+
+def window_defaults_kdl(s):
+    """Rules for every window. They come before cfg/rules.kdl, so app rules still win."""
+    w = s["windows"]
+    out = ["// Generated file: change it in the Settings window or settings.json.", ""]
+    rule = []
+    if not w["newFocus"]:
+        rule.append("    open-focused false")
+    corner = choice(w, "floatPosition", ["center", "top-left", "top-right", "bottom-left", "bottom-right", "top", "bottom"])
+    if corner != "center":
+        gap = number(w, "gaps", 0, 64) + 8
+        rule.append(f"    default-floating-position x={gap} y={gap} relative-to={q(corner)}")
+    if rule:
+        out += ["window-rule {"] + rule + ["}", ""]
+    return "\n".join(out)
+
+
 def open_animation_kdl(w):
     """window-open for niri: the chosen look as a custom shader, eased inside it, so the curve is linear."""
     look = choice(w, "openAnimation", OPEN_ANIMATIONS + ["random"])
     ms = int(number(w, "openDuration", 80, 2000))
     if look == "standard":
         return ["    window-open {", f"        duration-ms {ms}", '        curve "ease-out-expo"', "    }"]
-    source = (NIRI / "shaders/window-open.glsl").read_text()
-    if look == "random":
-        pick = f"1.0 + floor(niri_random_seed * {float(len(OPEN_ANIMATIONS) - 1)})"
-    else:
-        pick = f"{float(OPEN_ANIMATIONS.index(look))}"
-    body = source + "\nvec4 open_color(vec3 coords_geo, vec3 size_geo) {\n" \
-        f"    return fo_pick({pick}, coords_geo.xy, size_geo.xy, niri_clamped_progress);\n}}\n"
-    if '"#' in body:
-        raise Bad("window-open.glsl must not contain \"#")
-    lines = ["    window-open {", f"        duration-ms {ms}", '        curve "linear"', '        custom-shader r#"']
-    return lines + [l for l in body.splitlines()] + ['"#', "    }"]
+    return shader_kdl("window-open", "open_color", look, ms, "niri_clamped_progress")
 
 
 def pictures_dir():
@@ -256,6 +374,22 @@ def app_rule(rule):
         out.append("    open-focused false")
     if rule.get("width"):
         out.append(f"    default-column-width {{ proportion {float(number(rule, 'width', 0.1, 1))}; }}")
+    if rule.get("height"):
+        out.append(f"    default-window-height {{ proportion {float(number(rule, 'height', 0.1, 1))}; }}")
+    if rule.get("output"):
+        out.append(f"    open-on-output {q(one_line(rule, 'output'))}")
+    position = rule.get("position") or "center"
+    if position != "center":
+        corner = choice(rule, "position", ["top-left", "top-right", "bottom-left", "bottom-right", "top", "bottom"])
+        out.append(f"    default-floating-position x=24 y=24 relative-to={q(corner)}")
+    if rule.get("radius") not in (None, ""):
+        out.append(f"    geometry-corner-radius {number(rule, 'radius', 0, 48)}")
+    for key, node in (("minWidth", "min-width"), ("maxWidth", "max-width"),
+                      ("minHeight", "min-height"), ("maxHeight", "max-height")):
+        if rule.get(key):
+            out.append(f"    {node} {int(number(rule, key, 1, 10000))}")
+    if rule.get("hideFromShare"):
+        out.append('    block-out-from "screencast"')
     if rule.get("opacity") not in (None, 1, 1.0):
         out.append(f"    opacity {float(number(rule, 'opacity', 0.2, 1))}")
     if rule.get("hideFromCapture"):
@@ -430,13 +564,14 @@ def run_quiet(*cmd):
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
 
 
-def validate(settings_text, binds_text):
+def validate(settings_text, binds_text, defaults_text):
     with tempfile.TemporaryDirectory(prefix="falcon-") as tmp:
         copy = Path(tmp) / "niri"
         shutil.copytree(NIRI, copy)
         (copy / "generated").mkdir(exist_ok=True)
         (copy / "generated/settings.kdl").write_text(settings_text)
         (copy / "generated/binds.kdl").write_text(binds_text)
+        (copy / "generated/window-defaults.kdl").write_text(defaults_text)
         res = subprocess.run(["niri", "validate", "-c", str(copy / "config.kdl")], capture_output=True, text=True)
         if res.returncode != 0:
             text = re.sub(r"\x1b\[[0-9;]*m", "", res.stderr + res.stdout)
@@ -535,12 +670,13 @@ def main(argv):
     if len(argv) >= 2 and argv[0] == "--colors":
         colors(s, argv[1])
         return
-    settings_text, binds_text = settings_kdl(s), binds_kdl(s)
-    validate(settings_text, binds_text)
+    settings_text, binds_text, defaults_text = settings_kdl(s), binds_kdl(s), window_defaults_kdl(s)
+    validate(settings_text, binds_text, defaults_text)
     idle_text, kitty_text = idle_conf(s), kitty_conf(s)
     choice(s["appearance"], "mode", ["dark", "light"])
     if argv[:1] == ["--check"]:
         return
+    write_if_changed(NIRI / "generated/window-defaults.kdl", defaults_text)
     write_if_changed(NIRI / "generated/settings.kdl", settings_text)
     # Bloklash ekrani matnlari interfeys tilida.
     write_if_changed(CONFIG / "hypr/falcon-lang.conf", f"$pw_placeholder = {tr('Password')}\n$pw_fail = {tr('Wrong password')}\n")

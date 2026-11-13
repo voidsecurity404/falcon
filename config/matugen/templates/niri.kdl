@@ -5,6 +5,11 @@ layout {
         inactive-color "{{colors.outline_variant.default.hex}}"
         urgent-color "{{colors.error.default.hex}}"
     }
+    border {
+        active-color "{{colors.primary.default.hex}}"
+        inactive-color "{{colors.outline_variant.default.hex}}"
+        urgent-color "{{colors.error.default.hex}}"
+    }
     shadow {
         color "#00000070"
     }

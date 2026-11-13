@@ -1,13 +1,31 @@
 import QtQuick
+import Quickshell
 import qs.services
 
 // Har bir dastur uchun o'z qoidasi: suzib ochilsin, kengligi, shaffofligi va hokazo.
+// Each card is one entry of windows.rules; its rows are ordinary SettingRows on keys such as
+// windows.rules.2.width, so they look and save like every other setting.
 Column {
     id: root
 
     readonly property var rules: Settings.get("windows.rules", [])
 
+    // App ids of the windows open now, for picking instead of typing a regex.
+    readonly property var openApps: {
+        const seen = [];
+        for (const key in Niri.windows) {
+            const app = Niri.windows[key].app_id;
+            if (app && app !== "org.quickshell" && seen.indexOf(app) < 0)
+                seen.push(app);
+        }
+        return seen.sort();
+    }
+
     spacing: 10
+
+    function exact(app) {
+        return "^" + app.replace(/[.+*?^$()[\]{}|\\]/g, "\\$&") + "$";
+    }
 
     function change(index, key, value) {
         const next = JSON.parse(JSON.stringify(rules));
@@ -24,10 +42,9 @@ Column {
     function add() {
         // Sozlamalar oynasi fokusda turadi, shuning uchun undan oldingi dastur olinadi.
         const last = Niri.lastAppId;
-        const app = last ? "^" + last.replace(/[.+*?^$()[\]{}|\\]/g, "\\$&") + "$" : "";
         Settings.set("windows.rules", rules.concat([
             {
-                app: app,
+                app: last ? exact(last) : "",
                 title: "",
                 floating: false,
                 maximized: false,
@@ -42,7 +59,7 @@ Column {
         width: parent.width
         wrapMode: Text.WordWrap
         elide: Text.ElideNone
-        text: Tr.t("A rule applies when a window opens. The app name is a regex. To list windows: niri msg windows.")
+        text: Tr.t("A rule applies when a window opens. Pick an open app or type a regex for its name or title. Rules lower in the list win.")
         color: Theme.muted
         size: 13
     }
@@ -55,6 +72,9 @@ Column {
 
             required property var modelData
             required property int index
+
+            property bool more: false
+            readonly property string base: "windows.rules." + index + "."
 
             width: root.width
             height: cardColumn.implicitHeight + 28
@@ -86,13 +106,13 @@ Column {
 
                         Label {
                             anchors.verticalCenter: parent.verticalCenter
-                            width: 70
+                            width: 96
                             text: field.modelData.label
                             color: Theme.muted
                             size: 13
                         }
                         Rectangle {
-                            width: cardColumn.width - 78
+                            width: cardColumn.width - 104
                             height: 30
                             radius: 9
                             color: Qt.alpha(Theme.text, 0.07)
@@ -116,6 +136,49 @@ Column {
                     }
                 }
 
+                // Open apps: a press puts the exact name in.
+                Flow {
+                    visible: root.openApps.length > 0
+                    x: 104
+                    width: parent.width - 104
+                    spacing: 5
+
+                    Repeater {
+                        model: root.openApps.slice(0, 14)
+
+                        delegate: Rectangle {
+                            id: appChip
+
+                            required property string modelData
+
+                            readonly property bool on: card.modelData.app === root.exact(modelData)
+
+                            width: appLabel.implicitWidth + 14
+                            height: 24
+                            radius: 8
+                            color: on ? Qt.alpha(Theme.accent, 0.24) : Qt.alpha(Theme.text, appArea.containsMouse ? 0.1 : 0.05)
+
+                            Label {
+                                id: appLabel
+
+                                anchors.centerIn: parent
+                                text: appChip.modelData
+                                color: appChip.on ? Theme.accent : Theme.muted
+                                font.family: Theme.mono
+                                size: 11
+                            }
+                            MouseArea {
+                                id: appArea
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.change(card.index, "app", root.exact(appChip.modelData))
+                            }
+                        }
+                    }
+                }
+
                 Flow {
                     width: parent.width
                     spacing: 5
@@ -123,11 +186,14 @@ Column {
                     Repeater {
                         model: [
                             { key: "floating", label: Tr.t("Floating") },
+                            { key: "tiled", label: Tr.t("Tiled") },
                             { key: "maximized", label: Tr.t("Wide") },
                             { key: "fullscreen", label: Tr.t("Fullscreen") },
                             { key: "noFocus", label: Tr.t("No focus") },
-                            { key: "hideFromCapture", label: Tr.t("Hide from recordings") }
-                        ]
+                            { key: "sticky", label: Tr.t("On every workspace"), native: true },
+                            { key: "hideFromCapture", label: Tr.t("Hide from recordings") },
+                            { key: "hideFromShare", label: Tr.t("Hide from screen sharing") }
+                        ].filter(f => !f.native || Sticky.nativeSticky || card.modelData[f.key] === true)
 
                         delegate: Rectangle {
                             id: flag
@@ -152,18 +218,161 @@ Column {
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: root.change(card.index, flag.modelData.key, !flag.on)
+                                onClicked: {
+                                    // Floating and tiled exclude each other.
+                                    const key = flag.modelData.key;
+                                    const next = JSON.parse(JSON.stringify(root.rules));
+                                    next[card.index][key] = !flag.on;
+                                    if (!flag.on && key === "floating")
+                                        next[card.index].tiled = false;
+                                    if (!flag.on && key === "tiled")
+                                        next[card.index].floating = false;
+                                    Settings.set("windows.rules", next);
+                                }
                             }
+                        }
+                    }
+                }
+
+                Column {
+                    width: parent.width
+
+                    Repeater {
+                        model: [
+                            {
+                                key: card.base + "width",
+                                label: Tr.t("Width"),
+                                type: "choice",
+                                fallback: 0,
+                                options: [0, 0.33333, 0.5, 0.66667, 1],
+                                names: [Tr.t("Default"), "1/3", "1/2", "2/3", Tr.t("Full")]
+                            },
+                            {
+                                key: card.base + "height",
+                                label: Tr.t("Height"),
+                                type: "choice",
+                                fallback: 0,
+                                options: [0, 0.33333, 0.5, 0.66667, 1],
+                                names: [Tr.t("Default"), "1/3", "1/2", "2/3", Tr.t("Full")]
+                            },
+                            {
+                                key: card.base + "position",
+                                label: Tr.t("Place when floating"),
+                                type: "choice",
+                                layout: "chips",
+                                fallback: "center",
+                                options: ["center", "top-left", "top", "top-right", "bottom-left", "bottom", "bottom-right"],
+                                names: [Tr.t("Center"), Tr.t("Top left"), Tr.t("Top"), Tr.t("Top right"), Tr.t("Bottom left"), Tr.t("Bottom"), Tr.t("Bottom right")],
+                                show: card.modelData.floating === true
+                            },
+                            {
+                                key: card.base + "opacity",
+                                label: Tr.t("Opacity"),
+                                type: "slider",
+                                fallback: 1,
+                                min: 0.2,
+                                max: 1,
+                                step: 0.02,
+                                unit: "percent"
+                            },
+                            {
+                                key: card.base + "radius",
+                                label: Tr.t("Corner radius"),
+                                type: "slider",
+                                fallback: Settings.get("windows.radius", 13),
+                                min: 0,
+                                max: 32,
+                                step: 1,
+                                unit: "px",
+                                show: card.more
+                            },
+                            {
+                                key: card.base + "output",
+                                label: Tr.t("Open on monitor"),
+                                type: "choice",
+                                fallback: "",
+                                options: [""].concat(Quickshell.screens.map(s => s.name)),
+                                names: [Tr.t("Any")].concat(Quickshell.screens.map(s => s.name)),
+                                show: card.more
+                            },
+                            {
+                                key: card.base + "minWidth",
+                                label: Tr.t("Smallest width"),
+                                hint: Tr.t("Pixels, empty for no limit"),
+                                type: "number",
+                                width: 110,
+                                show: card.more
+                            },
+                            {
+                                key: card.base + "maxWidth",
+                                label: Tr.t("Largest width"),
+                                hint: Tr.t("Pixels, empty for no limit"),
+                                type: "number",
+                                width: 110,
+                                show: card.more
+                            },
+                            {
+                                key: card.base + "minHeight",
+                                label: Tr.t("Smallest height"),
+                                hint: Tr.t("Pixels, empty for no limit"),
+                                type: "number",
+                                width: 110,
+                                show: card.more
+                            },
+                            {
+                                key: card.base + "maxHeight",
+                                label: Tr.t("Largest height"),
+                                hint: Tr.t("Pixels, empty for no limit"),
+                                type: "number",
+                                width: 110,
+                                show: card.more
+                            }
+                        ].filter(r => r.show !== false)
+
+                        delegate: SettingRow {
+                            required property var modelData
+
+                            width: cardColumn.width
+                            item: modelData
+                        }
+                    }
+                }
+
+                Row {
+                    spacing: 6
+
+                    Rectangle {
+                        width: moreLabel.implicitWidth + 24
+                        height: 28
+                        radius: 9
+                        color: Qt.alpha(Theme.text, moreArea.containsMouse ? 0.1 : 0.07)
+
+                        Label {
+                            id: moreLabel
+
+                            anchors.centerIn: parent
+                            text: card.more ? Tr.t("Fewer options") : Tr.t("More options")
+                            size: 13
+                        }
+                        MouseArea {
+                            id: moreArea
+
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: card.more = !card.more
                         }
                     }
 
                     Rectangle {
-                        width: 74
+                        width: deleteLabel.implicitWidth + 24
                         height: 28
                         radius: 9
                         color: Qt.alpha(Theme.error, 0.2)
 
                         Label {
+                            id: deleteLabel
+
                             anchors.centerIn: parent
                             text: Tr.t("Delete")
                             color: Theme.error

@@ -29,6 +29,7 @@ Item {
         case "scale":
             return "×" + rounded;
         case "lineHeight":
+        case "percent100":
             return rounded + " %";
         case "sec":
             return Tr.t("{n} s").replace("{n}", rounded);

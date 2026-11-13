@@ -1,6 +1,8 @@
 // falcon: asosiy fayl. Har bir mavzu alohida turadi.
 // Tartib muhim: keyingi include avvalgisini ustidan yozadi.
 include "cfg/layout.kdl"
+// Rules for every window from Settings, before the app rules so those still win.
+include optional=true "generated/window-defaults.kdl"
 include "cfg/rules.kdl"
 include "cfg/startup.kdl"
 include "cfg/binds.kdl"

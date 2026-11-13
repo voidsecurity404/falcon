@@ -341,6 +341,27 @@ Singleton {
             ids = ids.concat([id]);
     }
 
+    // Settings → Window rules: "On every workspace". niri has no such rule, so the shell does it.
+    function ruleWantsSticky(window) {
+        let wants = false;
+        for (const rule of Settings.get("windows.rules", [])) {
+            if (!rule || (!rule.app && !rule.title))
+                continue;
+            try {
+                if (rule.app && !new RegExp(rule.app).test(window.app_id || ""))
+                    continue;
+                if (rule.title && !new RegExp(rule.title).test(window.title || ""))
+                    continue;
+            } catch (e) {
+                continue;
+            }
+            // Later rules win, as in niri, but only where they say something.
+            if (rule.sticky !== undefined)
+                wants = rule.sticky === true;
+        }
+        return wants;
+    }
+
     // niri-falcon: the sticky list is whatever niri says.
     function readNative() {
         const list = [];
@@ -564,6 +585,8 @@ Singleton {
         function onWindowOpened(window) {
             if (root.isPip(window.title)) {
                 root.placePip(window.id);
+                root.add(window.id);
+            } else if (root.nativeSticky && root.ruleWantsSticky(window)) {
                 root.add(window.id);
             }
         }

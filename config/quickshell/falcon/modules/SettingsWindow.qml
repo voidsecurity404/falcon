@@ -752,7 +752,7 @@ LazyLoader {
             },
             {
                 title: Tr.t("Windows"),
-                subtitle: Tr.t("Layout and decoration"),
+                subtitle: Tr.t("Layout, decoration and behavior"),
                 icon: "windows",
                 group: 1,
                 sections: [
@@ -785,6 +785,22 @@ LazyLoader {
                                 names: ["1/3", "1/2", "2/3", Tr.t("Full")]
                             },
                             {
+                                key: "windows.widthPresets",
+                                label: Tr.t("Widths to cycle"),
+                                hint: Tr.t("What the column width key steps through"),
+                                type: "choice",
+                                options: ["thirds", "quarters", "halves", "mixed"],
+                                names: ["⅓ ½ ⅔", "¼ ½ ¾", "½ 1", "⅓ ½ ⅔ 1"]
+                            },
+                            {
+                                key: "windows.heightPresets",
+                                label: Tr.t("Heights to cycle"),
+                                hint: Tr.t("For windows stacked in one column"),
+                                type: "choice",
+                                options: ["thirds", "quarters", "halves", "mixed"],
+                                names: ["⅓ ½ ⅔", "¼ ½ ¾", "½ 1", "⅓ ½ ⅔ 1"]
+                            },
+                            {
                                 key: "windows.centerFocused",
                                 label: Tr.t("Center focused column"),
                                 type: "choice",
@@ -799,6 +815,37 @@ LazyLoader {
                             {
                                 key: "windows.tabbedByDefault",
                                 label: Tr.t("Columns as tabs"),
+                                type: "toggle"
+                            },
+                            {
+                                key: "windows.emptyAbove",
+                                label: Tr.t("Empty workspace above the first"),
+                                hint: Tr.t("A free workspace is always at the top too"),
+                                type: "toggle"
+                            }
+                        ]
+                    },
+                    {
+                        title: Tr.t("New windows"),
+                        items: [
+                            {
+                                key: "windows.newFocus",
+                                label: Tr.t("New windows take focus"),
+                                hint: Tr.t("Off: they open beside you without taking the keyboard"),
+                                type: "toggle"
+                            },
+                            {
+                                key: "windows.floatPosition",
+                                label: Tr.t("Where floating windows open"),
+                                type: "choice",
+                                layout: "chips",
+                                options: ["center", "top-left", "top", "top-right", "bottom-left", "bottom", "bottom-right"],
+                                names: [Tr.t("Center"), Tr.t("Top left"), Tr.t("Top"), Tr.t("Top right"), Tr.t("Bottom left"), Tr.t("Bottom"), Tr.t("Bottom right")]
+                            },
+                            {
+                                key: "windows.titlebars",
+                                label: Tr.t("App title bars"),
+                                hint: Tr.t("Off: apps leave out their own title bar and buttons"),
                                 type: "toggle"
                             }
                         ]
@@ -818,6 +865,17 @@ LazyLoader {
                             {
                                 key: "windows.focusRing",
                                 label: Tr.t("Focus ring width"),
+                                hint: Tr.t("Drawn around the focused window only"),
+                                type: "slider",
+                                min: 0,
+                                max: 8,
+                                step: 1,
+                                unit: "px"
+                            },
+                            {
+                                key: "windows.border",
+                                label: Tr.t("Border width"),
+                                hint: Tr.t("Drawn around every window, brighter on the focused one"),
                                 type: "slider",
                                 min: 0,
                                 max: 8,
@@ -845,11 +903,13 @@ LazyLoader {
                                 min: 0,
                                 max: 80,
                                 step: 2,
-                                unit: "px"
+                                unit: "px",
+                                when: ["windows.shadow", true]
                             },
                             {
                                 key: "windows.blur",
                                 label: Tr.t("Blur"),
+                                hint: Tr.t("The main cost for the graphics card: lower it on a weak laptop"),
                                 type: "toggle"
                             },
                             {
@@ -858,12 +918,27 @@ LazyLoader {
                                 type: "slider",
                                 min: 1,
                                 max: 6,
-                                step: 1
+                                step: 1,
+                                when: ["windows.blur", true]
+                            },
+                            {
+                                key: "windows.tabIndicator",
+                                label: Tr.t("Tab marks"),
+                                hint: Tr.t("Where a column of tabs shows its tabs"),
+                                type: "choice",
+                                options: ["left", "top", "right", "bottom", "off"],
+                                names: [Tr.t("Left"), Tr.t("Top"), Tr.t("Right"), Tr.t("Bottom"), Tr.t("Off")]
+                            },
+                            {
+                                key: "windows.insertHint",
+                                label: Tr.t("Drop place hint"),
+                                hint: Tr.t("Shows where a dragged window will land"),
+                                type: "toggle"
                             }
                         ]
                     },
                     {
-                        title: Tr.t("Behavior"),
+                        title: Tr.t("Mouse and focus"),
                         items: [
                             {
                                 key: "windows.focusFollowsMouse",
@@ -871,14 +946,40 @@ LazyLoader {
                                 type: "toggle"
                             },
                             {
+                                key: "windows.followScroll",
+                                label: Tr.t("May scroll the view"),
+                                hint: Tr.t("How far a window half off screen may pull the view when pointed at"),
+                                type: "slider",
+                                min: 0,
+                                max: 100,
+                                step: 5,
+                                unit: "percent100",
+                                when: ["windows.focusFollowsMouse", true]
+                            },
+                            {
                                 key: "windows.warpMouse",
                                 label: Tr.t("Cursor follows focus"),
                                 type: "toggle"
                             },
                             {
+                                key: "windows.warpMode",
+                                label: Tr.t("Cursor goes to"),
+                                type: "choice",
+                                options: ["edge", "center-xy", "center-xy-always"],
+                                names: [Tr.t("Nearest edge"), Tr.t("Center"), Tr.t("Center, always")],
+                                when: ["windows.warpMouse", true]
+                            },
+                            {
                                 key: "windows.autoBackForth",
                                 label: Tr.t("Same number again goes to previous workspace"),
                                 type: "toggle"
+                            },
+                            {
+                                key: "windows.hotCorner",
+                                label: Tr.t("Hot corner for the overview"),
+                                type: "choice",
+                                options: ["top-left", "top-right", "bottom-left", "bottom-right", "off"],
+                                names: [Tr.t("Top left"), Tr.t("Top right"), Tr.t("Bottom left"), Tr.t("Bottom right"), Tr.t("Off")]
                             },
                             {
                                 key: "windows.overviewZoom",
@@ -895,23 +996,18 @@ LazyLoader {
             },
             {
                 title: Tr.t("Animations"),
-                subtitle: Tr.t("How windows open, and how fast"),
+                subtitle: Tr.t("Every motion of the windows"),
                 icon: "sparkle",
                 group: 1,
                 openAnims: true,
                 sections: [
                     {
-                        title: Tr.t("Speed"),
+                        title: Tr.t("General"),
                         items: [
                             {
-                                key: "windows.openDuration",
-                                label: Tr.t("Opening time"),
-                                hint: Tr.t("Less is faster"),
-                                type: "slider",
-                                min: 100,
-                                max: 1200,
-                                step: 10,
-                                unit: "ms"
+                                key: "windows.animations",
+                                label: Tr.t("Animations"),
+                                type: "toggle"
                             },
                             {
                                 key: "windows.animationSpeed",
@@ -921,15 +1017,65 @@ LazyLoader {
                                 min: 0.3,
                                 max: 3,
                                 step: 0.1,
-                                unit: "scale"
+                                unit: "scale",
+                                when: ["windows.animations", true]
                             },
                             {
-                                key: "windows.animations",
-                                label: Tr.t("Animations"),
-                                type: "toggle"
+                                key: "windows.openDuration",
+                                label: Tr.t("Opening time"),
+                                hint: Tr.t("Less is faster"),
+                                type: "slider",
+                                min: 100,
+                                max: 1200,
+                                step: 10,
+                                unit: "ms",
+                                when: ["windows.animations", true]
                             }
                         ]
-                    }
+                    },
+                    {
+                        title: Tr.t("Closing a window"),
+                        when: ["windows.animations", true],
+                        items: [
+                            {
+                                key: "windows.closeAnimation",
+                                label: Tr.t("Look"),
+                                hint: Tr.t("The opening looks, played backward"),
+                                type: "choice",
+                                layout: "chips",
+                                options: ["standard", "fade", "pop", "rise", "drop", "zoom", "unfold", "flip", "swing", "circle", "pixels", "glitch", "dissolve", "blinds", "random"],
+                                names: [Tr.t("Standard"), Tr.t("Fade"), Tr.t("Pop"), Tr.t("Rise"), Tr.t("Drop"), Tr.t("Zoom"), Tr.t("Unfold"), Tr.t("Flip"), Tr.t("Swing"), Tr.t("Circle"), Tr.t("Pixels"), Tr.t("Glitch"), Tr.t("Dissolve"), Tr.t("Blinds"), Tr.t("Random")]
+                            },
+                            {
+                                key: "windows.closeDuration",
+                                label: Tr.t("Closing time"),
+                                type: "slider",
+                                min: 60,
+                                max: 1000,
+                                step: 10,
+                                unit: "ms"
+                            }
+                        ]
+                    },
+                    {
+                        title: Tr.t("Motion"),
+                        when: ["windows.animations", true],
+                        items: [
+                            {
+                                key: "windows.motionPreset",
+                                label: Tr.t("Feel"),
+                                hint: Tr.t("Sliding, moving, resizing and the overview together"),
+                                type: "choice",
+                                options: ["smooth", "snappy", "bouncy", "calm", "custom"],
+                                names: [Tr.t("Smooth"), Tr.t("Snappy"), Tr.t("Bouncy"), Tr.t("Calm"), Tr.t("Custom")]
+                            }
+                        ]
+                    },
+                    win.motionSection("workspace", Tr.t("Switching workspaces")),
+                    win.motionSection("view", Tr.t("Scrolling along the columns")),
+                    win.motionSection("move", Tr.t("Moving windows")),
+                    win.motionSection("resize", Tr.t("Resizing windows")),
+                    win.motionSection("overview", Tr.t("Opening the overview"))
                 ]
             },
             {
@@ -1735,6 +1881,73 @@ LazyLoader {
             }
         ]
 
+        // One motion of niri for the Custom feel: spring or curve, and their numbers.
+        function motionSection(name, title) {
+            const base = "windows.motion." + name + ".";
+            const custom = ["windows.motionPreset", "custom"];
+            return {
+                title: title,
+                when: [["windows.animations", true], custom],
+                items: [
+                    {
+                        key: base + "kind",
+                        label: Tr.t("Kind"),
+                        type: "choice",
+                        options: ["spring", "ease", "off"],
+                        names: [Tr.t("Spring"), Tr.t("Curve"), Tr.t("Off")]
+                    },
+                    {
+                        key: base + "damping",
+                        label: Tr.t("Damping"),
+                        hint: Tr.t("1 settles without a bounce, lower bounces more"),
+                        type: "slider",
+                        min: 0.3,
+                        max: 1,
+                        step: 0.02,
+                        when: [base + "kind", "spring"]
+                    },
+                    {
+                        key: base + "stiffness",
+                        label: Tr.t("Stiffness"),
+                        hint: Tr.t("Higher is quicker"),
+                        type: "slider",
+                        min: 100,
+                        max: 2500,
+                        step: 50,
+                        when: [base + "kind", "spring"]
+                    },
+                    {
+                        key: base + "duration",
+                        label: Tr.t("Duration"),
+                        type: "slider",
+                        min: 50,
+                        max: 1200,
+                        step: 10,
+                        unit: "ms",
+                        when: [base + "kind", "ease"]
+                    },
+                    {
+                        key: base + "curve",
+                        label: Tr.t("Curve"),
+                        type: "choice",
+                        options: ["smooth", "quad", "cubic", "expo", "linear"],
+                        names: [Tr.t("Smooth"), "Quad", "Cubic", "Expo", Tr.t("Linear")],
+                        when: [base + "kind", "ease"]
+                    }
+                ]
+            };
+        }
+
+        // A row or section with `when` shows only while settings match: [key, value, value...]
+        // (any of the values), or a list of such conditions, all of which must hold.
+        function holds(item) {
+            const when = item && item.when;
+            if (!when)
+                return true;
+            const all = Array.isArray(when[0]) ? when : [when];
+            return all.every(c => c.slice(1).indexOf(Settings.get(c[0])) >= 0);
+        }
+
         readonly property var shown: {
             const q = filter.trim().toLowerCase();
             if (q === "")
@@ -2356,6 +2569,7 @@ LazyLoader {
                                 required property var modelData
                                 required property int index
 
+                                visible: win.holds(modelData)
                                 width: cards.width
                                 animate: win.filter === ""
                                 delay: 40 + Math.min(index, 6) * 55
@@ -2424,6 +2638,7 @@ LazyLoader {
                                                     required property var modelData
                                                     required property int index
 
+                                                    visible: win.holds(modelData)
                                                     width: rows.width
 
                                                     Rectangle {
