@@ -124,6 +124,7 @@ targets=(
     .config/systemd/user/falcon-remote.service
     .local/bin/archmarket
     .local/bin/falcon-archmarket-build
+    .local/bin/falcon-gtk4-live-build
     .local/share/applications/archmarket.desktop
 )
 
@@ -311,6 +312,11 @@ fi
 if command -v cargo >/dev/null; then
     say "Building Archmarket"
     soft env FALCON_REPO="$root" "$root/bin/falcon-archmarket-build"
+fi
+
+# Open GTK 4 apps (Nautilus) take new wallpaper colors through this GIO module.
+if command -v gcc >/dev/null; then
+    soft env FALCON_REPO="$root" "$root/bin/falcon-gtk4-live-build"
 fi
 
 # Foydalanuvchi sozlamalari va fon rasmlari ustidan yozilmaydi.

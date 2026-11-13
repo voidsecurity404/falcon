@@ -35,9 +35,5 @@ hotkey-overlay {
     skip-at-startup
 }
 
-environment {
-    QT_QPA_PLATFORM "wayland"
-    QT_WAYLAND_DISABLE_WINDOWDECORATION "1"
-    QT_QPA_PLATFORMTHEME "qt6ct"
-    ELECTRON_OZONE_PLATFORM_HINT "auto"
-}
+// environment is written by falcon-apply into generated/settings.kdl (ENVIRONMENT), since
+// GIO_EXTRA_MODULES needs the home folder's full path and niri allows only one such block.

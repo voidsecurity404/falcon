@@ -84,6 +84,13 @@ def remote_stale():
     return any(p.stat().st_mtime > built for p in (REPO / "remote").rglob("*") if p.is_file())
 
 
+def gtk4live_stale():
+    """falcon-gtk4-live is C code in gtk4-live/, so it is rebuilt when the source is newer."""
+    built = HOME / ".local/lib/falcon/gio-modules/libfalcongtk4live.so"
+    src = REPO / "gtk4-live" / "falcon-gtk4-live.c"
+    return src.exists() and shutil.which("gcc") is not None and (not built.exists() or src.stat().st_mtime > built.stat().st_mtime)
+
+
 def archmarket_stale():
     """Archmarket, the app store, is built from Rust code in archmarket/, so it is rebuilt when that code is newer."""
     binary = HOME / ".local/bin/archmarket"
@@ -112,10 +119,13 @@ def main(args):
     if rebuild:
         print("remote/ -> ~/.local/bin/falcon-remote (go build)")
     market = archmarket_stale()
+    gtk4 = gtk4live_stale()
+    if gtk4:
+        print("gtk4-live/ -> ~/.local/lib/falcon/gio-modules (gcc)")
     if market:
         print("archmarket/ -> ~/.local/bin/archmarket (cargo build)")
     if "--check" in args:
-        return 1 if copy or remove or rebuild or market else 0
+        return 1 if copy or remove or rebuild or market or gtk4 else 0
     for source, target in copy:
         live = HOME / target
         live.parent.mkdir(parents=True, exist_ok=True)
@@ -126,9 +136,11 @@ def main(args):
         subprocess.run([str(REPO / "bin/falcon-remote-build")], env={**os.environ, "FALCON_REPO": str(REPO)}, check=False)
     if market:
         subprocess.run([str(REPO / "bin/falcon-archmarket-build")], env={**os.environ, "FALCON_REPO": str(REPO)}, check=False)
+    if gtk4:
+        subprocess.run([str(REPO / "bin/falcon-gtk4-live-build")], env={**os.environ, "FALCON_REPO": str(REPO)}, check=False)
     if any(t.startswith(".config/systemd/") for _, t in copy):
         subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
-    if not copy and not remove and not rebuild and not market:
+    if not copy and not remove and not rebuild and not market and not gtk4:
         print(tr("Everything is up to date"))
     if RESTART & {t for _, t in copy}:
         subprocess.run(["pkill", "-x", "qs"], check=False)

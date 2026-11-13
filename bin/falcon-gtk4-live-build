@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Builds falcon-gtk4-live (gtk4-live/ in the repo), a GIO module that lets open GTK 4 and
+# libadwaita apps such as Nautilus take new wallpaper colors without restarting, and makes
+# programs started from now on load it (GIO_EXTRA_MODULES).
+set -euo pipefail
+repo="${FALCON_REPO:-$HOME/Downloads/falcon}"
+src="$repo/gtk4-live/falcon-gtk4-live.c"
+dir="$HOME/.local/lib/falcon/gio-modules"
+out="$dir/libfalcongtk4live.so"
+command -v gcc >/dev/null || { echo "gcc is not installed" >&2; exit 1; }
+mkdir -p "$dir"
+gcc -O2 -shared -fPIC -Wall -o "$out.new" "$src" $(pkg-config --cflags --libs gio-2.0)
+mv -f "$out.new" "$out"
+# Apps started by D-Bus or systemd (Nautilus is) read the systemd user environment;
+# niri's own children get it from generated/settings.kdl (falcon-apply).
+mkdir -p "$HOME/.config/environment.d"
+printf 'GIO_EXTRA_MODULES=%s\n' "$dir" >"$HOME/.config/environment.d/falcon-gtk4-live.conf"
+systemctl --user set-environment "GIO_EXTRA_MODULES=$dir" 2>/dev/null || true
+command -v dbus-update-activation-environment >/dev/null && dbus-update-activation-environment "GIO_EXTRA_MODULES=$dir" 2>/dev/null || true
+echo "Built $out"
