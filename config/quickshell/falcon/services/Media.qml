@@ -26,6 +26,12 @@ Singleton {
         }
     }
     readonly property string art: player ? player.trackArtUrl : ""
+
+    // The player's name as shown. Firefox calls itself "Mozilla firefox".
+    function nameOf(p) {
+        const name = p ? String(p.identity || "") : "";
+        return name.split(" ").map(w => w.length > 0 && w === w.toLowerCase() ? w.charAt(0).toUpperCase() + w.slice(1) : w).join(" ");
+    }
     // Browsers put the artist into the title as well: "Artist - Song".
     readonly property string title: {
         if (!player)

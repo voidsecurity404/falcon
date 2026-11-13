@@ -224,7 +224,7 @@ Item {
             }
             Label {
                 anchors.verticalCenter: parent.verticalCenter
-                text: root.player ? root.player.identity : ""
+                text: root.player ? Media.nameOf(root.player) : ""
                 size: 11
                 font.weight: Font.DemiBold
                 font.letterSpacing: 0.6

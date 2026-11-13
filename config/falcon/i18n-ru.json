@@ -1500,5 +1500,6 @@
  "Something needs a look: it is marked red": "Что-то требует внимания — отмечено красным",
  "Worth a look: marked yellow": "Стоит проверить — отмечено жёлтым",
  "All quiet": "Всё спокойно",
- "A tile opens its table": "Плитка открывает подробную таблицу"
+ "A tile opens its table": "Плитка открывает подробную таблицу",
+ "The phone sent no conversations. Allow SMS for KDE Connect on the phone, then open this page again.": "Телефон не прислал переписки. Разрешите KDE Connect на телефоне доступ к SMS и откройте эту страницу снова."
 }

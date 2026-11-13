@@ -23,7 +23,16 @@ PhonePage {
         return Qt.formatDate(d, "dd.MM");
     }
 
+    // The phone answers within seconds, or not at all when KDE Connect there may not read SMS.
+    property bool gaveUp: false
+
     Component.onCompleted: Phone.send("smsSync")
+
+    Timer {
+        interval: 15000
+        running: root.mode === "list" && list.count === 0 && !root.gaveUp
+        onTriggered: root.gaveUp = true
+    }
     Component.onDestruction: Phone.closeThread()
 
     actions: [
@@ -64,7 +73,7 @@ PhonePage {
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
             visible: list.count === 0
-            text: Tr.t("Loading conversations from the phone…")
+            text: root.gaveUp ? Tr.t("The phone sent no conversations. Allow SMS for KDE Connect on the phone, then open this page again.") : Tr.t("Loading conversations from the phone…")
             color: Theme.muted
             size: 12
         }

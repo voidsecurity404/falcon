@@ -70,7 +70,7 @@ Flyout {
                 Label {
                     width: parent.width
                     visible: !!root.player && root.player.identity !== ""
-                    text: root.player ? root.player.identity : ""
+                    text: root.player ? Media.nameOf(root.player) : ""
                     size: 11
                     color: Qt.alpha(Theme.muted, 0.8)
                 }

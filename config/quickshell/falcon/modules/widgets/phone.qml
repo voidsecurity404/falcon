@@ -14,9 +14,11 @@ Item {
     readonly property bool square: form === "square"
     readonly property var dev: Phone.device
     readonly property bool on: Phone.connected
+    // Connected but no charge reported yet: not an empty battery.
+    readonly property bool known: on && !!Phone.battery
     readonly property int charge: Phone.battery ? Phone.battery.charge : 0
     readonly property bool charging: !!Phone.battery && Phone.battery.charging
-    readonly property color level: !on ? Theme.muted : charging ? Theme.good : charge <= 15 ? Theme.error : Theme.accent
+    readonly property color level: !known ? Theme.muted : charging ? Theme.good : charge <= 15 ? Theme.error : Theme.accent
     readonly property var latest: Phone.history.length ? Phone.history[0] : null
 
     function ago(entry) {
@@ -85,7 +87,7 @@ Item {
                 Label {
                     anchors.horizontalCenter: parent.horizontalCenter
                     visible: root.on
-                    text: root.charge + "%"
+                    text: root.known ? root.charge + "%" : "–"
                     size: root.square ? 12 : 14
                     font.weight: Font.Bold
                 }
