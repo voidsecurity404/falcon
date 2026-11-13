@@ -16,8 +16,18 @@ import Quickshell.Io
 // it is focused, all over niri's socket in that order, niri slides the workspaces under the still
 // pictures, and when the slide is still the windows show again and the pictures go.
 // The overview still goes through follow().
+//
+// niri-falcon (~/Downloads/niri-falcon) has real sticky windows: it keeps them on the shown
+// workspace and draws them still during the slide. When niri reports `is_sticky` on its windows
+// (`nativeSticky`), all of the above is off: Mod+S sends toggle-window-sticky over the socket, `ids`
+// is read from the windows, and the keys, the rules and the pictures are not used.
 Singleton {
     id: root
+
+    // niri-falcon reports is_sticky on every window, stock niri on none.
+    property bool nativeSticky: false
+    // The workaround above is running.
+    readonly property bool emulated: active && !nativeSticky
 
     // Window ids mean something only within one niri session, so they are saved with its socket.
     readonly property string session: Quickshell.env("NIRI_SOCKET") || ""
@@ -117,6 +127,9 @@ Singleton {
     function writeConfig(then, forced) {
         if (!loaded)
             return;
+        // niri-falcon needs no keys and no rules: keep the file empty.
+        if (nativeSticky && forced === undefined)
+            forced = "";
         const apps = forced !== undefined ? [] : stickyApps();
         const text = forced !== undefined ? forced : configText(apps);
         if (written === text && !then)
@@ -290,6 +303,19 @@ Singleton {
         const id = Niri.focusedWindowId;
         if (id < 0)
             return;
+        if (nativeSticky) {
+            const w = Niri.windows[id];
+            const was = !!(w && w.is_sticky);
+            Niri.toggleSticky(id);
+            // Back into its place among the columns. A picture-in-picture window stays floating.
+            if (was && !(w && root.isPip(w.title)))
+                Niri.action("move-window-to-tiling", "--id", String(id));
+            if (was)
+                Toasts.show(Tr.t("Sticky off"), Tr.t("The window stays on this workspace"), "check");
+            else
+                Toasts.show(Tr.t("Sticky on"), Tr.t("The window shows on all workspaces"), "check");
+            return;
+        }
         if (ids.indexOf(id) >= 0) {
             ids = ids.filter(x => x !== id);
             // Back into its place among the columns. A picture-in-picture window stays floating.
@@ -305,8 +331,25 @@ Singleton {
     }
 
     function add(id) {
+        if (nativeSticky) {
+            const w = Niri.windows[id];
+            if (w && !w.is_sticky)
+                Niri.toggleSticky(id);
+            return;
+        }
         if (ids.indexOf(id) < 0)
             ids = ids.concat([id]);
+    }
+
+    // niri-falcon: the sticky list is whatever niri says.
+    function readNative() {
+        const list = [];
+        for (const key in Niri.windows)
+            if (Niri.windows[key].is_sticky)
+                list.push(Niri.windows[key].id);
+        list.sort((a, b) => a - b);
+        if (JSON.stringify(list) !== JSON.stringify(ids))
+            ids = list;
     }
 
     function goalFor(target) {
@@ -359,6 +402,10 @@ Singleton {
         const goal = goalFor(String(target));
         if (!goal)
             return;
+        if (nativeSticky) {
+            Niri.focusWorkspaceId(goal.id);
+            return;
+        }
         if (busy) {
             pendingGoal = goal;
             // Pressed again during a slide: the pictures are still up, so just go on.
@@ -419,7 +466,7 @@ Singleton {
     // and dropped them.
     Process {
         id: keyReader
-        running: root.loaded && root.active
+        running: root.loaded && root.emulated
         command: ["sh", "-c", 'mkdir -m 700 -p "$(dirname "$1")" && { [ -p "$1" ] || { rm -f "$1"; mkfifo -m 600 "$1"; }; } && exec setpriv --pdeathsig KILL cat 0<>"$1"', "sh", root.keyPipe]
         stdout: SplitParser {
             onRead: line => root.switchTo(line.trim())
@@ -451,6 +498,8 @@ Singleton {
     }
 
     function follow(workspace) {
+        if (nativeSticky)
+            return;
         for (const id of ids) {
             const w = Niri.windows[id];
             if (w && w.workspace_id !== workspace.id)
@@ -462,6 +511,21 @@ Singleton {
         target: Niri
         // The first window list drops windows that closed while the shell was down.
         function onWindowsChanged() {
+            for (const key in Niri.windows) {
+                const isNative = Niri.windows[key].is_sticky !== undefined;
+                if (isNative !== root.nativeSticky) {
+                    root.nativeSticky = isNative;
+                    // Rules and keys of the workaround go once niri does it itself.
+                    root.writeConfig(null);
+                }
+                break;
+            }
+            if (root.nativeSticky) {
+                root.checked = true;
+                root.readNative();
+                root.pipMoved();
+                return;
+            }
             if (!root.checked) {
                 root.checked = true;
                 root.ids = root.ids.filter(id => Niri.windows[id]);

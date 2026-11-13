@@ -190,6 +190,15 @@ Singleton {
         }, ["toggle-window-rule-opacity", "--id", String(windowId)]);
     }
 
+    // Makes a window sticky or not. Only niri-falcon has this action, see services/Sticky.qml.
+    function toggleSticky(windowId) {
+        request({
+            ToggleWindowSticky: {
+                id: windowId
+            }
+        }, ["toggle-window-sticky", "--id", String(windowId)]);
+    }
+
     function focusWorkspace(index) {
         action("focus-workspace", String(index));
     }

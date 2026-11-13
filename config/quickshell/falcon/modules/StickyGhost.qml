@@ -20,7 +20,7 @@ import qs.services
 PanelWindow {
     id: root
 
-    visible: Sticky.active
+    visible: Sticky.emulated
     screen: Quickshell.screens.find(s => s.name === (Sticky.ghostOutput || Niri.focusedOutput)) || Quickshell.screens[0]
     anchors {
         top: true
@@ -110,7 +110,7 @@ PanelWindow {
     // wakes this, so a fresh picture is ready by the time the number key follows.
     IdleMonitor {
         id: idle
-        enabled: Sticky.active
+        enabled: Sticky.emulated
         timeout: 2
         respectInhibitors: false
     }
@@ -119,7 +119,7 @@ PanelWindow {
     Timer {
         interval: root.period
         repeat: true
-        running: Sticky.active && !Sticky.ghostShown && !idle.isIdle && !Niri.overview && !Lock.active && root.visible
+        running: Sticky.emulated && !Sticky.ghostShown && !idle.isIdle && !Niri.overview && !Lock.active && root.visible
         triggeredOnStart: true
         onTriggered: {
             const shown = Sticky.shownNow();

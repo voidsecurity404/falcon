@@ -313,7 +313,7 @@ GlassIsland {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         // By id: a number means that workspace on the focused screen, not on this bar's screen.
-                        onClicked: Sticky.active ? Sticky.switchTo(chip.ws.idx) : Niri.focusWorkspaceId(chip.modelData)
+                        onClicked: Sticky.emulated ? Sticky.switchTo(chip.ws.idx) : Niri.focusWorkspaceId(chip.modelData)
                     }
                 }
             }
