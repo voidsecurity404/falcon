@@ -194,28 +194,82 @@ fn parse_updates(text: &str, aur: bool, out: &mut Vec<Update>) {
     }
 }
 
+/// Runs a command with a time limit; a hung network must not keep the
+/// Updates page spinning forever.
+fn output_within(cmd: &str, args: &[&str], secs: u64) -> Result<std::process::Output, String> {
+    use std::io::Read;
+    use std::process::Stdio;
+    let mut child = Command::new(cmd)
+        .args(args)
+        .env("LC_ALL", "C")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    let mut out = child.stdout.take().unwrap();
+    let mut err = child.stderr.take().unwrap();
+    let reader = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = out.read_to_end(&mut b);
+        b
+    });
+    let ereader = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = err.read_to_end(&mut b);
+        b
+    });
+    let start = std::time::Instant::now();
+    let status = loop {
+        if let Some(st) = child.try_wait().map_err(|e| e.to_string())? {
+            break st;
+        }
+        if start.elapsed() > std::time::Duration::from_secs(secs) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("timeout".into());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    };
+    Ok(std::process::Output { status, stdout: reader.join().unwrap_or_default(), stderr: ereader.join().unwrap_or_default() })
+}
+
+/// The error text when updates could not be checked for lack of network.
+pub const UPDATES_OFFLINE: &str = "offline";
+
 /// Waiting updates. `checkupdates` works on its own copy of the database,
 /// so nothing here needs root or changes the system.
 pub fn load_updates() -> Result<Vec<Update>, String> {
     let mut out = Vec::new();
-    if have("checkupdates") {
-        let o = Command::new("checkupdates")
-            .env("LC_ALL", "C")
-            .output()
-            .map_err(|e| e.to_string())?;
-        match o.status.code() {
-            Some(0) => parse_updates(&String::from_utf8_lossy(&o.stdout), false, &mut out),
-            Some(2) => {}
-            _ => {
-                let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
-                return Err(if err.is_empty() { "checkupdates failed".into() } else { err });
-            }
-        }
-    } else {
+    if !have("checkupdates") {
         return Err("checkupdates is missing (pacman-contrib)".into());
     }
+    if crate::net::offline() {
+        return Err(UPDATES_OFFLINE.into());
+    }
+    let o = match output_within("checkupdates", &[], 120) {
+        Ok(o) => o,
+        Err(e) if e == "timeout" => {
+            crate::net::lost();
+            return Err(UPDATES_OFFLINE.into());
+        }
+        Err(e) => return Err(e),
+    };
+    match o.status.code() {
+        Some(0) => parse_updates(&String::from_utf8_lossy(&o.stdout), false, &mut out),
+        Some(2) => {}
+        _ => {
+            let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
+            // "Cannot fetch updates": no mirror answered
+            if err.contains("Cannot fetch") || err.is_empty() {
+                crate::net::lost();
+                return Err(UPDATES_OFFLINE.into());
+            }
+            return Err(err.trim_start_matches("==> ERROR:").trim().to_string());
+        }
+    }
     if have("yay") {
-        if let Ok(o) = Command::new("yay").args(["-Qua"]).env("LC_ALL", "C").output() {
+        if let Ok(o) = output_within("yay", &["-Qua"], 45) {
             parse_updates(&String::from_utf8_lossy(&o.stdout), true, &mut out);
         }
     }

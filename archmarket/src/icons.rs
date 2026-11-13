@@ -84,8 +84,18 @@ impl Icons {
         }
     }
 
+    pub fn ready(&self, key: &str) -> bool {
+        matches!(self.slots.get(key), Some(Slot::Ready(_)))
+    }
+
     pub fn waiting(&self, key: &str) -> bool {
         matches!(self.slots.get(key), Some(Slot::Waiting))
+    }
+
+    /// The connection is back: pictures that could not be fetched are
+    /// asked for again the next time they are drawn.
+    pub fn retry_missing(&mut self) {
+        self.slots.retain(|_, s| !matches!(s, Slot::Missing));
     }
 
     /// Forget a package's icon, after it was installed or removed.
@@ -104,7 +114,18 @@ fn load(src: &Src) -> Option<ColorImage> {
             .or_else(|| web_icon(pkg)),
         Src::Web(pkg) => web_icon(pkg),
         Src::Url(url) => {
-            let mut resp = crate::aur::agent(20).get(url).call().ok()?;
+            if crate::net::offline() {
+                return None;
+            }
+            let mut resp = match crate::net::agent(20).get(url).call() {
+                Ok(r) => r,
+                Err(e) => {
+                    if crate::net::is_network(&e) {
+                        crate::net::lost();
+                    }
+                    return None;
+                }
+            };
             let bytes = resp.body_mut().with_config().limit(25 << 20).read_to_vec().ok()?;
             let img = image::load_from_memory(&bytes).ok()?;
             let img = if img.width() > 1400 { img.resize(1400, 1400 * 4, image::imageops::FilterType::Triangle) } else { img };
@@ -225,7 +246,7 @@ fn web_icon(pkg: &str) -> Option<ColorImage> {
         .and_then(|t| t.elapsed().ok())
         .map(|age| age.as_secs() < 30 * 24 * 3600)
         .unwrap_or(false);
-    if recent {
+    if recent || crate::net::offline() {
         return None;
     }
     match fetch_web_icon(pkg) {
@@ -247,11 +268,16 @@ fn fetch_web_icon(pkg: &str) -> Result<Option<Vec<u8>>, ()> {
     if want.len() < 3 {
         return Ok(None);
     }
-    let agent = crate::aur::agent(12);
+    let agent = crate::net::agent(12);
+    let failed = |e: ureq::Error| {
+        if crate::net::is_network(&e) {
+            crate::net::lost();
+        }
+    };
     let mut resp = agent
         .post("https://flathub.org/api/v2/search")
         .send_json(serde_json::json!({ "query": words, "hits_per_page": 6 }))
-        .map_err(|_| ())?;
+        .map_err(failed)?;
     let v: serde_json::Value = resp.body_mut().read_json().map_err(|_| ())?;
     let hits = v["hits"].as_array().cloned().unwrap_or_default();
     let score = |h: &serde_json::Value| -> u8 {
@@ -270,7 +296,7 @@ fn fetch_web_icon(pkg: &str) -> Result<Option<Vec<u8>>, ()> {
     let best = hits.iter().map(|h| (score(h), h)).filter(|(s, _)| *s > 0).max_by_key(|(s, _)| *s);
     let Some((_, hit)) = best else { return Ok(None) };
     let Some(url) = hit["icon"].as_str().filter(|u| u.starts_with("https://")) else { return Ok(None) };
-    let mut img = agent.get(url).call().map_err(|_| ())?;
+    let mut img = agent.get(url).call().map_err(failed)?;
     let bytes = img.body_mut().with_config().limit(4 << 20).read_to_vec().map_err(|_| ())?;
     Ok(image::load_from_memory(&bytes).is_ok().then_some(bytes))
 }

@@ -48,6 +48,7 @@ pub enum Glyph {
     Spark,
     Link,
     Alert,
+    Offline,
 }
 
 fn lerp(r: Rect, x: f32, y: f32) -> Pos2 {
@@ -192,6 +193,15 @@ pub fn glyph(p: &egui::Painter, r: Rect, g: Glyph, color: Color32) {
             closed(vec![lerp(r, 0.5, 0.1), lerp(r, 0.92, 0.86), lerp(r, 0.08, 0.86)]);
             p.line_segment([lerp(r, 0.5, 0.38), lerp(r, 0.5, 0.6)], st);
             p.circle_filled(lerp(r, 0.5, 0.73), w * 0.8, color);
+        }
+        Glyph::Offline => {
+            // Wi-Fi waves with a slash through them
+            let o = lerp(r, 0.5, 0.8);
+            for k in [0.62, 0.42] {
+                line(arc(o, s * k, -PI * 0.78, -PI * 0.22, 18));
+            }
+            p.circle_filled(o, w * 1.1, color);
+            p.line_segment([lerp(r, 0.14, 0.12), lerp(r, 0.86, 0.9)], st);
         }
     }
 }

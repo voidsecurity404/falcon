@@ -396,7 +396,25 @@ fn stage_of(line: &str) -> Option<String> {
 fn explain(log: &[String]) -> String {
     let text = log.join("\n").to_lowercase();
     let t = crate::i18n::t;
-    if text.contains("failed retrieving file") || text.contains("404") {
+    let network = [
+        "could not resolve host",
+        "failed to connect",
+        "couldn't connect",
+        "connection timed out",
+        "operation too slow",
+        "network is unreachable",
+        "connection refused",
+        "connection reset",
+        "dial tcp",
+        "no such host",
+        "temporary failure in name resolution",
+        "request failed",
+    ];
+    if network.iter().any(|n| text.contains(n)) || (text.contains("failed retrieving file") && crate::net::offline()) {
+        crate::net::lost();
+        return t("The internet connection was lost. Try again when it is back").into();
+    }
+    if text.contains("failed retrieving file") || text.contains("error: failed to retrieve some files") {
         return t("A file is missing on the mirror. Update the system first, then try again").into();
     }
     if text.contains("could not satisfy dependencies") || text.contains("breaks dependency") {
@@ -419,4 +437,33 @@ fn explain(log: &[String]) -> String {
         .find(|l| l.to_lowercase().contains("error"))
         .cloned()
         .unwrap_or_else(|| t("Something went wrong, see the log").into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::explain;
+    use crate::i18n::t;
+
+    fn lines(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn lost_connection_is_named() {
+        let log = lines(&[
+            ":: Retrieving packages...",
+            "error: failed retrieving file 'gimp-3.2.0-1-x86_64.pkg.tar.zst' from mirror : Could not resolve host: mirror",
+            "error: failed to commit transaction (failed to retrieve some files)",
+        ]);
+        let lost = t("The internet connection was lost. Try again when it is back");
+        assert_eq!(explain(&log), lost);
+        let yay = lines(&[" -> request failed: Get \"https://aur.archlinux.org/rpc\": dial tcp: connect: network is unreachable"]);
+        assert_eq!(explain(&yay), lost);
+    }
+
+    #[test]
+    fn missing_file_on_mirror_is_not_the_network() {
+        let log = lines(&["error: failed retrieving file 'x.pkg.tar.zst' from mirror : The requested URL returned error: 404"]);
+        assert_eq!(explain(&log), t("A file is missing on the mirror. Update the system first, then try again"));
+    }
 }

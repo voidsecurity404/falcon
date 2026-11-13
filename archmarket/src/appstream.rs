@@ -50,28 +50,38 @@ fn fresh(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// Where the catalog lives, downloading it when needed. `say` reports
-/// progress for the loading screen.
-pub fn locate(say: &dyn Fn(&str)) -> Option<PathBuf> {
+pub enum Found {
+    /// Up to date: the system's copy, or ours under two weeks old.
+    Ready(PathBuf),
+    /// Our copy, older than two weeks: use it now, refresh in the background.
+    Stale(PathBuf),
+    Missing,
+}
+
+/// The catalog already on this computer, without touching the network.
+pub fn find() -> Found {
     if let Some(p) = system_root() {
-        return Some(p);
+        return Found::Ready(p);
     }
     let root = cached_root();
-    let stamp = root.join(".stamp");
-    if root.join("xml/extra.xml.gz").is_file() && fresh(&stamp) {
-        return Some(root);
+    if !root.join("xml/extra.xml.gz").is_file() {
+        return Found::Missing;
     }
-    say("Downloading app catalog");
-    match download(&root) {
-        Ok(()) => {
-            let _ = std::fs::write(&stamp, b"");
-            Some(root)
-        }
-        Err(e) => {
-            eprintln!("archmarket: appstream download failed: {e}");
-            root.join("xml/extra.xml.gz").is_file().then_some(root)
-        }
+    if fresh(&root.join(".stamp")) { Found::Ready(root) } else { Found::Stale(root) }
+}
+
+/// Download the catalog into the cache.
+pub fn fetch() -> Result<PathBuf, String> {
+    if crate::net::offline() {
+        return Err("offline".into());
     }
+    let root = cached_root();
+    download(&root).inspect_err(|e| {
+        eprintln!("archmarket: appstream download failed: {e}");
+        let _ = std::fs::remove_dir_all(root.with_extension("new"));
+    })?;
+    let _ = std::fs::write(root.join(".stamp"), b"");
+    Ok(root)
 }
 
 fn download(root: &Path) -> Result<(), String> {
@@ -86,8 +96,12 @@ fn download(root: &Path) -> Result<(), String> {
         .ok_or("no mirror url")?
         .trim()
         .to_string();
-    let agent = crate::aur::agent(120);
-    let mut resp = agent.get(&url).call().map_err(|e| e.to_string())?;
+    let mut resp = crate::net::download_agent().get(&url).call().map_err(|e| {
+        if crate::net::is_network(&e) {
+            crate::net::lost();
+        }
+        e.to_string()
+    })?;
     let body = resp.body_mut().as_reader();
     let zstd = ruzstd::decoding::StreamingDecoder::new(body).map_err(|e| e.to_string())?;
     let tmp = root.with_extension("new");

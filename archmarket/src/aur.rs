@@ -2,15 +2,6 @@
 
 use crate::catalog::{Details, Pkg};
 use serde_json::Value;
-use std::time::Duration;
-
-pub fn agent(secs: u64) -> ureq::Agent {
-    ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(secs)))
-        .user_agent("archmarket/1.0")
-        .build()
-        .into()
-}
 
 fn encode(s: &str) -> String {
     let mut out = String::new();
@@ -23,13 +14,23 @@ fn encode(s: &str) -> String {
     out
 }
 
+/// The error text for "no network"; the window shows its own sentence.
+pub const OFFLINE: &str = "offline";
+pub const NOT_IN_AUR: &str = "not in the AUR";
+
 fn get(url: &str) -> Result<Value, String> {
-    let mut resp = agent(15).get(url).call().map_err(|e| match e {
-        ureq::Error::StatusCode(c) => format!("AUR answered {c}"),
-        ureq::Error::Io(_) | ureq::Error::HostNotFound | ureq::Error::ConnectionFailed => "offline".into(),
+    if crate::net::offline() {
+        return Err(OFFLINE.into());
+    }
+    let mut resp = crate::net::agent(15).get(url).call().map_err(|e| match e {
+        ureq::Error::StatusCode(c) => crate::i18n::tf("The AUR answered with error {}", &c.to_string()),
+        e if crate::net::is_network(&e) => {
+            crate::net::lost();
+            OFFLINE.into()
+        }
         e => e.to_string(),
     })?;
-    let v: Value = resp.body_mut().read_json().map_err(|e| e.to_string())?;
+    let v: Value = resp.body_mut().read_json().map_err(|_| crate::i18n::t("The AUR sent an unreadable answer").to_string())?;
     if v["type"] == "error" {
         return Err(v["error"].as_str().unwrap_or("AUR error").to_string());
     }
@@ -73,7 +74,7 @@ pub fn info_many(names: &[&str]) -> Result<Vec<Pkg>, String> {
 
 pub fn details(name: &str) -> Result<(Pkg, Details), String> {
     let v = get(&format!("https://aur.archlinux.org/rpc/v5/info?arg[]={}", encode(name)))?;
-    let r = v["results"].get(0).ok_or_else(|| "not in the AUR".to_string())?;
+    let r = v["results"].get(0).ok_or_else(|| NOT_IN_AUR.to_string())?;
     let list = |k: &str| -> Vec<String> {
         r[k].as_array().into_iter().flatten().filter_map(|x| x.as_str().map(str::to_string)).collect()
     };

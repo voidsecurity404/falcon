@@ -73,6 +73,8 @@ enum Msg {
     Status(&'static str),
     Repo(Vec<Pkg>, HashMap<String, usize>),
     Apps(HashMap<String, AppMeta>),
+    /// The catalog thread ended without a new catalog.
+    AppsDone,
     Local(HashMap<String, Local>),
     Aur { query: String, result: Result<Vec<Pkg>, String> },
     Picks(Vec<Pkg>),
@@ -162,6 +164,10 @@ pub struct Market {
     have_yay: bool,
     pending_show: Option<String>,
     pending_install: Option<String>,
+    /// `net::generation()` last seen: a change means the connection is back.
+    net_gen: u64,
+    apps_loading: bool,
+    picks_loading: bool,
 }
 
 fn spawn(tx: &Sender<Msg>, ctx: &egui::Context, f: impl FnOnce() -> Msg + Send + 'static) {
@@ -186,22 +192,7 @@ impl Market {
             Msg::Repo(list, index)
         });
         spawn(&tx, ctx, || Msg::Local(catalog::load_local()));
-        {
-            let tx2 = tx.clone();
-            let ctx2 = ctx.clone();
-            spawn(&tx, ctx, move || {
-                let say = |s: &str| {
-                    let s: &'static str = if s.starts_with("Downloading") { "Downloading app catalog" } else { "Loading" };
-                    let _ = tx2.send(Msg::Status(s));
-                    ctx2.request_repaint();
-                };
-                match appstream::locate(&say) {
-                    Some(root) => Msg::Apps(appstream::load(&root, crate::i18n::ru())),
-                    None => Msg::Apps(HashMap::new()),
-                }
-            });
-        }
-        spawn(&tx, ctx, || Msg::Picks(crate::aur::info_many(AUR_PICKS).unwrap_or_default()));
+        crate::net::start(ctx.clone());
         let now = Instant::now();
         let mut m = Market {
             pal,
@@ -248,7 +239,12 @@ impl Market {
             have_yay: catalog::have("yay"),
             pending_show: None,
             pending_install: None,
+            net_gen: crate::net::generation(),
+            apps_loading: false,
+            picks_loading: false,
         };
+        m.load_apps(ctx);
+        m.load_picks(ctx);
         m.check_updates(ctx);
         // Start somewhere else: `--search TEXT`, `--page installed|updates|N`, `--show PACKAGE`.
         let args: Vec<String> = std::env::args().collect();
@@ -270,6 +266,82 @@ impl Market {
         m
     }
 
+    /// The AppStream catalog: what is on disk at once, then a download when
+    /// it is missing or two weeks old. Without a connection the store works
+    /// on the package lists alone and tries again when it is back.
+    fn load_apps(&mut self, ctx: &egui::Context) {
+        if self.apps_loading {
+            return;
+        }
+        self.apps_loading = true;
+        let tx = self.tx.clone();
+        let ctx2 = ctx.clone();
+        spawn(&self.tx, ctx, move || {
+            let send = |m: Msg| {
+                let _ = tx.send(m);
+                ctx2.request_repaint();
+            };
+            let ru = crate::i18n::ru();
+            match appstream::find() {
+                appstream::Found::Ready(root) => return Msg::Apps(appstream::load(&root, ru)),
+                appstream::Found::Stale(root) => {
+                    send(Msg::Apps(appstream::load(&root, ru)));
+                    if let Ok(root) = appstream::fetch() {
+                        return Msg::Apps(appstream::load(&root, ru));
+                    }
+                    return Msg::AppsDone;
+                }
+                appstream::Found::Missing => {}
+            }
+            if !crate::net::offline() {
+                send(Msg::Status("Downloading app catalog"));
+            }
+            match appstream::fetch() {
+                Ok(root) => Msg::Apps(appstream::load(&root, ru)),
+                Err(_) => Msg::Apps(HashMap::new()),
+            }
+        });
+    }
+
+    fn load_picks(&mut self, ctx: &egui::Context) {
+        if self.picks_loading || !self.picks.is_empty() {
+            return;
+        }
+        self.picks_loading = true;
+        spawn(&self.tx, ctx, || Msg::Picks(crate::aur::info_many(AUR_PICKS).unwrap_or_default()));
+    }
+
+    /// The connection came back: repeat everything that failed without it.
+    fn reconnected(&mut self, ctx: &egui::Context) {
+        self.icons.retry_missing();
+        self.load_picks(ctx);
+        if self.cat.apps.is_empty() {
+            self.load_apps(ctx);
+        }
+        if matches!(self.updates, Some(Err(_))) {
+            self.updates_loading = false;
+            self.check_updates(ctx);
+        }
+        if self.aur_error.is_some() {
+            self.aur_sent.clear();
+            self.aur_error = None;
+        }
+        self.details.retain(|_, d| !matches!(d, Detail::Failed(_)));
+        if let Some(name) = self.sheet.as_ref().filter(|s| s.closing.is_none()).map(|s| s.name.clone()) {
+            self.fetch_details(ctx, &name);
+        }
+    }
+
+    /// Install and update need the network: say so at once instead of
+    /// asking for the password and failing after it.
+    fn refuse_offline(&mut self) -> bool {
+        if crate::net::offline() {
+            self.toast = Some((t("No internet connection: installing needs it").into(), Instant::now(), false));
+            return true;
+        }
+        false
+    }
+
     fn check_updates(&mut self, ctx: &egui::Context) {
         if self.updates_loading {
             return;
@@ -279,6 +351,11 @@ impl Market {
     }
 
     fn poll(&mut self, ctx: &egui::Context) {
+        let net_gen = crate::net::generation();
+        if net_gen != self.net_gen {
+            self.net_gen = net_gen;
+            self.reconnected(ctx);
+        }
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
                 Msg::Status(s) => self.status = s,
@@ -289,7 +366,13 @@ impl Market {
                     self.hits_for.clear();
                     self.status = "Loading app catalog";
                 }
+                Msg::AppsDone => self.apps_loading = false,
                 Msg::Apps(apps) => {
+                    // a refresh that failed never empties a catalog already shown
+                    self.apps_loading = false;
+                    if apps.is_empty() && !self.cat.apps.is_empty() {
+                        continue;
+                    }
                     self.cat.apps = apps;
                     self.apps_ready = true;
                     self.cat_lists.clear();
@@ -320,6 +403,7 @@ impl Market {
                     }
                 }
                 Msg::Picks(list) => {
+                    self.picks_loading = false;
                     self.picks = list.iter().map(|p| p.name.clone()).collect();
                     for p in list {
                         self.aur.insert(p.name.clone(), p);
@@ -539,6 +623,9 @@ impl Market {
             match act {
                 Act::Show(name) => self.open_sheet(ctx, &name),
                 Act::Install(name) => {
+                    if self.refuse_offline() {
+                        continue;
+                    }
                     let aur = !self.cat.index.contains_key(&name);
                     self.jobs.add(Kind::Install, vec![name], aur);
                     self.jobs.mark_seen();
@@ -575,6 +662,9 @@ impl Market {
                     }
                 }
                 Act::UpgradeAll => {
+                    if self.refuse_offline() {
+                        continue;
+                    }
                     let aur = matches!(&self.updates, Some(Ok(l)) if l.iter().any(|u| u.aur));
                     self.jobs.add(Kind::Upgrade, Vec::new(), aur);
                 }
@@ -600,6 +690,10 @@ impl Market {
 
     fn open_sheet(&mut self, ctx: &egui::Context, name: &str) {
         self.sheet = Some(Sheet { name: name.to_string(), opened: Instant::now(), closing: None });
+        self.fetch_details(ctx, name);
+    }
+
+    fn fetch_details(&mut self, ctx: &egui::Context, name: &str) {
         if !self.details.contains_key(name) {
             self.details.insert(name.to_string(), Detail::Loading);
             let n = name.to_string();
@@ -844,7 +938,8 @@ impl Market {
         p.text(foot.left_top() + vec2(14.0, 12.0), Align2::LEFT_TOP, tf("{} packages", &pk), semi(13.0), pal.text);
         p.text(foot.left_top() + vec2(14.0, 31.0), Align2::LEFT_TOP, tf("{} apps with icons", &ap), body(12.0), pal.muted);
         let mut x = foot.left() + 14.0;
-        for (name, ok) in [("pacman", true), ("yay", self.have_yay)] {
+        let net_ok = !crate::net::offline();
+        for (name, ok) in [("pacman", true), ("yay", self.have_yay), (t("internet"), net_ok)] {
             let c = if ok { pal.good } else { pal.error };
             p.circle_filled(pos2(x + 3.0, foot.bottom() - 15.0), 3.0, c);
             let g = p.layout_no_wrap(name.into(), mono(11.0), pal.muted);
@@ -917,7 +1012,17 @@ impl Market {
         let hint_r = Rect::from_min_max(pos2(bar.right() + 16.0, bar.top()), pos2(r.right() - 32.0, bar.bottom()));
         if hint_r.width() > 160.0 {
             let busy = self.job_list.iter().filter(|j| j.active()).count();
-            if busy > 0 {
+            if crate::net::offline() {
+                let g = p.layout_no_wrap(t("No internet").into(), semi(12.5), pal.error);
+                let pw = g.size().x + 46.0;
+                let pill = Rect::from_min_size(pos2(hint_r.right() - pw, hint_r.center().y - 15.0), vec2(pw, 30.0));
+                p.rect_filled(pill, CornerRadius::same(15), alpha(pal.error, 0.13));
+                p.rect_stroke(pill, CornerRadius::same(15), Stroke::new(1.0, alpha(pal.error, 0.35)), StrokeKind::Inside);
+                glyph(&p, Rect::from_center_size(pos2(pill.left() + 18.0, pill.center().y), vec2(16.0, 16.0)), Glyph::Offline, pal.error);
+                p.galley(pos2(pill.left() + 32.0, pill.center().y - g.size().y / 2.0), g, pal.error);
+                let tip = ui.interact(pill, Id::new("offline-pill"), Sense::hover());
+                tip.on_hover_text(t("Installed apps, removing and the package lists work without it. Searching the AUR, icons, screenshots and installing come back by themselves when the connection does."));
+            } else if busy > 0 {
                 spinner(&p, pos2(hint_r.right() - 10.0, hint_r.center().y), 8.0, pal.accent, ui.input(|i| i.time));
                 p.text(pos2(hint_r.right() - 26.0, hint_r.center().y), Align2::RIGHT_CENTER, tf("{} in progress", &busy.to_string()), body(13.0), pal.muted);
             } else {
@@ -1001,6 +1106,10 @@ impl Market {
 
     fn discover(&mut self, ui: &mut Ui) {
         self.scroll("discover").show(ui, |ui| {
+            if self.apps_ready && self.cat.apps.is_empty() {
+                ui.add_space(4.0);
+                self.catalog_note(ui);
+            }
             self.hero(ui);
             for (si, (title, names)) in SHELVES.iter().enumerate() {
                 let list: Vec<String> = names
@@ -1037,9 +1146,15 @@ impl Market {
             .copied()
             .filter(|n| self.cat.index.contains_key(*n) && self.cat.apps.get(*n).and_then(|a| a.icon.as_ref()).is_some())
             .collect();
+        // no catalog (offline on the first start): no empty hero either
+        if picks.is_empty() && self.apps_ready {
+            return;
+        }
         let w = ui.available_width();
         let (r, _) = ui.allocate_exact_size(vec2(w, 236.0), Sense::hover());
         if picks.is_empty() {
+            // the catalog is still loading: a quiet placeholder
+            ui.painter().rect_filled(r, CornerRadius::same(26), alpha(self.pal.text, 0.04));
             return;
         }
         if self.hero_since.elapsed() > Duration::from_secs(7) && self.sheet.is_none() {
@@ -1308,6 +1423,9 @@ impl Market {
                 glyph(p, Rect::from_min_size(hr.min + vec2(0.0, 6.0), vec2(26.0, 26.0)), CATS[i].glyph, pal.accent);
                 p.text(hr.min + vec2(40.0, 2.0), Align2::LEFT_TOP, title, display(22.0), pal.text);
                 p.text(hr.min + vec2(40.0, 36.0), Align2::LEFT_TOP, tf("{} apps", &list.len().to_string()), body(13.0), pal.muted);
+                if self.cat.apps.is_empty() {
+                    self.catalog_note(ui);
+                }
                 for row in 0..rows {
                     let (rr, _) = ui.allocate_exact_size(vec2(w, ch), Sense::hover());
                     if !ui.is_rect_visible(rr) {
@@ -1451,7 +1569,13 @@ impl Market {
                 let sub = if self.aur_loading {
                     t("Searching…").to_string()
                 } else if let Some(e) = &self.aur_error {
-                    if e == "offline" { t("No connection to the AUR").into() } else { e.clone() }
+                    if e == crate::aur::OFFLINE {
+                        t("No internet: the AUR will be searched when the connection is back").into()
+                    } else if e.contains("Too many") {
+                        t("Too many results in the AUR, type a longer name").into()
+                    } else {
+                        e.clone()
+                    }
                 } else {
                     tf("{} found", &aur.len().to_string())
                 };
@@ -1472,6 +1596,29 @@ impl Market {
                 }
             }
         });
+    }
+
+    /// A quiet line with an icon, for things that wait for the network.
+    fn note(&self, ui: &mut Ui, g: Glyph, text: &str) {
+        let w = ui.available_width();
+        let gal = wrap_galley(ui, text, body(13.0), self.pal.muted, w - 56.0, 3);
+        let (r, _) = ui.allocate_exact_size(vec2(w, gal.size().y + 24.0), Sense::hover());
+        let p = ui.painter();
+        p.rect_filled(r, CornerRadius::same(14), alpha(self.pal.text, 0.04));
+        glyph(p, Rect::from_min_size(r.min + vec2(16.0, 12.0), vec2(18.0, 18.0)), g, self.pal.muted);
+        p.galley(r.min + vec2(44.0, 12.0), gal, self.pal.muted);
+    }
+
+    /// Why the app catalog is empty, when it is.
+    fn catalog_note(&self, ui: &mut Ui) {
+        let text = if crate::net::offline() {
+            t("The app catalog is downloaded once and needs the internet. Until then packages show without icons and categories are empty; it loads by itself when the connection is back.")
+        } else if self.apps_loading {
+            t("Downloading the app catalog…")
+        } else {
+            t("The app catalog could not be downloaded. Packages show without icons for now.")
+        };
+        self.note(ui, if crate::net::offline() { Glyph::Offline } else { Glyph::Alert }, text);
     }
 
     fn empty(&self, ui: &mut Ui, text: &str) {
@@ -1529,6 +1676,13 @@ impl Market {
                 match &self.updates {
                     Some(Ok(l)) if l.is_empty() => t("Everything is up to date").into(),
                     Some(Ok(l)) => tf("{} updates are waiting", &l.len().to_string()),
+                    Some(Err(e)) if e == catalog::UPDATES_OFFLINE => {
+                        if crate::net::offline() {
+                            t("No internet: updates are checked when the connection is back").into()
+                        } else {
+                            t("The mirrors did not answer, try again later").into()
+                        }
+                    }
                     Some(Err(e)) => e.clone(),
                     None => String::new(),
                 }
@@ -1661,7 +1815,22 @@ impl Market {
             self.acts.push(Act::Close);
         }
         let Some(it) = self.item(name) else {
-            p.text(r.center(), Align2::CENTER_CENTER, t("Loading"), body(14.0), pal.muted);
+            // nothing known yet: an AUR package whose details did not come
+            let (g, text, color) = match self.details.get(name) {
+                Some(Detail::Failed(e)) if e == crate::aur::OFFLINE => {
+                    (Glyph::Offline, t("This package is in the AUR. Its page loads when the internet is back."), pal.muted)
+                }
+                Some(Detail::Failed(_)) => (Glyph::Alert, t("Not found in the repositories or the AUR"), pal.error),
+                _ => {
+                    spinner(&p, r.center() - vec2(0.0, 24.0), 12.0, pal.accent, ui.input(|i| i.time));
+                    ui.ctx().request_repaint();
+                    p.text(r.center() + vec2(0.0, 4.0), Align2::CENTER_TOP, t("Loading"), body(14.0), pal.muted);
+                    return;
+                }
+            };
+            glyph(&p, Rect::from_center_size(r.center() - vec2(0.0, 30.0), vec2(34.0, 34.0)), g, color);
+            let gal = wrap_galley(ui, text, body(14.5), color, (r.width() - 120.0).min(420.0), 3);
+            p.galley(pos2(r.center().x - gal.size().x / 2.0, r.center().y + 4.0), gal, color);
             return;
         };
         let app = self.cat.app(name).cloned();
@@ -1720,7 +1889,14 @@ impl Market {
                     }
                     // screenshots
                     if let Some(a) = &app {
-                        if !a.screenshots.is_empty() {
+                        let any_shot = a.screenshots.iter().any(|u| {
+                            let k = format!("shot:{u}");
+                            self.icons.ready(&k) || self.icons.waiting(&k)
+                        });
+                        if !a.screenshots.is_empty() && !any_shot && crate::net::offline() {
+                            ui.add_space(14.0);
+                            self.note(ui, Glyph::Offline, t("Screenshots appear when the internet is back"));
+                        } else if !a.screenshots.is_empty() {
                             ui.add_space(14.0);
                             let sh = 230.0;
                             egui::ScrollArea::horizontal().id_salt(("shots", name)).auto_shrink([false, true]).show(ui, |ui| {
@@ -1813,7 +1989,14 @@ impl Market {
                                 facts.push(("Installed on", d.installed_on.clone()));
                             }
                         }
-                        Some(Detail::Failed(e)) => facts.push(("Details", e.clone())),
+                        Some(Detail::Failed(e)) => facts.push((
+                            "Details",
+                            match e.as_str() {
+                                crate::aur::OFFLINE => t("Need the internet, they load when it is back").into(),
+                                crate::aur::NOT_IN_AUR | "no such package" | "pacman failed" => t("Not found in the repositories or the AUR").into(),
+                                _ => e.clone(),
+                            },
+                        )),
                         _ => {
                             let (lr, _) = ui.allocate_exact_size(vec2(w, 40.0), Sense::hover());
                             spinner(ui.painter(), lr.center(), 10.0, pal.accent, time);
@@ -2000,7 +2183,16 @@ impl Market {
             let p = ui.painter();
             let g = p.layout_no_wrap(text.clone(), semi(13.5), pal.text);
             let w = g.size().x + 64.0;
-            let r = Rect::from_center_size(pos2(full.center().x + 126.0, full.top() + 48.0 + (1.0 - k) * -20.0), vec2(w, 40.0));
+            // over the sheet it would hide the back button and the title:
+            // then it stands in the free part left of the sheet
+            let mut cx = full.center().x + 126.0;
+            if self.sheet.is_some() {
+                let free = full.width() - (full.width() * 0.56).clamp(520.0, 680.0);
+                if w + 32.0 < free {
+                    cx = full.left() + free / 2.0;
+                }
+            }
+            let r = Rect::from_center_size(pos2(cx, full.top() + 48.0 + (1.0 - k) * -20.0), vec2(w, 40.0));
             let c = if ok { pal.good } else { pal.error };
             shadow(p, r, 20.0, k);
             p.rect_filled(r, CornerRadius::same(20), alpha(mix(pal.bg, pal.pill, 0.4), k));

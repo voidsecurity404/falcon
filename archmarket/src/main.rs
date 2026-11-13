@@ -14,6 +14,7 @@ mod i18n;
 mod icons;
 mod jobs;
 mod meter;
+mod net;
 mod theme;
 mod widgets;
 
