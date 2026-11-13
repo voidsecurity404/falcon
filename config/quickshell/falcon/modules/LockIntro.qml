@@ -223,12 +223,19 @@ PanelWindow {
         visible: root.playing
         readonly property real cy: height / 2
 
+        // Live time: a value read once at shell start showed a stale clock until hyprlock took over.
+        SystemClock {
+            id: clock
+
+            precision: SystemClock.Minutes
+        }
+
         // The clock, $TIME at 0, 170, Geist Light 132.
         Text {
             id: time
 
             readonly property real rise: root.part(520, 980, "out")
-            text: Qt.formatTime(new Date(), "HH:mm")
+            text: Qt.formatTime(clock.date, "HH:mm")
             color: Theme.text
             font.family: "Geist"
             font.weight: Font.Light
@@ -244,7 +251,7 @@ PanelWindow {
         // The date at 0, 66, Geist 19.
         Text {
             readonly property real rise: root.part(640, 1060, "out")
-            text: Qt.formatDate(new Date(), "dd.MM.yyyy")
+            text: Qt.formatDate(clock.date, "dd.MM.yyyy")
             color: Theme.text
             font.family: "Geist"
             font.pixelSize: 25
