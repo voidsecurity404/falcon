@@ -1,0 +1,12 @@
+#!/bin/sh
+# Force-closes the focused window: SIGKILL to the process that owns it, for an app that no
+# longer answers the normal close. Bound in Settings → Shortcuts.
+pid=$(niri msg -j focused-window 2>/dev/null | python3 -c 'import json,sys
+w = json.load(sys.stdin) or {}
+print(w.get("pid") or "")' 2>/dev/null)
+[ -n "$pid" ] || exit 0
+# Never the shell itself, the compositor, or this script's parents.
+case "$(cat /proc/"$pid"/comm 2>/dev/null)" in
+    qs|niri|niri-falcon|kitty) [ "$1" = "--any" ] || exit 0 ;;
+esac
+kill -KILL "$pid"

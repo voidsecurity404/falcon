@@ -430,7 +430,32 @@ ACTIONS = {
     "translate": ("Translate from screen", "spawn " + desk("region", "translate"), False),
     "pin": ("Pin an area of the screen", "spawn " + desk("region", "pin"), False),
     "widgets": ("Edit widgets", "spawn " + desk("widgets"), False),
+    "kill": ("Force close window", f'spawn "{SCRIPTS}falcon-kill"', False),
+    "widthUp": ("Wider window", 'set-column-width "+5%"', True),
+    "widthDown": ("Narrower window", 'set-column-width "-5%"', True),
 }
+
+# Actions only niri-falcon (~/Downloads/niri-falcon) has. Their keys go to generated/falcon.kdl,
+# which only its session reads (config/niri/falcon-config.kdl): stock niri would reject them.
+FORK_ACTIONS = {
+    "minimize": ("Minimize window", "minimize-window", False),
+    "unminimize": ("Bring back the last minimized window", "unminimize-window", False),
+    "onTop": ("Keep window above others", "toggle-window-on-top", False),
+    "opacityUp": ("Window more opaque", 'set-window-opacity "+0.05"', True),
+    "opacityDown": ("Window more see-through", 'set-window-opacity "-0.05"', True),
+    "opacityReset": ("Window opacity back", 'set-window-opacity "reset"', False),
+    "zoomIn": ("Zoom in", "zoom-in", True),
+    "zoomOut": ("Zoom out", "zoom-out", True),
+    "zoomReset": ("Zoom off", "zoom-reset", False),
+    "snapLeft": ("Window to the left half", 'snap-floating-window "left"', False),
+    "snapRight": ("Window to the right half", 'snap-floating-window "right"', False),
+    "snapTop": ("Window to the top half", 'snap-floating-window "top"', False),
+    "snapBottom": ("Window to the bottom half", 'snap-floating-window "bottom"', False),
+    "snapFill": ("Window fills the screen", 'snap-floating-window "fill"', False),
+    "snapCenter": ("Window to the middle", 'snap-floating-window "center"', False),
+}
+
+FORK = HOME / ".local/bin/niri-falcon"
 
 
 def fixed_keys():
@@ -443,6 +468,8 @@ def binds_kdl(s):
     fixed = fixed_keys()
     out = ["// Generated file: change it in Settings → Shortcuts.", "binds {"]
     for action, combo in s["binds"].items():
+        if action in FORK_ACTIONS:
+            continue
         if action not in ACTIONS:
             raise Bad(tr("Unknown action: {action}", action=action))
         combo = (combo or "").strip()
@@ -457,6 +484,45 @@ def binds_kdl(s):
             raise Bad(tr("{combo} is taken by a system shortcut", combo=combo))
         seen[norm] = action
         title, cmd, repeat = ACTIONS[action]
+        rep = "" if repeat else " repeat=false"
+        out.append(f"    {combo} hotkey-overlay-title={q(tr(title))}{rep} {{ {cmd}; }}")
+    return "\n".join(out + ["}"]) + "\n"
+
+
+def falcon_kdl(s):
+    """Options and keys of niri-falcon, see FORK_ACTIONS."""
+    f = s["falcon"]
+    out = ["// Generated file: options and keys of niri-falcon, read only by its session.", "falcon {"]
+    column = choice(f, "newColumn", ["after-focused", "before-focused", "start", "end"])
+    out.append(f"    new-column-position {q(column)}")
+    if f["focusPrevious"]:
+        out.append("    focus-previous-on-close")
+    if f["smartGaps"]:
+        out.append("    smart-gaps")
+    out.append(f"    dim-inactive {float(number(f, 'dim', 0, 1))}")
+    out.append(f"    floating-snap {float(number(f, 'snap', 0, 200))}")
+    if f["rememberFloating"]:
+        out.append("    remember-floating")
+    out.append(f"    zoom-step {float(number(f, 'zoomStep', 0.05, 4))}")
+    out += ["}", "", "binds {"]
+
+    taken = fixed_keys() | {(c or "").strip().lower() for a, c in s["binds"].items() if a not in FORK_ACTIONS}
+    seen = {}
+    for action, combo in s["binds"].items():
+        if action not in FORK_ACTIONS:
+            continue
+        combo = (combo or "").strip()
+        if not combo:
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9_+]+", combo):
+            raise Bad(tr("Invalid shortcut: {combo}", combo=combo))
+        norm = combo.lower()
+        if norm in seen:
+            raise Bad(tr("{combo} is assigned to two actions: {first} and {second}", combo=combo, first=seen[norm], second=action))
+        if norm in taken:
+            raise Bad(tr("{combo} is taken by a system shortcut", combo=combo))
+        seen[norm] = action
+        title, cmd, repeat = FORK_ACTIONS[action]
         rep = "" if repeat else " repeat=false"
         out.append(f"    {combo} hotkey-overlay-title={q(tr(title))}{rep} {{ {cmd}; }}")
     return "\n".join(out + ["}"]) + "\n"
@@ -564,7 +630,7 @@ def run_quiet(*cmd):
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
 
 
-def validate(settings_text, binds_text, defaults_text):
+def validate(settings_text, binds_text, defaults_text, falcon_text=None):
     with tempfile.TemporaryDirectory(prefix="falcon-") as tmp:
         copy = Path(tmp) / "niri"
         shutil.copytree(NIRI, copy)
@@ -573,6 +639,11 @@ def validate(settings_text, binds_text, defaults_text):
         (copy / "generated/binds.kdl").write_text(binds_text)
         (copy / "generated/window-defaults.kdl").write_text(defaults_text)
         res = subprocess.run(["niri", "validate", "-c", str(copy / "config.kdl")], capture_output=True, text=True)
+        # The fork's session reads one more file; only the fork can check it.
+        if res.returncode == 0 and falcon_text is not None:
+            (copy / "generated/falcon.kdl").write_text(falcon_text)
+            res = subprocess.run([str(FORK), "validate", "-c", str(copy / "falcon-config.kdl")],
+                                 capture_output=True, text=True)
         if res.returncode != 0:
             text = re.sub(r"\x1b\[[0-9;]*m", "", res.stderr + res.stdout)
             reason = [l.strip() for l in text.splitlines() if l.strip() and "DEBUG" not in l]
@@ -671,12 +742,16 @@ def main(argv):
         colors(s, argv[1])
         return
     settings_text, binds_text, defaults_text = settings_kdl(s), binds_kdl(s), window_defaults_kdl(s)
-    validate(settings_text, binds_text, defaults_text)
+    falcon_text = falcon_kdl(s)
+    fork = FORK.exists() and (NIRI / "falcon-config.kdl").exists()
+    validate(settings_text, binds_text, defaults_text, falcon_text if fork else None)
     idle_text, kitty_text = idle_conf(s), kitty_conf(s)
     choice(s["appearance"], "mode", ["dark", "light"])
     if argv[:1] == ["--check"]:
         return
     write_if_changed(NIRI / "generated/window-defaults.kdl", defaults_text)
+    if fork:
+        write_if_changed(NIRI / "generated/falcon.kdl", falcon_text)
     write_if_changed(NIRI / "generated/settings.kdl", settings_text)
     # Bloklash ekrani matnlari interfeys tilida.
     write_if_changed(CONFIG / "hypr/falcon-lang.conf", f"$pw_placeholder = {tr('Password')}\n$pw_fail = {tr('Wrong password')}\n")

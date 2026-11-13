@@ -68,6 +68,8 @@ targets=(
     .local/bin/falcon-songrec
     .local/bin/falcon-lyrics
     .local/bin/falcon-game
+    .local/bin/falcon-kill
+    .local/bin/falcon-battery-look
     .local/bin/falcon-keysounds
     .local/bin/falcon-wallget
     .local/bin/falcon-keys

@@ -80,6 +80,16 @@ Singleton {
             applyProfile(true);
     }
 
+    // Settings → Battery and power: a lighter look while on battery (bin/falcon-battery-look).
+    readonly property string batteryLook: Settings.get("power.batteryLook", "same")
+    function applyLook() {
+        if (!started)
+            return;
+        const look = Sys.hasBattery && onBattery ? batteryLook : "same";
+        Quickshell.execDetached([Ui.binDir + "falcon-battery-look", look]);
+    }
+    onBatteryLookChanged: applyLook()
+
     onSourceNowChanged: {
         if (started)
             sourceDelay.restart();
@@ -97,6 +107,7 @@ Singleton {
         onTriggered: {
             root.started = true;
             root.sourceSettled();
+            root.applyLook();
             root.refresh();
         }
     }
@@ -106,7 +117,10 @@ Singleton {
         id: sourceDelay
 
         interval: 3000
-        onTriggered: root.sourceSettled()
+        onTriggered: {
+            root.sourceSettled();
+            root.applyLook();
+        }
     }
 
     Timer {

@@ -938,6 +938,64 @@ LazyLoader {
                         ]
                     },
                     {
+                        title: Tr.t("More with niri-falcon"),
+                        when: ["@fork", true],
+                        items: [
+                            {
+                                key: "falcon.newColumn",
+                                label: Tr.t("Where a new window opens"),
+                                type: "choice",
+                                options: ["after-focused", "before-focused", "start", "end"],
+                                names: [Tr.t("Right of focused"), Tr.t("Left of focused"), Tr.t("At the start"), Tr.t("At the end")]
+                            },
+                            {
+                                key: "falcon.focusPrevious",
+                                label: Tr.t("After closing, focus the previous window"),
+                                hint: Tr.t("The one used before it, not its neighbor"),
+                                type: "toggle"
+                            },
+                            {
+                                key: "falcon.smartGaps",
+                                label: Tr.t("No gaps around a single window"),
+                                type: "toggle"
+                            },
+                            {
+                                key: "falcon.dim",
+                                label: Tr.t("Darken unfocused windows"),
+                                type: "slider",
+                                min: 0,
+                                max: 0.6,
+                                step: 0.02,
+                                unit: "percent"
+                            },
+                            {
+                                key: "falcon.snap",
+                                label: Tr.t("Floating windows snap to edges"),
+                                hint: Tr.t("Distance at which a dragged window snaps, 0 is off"),
+                                type: "slider",
+                                min: 0,
+                                max: 48,
+                                step: 2,
+                                unit: "px"
+                            },
+                            {
+                                key: "falcon.rememberFloating",
+                                label: Tr.t("Floating windows remember size and place"),
+                                hint: Tr.t("Each app opens where its last floating window was"),
+                                type: "toggle"
+                            },
+                            {
+                                key: "falcon.zoomStep",
+                                label: Tr.t("Zoom step"),
+                                type: "slider",
+                                min: 0.1,
+                                max: 1,
+                                step: 0.05,
+                                unit: "scale"
+                            }
+                        ]
+                    },
+                    {
                         title: Tr.t("Mouse and focus"),
                         items: [
                             {
@@ -1298,7 +1356,17 @@ LazyLoader {
                     },
                     {
                         title: Tr.t("Windows"),
-                        items: [win.bind("close", Tr.t("Close window")), win.bind("widthCycle", Tr.t("Column width")), win.bind("maximize", Tr.t("Maximize column")), win.bind("fullscreen", Tr.t("Fullscreen")), win.bind("sticky", Tr.t("Sticky window")), win.bind("overview", Tr.t("Overview")), win.bind("zen", Tr.t("Focus mode"))]
+                        items: [win.bind("close", Tr.t("Close window")), win.bind("widthCycle", Tr.t("Column width")), win.bind("maximize", Tr.t("Maximize column")), win.bind("fullscreen", Tr.t("Fullscreen")), win.bind("sticky", Tr.t("Sticky window")), win.bind("overview", Tr.t("Overview")), win.bind("zen", Tr.t("Focus mode")), win.bind("kill", Tr.t("Force close window")), win.bind("widthUp", Tr.t("Wider window")), win.bind("widthDown", Tr.t("Narrower window"))]
+                    },
+                    {
+                        title: Tr.t("Window tools"),
+                        when: ["@fork", true],
+                        items: [win.bind("minimize", Tr.t("Minimize window")), win.bind("unminimize", Tr.t("Bring back the last minimized window")), win.bind("onTop", Tr.t("Keep window above others")), win.bind("opacityUp", Tr.t("Window more opaque")), win.bind("opacityDown", Tr.t("Window more see-through")), win.bind("opacityReset", Tr.t("Window opacity back")), win.bind("zoomIn", Tr.t("Zoom in")), win.bind("zoomOut", Tr.t("Zoom out")), win.bind("zoomReset", Tr.t("Zoom off"))]
+                    },
+                    {
+                        title: Tr.t("Placing floating windows"),
+                        when: ["@fork", true],
+                        items: [win.bind("snapLeft", Tr.t("Window to the left half")), win.bind("snapRight", Tr.t("Window to the right half")), win.bind("snapTop", Tr.t("Window to the top half")), win.bind("snapBottom", Tr.t("Window to the bottom half")), win.bind("snapFill", Tr.t("Window fills the screen")), win.bind("snapCenter", Tr.t("Window to the middle"))]
                     },
                     {
                         title: Tr.t("Screen"),
@@ -1375,6 +1443,14 @@ LazyLoader {
                     {
                         title: Tr.t("Power mode"),
                         items: [
+                            {
+                                key: "power.batteryLook",
+                                label: Tr.t("Look on battery"),
+                                hint: Tr.t("Lighter: faster animations, less blur, no window shadows"),
+                                type: "choice",
+                                options: ["same", "light", "off"],
+                                names: [Tr.t("Same"), Tr.t("Lighter"), Tr.t("No animations")]
+                            },
                             {
                                 key: "power.auto",
                                 label: Tr.t("Follow the charger"),
@@ -1945,7 +2021,8 @@ LazyLoader {
             if (!when)
                 return true;
             const all = Array.isArray(when[0]) ? when : [when];
-            return all.every(c => c.slice(1).indexOf(Settings.get(c[0])) >= 0);
+            // "@fork": niri-falcon runs (its windows report is_sticky).
+            return all.every(c => c.slice(1).indexOf(c[0] === "@fork" ? Sticky.nativeSticky : Settings.get(c[0])) >= 0);
         }
 
         readonly property var shown: {

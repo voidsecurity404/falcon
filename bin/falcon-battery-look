@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# How the desktop looks on battery, from Settings → Battery and power (power.batteryLook):
+#   light  faster animations, one blur pass, no window shadows
+#   off    animations off, one blur pass, no window shadows
+#   same   nothing changes (the file is emptied)
+# Called by services/Power.qml when the power source settles and when the setting changes.
+# Blur stays on: without it the panels turn see-through (see falcon-game).
+set -euo pipefail
+
+file="${XDG_CONFIG_HOME:-$HOME/.config}/niri/generated/battery.kdl"
+case "${1:-same}" in
+light) anim='    slowdown 0.6' ;;
+off) anim='    off' ;;
+same)
+    if [[ -s "$file" ]]; then
+        : >"$file"
+        niri msg action load-config-file >/dev/null 2>&1 || true
+    fi
+    exit 0
+    ;;
+*)
+    echo "Usage: falcon-battery-look light|off|same" >&2
+    exit 2
+    ;;
+esac
+text=$(printf '// battery\nanimations {\n%s\n}\nblur {\n    passes 1\n}\nlayout {\n    shadow {\n        off\n    }\n}\n' "$anim")
+if [[ "$(cat "$file" 2>/dev/null)" != "$text" ]]; then
+    mkdir -p "$(dirname "$file")"
+    printf '%s\n' "$text" >"$file.$$.tmp"
+    mv "$file.$$.tmp" "$file"
+    niri msg action load-config-file >/dev/null 2>&1 || true
+fi

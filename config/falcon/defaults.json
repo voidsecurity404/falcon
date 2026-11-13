@@ -229,7 +229,25 @@
     "ocr": "Mod+P",
     "translate": "Mod+Alt+P",
     "pin": "Mod+Alt+S",
-    "widgets": "Mod+Shift+W"
+    "widgets": "Mod+Shift+W",
+    "kill": "Mod+Ctrl+Q",
+    "widthUp": "Mod+Ctrl+Shift+WheelScrollUp",
+    "widthDown": "Mod+Ctrl+Shift+WheelScrollDown",
+    "minimize": "Mod+Z",
+    "unminimize": "Mod+Shift+Z",
+    "onTop": "Mod+Shift+T",
+    "opacityUp": "Mod+Alt+WheelScrollUp",
+    "opacityDown": "Mod+Alt+WheelScrollDown",
+    "opacityReset": "Mod+Alt+0",
+    "zoomIn": "Mod+Ctrl+WheelScrollUp",
+    "zoomOut": "Mod+Ctrl+WheelScrollDown",
+    "zoomReset": "Mod+Ctrl+0",
+    "snapLeft": "Mod+Alt+Left",
+    "snapRight": "Mod+Alt+Right",
+    "snapTop": "Mod+Alt+Up",
+    "snapBottom": "Mod+Alt+Down",
+    "snapFill": "Mod+Alt+Return",
+    "snapCenter": "Mod+Alt+C"
   },
   "session": {
     "restore": true,
@@ -289,7 +307,8 @@
     "onBattery": "power-saver",
     "onCharger": "balanced",
     "chargeLimitOn": false,
-    "chargeLimit": 80
+    "chargeLimit": 80,
+    "batteryLook": "same"
   },
   "updates": {
     "enabled": true,
@@ -310,5 +329,14 @@
     "power": true,
     "chatClipboard": true,
     "notifyBoot": true
+  },
+  "falcon": {
+    "newColumn": "after-focused",
+    "focusPrevious": false,
+    "smartGaps": false,
+    "dim": 0,
+    "snap": 0,
+    "rememberFloating": false,
+    "zoomStep": 0.25
   }
 }

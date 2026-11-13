@@ -1,0 +1,4 @@
+// Read only by the niri-falcon session (its own `-c`), never by stock niri: the shared config,
+// then the fork's own options and keys, which stock niri would reject.
+include "config.kdl"
+include optional=true "generated/falcon.kdl"
