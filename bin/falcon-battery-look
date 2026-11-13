@@ -12,6 +12,8 @@ case "${1:-same}" in
 light) anim='    slowdown 0.6' ;;
 off) anim='    off' ;;
 same)
+    # An empty file rather than none: niri warns about a missing optional include on every reload.
+    [[ -e "$file" ]] || { mkdir -p "$(dirname "$file")"; : >"$file"; }
     if [[ -s "$file" ]]; then
         : >"$file"
         niri msg action load-config-file >/dev/null 2>&1 || true
