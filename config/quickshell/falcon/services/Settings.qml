@@ -53,6 +53,16 @@ Singleton {
 
     // keep: o'zi qayta urinadigan chaqiruvchi uchun (jadval), aks holda qaytarish aylanib qoladi.
     function set(path, value, keep) {
+        // A slider reports every pointer move, mostly with the same stepped value: writing the
+        // file again for it would run falcon-apply for nothing.
+        let existing = user;
+        for (const key of path.split(".")) {
+            existing = existing !== null && typeof existing === "object" ? existing[key] : undefined;
+            if (existing === undefined)
+                break;
+        }
+        if (existing !== undefined && JSON.stringify(existing) === JSON.stringify(value))
+            return;
         const copy = JSON.parse(JSON.stringify(user));
         const keys = path.split(".");
         let node = copy;
