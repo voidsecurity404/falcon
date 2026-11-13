@@ -10,12 +10,15 @@ import json
 import os
 import re
 import shlex
+import subprocess
 from pathlib import Path
 
 NIRI = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "niri"
 FIXED = NIRI / "cfg" / "binds.kdl"
 CHOSEN = NIRI / "generated" / "binds.kdl"
 USER = NIRI / "cfg" / "user.kdl"
+# Keys of niri-falcon's own actions (Settings → Shortcuts → Window tools), read only by its session.
+FORK = NIRI / "generated" / "falcon.kdl"
 
 # Groups in the order they are shown.
 GROUPS = ["Falcon", "Windows", "Workspaces", "Monitors", "Screen", "Media keys", "System", "Your keys"]
@@ -193,6 +196,15 @@ def squeeze(keys):
     return out
 
 
+def fork_running():
+    """generated/falcon.kdl counts only while the running niri is niri-falcon."""
+    try:
+        out = subprocess.run(["niri", "msg", "version"], capture_output=True, text=True, timeout=2).stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return "-falcon" in out
+
+
 def main():
     rows = {}
 
@@ -204,6 +216,11 @@ def main():
     for key, options, action in binds(CHOSEN):
         m = TITLE.search(options)
         add("Falcon", m.group(1) if m else action, key, translated=bool(m))
+    if FORK.exists() and fork_running():
+        for key, options, action in binds(FORK):
+            m = TITLE.search(options)
+            if m:
+                add("Windows", m.group(1), key, translated=True)
     for key, options, action in binds(FIXED):
         if key.startswith("Mod+Wheel") or key.startswith("Mod+Shift+Wheel"):
             continue

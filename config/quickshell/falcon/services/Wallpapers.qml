@@ -36,6 +36,8 @@ Singleton {
 
     // Before its small picture exists, a card shows the original or the first frame of the video.
     function thumbOf(path) {
+        if (!path)
+            return "";
         const name = nameOf(path);
         if (thumbs[name])
             return "file://" + stateDir + "/thumbs/" + name + ".jpg";

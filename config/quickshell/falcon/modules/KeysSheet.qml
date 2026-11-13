@@ -74,7 +74,11 @@ PanelWindow {
             Left: "←",
             Right: "→",
             Up: "↑",
-            Down: "↓"
+            Down: "↓",
+            WheelScrollUp: Tr.t("Wheel") + " ↑",
+            WheelScrollDown: Tr.t("Wheel") + " ↓",
+            WheelScrollLeft: Tr.t("Wheel") + " ←",
+            WheelScrollRight: Tr.t("Wheel") + " →"
         })
     // Media keys show their picture instead of a name.
     readonly property var icons: ({

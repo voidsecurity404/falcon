@@ -280,6 +280,7 @@ ShellRoot {
         }
         function close(): void {
             Ui.popup = "";
+            Lock.preview = false;
             if (Ui.regionPhase !== "")
                 Ui.regionCancel();
         }

@@ -2020,7 +2020,8 @@ LazyLoader {
             const when = item && item.when;
             if (!when)
                 return true;
-            const all = Array.isArray(when[0]) ? when : [when];
+            // A list read back through a model may be a sequence, for which Array.isArray is false.
+            const all = typeof when[0] === "string" ? [when] : when;
             // "@fork": niri-falcon runs (its windows report is_sticky).
             return all.every(c => c.slice(1).indexOf(c[0] === "@fork" ? Sticky.nativeSticky : Settings.get(c[0])) >= 0);
         }
