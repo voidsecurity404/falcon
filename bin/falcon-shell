@@ -5,6 +5,24 @@ set -u
 exec 9>"${XDG_RUNTIME_DIR:-/tmp}/falcon-shell.lock"
 flock -n 9 || exit 0
 
+# awww-daemon is started once by niri, and nothing brought it back when it exited mid-session:
+# the screen behind the shell's wallpaper copy stayed black. Wait for it to end (no polling) and
+# restore the wallpaper, which starts the daemon again. Gives up after 5 restarts.
+awww_guard() {
+    sleep 15
+    local restarts=0
+    while niri msg version >/dev/null 2>&1; do
+        pidwait -x awww-daemon 2>/dev/null
+        sleep 2
+        niri msg version >/dev/null 2>&1 || break
+        pgrep -x awww-daemon >/dev/null && continue
+        ((restarts++ >= 5)) && break
+        "$HOME/.local/bin/falcon-wallpaper" --restore >/dev/null 2>&1
+        sleep 5
+    done
+}
+awww_guard 9>&- &
+
 fails=0
 while niri msg version >/dev/null 2>&1; do
     started=$SECONDS
