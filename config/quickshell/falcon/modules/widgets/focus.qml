@@ -126,6 +126,48 @@ Item {
         }
     }
 
+    // The week in the round form too: small bars in the corner beside the dial, the total under them.
+    Column {
+        visible: !root.wide
+        anchors.right: parent.right
+        anchors.rightMargin: 14
+        y: 16
+        spacing: 3
+
+        Row {
+            anchors.right: parent.right
+            spacing: 2
+
+            Repeater {
+                model: root.week
+
+                Item {
+                    id: miniBar
+
+                    required property var modelData
+                    required property int index
+
+                    width: 4
+                    height: 20
+
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        width: parent.width
+                        height: Math.max(2, parent.height * miniBar.modelData.n / root.weekTop)
+                        radius: 2
+                        color: miniBar.modelData.n === 0 ? Qt.alpha(Theme.text, 0.15) : miniBar.index === 6 ? root.tint : Qt.alpha(root.tint, 0.55)
+                    }
+                }
+            }
+        }
+        Label {
+            anchors.right: parent.right
+            text: Tr.t("Week") + ": " + root.weekTotal
+            size: 9
+            color: Theme.muted
+        }
+    }
+
     // Rounds finished today (round form).
     Label {
         visible: !root.wide

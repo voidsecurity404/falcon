@@ -66,12 +66,13 @@ Item {
             }
         }
     }
+    // The waiting packages; in the compact form beside the buttons.
     Flow {
-        visible: !root.compact && !root.none
+        visible: !root.none
         x: 20
-        y: 110
-        width: root.width - 40
-        height: 30
+        y: root.compact ? root.height - 14 - 34 + 5 : 110
+        width: root.compact ? buttons.x - x - 10 : root.width - 40
+        height: root.compact ? 24 : 30
         clip: true
         spacing: 6
 
@@ -98,6 +99,8 @@ Item {
         }
     }
     Row {
+        id: buttons
+
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.margins: 14

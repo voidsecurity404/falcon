@@ -102,14 +102,23 @@ Item {
 
         visible: Weather.hasData
         x: 22
-        y: root.compact ? 16 : 20
+        y: root.compact ? 12 : 20
         width: root.large ? root.width - 44 : root.compact ? root.width - 44 : 190
-        height: root.compact ? root.height - 32 : 150
+        height: root.compact ? 56 : 150
 
         WidgetCaption {
             visible: !root.compact
             icon: "globe"
             text: Tr.t("Now")
+        }
+        // Sunrise and sunset, which the large form draws as the sun's arc.
+        Label {
+            visible: !root.large && !root.compact && Weather.sunrise > 0
+            anchors.right: parent.right
+            y: 2
+            text: "☀ " + root.clock(Weather.sunrise) + " – " + root.clock(Weather.sunset)
+            size: 10
+            color: Theme.muted
         }
         Row {
             id: tempRow
@@ -120,7 +129,7 @@ Item {
             Item {
                 visible: root.compact || root.large
                 anchors.verticalCenter: parent.verticalCenter
-                width: root.compact ? 48 : 64
+                width: root.compact ? 44 : 64
                 height: width
 
                 Rectangle {
@@ -138,7 +147,7 @@ Item {
             Text {
                 text: Weather.temperature + "°"
                 font.family: Theme.display
-                font.pixelSize: root.compact ? 44 : 62
+                font.pixelSize: root.compact ? 40 : 62
                 font.weight: Font.DemiBold
                 color: Theme.text
             }
@@ -149,20 +158,20 @@ Item {
 
                 Label {
                     text: Tr.capitalized(Weather.describe(Weather.code))
-                    size: root.compact ? 14 : 17
+                    size: root.compact ? 13 : 17
                     font.weight: Font.DemiBold
                     font.capitalization: Font.Capitalize
                 }
                 Label {
                     text: Tr.t("Feels like") + " " + Weather.feels + "°"
-                    size: 12
+                    size: root.compact ? 11 : 12
                     color: Theme.muted
                 }
                 Label {
                     visible: !!root.today
                     text: root.compact && root.rainSoon !== "" ? root.rainSoon : root.today ? "↑ " + root.today.max + "°   ↓ " + root.today.min + "°" + (root.compact && root.today.rain > 0 ? "   ☂ " + root.today.rain + "%" : "") : ""
                     color: root.compact && root.rainSoon !== "" ? root.rainColor : Theme.muted
-                    size: 12
+                    size: root.compact ? 11 : 12
                 }
             }
         }
@@ -177,9 +186,9 @@ Item {
         // Humidity, wind, sunrise and sunset.
         Flow {
             visible: !root.compact && (root.large || root.rainSoon === "")
-            y: root.large ? 112 : 136
+            y: root.large ? 112 : 124
             width: parent.width
-            spacing: 6
+            spacing: root.large ? 6 : 4
 
             Repeater {
                 model: [
@@ -187,14 +196,14 @@ Item {
                     { icon: "wave", text: Weather.wind + " " + Tr.t("km/h"), tint: Theme.accent },
                     { icon: "sun", text: Weather.uv < 0 ? "" : Tr.t("UV") + " " + Math.round(Weather.uv), tint: root.uvColor },
                     { icon: "leaf", text: Weather.aqi < 0 ? "" : Tr.t("Air") + " " + Weather.aqi, tint: root.aqiColor }
-                ].slice(0, root.large ? 4 : 2).filter(c => c.text !== "")
+                ].filter(c => c.text !== "")
 
                 Rectangle {
                     required property var modelData
 
-                    width: statRow.implicitWidth + 18
-                    height: 28
-                    radius: 14
+                    width: statRow.implicitWidth + (root.large ? 18 : 14)
+                    height: root.large ? 28 : 24
+                    radius: height / 2
                     color: Qt.alpha(Theme.text, 0.08)
 
                     Row {
@@ -222,7 +231,7 @@ Item {
         // Rain or snow coming within two hours, in place of the chips in the wide form.
         Row {
             visible: !root.compact && !root.large && root.rainSoon !== ""
-            y: 136
+            y: 124
             spacing: 6
 
             Icon {
@@ -364,9 +373,9 @@ Item {
 
         visible: Weather.hasData && !root.compact && root.hours.length > 1
         x: root.large ? 14 : 224
-        y: root.large ? 158 : 18
+        y: root.large ? 158 : 14
         width: root.width - x - 14
-        height: root.large ? 132 : root.height - 30
+        height: root.large ? 132 : 122
 
         function px(i) {
             return step * (i + 0.5);
@@ -579,5 +588,153 @@ Item {
                 }
             }
         }
+    }
+
+    // ---------------------------------------------------------------- small forms: the rest in brief
+    // The coming days as a strip, under the hours in the wide form and at the bottom of the compact one.
+    component DayStrip: Row {
+        id: strip
+
+        readonly property var list: Weather.daily.slice(0, 5)
+        readonly property real cell: width / Math.max(1, list.length)
+
+        Repeater {
+            model: strip.list
+
+            Column {
+                id: dayCell
+
+                required property var modelData
+                required property int index
+
+                width: strip.cell
+                spacing: 1
+
+                Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 3
+
+                    Label {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Qt.locale().toString(new Date(dayCell.modelData.date), "ddd")
+                        size: 10
+                        color: dayCell.index === 0 ? root.warm : Theme.muted
+                        font.weight: dayCell.index === 0 ? Font.DemiBold : Font.Normal
+                        font.capitalization: Font.Capitalize
+                    }
+                    Icon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: Weather.icon(dayCell.modelData.code, true)
+                        size: 12
+                    }
+                }
+                Label {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: dayCell.modelData.max + "° <font color=\"" + Theme.muted + "\">" + dayCell.modelData.min + "°</font>"
+                    textFormat: Text.StyledText
+                    size: 11
+                    font.weight: Font.DemiBold
+                }
+                Label {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: dayCell.modelData.rain > 0 ? "☂ " + dayCell.modelData.rain + "%" : " "
+                    size: 9
+                    color: root.rainColor
+                }
+            }
+        }
+    }
+
+    DayStrip {
+        visible: !root.large && !root.compact && Weather.hasData
+        x: 222
+        y: 146
+        width: root.width - x - 12
+    }
+
+    // Compact: humidity, wind, UV, air and the sun on one line, then the hours and the days.
+    Row {
+        visible: root.compact && Weather.hasData
+        x: 20
+        y: 72
+        spacing: 10
+
+        Repeater {
+            model: [
+                { icon: "color", text: Weather.humidity + "%", tint: Theme.accent },
+                { icon: "wave", text: Weather.wind + " " + Tr.t("km/h"), tint: Theme.accent },
+                { icon: "sun", text: Weather.uv < 0 ? "" : Tr.t("UV") + " " + Math.round(Weather.uv), tint: root.uvColor },
+                { icon: "leaf", text: Weather.aqi < 0 ? "" : Tr.t("Air") + " " + Weather.aqi, tint: root.aqiColor }
+            ].filter(c => c.text !== "")
+
+            Row {
+                required property var modelData
+
+                spacing: 3
+
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: modelData.icon
+                    size: 11
+                    color: modelData.tint
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: modelData.text
+                    size: 10
+                }
+            }
+        }
+    }
+    Row {
+        id: compactHours
+
+        readonly property real cell: width / Math.max(1, root.hours.length)
+
+        visible: root.compact && Weather.hasData
+        x: 14
+        y: 92
+        width: root.width - 28
+
+        Repeater {
+            model: root.compact ? root.hours : []
+
+            Column {
+                id: hourCell
+
+                required property var modelData
+                required property int index
+
+                width: compactHours.cell
+
+                Label {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: hourCell.modelData.temp + "°"
+                    size: 10
+                    font.weight: Font.DemiBold
+                    color: hourCell.index === 0 ? root.warm : Theme.text
+                }
+                // The chance of rain as a thin bar.
+                Rectangle {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: 12
+                    height: 3
+                    radius: 1.5
+                    color: Qt.alpha(root.rainColor, hourCell.modelData.rain > 0 ? 0.35 + hourCell.modelData.rain / 160 : 0.12)
+                }
+                Label {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: root.hourLabel(hourCell.modelData.time)
+                    size: 9
+                    color: Theme.muted
+                }
+            }
+        }
+    }
+    DayStrip {
+        visible: root.compact && Weather.hasData
+        x: 14
+        y: 128
+        width: root.width - 28
     }
 }

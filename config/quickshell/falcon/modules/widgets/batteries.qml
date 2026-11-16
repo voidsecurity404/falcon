@@ -87,12 +87,12 @@ Item {
         visible: !root.tall
         anchors.horizontalCenter: parent.horizontalCenter
         y: 52
-        columns: root.square ? 2 : Math.max(1, Math.min(5, root.items.length))
-        columnSpacing: root.square ? 30 : 18
+        columns: root.square ? Math.min(3, Math.max(1, root.items.length)) : Math.max(1, Math.min(5, root.items.length))
+        columnSpacing: root.square ? 12 : 18
         rowSpacing: 12
 
         Repeater {
-            model: root.tall ? [] : root.items.slice(0, root.square ? 4 : 5)
+            model: root.tall ? [] : root.items.slice(0, root.square ? 6 : 5)
 
             Column {
                 id: cell

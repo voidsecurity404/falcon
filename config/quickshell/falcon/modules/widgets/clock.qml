@@ -203,20 +203,19 @@ Item {
             id: minute
 
             x: 6
-            y: chips.y - 18
+            y: chips.y - (root.compact ? 9 : 18)
             width: root.width - 12
-            height: 6
-            visible: !root.compact
+            height: root.compact ? 4 : 6
 
             Rectangle {
                 anchors.fill: parent
-                radius: 3
+                radius: height / 2
                 color: Qt.alpha(Theme.text, 0.18)
             }
             Rectangle {
                 width: Math.max(6, parent.width * root.minuteShare)
                 height: parent.height
-                radius: 3
+                radius: height / 2
                 gradient: Gradient {
                     orientation: Gradient.Horizontal
                     GradientStop {
@@ -239,12 +238,14 @@ Item {
             }
         }
 
-        Row {
+        // Every chip shows in every form; a narrow form wraps them onto a second line.
+        Flow {
             id: chips
 
             x: 6
             y: root.compact ? root.height - height - 4 : root.height - height - 6
-            spacing: 8
+            width: root.width - 12
+            spacing: root.compact ? 6 : 8
 
             component Chip: Rectangle {
                 id: chip
@@ -253,7 +254,7 @@ Item {
                 property string text: ""
                 property color tint: Theme.text
 
-                width: chipRow.implicitWidth + 22
+                width: chipRow.implicitWidth + (root.compact ? 14 : 22)
                 height: root.compact ? 28 : 34
                 radius: height / 2
                 color: Qt.alpha(Theme.pill, 0.42)
@@ -284,23 +285,23 @@ Item {
             Chip {
                 visible: Weather.hasData
                 icon: Weather.icon(Weather.code, Weather.isDay)
-                text: Weather.temperature + "°  " + Weather.describe(Weather.code)
+                text: Weather.temperature + "°" + (root.compact || root.stacked ? "" : "  " + Weather.describe(Weather.code))
                 tint: Theme.accent
             }
             Chip {
-                visible: root.showPrayer && !(root.stacked && Countdown.active)
+                visible: root.showPrayer
                 icon: "mosque"
                 text: root.showPrayer ? Tr.t(Prayer.next.name) + " " + root.prayerClock(Prayer.next.time) : ""
                 tint: root.second
             }
             Chip {
-                visible: Countdown.active && !root.compact
+                visible: Countdown.active
                 icon: Countdown.icon
                 text: Countdown.text
                 tint: root.second
             }
             Chip {
-                visible: Sys.hasBattery && !root.stacked
+                visible: Sys.hasBattery
                 icon: Sys.charging ? "charging" : "battery"
                 text: Sys.batteryPercent + "%"
                 tint: Sys.batteryPercent <= 20 && !Sys.charging ? Theme.error : Theme.good

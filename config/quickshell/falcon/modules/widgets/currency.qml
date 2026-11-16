@@ -146,8 +146,8 @@ Item {
         spacing: root.compact ? 2 : 8
 
         Repeater {
-            // Compact holds four rows: with a fourth code they close up from 26 to 21 px.
-            model: root.wide ? [] : root.list.slice(0, root.compact ? 4 : 6)
+            // Compact holds every code (six at most): the rows close up as codes are added.
+            model: root.wide ? [] : root.list.slice(0, 6)
 
             Item {
                 id: row
@@ -155,20 +155,20 @@ Item {
                 required property string modelData
 
                 width: parent.width
-                height: root.compact ? (root.list.length > 3 ? 21 : 26) : 44
+                height: root.compact ? Math.min(26, Math.floor(92 / Math.max(1, root.list.length)) - 2) : 44
 
                 Label {
                     anchors.verticalCenter: parent.verticalCenter
                     text: row.modelData
-                    size: 13
+                    size: root.compact && root.list.length > 4 ? 11 : 13
                     font.weight: Font.DemiBold
                 }
+                // Two weeks as a line; in the compact form a short one between the code and the change.
                 WidgetSpark {
-                    visible: !root.compact
-                    x: 46
+                    x: root.compact ? 44 : 46
                     anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width - 46 - 120
-                    height: 30
+                    width: root.compact ? parent.width - 44 - 150 : parent.width - 46 - 120
+                    height: root.compact ? Math.min(18, parent.height - 2) : 30
                     readonly property var h: Currency.history[row.modelData] || []
                     values: h.length > 1 ? h : [0, 0]
                     min: h.length ? Math.min(...h) * 0.998 : 0
@@ -185,7 +185,7 @@ Item {
                     Label {
                         anchors.right: parent.right
                         text: Currency.price(row.modelData, Currency.rates[row.modelData].rate)
-                        size: root.compact ? 13 : 16
+                        size: root.compact ? (root.list.length > 4 ? 11 : 13) : 16
                         font.weight: Font.DemiBold
                     }
                     Label {

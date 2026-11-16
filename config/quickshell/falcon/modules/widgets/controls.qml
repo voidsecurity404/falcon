@@ -74,7 +74,7 @@ Item {
         x: 20
         y: 20
         width: root.tall ? root.width - 40 : 220
-        spacing: 12
+        spacing: root.tall ? 12 : 10
 
         WidgetCaption {
             icon: "volume"
@@ -82,7 +82,7 @@ Item {
         }
         WidgetSlider {
             width: parent.width
-            height: root.tall ? 46 : 48
+            height: root.tall ? 46 : 40
             icon: Audio.muted || Audio.volume === 0 ? "mute" : "volume"
             value: Audio.volume
             dimmed: Audio.muted
@@ -91,7 +91,7 @@ Item {
         }
         WidgetSlider {
             width: parent.width
-            height: root.tall ? 46 : 48
+            height: root.tall ? 46 : 40
             visible: Brightness.available
             icon: "sun"
             value: Brightness.percent / 100
@@ -100,8 +100,9 @@ Item {
         }
         WidgetSlider {
             width: parent.width
-            height: 46
-            visible: root.tall || !Brightness.available
+            // The microphone's level in both forms, so the wide one loses nothing.
+            height: root.tall ? 46 : 40
+            visible: Audio.micAvailable
             icon: Audio.micMuted ? "micOff" : "mic"
             value: Audio.micVolume
             dimmed: Audio.micMuted

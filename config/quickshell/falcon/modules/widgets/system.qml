@@ -165,49 +165,190 @@ Item {
         }
     }
 
-    // ---------------------------------------------------------------- compact: three rings
-    Row {
+    // ---------------------------------------------------------------- compact: four rings and the network
+    // Everything the wide form has, packed: processor, memory, disk and temperature as rings, the network
+    // and uptime on the line under them, and a press on the rings shows the busiest processes in their place.
+    Item {
+        id: small
+
         visible: root.compact
-        anchors.centerIn: parent
-        spacing: 22
+        anchors.fill: parent
 
-        Repeater {
-            model: [
-                { title: Tr.t("CPU"), value: Sys.cpu / 100, text: Sys.cpu + "%", color: Theme.accent },
-                { title: Tr.t("Memory"), value: Sys.ram / 100, text: Sys.ram + "%", color: root.memColor },
-                { title: Tr.t("Temp"), value: Sys.temperature / 100, text: Sys.temperature + "°", color: root.hot }
-            ]
+        Row {
+            id: rings
 
-            Column {
-                required property var modelData
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: 12
+            spacing: 14
+            visible: opacity > 0
+            opacity: root.showTop ? 0 : 1
 
-                spacing: 6
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 180
+                }
+            }
 
-                Item {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    width: 76
-                    height: 76
+            Repeater {
+                model: [
+                    { title: Tr.t("CPU"), value: Sys.cpu / 100, text: Sys.cpu + "%", color: Theme.accent },
+                    { title: Tr.t("Memory"), value: Sys.ram / 100, text: Sys.ram + "%", color: root.memColor },
+                    { title: Tr.t("Disk"), value: Sys.disk / 100, text: Sys.diskFreeGb + " " + Tr.t("GB"), color: root.diskColor },
+                    { title: Tr.t("Temp"), value: Sys.temperature / 100, text: Sys.temperature + "°", color: root.hot }
+                ]
 
-                    Ring {
-                        anchors.fill: parent
-                        thickness: 8
-                        value: modelData.value
-                        color: modelData.color
+                Column {
+                    required property var modelData
+
+                    spacing: 4
+
+                    Item {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: 60
+                        height: 60
+
+                        Ring {
+                            anchors.fill: parent
+                            thickness: 6
+                            value: modelData.value
+                            color: modelData.color
+                        }
+                        Label {
+                            anchors.centerIn: parent
+                            text: modelData.text
+                            size: modelData.text.length > 4 ? 11 : 13
+                            font.weight: Font.Bold
+                        }
                     }
                     Label {
-                        anchors.centerIn: parent
-                        text: modelData.text
-                        size: 15
-                        font.weight: Font.Bold
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: modelData.title
+                        size: 10
+                        color: Theme.muted
                     }
                 }
+            }
+        }
+        // The three busiest processes, in place of the rings while asked for.
+        Column {
+            x: 18
+            y: 12
+            width: parent.width - 36
+            spacing: 3
+            visible: opacity > 0
+            opacity: root.showTop ? 1 : 0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 180
+                }
+            }
+
+            Label {
+                visible: Processes.top3.length === 0
+                text: Tr.t("Measuring…")
+                size: 12
+                color: Theme.muted
+            }
+            Repeater {
+                model: Processes.top3
+
+                Item {
+                    id: smallProc
+
+                    required property var modelData
+                    required property int index
+
+                    width: parent.width
+                    height: 23
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 8
+                        color: Qt.alpha(Theme.accent, 0.06 + 0.1 * Math.min(1, smallProc.modelData.cpu / 100))
+                    }
+                    Rectangle {
+                        width: Math.max(6, parent.width * Math.min(1, smallProc.modelData.cpu / 100))
+                        height: parent.height
+                        radius: 8
+                        color: Qt.alpha(smallProc.index === 0 ? Theme.accent : Theme.text, 0.14)
+                    }
+                    Label {
+                        x: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - 70
+                        text: smallProc.modelData.name
+                        size: 12
+                        font.weight: smallProc.index === 0 ? Font.DemiBold : Font.Normal
+                        elide: Text.ElideRight
+                    }
+                    Label {
+                        anchors.right: parent.right
+                        anchors.rightMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Math.round(smallProc.modelData.cpu) + "%"
+                        size: 12
+                        font.weight: Font.DemiBold
+                        color: smallProc.index === 0 ? Theme.accent : Theme.text
+                    }
+                }
+            }
+        }
+        WidgetHot {
+            x: 0
+            y: 0
+            width: parent.width
+            height: 96
+            onClicked: Widgets.share(root.widgetId, "top", !root.showTop)
+        }
+        // Network speed, free disk and uptime along the bottom.
+        Row {
+            x: 18
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 12
+            spacing: 10
+
+            Row {
+                spacing: 3
+
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "arrowDown"
+                    size: 11
+                    color: root.netColor
+                }
                 Label {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: modelData.title
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.speed(root.down)
+                    size: 11
+                    font.weight: Font.DemiBold
+                }
+            }
+            Row {
+                spacing: 3
+
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "arrowUp"
+                    size: 11
+                    color: Theme.hueShift(Theme.accent, 0.5)
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.speed(root.up)
                     size: 11
                     color: Theme.muted
                 }
             }
+        }
+        Label {
+            anchors.right: parent.right
+            anchors.rightMargin: 18
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 12
+            text: Tr.t("Up") + " " + root.uptime
+            size: 11
+            color: Theme.muted
         }
     }
 
@@ -485,7 +626,7 @@ Item {
         }
     }
     Rectangle {
-        visible: root.overheat && !root.compact
+        visible: root.overheat
         anchors.horizontalCenter: parent.horizontalCenter
         y: -height / 2
         width: hotText.implicitWidth + 20

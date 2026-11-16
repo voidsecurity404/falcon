@@ -35,12 +35,14 @@ Item {
         tint: Theme.hueShift(Theme.accent, 0.06)
     }
     Label {
-        visible: !root.compact
         anchors.right: parent.right
-        anchors.rightMargin: 20
-        y: 20
+        anchors.rightMargin: root.compact ? 16 : 20
+        y: root.compact ? 19 : 20
+        width: root.compact ? 130 : implicitWidth
+        horizontalAlignment: Text.AlignRight
+        elide: Text.ElideLeft
         text: ClaudeUsage.updatedText
-        size: 11
+        size: root.compact ? 10 : 11
         color: Theme.muted
     }
     Label {
@@ -54,7 +56,7 @@ Item {
         visible: ClaudeUsage.hasData
         x: 20
         y: root.compact ? 48 : 52
-        spacing: root.compact ? 18 : 16
+        spacing: root.compact ? 10 : 16
 
         Repeater {
             model: [
@@ -67,22 +69,22 @@ Item {
 
                 required property var modelData
 
-                spacing: 12
+                spacing: root.compact ? 8 : 12
 
                 Item {
-                    width: root.compact ? 64 : 84
+                    width: root.compact ? 54 : 84
                     height: width
 
                     Ring {
                         anchors.fill: parent
-                        thickness: root.compact ? 7 : 9
+                        thickness: root.compact ? 6 : 9
                         value: lim.modelData.value / 100
                         color: root.colorOf(lim.modelData.value)
                     }
                     Label {
                         anchors.centerIn: parent
                         text: Math.round(lim.modelData.value) + "%"
-                        size: root.compact ? 14 : 19
+                        size: root.compact ? 13 : 19
                         font.weight: Font.Bold
                     }
                 }
@@ -105,12 +107,27 @@ Item {
                         wrapMode: Text.WordWrap
                     }
                 }
-                Label {
+                // Compact: the title and when it resets, beside the ring.
+                Column {
                     visible: root.compact
                     anchors.verticalCenter: parent.verticalCenter
-                    text: lim.modelData.title
-                    size: 12
-                    color: Theme.muted
+                    width: 62
+                    spacing: 1
+
+                    Label {
+                        text: lim.modelData.title
+                        size: 12
+                        font.weight: Font.DemiBold
+                    }
+                    Label {
+                        width: parent.width
+                        text: lim.modelData.reset
+                        size: 10
+                        color: Theme.muted
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 3
+                        elide: Text.ElideRight
+                    }
                 }
             }
         }
