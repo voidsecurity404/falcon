@@ -76,7 +76,7 @@ Singleton {
     }
     Timer {
         interval: 15 * 60 * 1000
-        running: root.configured
+        running: root.configured && !GameMode.quiet
         repeat: true
         onTriggered: root.refresh(false)
     }

@@ -255,10 +255,11 @@ Singleton {
     // True while niri slides workspaces: the clickable copies step aside, the faces stay put.
     property bool sliding: false
 
-    readonly property bool enabled: Settings.get("widgets.enabled", true)
+    // Game mode clears the desktop: no widgets and no waves while it is on.
+    readonly property bool enabled: Settings.get("widgets.enabled", true) && !GameMode.hidesWidgets
     readonly property bool firstOnly: Settings.get("widgets.firstOnly", false)
     // The music waves own the bottom of the desktop, so widgets stay above them.
-    readonly property bool wavesEnabled: Settings.get("waves.enabled", true)
+    readonly property bool wavesEnabled: Settings.get("waves.enabled", true) && !GameMode.hidesWidgets
     readonly property int wavesHeight: Math.max(60, Math.min(320, Number(Settings.get("waves.height", 140)) || 140))
     readonly property int topInset: 56
     // Looks drawn along the bottom; aura, ring and orb take no strip of their own.

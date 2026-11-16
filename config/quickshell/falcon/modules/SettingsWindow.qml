@@ -2080,6 +2080,43 @@ LazyLoader {
                         ]
                     },
                     {
+                        title: Tr.t("Game mode"),
+                        items: [
+                            {
+                                key: "game.closeApps",
+                                label: Tr.t("Close other apps"),
+                                hint: Tr.t("Games and game launchers stay open"),
+                                type: "toggle"
+                            },
+                            {
+                                key: "game.keep",
+                                label: Tr.t("Apps to keep open"),
+                                hint: Tr.t("Names separated by commas, for example discord, obs"),
+                                type: "text",
+                                width: 220,
+                                fallback: "",
+                                when: ["game.closeApps", true]
+                            },
+                            {
+                                key: "game.hideWidgets",
+                                label: Tr.t("Hide widgets and music waves"),
+                                type: "toggle"
+                            },
+                            {
+                                key: "game.blackBackground",
+                                label: Tr.t("Black background"),
+                                hint: Tr.t("The wallpaper, a live one too, is off until game mode ends"),
+                                type: "toggle"
+                            },
+                            {
+                                key: "game.pauseServices",
+                                label: Tr.t("Pause background services"),
+                                hint: Tr.t("Phone link, Telegram bot, network checks, updates, weather"),
+                                type: "toggle"
+                            }
+                        ]
+                    },
+                    {
                         title: Tr.t("Reset"),
                         items: [
                             {

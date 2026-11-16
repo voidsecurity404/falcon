@@ -72,7 +72,8 @@ PanelWindow {
     }
 
     // Turned on later, it opens above the widgets, so they are opened again on top.
-    readonly property bool wanted: Settings.get("wallpaper.parallax", true)
+    // In game mode the screen behind the windows is black, so the shell's copy of the picture goes too.
+    readonly property bool wanted: Settings.get("wallpaper.parallax", true) && !GameMode.black
     onWantedChanged: {
         if (wanted)
             Widgets.restack();

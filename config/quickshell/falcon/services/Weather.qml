@@ -233,7 +233,7 @@ Singleton {
     Timer {
         interval: 1800000
         repeat: true
-        running: root.enabled
+        running: root.enabled && !GameMode.quiet
         triggeredOnStart: true
         onTriggered: fetch.running = true
     }

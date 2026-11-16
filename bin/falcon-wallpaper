@@ -181,6 +181,13 @@ case "${1:-}" in
         ;;
     --restore)
         take_turn
+        # Game mode keeps the screen behind the windows black (falcon-game black): a restore asked
+        # meanwhile (the daemon came back, the shell restarted) must not bring the picture up.
+        if [[ -e "$state/game-black" ]]; then
+            wait_daemon
+            awww clear 000000
+            exit 0
+        fi
         video="$(readlink -f "$live_link" 2>/dev/null || true)"
         if [[ -f "$video" ]] && command -v mpvpaper >/dev/null; then
             image="$(poster "$video")"
@@ -200,6 +207,11 @@ case "${1:-}" in
         ;;
     --reshow)
         take_turn
+        if [[ -e "$state/game-black" ]]; then
+            wait_daemon
+            awww clear 000000
+            exit 0
+        fi
         image="$(readlink -f "$link" 2>/dev/null || true)"
         [[ -f "$image" ]] || exit 0
         wait_daemon

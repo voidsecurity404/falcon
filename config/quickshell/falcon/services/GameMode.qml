@@ -5,10 +5,14 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Services.UPower
 
-// Game mode, one switch for playing: niri's animations and shadows off (bin/falcon-game),
-// the performance power mode, Silent, and an idle lock so a game played with a gamepad does not
-// lock the screen. Only on the charger: on battery it refuses, and pulling the cable ends it.
-// What it changed comes back when it ends: the power mode and Silent only if it switched them.
+// Game mode, one switch for playing: niri's animations, shadows and hot corner off
+// (bin/falcon-game), the performance power mode, Silent, and an idle lock so a game played with a
+// gamepad does not lock the screen. It also clears the computer for the game, each part by its own
+// switch in Settings (`game.*`): every other app is asked to close, the widgets and the music
+// waves leave the desktop, the wallpaper (a live one's player too) gives way to black, and the
+// shell's background helpers wait. Only on the charger: on battery it refuses, and pulling the
+// cable ends it. What it changed comes back when it ends: the power mode and Silent only if it
+// switched them, the wallpaper, the widgets and the helpers always; closed apps stay closed.
 // The state is kept by Saved as `gameMode`, so it survives a shell restart.
 Singleton {
     id: root
@@ -19,6 +23,14 @@ Singleton {
     property var before: null
     // The power mode game mode chose, so ending it only undoes its own choice.
     property int ownProfile: -1
+    // The parts that clear the computer. Read only once the settings are in: at a shell restart
+    // the defaults would otherwise switch a part on for a moment that the user turned off.
+    readonly property bool hidesWidgets: enabled && Settings.loaded && Settings.get("game.hideWidgets", true)
+    readonly property bool black: enabled && Settings.loaded && Settings.get("game.blackBackground", true)
+    readonly property bool quiet: enabled && Settings.loaded && Settings.get("game.pauseServices", true)
+
+    onBlackChanged: Quickshell.execDetached([Ui.binDir + "falcon-game", "black", black ? "on" : "off"])
+    onQuietChanged: Quickshell.execDetached([Ui.binDir + "falcon-game", "services", quiet ? "stop" : "start"])
 
     function toggle() {
         if (enabled)
@@ -40,7 +52,14 @@ Singleton {
         };
         enabled = true;
         apply();
-        Toasts.show(Tr.t("Game mode on"), Tr.t("No animations, full power, notifications wait"), "game");
+        // The shell's own windows and menus go first, then everyone else's.
+        Ui.popup = "";
+        Ui.settingsOpen = false;
+        if (Settings.get("game.closeApps", true)) {
+            closer.command = [Ui.binDir + "falcon-game", "close", "--keep", String(Settings.get("game.keep", ""))];
+            closer.running = true;
+        }
+        Toasts.show(Tr.t("Game mode on"), Tr.t("Everything else is off, full power for the game"), "game");
     }
 
     // `restore` is false when the cable was pulled: the battery's own power mode takes over then.
@@ -83,8 +102,11 @@ Singleton {
             enabled = true;
             resume.start();
         } else {
-            // A file left by a shell that died while on is cleared.
+            // What a shell that died while on left behind is cleared: the niri file, the black
+            // wallpaper and the stopped helpers (the last two do nothing without their marks).
             Quickshell.execDetached([Ui.binDir + "falcon-game", "off"]);
+            Quickshell.execDetached([Ui.binDir + "falcon-game", "black", "off"]);
+            Quickshell.execDetached([Ui.binDir + "falcon-game", "services", "start"]);
         }
     }
 
@@ -121,6 +143,26 @@ Singleton {
         onTriggered: {
             if (UPower.onBattery)
                 root.stop(false);
+        }
+    }
+
+    // Other apps are closed once, when game mode is switched on by hand: never when a restarted
+    // shell takes it up again, which would close what was opened on purpose meanwhile.
+    Process {
+        id: closer
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let report;
+                try {
+                    report = JSON.parse(text);
+                } catch (e) {
+                    return;
+                }
+                const count = (report.closed || []).length;
+                if (count > 0)
+                    console.log("Game mode closed", count, "windows:", report.closed.join(", "));
+            }
         }
     }
 

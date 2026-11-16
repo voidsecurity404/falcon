@@ -49,14 +49,14 @@ Singleton {
     }
     Timer {
         interval: 3 * 3600000
-        running: root.wanted
+        running: root.wanted && !GameMode.quiet
         repeat: true
         onTriggered: root.refresh()
     }
     // A failed first try (no network yet at login) is tried again soon.
     Timer {
         interval: 120000
-        running: root.wanted && root.offline
+        running: root.wanted && root.offline && !GameMode.quiet
         repeat: true
         onTriggered: root.refresh()
     }

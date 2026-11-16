@@ -156,7 +156,7 @@ PanelWindow {
             id: "game",
             icon: "game",
             name: GameMode.enabled ? Tr.t("Turn off game mode") : Tr.t("Game mode"),
-            detail: Tr.t("No animations, full power, notifications wait"),
+            detail: GameMode.enabled ? Tr.t("Wallpaper, widgets and background services come back") : Tr.t("Closes other apps, black background, full power"),
             keywords: "game gaming игра игровой режим steam",
             run: () => GameMode.toggle()
         },

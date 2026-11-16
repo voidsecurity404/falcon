@@ -1,39 +1,258 @@
-#!/usr/bin/env bash
-# Game mode, the compositor's part: niri's animations and window shadows go off, so frames reach
-# the screen without extra work. services/GameMode.qml does the rest (performance power mode,
-# Silent, idle lock) and calls this.
-#   falcon-game on|off|status
-set -euo pipefail
+#!/usr/bin/env python3
+"""Game mode, everything outside the shell. services/GameMode.qml decides what runs and calls this.
 
-file="${XDG_CONFIG_HOME:-$HOME/.config}/niri/generated/game.kdl"
+  falcon-game on | off        niri's part: animations, window shadows and the hot corner go off
+  falcon-game status          prints on or off (exit 1 when off)
+  falcon-game close [--dry-run] [--keep "a,b"]
+                              asks every window that is not a game or a game launcher to close, then
+                              ends the processes that stayed behind without a window (tray apps).
+                              Nothing is killed by force: an app asking to save keeps its window.
+  falcon-game black on | off  the wallpaper: the live one's player ends and the screen behind the
+                              windows is black; off brings the wallpaper back
+  falcon-game services stop | start
+                              background helpers that are not part of the session itself
 
-reload() {
-    niri msg action load-config-file >/dev/null 2>&1 || true
+Prints one JSON line for `close`: {"closed": [...], "kept": [...], "ended": [...]}.
+"""
+
+import json
+import os
+import re
+import signal
+import subprocess
+import sys
+import time
+
+HOME = os.path.expanduser("~")
+CONFIG = os.environ.get("XDG_CONFIG_HOME", HOME + "/.config")
+STATE = os.environ.get("XDG_STATE_HOME", HOME + "/.local/state") + "/falcon"
+KDL = CONFIG + "/niri/generated/game.kdl"
+BLACK = STATE + "/game-black"
+QUIET = STATE + "/game-services"
+BIN = HOME + "/.local/bin/"
+
+# Blur stays on: without it the panels turn see-through and unreadable. A fullscreen game is drawn
+# alone anyway. The hot corner goes, since a pointer thrown into it would open the overview mid-game.
+KDL_TEXT = """// game
+animations {
+    off
 }
+layout {
+    shadow {
+        off
+    }
+}
+gestures {
+    hot-corners {
+        off
+    }
+}
+"""
 
-case "${1:-status}" in
-on)
-    mkdir -p "$(dirname "$file")"
-    printf '// game\nanimations {\n    off\n}\nlayout {\n    shadow {\n        off\n    }\n}\n' >"$file.$$.tmp"
-    mv "$file.$$.tmp" "$file"
-    reload
-    ;;
-off)
-    if [[ -s "$file" ]]; then
-        : >"$file"
-        reload
-    fi
-    ;;
-status)
-    if grep -q '^// game' "$file" 2>/dev/null; then
-        echo on
-    else
-        echo off
-        exit 1
-    fi
-    ;;
-*)
-    echo "Usage: falcon-game on|off|status" >&2
-    exit 2
-    ;;
-esac
+# Games and what starts them, matched anywhere in a window's app id or a process name, without
+# regard to case. A window of a process started by one of these stays too (a game under Steam).
+KEEP = [
+    r"^steam", r"steamwebhelper", r"steam_app_", r"lutris", r"heroic", r"gamescope", r"bottles",
+    r"prismlauncher", r"minecraft", r"horizon", r"^wine", r"proton", r"retroarch", r"mangohud",
+    r"^itch", r"legendary", r"\.exe$", r"dolphin-emu", r"pcsx2", r"rpcs3", r"ryujinx", r"yuzu",
+]
+# The session itself: never asked to close and never ended.
+SESSION = [
+    r"^org\.quickshell$", r"^qs$", r"^niri", r"xwayland", r"^falcon-", r"^systemd", r"^dbus",
+    r"pipewire", r"wireplumber", r"^awww", r"^xdg-", r"^gvfs", r"^hypr",
+]
+CLOSE_WAIT = 5.0
+
+
+def niri(*args):
+    return subprocess.run(["niri", "msg", *args], capture_output=True, text=True, timeout=5).stdout
+
+
+def niri_json(what):
+    try:
+        return json.loads(niri("-j", what))
+    except (ValueError, subprocess.SubprocessError, OSError):
+        return None
+
+
+def reload_niri():
+    try:
+        niri("action", "load-config-file")
+    except (subprocess.SubprocessError, OSError):
+        pass
+
+
+def write_atomic(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w") as f:
+        f.write(text)
+    os.replace(tmp, path)
+
+
+def is_on():
+    try:
+        with open(KDL) as f:
+            return f.readline().startswith("// game")
+    except OSError:
+        return False
+
+
+def matches(patterns, text):
+    return any(re.search(p, text or "", re.IGNORECASE) for p in patterns)
+
+
+def process(pid):
+    """(name, parent pid) of a process, or ("", 0) when it is gone."""
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            data = f.read()
+        name = data[data.index("(") + 1:data.rindex(")")]
+        return name, int(data[data.rindex(")") + 2:].split()[1])
+    except (OSError, ValueError, IndexError):
+        return "", 0
+
+
+def family(pid):
+    """Names of a process and of everything it was started by."""
+    names = []
+    seen = set()
+    while pid > 1 and pid not in seen:
+        seen.add(pid)
+        name, parent = process(pid)
+        if not name:
+            break
+        names.append(name)
+        pid = parent
+    return names
+
+
+def keep_patterns(extra):
+    words = [w.strip() for w in re.split(r"[,\s]+", extra or "") if w.strip()]
+    return KEEP + [re.escape(w) for w in words]
+
+
+def close(dry, extra):
+    keep = keep_patterns(extra)
+    windows = niri_json("windows") or []
+    output = (niri_json("focused-output") or {}).get("logical") or {}
+    full = (output.get("width", 0), output.get("height", 0))
+    closing, kept = [], []
+    for w in windows:
+        app = w.get("app_id") or ""
+        names = family(w.get("pid") or 0)
+        size = tuple((w.get("layout") or {}).get("tile_size") or (0, 0))
+        # A game already running fills the screen and has the focus.
+        playing = bool(w.get("is_focused")) and full[0] > 0 and size[0] >= full[0] and size[1] >= full[1]
+        if matches(SESSION, app) or matches(keep, app) or any(matches(keep, n) for n in names) or playing:
+            kept.append(w)
+        else:
+            closing.append(w)
+    report = {
+        "closed": [w.get("app_id") or "" for w in closing],
+        "kept": [w.get("app_id") or "" for w in kept],
+        "ended": [],
+    }
+    if dry:
+        print(json.dumps(report))
+        return
+    for w in closing:
+        try:
+            niri("action", "close-window", "--id", str(w["id"]))
+        except (subprocess.SubprocessError, OSError, KeyError):
+            pass
+    # Their processes: one that stays without any window (it went to the tray) is asked to end.
+    # One that still has a window is asking something, and is left alone.
+    pids = {w.get("pid") for w in closing if w.get("pid")}
+    deadline = time.monotonic() + CLOSE_WAIT
+    left = {}
+    while time.monotonic() < deadline:
+        time.sleep(0.25)
+        left = {}
+        for w in niri_json("windows") or []:
+            left.setdefault(w.get("pid"), []).append(w)
+        if not any(process(pid)[0] for pid in pids):
+            break
+    me = set()
+    pid = os.getpid()
+    while pid > 1:
+        me.add(pid)
+        pid = process(pid)[1]
+    for pid in pids:
+        name = process(pid)[0]
+        if not name or pid in left or pid in me:
+            continue
+        if matches(SESSION, name) or any(matches(keep, n) for n in family(pid)):
+            continue
+        try:
+            os.kill(pid, signal.SIGTERM)
+            report["ended"].append(name)
+        except OSError:
+            pass
+    print(json.dumps(report))
+
+
+def quiet(*command, wait=10):
+    try:
+        subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=wait)
+    except (subprocess.SubprocessError, OSError):
+        pass
+
+
+def black(on):
+    if on:
+        os.makedirs(STATE, exist_ok=True)
+        with open(BLACK, "w"):
+            pass
+        quiet("pkill", "-x", "mpvpaper")
+        quiet("awww", "clear", "000000")
+    elif os.path.exists(BLACK):
+        os.unlink(BLACK)
+        # Starts the daemon if it is gone, fades the picture in and plays a live one again.
+        subprocess.Popen([BIN + "falcon-wallpaper", "--restore"], stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+def services(stop):
+    # The phone link: the shell ends its own helper, the daemon is bus activated and comes back
+    # with it. The Telegram bot's service and its tunnel wait until the game is over, and are
+    # started again only if this stopped them.
+    if stop:
+        os.makedirs(STATE, exist_ok=True)
+        quiet("pkill", "-x", "kdeconnectd")
+        if subprocess.run(["systemctl", "--user", "is-active", "--quiet", "falcon-remote.service"]).returncode == 0:
+            with open(QUIET, "w"):
+                pass
+            quiet("systemctl", "--user", "stop", "falcon-remote.service")
+    elif os.path.exists(QUIET):
+        os.unlink(QUIET)
+        quiet("systemctl", "--user", "start", "falcon-remote.service")
+
+
+def main():
+    args = sys.argv[1:]
+    command = args[0] if args else "status"
+    if command == "on":
+        write_atomic(KDL, KDL_TEXT)
+        reload_niri()
+    elif command == "off":
+        if os.path.exists(KDL) and os.path.getsize(KDL) > 0:
+            write_atomic(KDL, "")
+            reload_niri()
+    elif command == "status":
+        print("on" if is_on() else "off")
+        sys.exit(0 if is_on() else 1)
+    elif command == "close":
+        extra = args[args.index("--keep") + 1] if "--keep" in args and len(args) > args.index("--keep") + 1 else ""
+        close("--dry-run" in args, extra)
+    elif command == "black" and len(args) > 1 and args[1] in ("on", "off"):
+        black(args[1] == "on")
+    elif command == "services" and len(args) > 1 and args[1] in ("stop", "start"):
+        services(args[1] == "stop")
+    else:
+        print(__doc__.strip().split("\n\n")[1], file=sys.stderr)
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

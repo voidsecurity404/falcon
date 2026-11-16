@@ -352,7 +352,7 @@ Singleton {
     Timer {
         interval: 1000
         repeat: true
-        running: true
+        running: !GameMode.quiet
         onTriggered: {
             const now = Date.now();
             for (const t of root.tools) {

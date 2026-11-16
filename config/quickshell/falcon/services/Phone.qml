@@ -253,7 +253,7 @@ Singleton {
         id: helper
 
         command: [Ui.binDir + "falcon-phone", "serve"]
-        running: Settings.loaded
+        running: Settings.loaded && !GameMode.quiet
         stdinEnabled: true
         stdout: SplitParser {
             splitMarker: "\n"
@@ -288,7 +288,16 @@ Singleton {
         id: retry
 
         interval: 5000
-        onTriggered: helper.running = Settings.loaded
+        onTriggered: helper.running = Settings.loaded && !GameMode.quiet
+    }
+    // The helper waits while game mode keeps the background quiet. Set by hand as well: `retry`
+    // assigns `running`, which ends the binding above.
+    Connections {
+        target: GameMode
+
+        function onQuietChanged() {
+            helper.running = Settings.loaded && !GameMode.quiet;
+        }
     }
 
     signal finished(var result)

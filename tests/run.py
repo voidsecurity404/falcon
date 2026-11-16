@@ -5108,10 +5108,26 @@ def _():
     if sh("cat /sys/class/power_supply/*/online 2>/dev/null | grep -q 1").returncode != 0 and Path("/sys/class/power_supply/BAT0").exists():
         raise Skip("batareyada")
     game = str(LBIN / "falcon-game")
-    ipc("gameMode")
-    wait(lambda: sh([game, "status"]).returncode == 0, 4, "game.kdl yozilmadi")
-    ipc("gameMode")
-    wait(lambda: sh([game, "status"]).returncode != 0, 4, "game.kdl tozalanmadi")
+    # Closing every other app would end the terminal the suite runs in.
+    settings(game__closeApps=False)
+    try:
+        ipc("gameMode")
+        wait(lambda: sh([game, "status"]).returncode == 0, 4, "game.kdl yozilmadi")
+        wait(lambda: st()["gameMode"]["black"] and st()["gameMode"]["widgets"], 4, "tozalash yoqilmadi")
+        wait(lambda: "falcon-widgets-face" not in layers(), 4, "vidjetlar ko'rinib turibdi")
+        ok((STATE / "game-black").exists(), "qora fon belgisi yo'q")
+        ipc("gameMode")
+        wait(lambda: sh([game, "status"]).returncode != 0, 4, "game.kdl tozalanmadi")
+        wait(lambda: not (STATE / "game-black").exists(), 4, "fon qaytmadi")
+    finally:
+        settings(game__closeApps=True)
+
+
+@case("Yopiladigan oynalar ro'yxati: o'yin va lancherlar qoladi")
+def _():
+    out = json.loads(sh([str(LBIN / "falcon-game"), "close", "--dry-run", "--keep", "kitty"]).stdout)
+    ok("kitty" not in out["closed"], f"kitty yopiladiganlar ichida: {out}")
+    ok(not any(a.startswith("steam") or a == "org.quickshell" for a in out["closed"]), out)
 
 
 feature("wallget", "Fon yuklab olish")

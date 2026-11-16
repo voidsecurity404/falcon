@@ -78,7 +78,7 @@ Singleton {
         // Five minutes keeps the waking up check close. The first one waits for the network after login.
         interval: 300000
         repeat: true
-        running: root.enabled
+        running: root.enabled && !GameMode.quiet
         onTriggered: {
             if (root.due())
                 root.check();
@@ -86,7 +86,7 @@ Singleton {
     }
     Timer {
         interval: 60000
-        running: root.enabled && root.loaded
+        running: root.enabled && root.loaded && !GameMode.quiet
         onTriggered: {
             if (root.due())
                 root.check();

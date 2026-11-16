@@ -24,6 +24,13 @@
     "lineHeight": 120,
     "scrollback": 2000
   },
+  "game": {
+    "closeApps": true,
+    "keep": "",
+    "hideWidgets": true,
+    "blackBackground": true,
+    "pauseServices": true
+  },
   "fetch": {
     "enabled": true,
     "style": "classic",

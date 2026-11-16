@@ -281,7 +281,7 @@ Singleton {
     Timer {
         interval: 2000
         repeat: true
-        running: root.shownLive && !mpv.connected
+        running: root.shownLive && !mpv.connected && !GameMode.black
         onTriggered: mpv.connected = true
     }
 }

@@ -231,6 +231,7 @@ ShellRoot {
                 clipPins: ClipPins.pins.length,
                 wallpaperAuto: WallpaperAuto.mode,
                 sessionWarning: Session.warning,
+                gameMode: ({ on: GameMode.enabled, widgets: GameMode.hidesWidgets, black: GameMode.black, quiet: GameMode.quiet }),
                 polkitActive: Polkit.active,
                 polkitRegistered: Polkit.registered,
                 songrec: SongRec.listening,
