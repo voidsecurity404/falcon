@@ -1454,7 +1454,7 @@ LazyLoader {
                     },
                     {
                         title: Tr.t("Windows"),
-                        items: [win.bind("close", Tr.t("Close window")), win.bind("widthCycle", Tr.t("Column width")), win.bind("maximize", Tr.t("Maximize column")), win.bind("fullscreen", Tr.t("Fullscreen")), win.bind("sticky", Tr.t("Sticky window")), win.bind("overview", Tr.t("Overview")), win.bind("zen", Tr.t("Focus mode")), win.bind("kill", Tr.t("Force close window")), win.bind("widthUp", Tr.t("Wider window")), win.bind("widthDown", Tr.t("Narrower window"))]
+                        items: [win.bind("close", Tr.t("Close window")), win.bind("widthCycle", Tr.t("Column width")), win.bind("maximize", Tr.t("Maximize column")), win.bind("fullscreen", Tr.t("Fullscreen")), win.bind("sticky", Tr.t("Sticky window")), win.bind("overview", Tr.t("Overview")), win.bind("zen", Tr.t("Focus mode")), win.bind("game", Tr.t("Game mode")), win.bind("kill", Tr.t("Force close window")), win.bind("widthUp", Tr.t("Wider window")), win.bind("widthDown", Tr.t("Narrower window"))]
                     },
                     {
                         title: Tr.t("Window tools"),
@@ -2103,6 +2103,12 @@ LazyLoader {
                                 hint: Tr.t("Each window returns to its workspace, place and size"),
                                 type: "toggle",
                                 when: ["game.closeApps", true]
+                            },
+                            {
+                                key: "game.disableBinds",
+                                label: Tr.t("Turn off all shortcuts"),
+                                hint: Tr.t("Every key goes to the game. Only the game mode shortcut still works"),
+                                type: "toggle"
                             },
                             {
                                 key: "game.hideWidgets",

@@ -5116,9 +5116,14 @@ def _():
         wait(lambda: st()["gameMode"]["black"] and st()["gameMode"]["widgets"], 4, "tozalash yoqilmadi")
         wait(lambda: "falcon-widgets-face" not in layers(), 4, "vidjetlar ko'rinib turibdi")
         ok((STATE / "game-black").exists(), "qora fon belgisi yo'q")
+        # Every key but the game mode one is off: niri reads the copy without bind files.
+        wait(lambda: (STATE / "game-keys").exists(), 4, "klavishsiz konfiguratsiya yuklanmadi")
+        twin = (HOME / ".config/niri/game-config.kdl").read_text()
+        ok("binds.kdl" not in twin and "gameMode" in twin + (HOME / ".config/niri/game-falcon-config.kdl").read_text() if (HOME / ".config/niri/game-falcon-config.kdl").exists() else "gameMode" in twin, "klavishlar qolgan")
         ipc("gameMode")
         wait(lambda: sh([game, "status"]).returncode != 0, 4, "game.kdl tozalanmadi")
         wait(lambda: not (STATE / "game-black").exists(), 4, "fon qaytmadi")
+        wait(lambda: not (STATE / "game-keys").exists(), 4, "odatdagi konfiguratsiya qaytmadi")
     finally:
         settings(game__closeApps=True)
 

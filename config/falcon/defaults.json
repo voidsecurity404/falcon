@@ -27,6 +27,7 @@
   "game": {
     "closeApps": true,
     "keep": "",
+    "disableBinds": true,
     "reopenApps": true,
     "hideWidgets": true,
     "blackBackground": true,
@@ -241,6 +242,7 @@
     "translate": "Mod+Alt+P",
     "pin": "Mod+Alt+S",
     "widgets": "Mod+Shift+W",
+    "game": "Mod+G",
     "kill": "Mod+Ctrl+Q",
     "widthUp": "Mod+Ctrl+Shift+WheelScrollUp",
     "widthDown": "Mod+Ctrl+Shift+WheelScrollDown",

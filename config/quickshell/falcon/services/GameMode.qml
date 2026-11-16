@@ -63,7 +63,7 @@ Singleton {
             // No list of an earlier time may wait for this one's end.
             Quickshell.execDetached([Ui.binDir + "falcon-game", "reopen", "--forget"]);
         }
-        Toasts.show(Tr.t("Game mode on"), Tr.t("Everything else is off, full power for the game"), "game");
+        Toasts.show(Tr.t("Game mode on"), keysOff ? Tr.t("All shortcuts are off, {key} ends game mode").replace("{key}", Settings.get("binds.game", "Mod+G")) : Tr.t("Everything else is off, full power for the game"), "game");
     }
 
     // `restore` is false when the cable was pulled: the battery's own power mode takes over then.
@@ -85,8 +85,11 @@ Singleton {
         Toasts.show(Tr.t("Game mode off"), restore ? Tr.t("Everything is back as it was") : Tr.t("The charger was unplugged"), "game");
     }
 
+    // Every shortcut off while playing, so the function row and the Super key reach the game.
+    readonly property bool keysOff: Settings.get("game.disableBinds", true)
+
     function apply() {
-        Quickshell.execDetached([Ui.binDir + "falcon-game", "on"]);
+        Quickshell.execDetached([Ui.binDir + "falcon-game", "on"].concat(keysOff ? ["--keys-off"] : []));
         ownProfile = PowerProfiles.hasPerformanceProfile ? PowerProfile.Performance : PowerProfile.Balanced;
         PowerProfiles.profile = ownProfile;
         Toasts.doNotDisturb = true;

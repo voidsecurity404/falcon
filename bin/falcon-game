@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Game mode, everything outside the shell. services/GameMode.qml decides what runs and calls this.
 
-  falcon-game on | off        niri's part: animations, window shadows and the hot corner go off
+  falcon-game on [--keys-off] | off
+                              niri's part: animations, window shadows and the hot corner go off.
+                              With --keys-off niri also loads a copy of its config without any
+                              key bind but the game mode shortcut, so every key reaches the game
   falcon-game status          prints on or off (exit 1 when off)
   falcon-game close [--dry-run] [--keep "a,b"]
                               asks every window that is not a game or a game launcher to close, then
@@ -33,6 +36,9 @@ KDL = CONFIG + "/niri/generated/game.kdl"
 BLACK = STATE + "/game-black"
 QUIET = STATE + "/game-services"
 WINDOWS = STATE + "/game-windows.json"
+# Holds the path of niri's usual config while the key-free copy is loaded.
+KEYS = STATE + "/game-keys"
+NIRI = CONFIG + "/niri"
 BIN = HOME + "/.local/bin/"
 
 # Blur stays on: without it the panels turn see-through and unreadable. A fullscreen game is drawn
@@ -84,6 +90,149 @@ def reload_niri():
         niri("action", "load-config-file")
     except (subprocess.SubprocessError, OSError):
         pass
+
+
+def niri_process():
+    """(binary, config path) of the running niri: the fork is started with its own -c."""
+    sock = os.path.basename(os.environ.get("NIRI_SOCKET", ""))
+    found = re.search(r"\.(\d+)\.sock$", sock)
+    binary, config = "niri", NIRI + "/config.kdl"
+    if found:
+        pid = found.group(1)
+        try:
+            binary = os.readlink(f"/proc/{pid}/exe")
+            with open(f"/proc/{pid}/cmdline", "rb") as f:
+                words = [w.decode() for w in f.read().split(b"\0") if w]
+            for flag in ("-c", "--config"):
+                if flag in words[:-1]:
+                    config = words[words.index(flag) + 1]
+        except (OSError, ValueError):
+            pass
+    return binary, config
+
+
+def without_binds(text):
+    """A config text with its top level `binds { }` blocks cut out, comments and strings respected."""
+    out, i, depth, n = [], 0, 0, len(text)
+    while i < n:
+        c = text[i]
+        if text.startswith("//", i):
+            j = text.find("\n", i)
+            j = n if j < 0 else j
+            out.append(text[i:j])
+            i = j
+        elif text.startswith("/*", i):
+            j = text.find("*/", i)
+            j = n if j < 0 else j + 2
+            out.append(text[i:j])
+            i = j
+        elif c == '"':
+            j = i + 1
+            while j < n and text[j] != '"':
+                j += 2 if text[j] == "\\" else 1
+            out.append(text[i:j + 1])
+            i = j + 1
+        elif depth == 0 and re.match(r"binds\s*\{", text[i:]) and (i == 0 or not (text[i - 1].isalnum() or text[i - 1] in "-_")):
+            j = text.index("{", i) + 1
+            level = 1
+            while j < n and level:
+                if text.startswith("//", j):
+                    k = text.find("\n", j)
+                    j = n if k < 0 else k
+                    continue
+                if text[j] == '"':
+                    j += 1
+                    while j < n and text[j] != '"':
+                        j += 2 if text[j] == "\\" else 1
+                elif text[j] == "{":
+                    level += 1
+                elif text[j] == "}":
+                    level -= 1
+                j += 1
+            i = j
+        else:
+            depth += c == "{"
+            depth -= c == "}"
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def keys_off(on):
+    """Loads a copy of niri's config that has no key binds, or goes back to the usual one.
+
+    niri cannot take a bind away in a later include, so the copy leaves the bind files out: each
+    config file niri reads (config.kdl, and the fork's falcon-config.kdl around it) gets a twin in
+    the same folder whose includes of bind files are dropped, and files that hold other things too
+    (user.kdl, the fork's falcon.kdl) are included as copies with their `binds` blocks cut. The
+    only bind in it is the game mode shortcut, taken from generated/binds.kdl."""
+    binary, config = niri_process()
+    if not on:
+        try:
+            with open(KEYS) as f:
+                usual = f.read().strip()
+            os.unlink(KEYS)
+        except OSError:
+            return False
+        try:
+            niri("action", "load-config-file", "--path", usual or config)
+        except (subprocess.SubprocessError, OSError):
+            pass
+        return True
+    drop = ("cfg/binds.kdl", "generated/binds.kdl")
+    # sticky.kdl keeps its window rules; its copy is as old as this call, so a window made sticky
+    # later simply slides along with its workspace.
+    cut = {"cfg/user.kdl": "generated/game-user.kdl", "generated/falcon.kdl": "generated/game-falcon.kdl",
+           "generated/sticky.kdl": "generated/game-sticky.kdl"}
+    twins = {}
+
+    def twin(path):
+        if path in twins:
+            return twins[path]
+        folder = os.path.dirname(path)
+        target = os.path.join(folder, "game-" + os.path.basename(path))
+        twins[path] = target
+        lines = []
+        with open(path) as f:
+            for line in f.read().split("\n"):
+                found = re.match(r'\s*include\s+(?:optional=\w+\s+)?"([^"]+)"', line)
+                name = found.group(1) if found else ""
+                if name in drop:
+                    continue
+                if name in cut:
+                    try:
+                        with open(os.path.join(folder, name)) as f2:
+                            write_atomic(os.path.join(folder, cut[name]), without_binds(f2.read()))
+                        line = line.replace(f'"{name}"', f'"{cut[name]}"')
+                    except OSError:
+                        continue
+                elif name and os.path.dirname(name) == "" and os.path.exists(os.path.join(folder, name)):
+                    # Another top level file of the same kind (the fork's file includes config.kdl).
+                    line = line.replace(f'"{name}"', f'"{os.path.basename(twin(os.path.join(folder, name)))}"')
+                lines.append(line)
+        write_atomic(target, "// Generated by falcon-game: this config without key binds.\n" + "\n".join(lines))
+        return target
+
+    try:
+        target = twin(config)
+        escape = ""
+        with open(NIRI + "/generated/binds.kdl") as f:
+            for line in f:
+                if '"gameMode"' in line:
+                    escape = line.rstrip()
+        with open(target, "a") as f:
+            f.write("\nbinds {\n" + (escape or '    Mod+G repeat=false { spawn "qs" "-c" "falcon" "ipc" "call" "desk" "gameMode"; }') + "\n}\n")
+        check = subprocess.run([binary, "validate", "-c", target], capture_output=True, text=True, timeout=10)
+        if check.returncode != 0:
+            print("falcon-game: the key-free config is not valid, keys stay on:\n" + check.stderr[-600:], file=sys.stderr)
+            return False
+        os.makedirs(STATE, exist_ok=True)
+        write_atomic(KEYS, config)
+        niri("action", "load-config-file", "--path", target)
+        return True
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        print(f"falcon-game: keys stay on: {error!r}", file=sys.stderr)
+        return False
 
 
 def write_atomic(path, text):
@@ -241,10 +390,15 @@ def main():
     command = args[0] if args else "status"
     if command == "on":
         write_atomic(KDL, KDL_TEXT)
-        reload_niri()
+        # Loading the key-free copy reads game.kdl as well; without it a plain reload does.
+        if not ("--keys-off" in args and keys_off(True)):
+            keys_off(False)
+            reload_niri()
     elif command == "off":
-        if os.path.exists(KDL) and os.path.getsize(KDL) > 0:
+        changed = os.path.exists(KDL) and os.path.getsize(KDL) > 0
+        if changed:
             write_atomic(KDL, "")
+        if not keys_off(False) and changed:
             reload_niri()
     elif command == "status":
         print("on" if is_on() else "off")
