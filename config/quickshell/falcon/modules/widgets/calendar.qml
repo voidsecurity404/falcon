@@ -19,9 +19,40 @@ Item {
     readonly property int daysInMonth: new Date(shown.getFullYear(), shown.getMonth() + 1, 0).getDate()
     readonly property int rows: Math.ceil((lead + daysInMonth) / 7)
     readonly property color weekend: Theme.hueShift(Theme.accent, 0.5)
+    // The day whose events show, picked with a press on it; today until then. Shared by both copies.
+    readonly property string pickedKey: Widgets.sharedValue(widgetId, "picked", "")
+    readonly property date picked: {
+        const p = pickedKey.split("-").map(Number);
+        return p.length === 3 ? new Date(p[0], p[1] - 1, p[2]) : today;
+    }
+    readonly property bool pickedToday: picked.toDateString() === today.toDateString()
+    readonly property var dayEvents: Agenda.configured ? Agenda.eventsOn(picked) : []
+    readonly property bool hasAgenda: Agenda.configured
+
+    function pick(d) {
+        const same = d.toDateString() === picked.toDateString();
+        Widgets.share(widgetId, "picked", same || d.toDateString() === today.toDateString() ? "" : d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate());
+    }
+    function timeOf(e) {
+        if (e.allDay)
+            return Tr.t("All day");
+        const s = new Date(e.start);
+        const f = Settings.get("panel.clock24", true) ? "HH:mm" : "h:mm AP";
+        return Qt.formatTime(s, f);
+    }
+    function dayTitle(d) {
+        if (d.toDateString() === today.toDateString())
+            return Tr.t("Today");
+        const t = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+        if (d.toDateString() === t.toDateString())
+            return Tr.t("Tomorrow");
+        return Qt.locale().toString(d, "d MMMM");
+    }
 
     function go(step) {
         Widgets.share(widgetId, "offset", step === 0 ? 0 : offset + step);
+        if (step === 0)
+            Widgets.share(widgetId, "picked", "");
     }
     function weekNumber(d) {
         const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -91,6 +122,8 @@ Item {
                 color: Theme.text
             }
             Label {
+                // The month already heads the grid beside it; the events need the room.
+                visible: !root.hasAgenda
                 text: Qt.locale().standaloneMonthName(root.today.getMonth()) + " " + root.today.getFullYear()
                 size: 15
                 font.capitalization: Font.Capitalize
@@ -99,6 +132,7 @@ Item {
         }
         Column {
             x: 30
+            visible: !root.hasAgenda
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 30
             spacing: 6
@@ -129,6 +163,78 @@ Item {
                 size: 12
                 color: Theme.muted
             }
+        }
+    }
+
+    // The picked day's events, under today's date in the wide form.
+    Column {
+        visible: root.wide && root.hasAgenda
+        x: 22
+        width: 196 - 44
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 24
+        spacing: 5
+
+        Label {
+            text: root.dayTitle(root.picked)
+            size: 11
+            font.weight: Font.DemiBold
+            font.capitalization: Font.AllUppercase
+            font.letterSpacing: 0.6
+            color: Theme.muted
+        }
+        Repeater {
+            model: root.dayEvents.slice(0, 2)
+
+            Rectangle {
+                id: ev
+
+                required property var modelData
+
+                width: parent.width
+                height: 34
+                radius: 9
+                color: Qt.alpha(Agenda.colorOf(modelData.source), 0.14)
+
+                Rectangle {
+                    x: 5
+                    y: 6
+                    width: 3
+                    height: parent.height - 12
+                    radius: 1.5
+                    color: Agenda.colorOf(ev.modelData.source)
+                }
+                Column {
+                    x: 14
+                    width: parent.width - 20
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Label {
+                        width: parent.width
+                        text: ev.modelData.title || Tr.t("(no title)")
+                        size: 12
+                        font.weight: Font.Medium
+                        elide: Text.ElideRight
+                    }
+                    Label {
+                        text: root.timeOf(ev.modelData)
+                        size: 10
+                        color: Theme.muted
+                    }
+                }
+            }
+        }
+        Label {
+            visible: root.dayEvents.length === 0
+            text: Tr.t("No events")
+            size: 12
+            color: Theme.muted
+        }
+        Label {
+            visible: root.dayEvents.length > 2
+            text: Tr.t("And {n} more").replace("{n}", root.dayEvents.length - 2)
+            size: 11
+            color: Theme.muted
         }
     }
 
@@ -227,6 +333,8 @@ Item {
                     readonly property bool inMonth: date.getMonth() === root.shown.getMonth()
                     readonly property bool isToday: date.toDateString() === root.today.toDateString()
                     readonly property bool weekendDay: date.getDay() === 0 || date.getDay() === 6
+                    readonly property bool isPicked: !root.pickedToday && date.toDateString() === root.picked.toDateString()
+                    readonly property int count: root.hasAgenda && visible ? Agenda.eventsOn(date).length : 0
 
                     width: grid.cell
                     height: grid.rowHeight
@@ -250,6 +358,42 @@ Item {
                             border.color: Qt.alpha(Theme.accent, 0.3)
                         }
                     }
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: Math.min(parent.width, parent.height) - 4
+                        height: width
+                        radius: width / 2
+                        visible: cell.isPicked || dayHot.hovered
+                        color: cell.isPicked ? Qt.alpha(Theme.accent, 0.22) : Qt.alpha(Theme.text, 0.1)
+                        border.width: cell.isPicked ? 1.5 : 0
+                        border.color: Theme.accent
+                    }
+                    Row {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 1
+                        spacing: 2
+                        visible: cell.count > 0 && !cell.isToday
+
+                        Repeater {
+                            model: Math.min(3, cell.count)
+
+                            Rectangle {
+                                width: 4
+                                height: 4
+                                radius: 2
+                                color: Theme.accent
+                                opacity: cell.inMonth ? 1 : 0.4
+                            }
+                        }
+                    }
+                    WidgetHot {
+                        id: dayHot
+
+                        anchors.fill: parent
+                        visible: root.hasAgenda
+                        onClicked: root.pick(cell.date)
+                    }
                     Label {
                         anchors.centerIn: parent
                         text: cell.date.getDate()
@@ -266,9 +410,13 @@ Item {
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 14
             x: 22
-            text: Tr.t("Week") + " " + root.weekNumber(root.today) + "  ·  " + Tr.t("Day") + " " + root.dayOfYear(root.today)
+            width: parent.width - 44
+            elide: Text.ElideRight
+            text: !root.hasAgenda ? Tr.t("Week") + " " + root.weekNumber(root.today) + "  ·  " + Tr.t("Day") + " " + root.dayOfYear(root.today)
+                : root.dayEvents.length === 0 ? root.dayTitle(root.picked) + ": " + Tr.t("No events")
+                : root.dayTitle(root.picked) + ": " + root.timeOf(root.dayEvents[0]) + "  " + (root.dayEvents[0].title || Tr.t("(no title)")) + (root.dayEvents.length > 1 ? "  +" + (root.dayEvents.length - 1) : "")
             size: 12
-            color: Theme.muted
+            color: root.hasAgenda && root.dayEvents.length > 0 ? Theme.text : Theme.muted
         }
     }
 }

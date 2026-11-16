@@ -46,7 +46,7 @@ Singleton {
             blurb: Tr.t("Now, the next hours with rain chance and the coming days"),
             icon: "cloudSun",
             group: "weather",
-            forms: [{ name: "large", w: 440, h: 440 }, { name: "wide", w: 460, h: 210 }, { name: "compact", w: 280, h: 140 }],
+            forms: [{ name: "large", w: 440, h: 500 }, { name: "wide", w: 460, h: 210 }, { name: "compact", w: 280, h: 140 }],
             plate: true
         },
         {

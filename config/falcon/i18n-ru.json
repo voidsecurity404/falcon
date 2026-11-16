@@ -1699,5 +1699,22 @@
  "Quietly: only into the history. Important: a card even in Silent and focus mode. Off: not shown and not kept. Urgent ones always show.": "Тихо: только в историю. Важное: карточка даже в беззвучном режиме и режиме фокуса. Выкл.: не показывать и не хранить. Срочные показываются всегда.",
  "Type to find a window": "Начните печатать, чтобы найти окно",
  "Search in the overview": "Поиск в обзоре",
- "Type in the overview to find a window, Enter opens it": "Печатайте в обзоре, чтобы найти окно, Enter открывает его"
+ "Type in the overview to find a window, Enter opens it": "Печатайте в обзоре, чтобы найти окно, Enter открывает его",
+ "low": "низкий",
+ "moderate": "умеренный",
+ "high": "высокий",
+ "very high": "очень высокий",
+ "extreme": "экстремальный",
+ "good": "хороший",
+ "unhealthy for some": "вреден для чувствительных",
+ "unhealthy": "вредный",
+ "very unhealthy": "очень вредный",
+ "Snow": "Снег",
+ "Rain": "Дождь",
+ "stops in about {n} min": "закончится примерно через {n} мин",
+ "for the next two hours": "ближайшие два часа",
+ "in about {n} min": "примерно через {n} мин",
+ "UV": "УФ",
+ "Air": "Воздух",
+ "Dry for the next two hours": "Ближайшие два часа без осадков"
 }

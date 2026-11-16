@@ -35,6 +35,21 @@ Item {
     }
     readonly property var hours: large ? Weather.hourly.filter((h, i) => i % 2 === 0).slice(0, 12) : Weather.hourly.filter((h, i) => i % 3 === 0).slice(0, 8)
 
+    // Ticks each minute, so the rain sentence counts down between requests.
+    property real nowMs: Date.now()
+    readonly property string rainSoon: Weather.nowcast(nowMs)
+    readonly property color aqiColor: [Theme.good, Theme.warn, Theme.error, Theme.error][Math.max(0, Weather.aqiLevel(Weather.aqi))]
+    readonly property color uvColor: Weather.uv < 3 ? Theme.good : Weather.uv < 6 ? Theme.warn : Theme.error
+    // Where the sun is between sunrise and sunset, 0 to 1; below 0 or above 1 at night.
+    readonly property real sunShare: Weather.sunset > Weather.sunrise ? (nowMs - Weather.sunrise) / (Weather.sunset - Weather.sunrise) : -1
+
+    Timer {
+        interval: 60000
+        running: true
+        repeat: true
+        onTriggered: root.nowMs = Date.now()
+    }
+
     function hourLabel(t) {
         const d = new Date(t);
         return (d.getHours() < 10 ? "0" : "") + d.getHours();
@@ -145,9 +160,9 @@ Item {
                 }
                 Label {
                     visible: !!root.today
-                    text: root.today ? "↑ " + root.today.max + "°   ↓ " + root.today.min + "°" + (root.compact && root.today.rain > 0 ? "   ☂ " + root.today.rain + "%" : "") : ""
+                    text: root.compact && root.rainSoon !== "" ? root.rainSoon : root.today ? "↑ " + root.today.max + "°   ↓ " + root.today.min + "°" + (root.compact && root.today.rain > 0 ? "   ☂ " + root.today.rain + "%" : "") : ""
+                    color: root.compact && root.rainSoon !== "" ? root.rainColor : Theme.muted
                     size: 12
-                    color: Theme.muted
                 }
             }
         }
@@ -161,18 +176,18 @@ Item {
         }
         // Humidity, wind, sunrise and sunset.
         Flow {
-            visible: !root.compact
+            visible: !root.compact && (root.large || root.rainSoon === "")
             y: root.large ? 112 : 136
             width: parent.width
             spacing: 6
 
             Repeater {
                 model: [
-                    { icon: "color", text: Weather.humidity + "%" },
-                    { icon: "wave", text: Weather.wind + " " + Tr.t("km/h") },
-                    { icon: "sun", text: root.clock(Weather.sunrise) },
-                    { icon: "moon", text: root.clock(Weather.sunset) }
-                ].slice(0, root.large ? 4 : 2)
+                    { icon: "color", text: Weather.humidity + "%", tint: Theme.accent },
+                    { icon: "wave", text: Weather.wind + " " + Tr.t("km/h"), tint: Theme.accent },
+                    { icon: "sun", text: Weather.uv < 0 ? "" : Tr.t("UV") + " " + Math.round(Weather.uv), tint: root.uvColor },
+                    { icon: "leaf", text: Weather.aqi < 0 ? "" : Tr.t("Air") + " " + Weather.aqi, tint: root.aqiColor }
+                ].slice(0, root.large ? 4 : 2).filter(c => c.text !== "")
 
                 Rectangle {
                     required property var modelData
@@ -192,7 +207,7 @@ Item {
                             anchors.verticalCenter: parent.verticalCenter
                             name: modelData.icon
                             size: 12
-                            color: Theme.accent
+                            color: modelData.tint
                         }
                         Label {
                             anchors.verticalCenter: parent.verticalCenter
@@ -201,6 +216,137 @@ Item {
                         }
                     }
                 }
+            }
+        }
+
+        // Rain or snow coming within two hours, in place of the chips in the wide form.
+        Row {
+            visible: !root.compact && !root.large && root.rainSoon !== ""
+            y: 136
+            spacing: 6
+
+            Icon {
+                anchors.verticalCenter: parent.verticalCenter
+                name: "rain"
+                size: 14
+                color: root.rainColor
+            }
+            Label {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 170
+                text: root.rainSoon
+                size: 12
+                font.weight: Font.Medium
+                color: root.rainColor
+                wrapMode: Text.WordWrap
+                maximumLineCount: 2
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- sun and rain (large)
+    Item {
+        id: sunBand
+
+        visible: root.large && Weather.hasData
+        x: 22
+        y: 300
+        width: root.width - 44
+        height: 56
+
+        // The sun's way across the sky today, the dot where it is now.
+        Item {
+            id: arc
+
+            width: 150
+            height: 40
+
+            Shape {
+                anchors.fill: parent
+                preferredRendererType: Shape.CurveRenderer
+
+                ShapePath {
+                    strokeColor: Qt.alpha(Theme.text, 0.25)
+                    strokeWidth: 1.5
+                    strokeStyle: ShapePath.DashLine
+                    dashPattern: [3, 3]
+                    fillColor: "transparent"
+                    startX: 6
+                    startY: arc.height - 2
+
+                    PathArc {
+                        x: arc.width - 6
+                        y: arc.height - 2
+                        radiusX: (arc.width - 12) / 2
+                        radiusY: arc.height - 6
+                    }
+                }
+                ShapePath {
+                    strokeColor: Qt.alpha(Theme.text, 0.18)
+                    strokeWidth: 1
+                    fillColor: "transparent"
+                    startX: 0
+                    startY: arc.height - 2
+
+                    PathLine {
+                        x: arc.width
+                        y: arc.height - 2
+                    }
+                }
+            }
+            Rectangle {
+                readonly property real t: Math.max(0, Math.min(1, root.sunShare))
+                readonly property bool up: root.sunShare >= 0 && root.sunShare <= 1
+                readonly property real a: Math.PI * (1 - t)
+
+                width: up ? 12 : 9
+                height: width
+                radius: width / 2
+                x: arc.width / 2 + Math.cos(a) * (arc.width - 12) / 2 - width / 2
+                y: arc.height - 2 - Math.sin(a) * (arc.height - 6) - height / 2
+                color: up ? root.warm : Qt.alpha(Theme.text, 0.4)
+                border.width: up ? 3 : 0
+                border.color: Qt.alpha(root.warm, 0.35)
+            }
+        }
+        Label {
+            anchors.top: arc.bottom
+            anchors.topMargin: 2
+            x: 0
+            text: "↑ " + root.clock(Weather.sunrise)
+            size: 11
+            color: Theme.muted
+        }
+        Label {
+            anchors.top: arc.bottom
+            anchors.topMargin: 2
+            x: arc.width - implicitWidth
+            text: "↓ " + root.clock(Weather.sunset)
+            size: 11
+            color: Theme.muted
+        }
+        Row {
+            x: arc.width + 22
+            width: parent.width - x
+            anchors.verticalCenter: arc.verticalCenter
+            anchors.verticalCenterOffset: 6
+            spacing: 8
+
+            Icon {
+                anchors.verticalCenter: parent.verticalCenter
+                name: root.rainSoon !== "" ? "rain" : "sun"
+                size: 16
+                color: root.rainSoon !== "" ? root.rainColor : Qt.alpha(Theme.text, 0.6)
+            }
+            Label {
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width - 24
+                text: root.rainSoon !== "" ? root.rainSoon : Tr.t("Dry for the next two hours")
+                size: 12
+                font.weight: Font.Medium
+                color: root.rainSoon !== "" ? root.rainColor : Theme.muted
+                wrapMode: Text.WordWrap
+                maximumLineCount: 2
             }
         }
     }
@@ -343,7 +489,7 @@ Item {
 
         visible: root.large && Weather.hasData
         x: 18
-        y: 304
+        y: 368
         width: root.width - 36
         spacing: 0
 
