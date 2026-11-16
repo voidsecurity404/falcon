@@ -2098,6 +2098,13 @@ LazyLoader {
                                 when: ["game.closeApps", true]
                             },
                             {
+                                key: "game.reopenApps",
+                                label: Tr.t("Reopen them when game mode ends"),
+                                hint: Tr.t("Each window returns to its workspace, place and size"),
+                                type: "toggle",
+                                when: ["game.closeApps", true]
+                            },
+                            {
                                 key: "game.hideWidgets",
                                 label: Tr.t("Hide widgets and music waves"),
                                 type: "toggle"

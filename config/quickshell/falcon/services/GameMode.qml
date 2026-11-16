@@ -12,7 +12,8 @@ import Quickshell.Services.UPower
 // waves leave the desktop, the wallpaper (a live one's player too) gives way to black, and the
 // shell's background helpers wait. Only on the charger: on battery it refuses, and pulling the
 // cable ends it. What it changed comes back when it ends: the power mode and Silent only if it
-// switched them, the wallpaper, the widgets and the helpers always; closed apps stay closed.
+// switched them, the wallpaper, the widgets and the helpers always, and the closed apps are opened
+// again in their places (`game.reopenApps`, through falcon-session).
 // The state is kept by Saved as `gameMode`, so it survives a shell restart.
 Singleton {
     id: root
@@ -58,6 +59,9 @@ Singleton {
         if (Settings.get("game.closeApps", true)) {
             closer.command = [Ui.binDir + "falcon-game", "close", "--keep", String(Settings.get("game.keep", ""))];
             closer.running = true;
+        } else {
+            // No list of an earlier time may wait for this one's end.
+            Quickshell.execDetached([Ui.binDir + "falcon-game", "reopen", "--forget"]);
         }
         Toasts.show(Tr.t("Game mode on"), Tr.t("Everything else is off, full power for the game"), "game");
     }
@@ -68,6 +72,8 @@ Singleton {
             return;
         enabled = false;
         Quickshell.execDetached([Ui.binDir + "falcon-game", "off"]);
+        // The apps it closed come back where they were (their content is up to each app).
+        Quickshell.execDetached([Ui.binDir + "falcon-game", "reopen"].concat(Settings.get("game.reopenApps", true) ? [] : ["--forget"]));
         const old = before || {};
         if (restore && old.profile !== undefined && PowerProfiles.profile === ownProfile)
             PowerProfiles.profile = old.profile;

@@ -7,6 +7,9 @@
                               asks every window that is not a game or a game launcher to close, then
                               ends the processes that stayed behind without a window (tray apps).
                               Nothing is killed by force: an app asking to save keeps its window.
+                              Their places are saved first (falcon-session save --to).
+  falcon-game reopen [--forget]
+                              brings the closed windows back where they were, or drops that list
   falcon-game black on | off  the wallpaper: the live one's player ends and the screen behind the
                               windows is black; off brings the wallpaper back
   falcon-game services stop | start
@@ -29,6 +32,7 @@ STATE = os.environ.get("XDG_STATE_HOME", HOME + "/.local/state") + "/falcon"
 KDL = CONFIG + "/niri/generated/game.kdl"
 BLACK = STATE + "/game-black"
 QUIET = STATE + "/game-services"
+WINDOWS = STATE + "/game-windows.json"
 BIN = HOME + "/.local/bin/"
 
 # Blur stays on: without it the panels turn see-through and unreadable. A fullscreen game is drawn
@@ -156,6 +160,9 @@ def close(dry, extra):
     if dry:
         print(json.dumps(report))
         return
+    # Where every window is now, with the closing ones marked, so `reopen` can bring them back.
+    if closing:
+        quiet(BIN + "falcon-session", "save", "--to", WINDOWS, "--closing", ",".join(str(w["id"]) for w in closing))
     for w in closing:
         try:
             niri("action", "close-window", "--id", str(w["id"]))
@@ -245,6 +252,15 @@ def main():
     elif command == "close":
         extra = args[args.index("--keep") + 1] if "--keep" in args and len(args) > args.index("--keep") + 1 else ""
         close("--dry-run" in args, extra)
+    elif command == "reopen":
+        # What `close` closed comes back to its place; --forget only drops the list.
+        if "--forget" in args:
+            try:
+                os.unlink(WINDOWS)
+            except OSError:
+                pass
+        elif os.path.exists(WINDOWS):
+            quiet(BIN + "falcon-session", "restore", "--from", WINDOWS, wait=90)
     elif command == "black" and len(args) > 1 and args[1] in ("on", "off"):
         black(args[1] == "on")
     elif command == "services" and len(args) > 1 and args[1] in ("stop", "start"):

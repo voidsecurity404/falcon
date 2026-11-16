@@ -5,6 +5,8 @@
   falcon-session watch    keep the saved state current (one copy runs at a time)
   falcon-session save     save the state now
   falcon-session restore  restore (does nothing when windows are open)
+  falcon-session save --to FILE --closing 1,2   every window into another file, these ids marked
+  falcon-session restore --from FILE            reopen that file's marked windows beside the open ones
 
 Each window comes back on its workspace and monitor, in its column, with its size, and floating
 windows at their position. A terminal comes back in its folder. Only the app is started, never its
@@ -180,7 +182,9 @@ def transient(title):
     return isinstance(title, str) and title.strip().lower() in TRANSIENT_TITLES
 
 
-def snapshot():
+def snapshot(closing=None):
+    """Every window as an entry to restore. With `closing` (window ids, for falcon-game) each entry
+    also carries its window's id and whether it is one of those."""
     workspaces = {w["id"]: w for w in niri_json("workspaces")}
     outputs = niri_json("outputs")
     zen = zen_on()
@@ -222,6 +226,9 @@ def snapshot():
                 item["x"], item["y"] = where
         if exe in TERMINALS:
             item["folder"] = terminal_folder(w["pid"])
+        if closing is not None:
+            item["id"] = w["id"]
+            item["closing"] = w["id"] in closing
         items.append(item)
     items.sort(key=lambda i: (i["output"], i["workspace"], i["floating"], i["column"], i["row"]))
     return items
@@ -490,9 +497,11 @@ def space_of(item, ranks):
     return item.get("output", ""), ranks[item.get("output", ""), item.get("workspace", 1)]
 
 
-def arrange_columns(bound, ranks, only=None):
+def arrange_columns(bound, ranks, only=None, also=None):
     """Rebuilds columns of each workspace (or of the workspaces in `only`). Moving a column needs
-    focus, which costs a frame each, so windows already in their place are left alone."""
+    focus, which costs a frame each, so windows already in their place are left alone. `also` holds
+    windows that never left (a reopen beside open windows): they take part in the order while they
+    are still on the workspace they were saved on, and are never moved to another one."""
     current = {w["id"]: w for w in niri_json("windows")}
     spaces = {}
     for window_id, item in bound.items():
@@ -500,6 +509,13 @@ def arrange_columns(bound, ranks, only=None):
             continue
         if not item.get("floating") and window_id in current:
             spaces.setdefault((item.get("output", ""), ranks[item.get("output", ""), item.get("workspace", 1)]), []).append((window_id, item))
+    if also and spaces:
+        places = {w["id"]: (w.get("output") or "", w.get("idx")) for w in niri_json("workspaces")}
+        for window_id, item in also.items():
+            space = space_of(item, ranks)
+            window = current.get(window_id)
+            if space in spaces and window and not window.get("is_floating") and places.get(window.get("workspace_id")) == space:
+                spaces[space].append((window_id, item))
     for members in spaces.values():
         members.sort(key=lambda m: (m[1].get("column", 999), m[1].get("row", 1)))
         wanted = {}
@@ -696,6 +712,38 @@ def restore(force, greet=False):
     return 0
 
 
+def reopen(source):
+    """Brings the windows of another file back beside the ones that are open, without the cover:
+    what game mode closed, when it ends. The file is used once."""
+    try:
+        items = json.loads(Path(source).read_text())
+    except (OSError, ValueError):
+        return 0
+    Path(source).unlink(missing_ok=True)
+    raw = [i for i in items if isinstance(i, dict)] if isinstance(items, list) else []
+    # A window that did not close after all (it asked to save) is still there under its id.
+    open_now = frozenset(w["id"] for w in niri_json("windows"))
+    entries = [c for c in (clean(i) for i in raw if i.get("closing") is True and i.get("id") not in open_now) if c]
+    if not entries:
+        return 0
+    # Workspace numbers are counted with the windows that stayed, as they were when it was saved.
+    ranks = workspace_ranks([c for c in map(clean, raw) if c])
+    neighbors = {i["id"]: c for i, c in ((i, clean(i)) for i in raw if i.get("id") in open_now) if c}
+    started = time.monotonic()
+    quiet(True)
+    back = 0
+    groups, wanted = {}, []
+    try:
+        groups, wanted = plan(entries)
+        if wanted:
+            # A game or a launcher still open keeps its place and is never taken for a returning window.
+            back = bring_back(groups, wanted, ignore=open_now, ranks=ranks, neighbors=neighbors)
+    finally:
+        quiet(False)
+        report(started, None, time.monotonic(), len(wanted), back, groups)
+    return 0
+
+
 def bring_back_saved(force):
     if not force and not enabled():
         return False
@@ -792,8 +840,10 @@ class CoverGate:
         return self.up_at is not None
 
 
-def bring_back(groups, wanted, gate=None):
-    ranks = workspace_ranks(wanted)
+def bring_back(groups, wanted, gate=None, ignore=frozenset(), ranks=None, neighbors=None):
+    """`ignore` holds the ids of windows that are not part of this restore (open before it), and
+    `neighbors` the saved entries of those among them that the returning ones stood beside."""
+    ranks = ranks or workspace_ranks(wanted)
     outputs = niri_json("outputs")
     bound = {}
     settled = set()
@@ -802,7 +852,7 @@ def bring_back(groups, wanted, gate=None):
         now = time.monotonic()
         arrived = False
         for window in niri_json("windows"):
-            if window["id"] in bound:
+            if window["id"] in bound or window["id"] in ignore:
                 continue
             app = window.get("app_id") or ""
             group = groups.get(app) or groups.get(executable(window.get("pid")))
@@ -822,7 +872,7 @@ def bring_back(groups, wanted, gate=None):
             waiting = {space_of(i, ranks) for g in groups.values() for i in g.items}
             ready = {space_of(i, ranks) for i in bound.values()} - waiting - settled
             if ready:
-                arrange_columns(bound, ranks, ready)
+                arrange_columns(bound, ranks, ready, neighbors)
                 fix_sizes(bound, outputs, ready, ranks)
                 settled |= ready
                 debug("settled early", sorted(ready))
@@ -857,7 +907,7 @@ def bring_back(groups, wanted, gate=None):
     # Sizes settle only after the app answers, so they get a second look. With animations off
     # nothing has to finish moving, so the waits are only for the apps' answers.
     time.sleep(0.06)
-    arrange_columns(bound, ranks)
+    arrange_columns(bound, ranks, also=neighbors)
     debug("columns")
     if fix_sizes(bound, outputs):
         time.sleep(0.1)
@@ -873,9 +923,22 @@ def bring_back(groups, wanted, gate=None):
 def main():
     args = sys.argv[1:]
     try:
+        if args[:1] == ["save"] and "--to" in args:
+            # falcon-game: the windows it is about to close, kept apart from the session file.
+            target = Path(args[args.index("--to") + 1])
+            closing = set()
+            if "--closing" in args:
+                closing = {int(i) for i in args[args.index("--closing") + 1].split(",") if i.strip().isdigit()}
+            target.parent.mkdir(parents=True, exist_ok=True)
+            tmp = target.with_name(f"{target.name}.{os.getpid()}.tmp")
+            tmp.write_text(json.dumps(snapshot(closing), ensure_ascii=False, indent=1))
+            os.replace(tmp, target)
+            return 0
         if args[:1] == ["save"]:
             save()
             return 0
+        if args[:1] == ["restore"] and "--from" in args:
+            return reopen(args[args.index("--from") + 1])
         if args[:1] == ["restore"]:
             return restore("--force" in args)
         if args[:1] == ["watch"]:

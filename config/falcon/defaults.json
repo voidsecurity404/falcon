@@ -27,6 +27,7 @@
   "game": {
     "closeApps": true,
     "keep": "",
+    "reopenApps": true,
     "hideWidgets": true,
     "blackBackground": true,
     "pauseServices": true

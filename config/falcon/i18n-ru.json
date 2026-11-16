@@ -1787,6 +1787,8 @@
  "Names separated by commas, for example discord, obs": "Названия через запятую, например discord, obs",
  "Hide widgets and music waves": "Скрывать виджеты и музыкальные волны",
  "Black background": "Чёрный фон",
+ "Reopen them when game mode ends": "Открывать их снова после игрового режима",
+ "Each window returns to its workspace, place and size": "Каждое окно возвращается на свой рабочий стол, место и размер",
  "The wallpaper, a live one too, is off until game mode ends": "Обои, в том числе живые, выключены до конца игрового режима",
  "Pause background services": "Останавливать фоновые службы",
  "Phone link, Telegram bot, network checks, updates, weather": "Связь с телефоном, Telegram-бот, проверки сети, обновления, погода",
