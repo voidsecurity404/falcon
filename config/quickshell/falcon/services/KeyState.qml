@@ -62,7 +62,12 @@ Singleton {
         running: root.enabled
         command: ["sh", "-c", "ls -d /sys/class/leds/*::capslock 2>/dev/null"]
         stdout: StdioCollector {
-            onStreamFinished: root.leds = text.split("\n").filter(l => l !== "").map(l => l + "/brightness")
+            onStreamFinished: {
+                const found = text.split("\n").filter(l => l !== "").map(l => l + "/brightness");
+                // Only a real change rebuilds the readers.
+                if (found.join("|") !== root.leds.join("|"))
+                    root.leds = found;
+            }
         }
     }
     Timer {

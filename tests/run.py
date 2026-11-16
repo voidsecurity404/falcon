@@ -60,6 +60,14 @@ def windows():
     return nj("windows")
 
 
+def wsof(app):
+    """The idx of the workspace holding the first window of this app id, or None."""
+    for w in windows():
+        if w.get("app_id") == app:
+            return next((ws["idx"] for ws in wsl() if ws["id"] == w["workspace_id"]), None)
+    return None
+
+
 def wsl():
     return sorted(nj("workspaces"), key=lambda w: w["idx"])
 

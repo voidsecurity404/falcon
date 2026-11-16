@@ -27,8 +27,13 @@ fi
 
 action="$1" image="$2" x="$3" y="$4" w="$5" h="$6" geometry="$7"
 
+# The shell's frozen pictures live in their own folder, removed once used. Only that folder:
+# called with a picture from anywhere else, the picture and its folder are left alone.
 dir="$(dirname "$image")"
-cleanup() { rm -rf "$dir"; }
+cleanup() {
+    [[ "$dir" == "${XDG_RUNTIME_DIR:-/nonexistent}/falcon-region" ]] && rm -rf "$dir"
+    return 0
+}
 
 if [[ "$action" == record ]]; then
     cleanup
