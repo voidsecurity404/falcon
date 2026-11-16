@@ -19,7 +19,18 @@ Item {
     readonly property int charge: Phone.battery ? Phone.battery.charge : 0
     readonly property bool charging: !!Phone.battery && Phone.battery.charging
     readonly property color level: !known ? Theme.muted : charging ? Theme.good : charge <= 15 ? Theme.error : Theme.accent
-    readonly property var latest: Phone.history.length ? Phone.history[0] : null
+    readonly property var note: Phone.history.length ? Phone.history[0] : null
+    // The newest message someone sent, from the SMS conversations.
+    readonly property var sms: (Phone.conversations || []).filter(m => !m.sent).sort((a, b) => b.date - a.date)[0] || null
+    // Whichever came last: a notification, or an SMS (shown with its own icon, opening the SMS page).
+    readonly property var latest: sms && (!note || sms.date > note.time) ? {
+        title: sms.name || (sms.addresses || [])[0] || Tr.t("Message"),
+        text: sms.body || (sms.attachments > 0 ? Tr.t("Picture") : ""),
+        time: sms.date,
+        icon: "",
+        isSms: true
+    } : note
+    readonly property var cell: dev && dev.cell ? dev.cell : null
 
     function ago(entry) {
         if (!entry || !entry.time)
@@ -134,6 +145,34 @@ Item {
                 size: 12
                 color: Theme.muted
             }
+            // The phone's mobile signal in four bars, with its network type.
+            Row {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.on && !!root.cell && root.cell.strength >= 0
+                spacing: 2
+
+                Repeater {
+                    model: 4
+
+                    Rectangle {
+                        required property int index
+
+                        anchors.bottom: parent.bottom
+                        width: 3
+                        height: 4 + index * 2.5
+                        radius: 1
+                        color: root.cell && index < root.cell.strength ? Theme.text : Qt.alpha(Theme.text, 0.2)
+                    }
+                }
+            }
+            Label {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.on && !!root.cell && root.cell.type !== ""
+                text: root.cell ? root.cell.type : ""
+                size: 10
+                font.weight: Font.DemiBold
+                color: Theme.muted
+            }
         }
     }
 
@@ -168,7 +207,7 @@ Item {
             Icon {
                 anchors.centerIn: parent
                 visible: !(root.latest && root.latest.icon)
-                name: "bell"
+                name: root.latest && root.latest.isSms ? "message" : "bell"
                 size: 15
                 color: Theme.accent
             }
@@ -230,8 +269,13 @@ Item {
 
             anchors.fill: parent
             onClicked: {
-                Ui.notificationsTab = 1;
-                Ui.popup = "notifications";
+                if (root.latest && root.latest.isSms) {
+                    Ui.phonePage = "sms";
+                    Ui.popup = "phone";
+                } else {
+                    Ui.notificationsTab = 1;
+                    Ui.popup = "notifications";
+                }
             }
         }
     }
