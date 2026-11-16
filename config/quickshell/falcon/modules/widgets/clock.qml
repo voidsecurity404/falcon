@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Effects
+import Quickshell.Io
 import qs.components
 import qs.services
 
@@ -20,6 +21,59 @@ Item {
     readonly property string mm: (now.getMinutes() < 10 ? "0" : "") + now.getMinutes()
     readonly property real minuteShare: now.getSeconds() / 60
     readonly property color second: Theme.hueShift(Theme.accent, 0.08)
+    // A second place's time beside the date (widgets.clock.zone, an IANA name such as Europe/Moscow).
+    readonly property string zone: String(Settings.get("widgets.clock.zone", "") || "").trim()
+    readonly property string zoneName: {
+        const n = String(Settings.get("widgets.clock.zoneName", "") || "").trim();
+        return n !== "" ? n : zone.split("/").pop().replace(/_/g, " ");
+    }
+    // That zone's offset from UTC in minutes, asked from date(1) since QML has no time zone data.
+    property int zoneOffset: 0
+    property bool zoneKnown: false
+    readonly property string zoneTime: {
+        if (!zoneKnown)
+            return "";
+        const t = new Date(now.getTime() + (zoneOffset + now.getTimezoneOffset()) * 60000);
+        const h = clock24 ? t.getHours() : (t.getHours() % 12 || 12);
+        return (clock24 && h < 10 ? "0" : "") + h + ":" + (t.getMinutes() < 10 ? "0" : "") + t.getMinutes();
+    }
+    readonly property bool showPrayer: Prayer.enabled && !!Prayer.next
+
+    function prayerClock(d) {
+        const h = clock24 ? d.getHours() : (d.getHours() % 12 || 12);
+        return (clock24 && h < 10 ? "0" : "") + h + ":" + (d.getMinutes() < 10 ? "0" : "") + d.getMinutes();
+    }
+
+    onZoneChanged: askZone()
+    Component.onCompleted: askZone()
+    function askZone() {
+        zoneKnown = false;
+        if (zone === "")
+            return;
+        zoneProc.environment = ({ TZ: zone });
+        zoneProc.running = true;
+    }
+    Process {
+        id: zoneProc
+
+        command: ["date", "+%z"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const m = text.trim().match(/^([+-])(\d\d)(\d\d)$/);
+                if (!m)
+                    return;
+                root.zoneOffset = (m[1] === "-" ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3]));
+                root.zoneKnown = true;
+            }
+        }
+    }
+    // Summer time can move the offset, so it is asked again now and then.
+    Timer {
+        interval: 600000
+        running: root.zone !== ""
+        repeat: true
+        onTriggered: root.askZone()
+    }
 
     Timer {
         interval: 1000
@@ -55,6 +109,16 @@ Item {
             size: root.compact ? 15 : 19
             font.weight: Font.Medium
             color: Theme.text
+        }
+        Label {
+            visible: root.zoneTime !== ""
+            anchors.left: dateLine.right
+            anchors.leftMargin: 10
+            anchors.baseline: dateLine.baseline
+            text: "·  " + root.zoneName + " " + root.zoneTime
+            size: root.compact ? 13 : 16
+            font.weight: Font.Medium
+            color: root.second
         }
 
         // Hours and minutes side by side, or the minutes under the hours.
@@ -222,6 +286,12 @@ Item {
                 icon: Weather.icon(Weather.code, Weather.isDay)
                 text: Weather.temperature + "°  " + Weather.describe(Weather.code)
                 tint: Theme.accent
+            }
+            Chip {
+                visible: root.showPrayer && !(root.stacked && Countdown.active)
+                icon: "mosque"
+                text: root.showPrayer ? Tr.t(Prayer.next.name) + " " + root.prayerClock(Prayer.next.time) : ""
+                tint: root.second
             }
             Chip {
                 visible: Countdown.active && !root.compact

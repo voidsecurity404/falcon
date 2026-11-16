@@ -1718,5 +1718,21 @@
  "Air": "Воздух",
  "Dry for the next two hours": "Ближайшие два часа без осадков",
  "Measuring…": "Измерение…",
- "Too hot": "Перегрев"
+ "Too hot": "Перегрев",
+ "Fajr": "Фаджр",
+ "Dhuhr": "Зухр",
+ "Asr": "Аср",
+ "Maghrib": "Магриб",
+ "Isha": "Иша",
+ "Clock widget": "Виджет часов",
+ "Second time zone": "Второй часовой пояс",
+ "Shown beside the date, for example Europe/Moscow. Empty is off": "Показывается рядом с датой, например Europe/Moscow. Пусто — выкл.",
+ "Its name": "Его название",
+ "Empty takes the city from the zone": "Пусто — город из названия пояса",
+ "Next prayer time": "Время следующего намаза",
+ "Counted here for the weather's place": "Считается здесь для места из погоды",
+ "Hanafi": "Ханафи",
+ "Shafi'i": "Шафии",
+ "Fajr angle": "Угол Фаджра",
+ "Isha angle": "Угол Иша"
 }

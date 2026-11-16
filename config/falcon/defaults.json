@@ -277,7 +277,17 @@
     "enabled": true,
     "firstOnly": false,
     "opacity": 0.5,
-    "followWallpaper": "full"
+    "followWallpaper": "full",
+    "clock": {
+      "zone": "",
+      "zoneName": ""
+    },
+    "prayer": {
+      "enabled": true,
+      "asr": "hanafi",
+      "fajr": 15,
+      "isha": 15
+    }
   },
   "keysounds": {
     "enabled": false,

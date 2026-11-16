@@ -665,6 +665,57 @@ LazyLoader {
                         ]
                     },
                     {
+                        title: Tr.t("Clock widget"),
+                        items: [
+                            {
+                                key: "widgets.clock.zone",
+                                label: Tr.t("Second time zone"),
+                                hint: Tr.t("Shown beside the date, for example Europe/Moscow. Empty is off"),
+                                type: "text",
+                                width: 220
+                            },
+                            {
+                                key: "widgets.clock.zoneName",
+                                label: Tr.t("Its name"),
+                                hint: Tr.t("Empty takes the city from the zone"),
+                                type: "text",
+                                width: 220
+                            },
+                            {
+                                key: "widgets.prayer.enabled",
+                                label: Tr.t("Next prayer time"),
+                                hint: Tr.t("Counted here for the weather's place"),
+                                type: "toggle"
+                            },
+                            {
+                                key: "widgets.prayer.asr",
+                                label: Tr.t("Asr"),
+                                type: "choice",
+                                options: ["hanafi", "standard"],
+                                names: [Tr.t("Hanafi"), Tr.t("Shafi'i")],
+                                when: ["widgets.prayer.enabled", true]
+                            },
+                            {
+                                key: "widgets.prayer.fajr",
+                                label: Tr.t("Fajr angle"),
+                                type: "slider",
+                                min: 12,
+                                max: 20,
+                                step: 0.5,
+                                when: ["widgets.prayer.enabled", true]
+                            },
+                            {
+                                key: "widgets.prayer.isha",
+                                label: Tr.t("Isha angle"),
+                                type: "slider",
+                                min: 12,
+                                max: 20,
+                                step: 0.5,
+                                when: ["widgets.prayer.enabled", true]
+                            }
+                        ]
+                    },
+                    {
                         title: Tr.t("Music"),
                         items: [
                             {
