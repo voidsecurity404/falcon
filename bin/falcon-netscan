@@ -17,7 +17,6 @@ tor, bt, hash, logins. Nothing here needs root, and nothing is sent anywhere exc
 
 import base64
 import codecs
-import concurrent.futures as cf
 import datetime
 import hashlib
 import ipaddress
@@ -29,7 +28,6 @@ import subprocess
 import sys
 import time
 import urllib.parse
-import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 from falcon_tr import tr  # noqa: E402
@@ -121,6 +119,7 @@ def neighbours():
 # ---- tools ---------------------------------------------------------------------------------
 
 def tool_lan(_arg):
+    import concurrent.futures as cf
     """Wakes every address of the local networks with one UDP packet, which makes the kernel
     ask for its MAC (ARP), then reads the neighbour table: the devices that answered."""
     nets = networks()
@@ -178,6 +177,7 @@ COMMON_PORTS = {21: "ftp", 22: "ssh", 23: "telnet", 25: "smtp", 53: "dns", 80: "
 
 
 def tool_probe(ip):
+    import concurrent.futures as cf
     """Tries a TCP connection to common ports of one device on the local network."""
     try:
         addr = ipaddress.ip_address(ip)
@@ -202,6 +202,7 @@ def tool_probe(ip):
 
 
 def tool_wan(_arg):
+    import urllib.request
     try:
         req = urllib.request.Request("https://ipinfo.io/json", headers={"User-Agent": "curl/8"})
         with urllib.request.urlopen(req, timeout=6) as r:
@@ -376,6 +377,7 @@ def ping_one(host):
 
 
 def tool_ping(_arg):
+    import concurrent.futures as cf
     route = default_route() or {}
     targets = [(route.get("gateway", ""), tr("gateway")), ("1.1.1.1", "Cloudflare"), ("8.8.8.8", "Google"),
                ("9.9.9.9", "Quad9")]

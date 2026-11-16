@@ -207,7 +207,7 @@ Item {
                 color: Lock.finger === "miss" ? Theme.error : Theme.accent
 
                 SequentialAnimation on opacity {
-                    running: Lock.finger === "ready"
+                    running: Lock.finger === "ready" && fingerIcon.visible
                     loops: Animation.Infinite
                     NumberAnimation { to: 0.45; duration: 1100; easing.type: Easing.InOutSine }
                     NumberAnimation { to: 1; duration: 1100; easing.type: Easing.InOutSine }

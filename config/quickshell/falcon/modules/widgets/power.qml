@@ -91,6 +91,8 @@ Item {
 
                 // A light that runs along while charging.
                 Rectangle {
+                    id: shine
+
                     visible: root.charging
                     width: 40
                     height: parent.height
@@ -112,7 +114,7 @@ Item {
                     }
 
                     NumberAnimation on x {
-                        running: root.charging
+                        running: root.charging && shine.visible
                         loops: Animation.Infinite
                         from: -40
                         to: liquid.width

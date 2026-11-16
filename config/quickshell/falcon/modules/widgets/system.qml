@@ -604,13 +604,15 @@ Item {
         color: "transparent"
         border.width: 2
         border.color: Theme.error
+        id: hotFrame
+
         visible: root.overheat
         opacity: 0.4 + 0.6 * pulse
 
         property real pulse: 0
 
         SequentialAnimation on pulse {
-            running: root.overheat
+            running: root.overheat && hotFrame.visible
             loops: Animation.Infinite
 
             NumberAnimation {

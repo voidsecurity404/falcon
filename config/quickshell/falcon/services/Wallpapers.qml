@@ -221,4 +221,67 @@ Singleton {
             visible: false
         }
     }
+
+    // A live wallpaper hidden behind windows still played at full rate whenever a few pixels of it
+    // showed (the gaps around a maximized window), and niri composed the whole screen again for
+    // every frame. While every screen's desktop is hidden it is paused through mpv's own socket,
+    // and it plays on the moment the desktop or the overview can be seen.
+    readonly property bool liveCovered: shownLive && !Niri.overview && Quickshell.screens.length > 0
+        && Quickshell.screens.every(s => Niri.desktopHiddenOn(s.name, s.width, s.height))
+
+    function sendLivePause() {
+        if (!mpv.connected)
+            return;
+        mpv.write(JSON.stringify({ command: ["set_property", "pause", liveCovered && !livePauseDelay.running] }) + "\n");
+        mpv.flush();
+    }
+
+    onLiveCoveredChanged: {
+        if (liveCovered)
+            livePauseDelay.restart();
+        else {
+            livePauseDelay.stop();
+            sendLivePause();
+        }
+    }
+
+    // A window closed and opened in one moment should not stop the video for a frame.
+    Timer {
+        id: livePauseDelay
+
+        interval: 700
+        onTriggered: root.sendLivePause()
+    }
+
+    Socket {
+        id: mpv
+
+        path: Quickshell.env("XDG_RUNTIME_DIR") + "/falcon-mpvpaper.sock"
+        connected: root.shownLive
+        onConnectedChanged: {
+            if (connected) {
+                write('{"command":["observe_property",1,"pause"]}\n');
+                root.sendLivePause();
+            }
+        }
+
+        // mpvpaper's own pause (-p) lets the video go on when it is shown again, also behind a
+        // window: pause it again then. Only that way, so the two never take turns.
+        parser: SplitParser {
+            onRead: line => {
+                if (line.indexOf('"pause"') < 0 || line.indexOf('"data":false') < 0)
+                    return;
+                if (root.liveCovered && !livePauseDelay.running)
+                    root.sendLivePause();
+            }
+        }
+    }
+
+    // mpvpaper starts after the first frame is reported, and again after a crash.
+    Timer {
+        interval: 2000
+        repeat: true
+        running: root.shownLive && !mpv.connected
+        onTriggered: mpv.connected = true
+    }
 }

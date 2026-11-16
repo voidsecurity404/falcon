@@ -109,9 +109,12 @@ stop_live() {
 
 # Ovozsiz, aylanib, ekranni to'ldirib o'ynaydi; ko'rinmaganda to'xtaydi.
 # mpvpaper reads ~/.config/mpv, so uosc and the OSD are turned off here: otherwise the
-# player's timeline and messages are drawn along the bottom of the wallpaper.
+# player's timeline and messages are drawn along the bottom of the wallpaper. The shell pauses it
+# through the socket while windows hide the desktop (Wallpapers.qml). hwdec=auto tried Vulkan
+# decoding first here, so VA-API is named first, as in mpv.conf.
 play() {
-    setsid -f mpvpaper -p -o "no-audio loop panscan=1.0 hwdec=auto load-scripts=no osc=no osd-level=0 osd-bar=no" '*' "$1" >/dev/null 2>&1 9>&-
+    local sock="${XDG_RUNTIME_DIR:-/tmp}/falcon-mpvpaper.sock"
+    setsid -f mpvpaper -p -o "no-audio loop panscan=1.0 hwdec=vaapi,auto-safe load-scripts=no osc=no osd-level=0 osd-bar=no input-ipc-server=$sock" '*' "$1" >/dev/null 2>&1 9>&-
     # Video keyin ochilgani uchun vidjetlarni yopadi: ularni yana ustiga chiqaramiz.
     for _ in $(seq 1 50); do
         niri msg -j layers 2>/dev/null | grep -q '"mpvpaper"' && break

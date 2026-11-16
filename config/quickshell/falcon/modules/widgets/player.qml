@@ -164,6 +164,8 @@ Item {
         }
         // Small bars that move while music plays.
         Row {
+            id: equalizer
+
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             anchors.margins: 10
@@ -183,8 +185,10 @@ Item {
                     color: "white"
                     opacity: 0.9
 
+                    // Only while drawn: the input copy keeps this widget hidden at opacity 0, and an
+                    // animation there still made the whole desktop layer repaint at the screen's rate.
                     SequentialAnimation on height {
-                        running: root.playing
+                        running: root.playing && equalizer.visible
                         loops: Animation.Infinite
 
                         NumberAnimation {

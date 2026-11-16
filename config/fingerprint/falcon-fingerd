@@ -40,6 +40,11 @@ GREETERS = {name[:15] for name in
 SDDM_STATE = os.environ.get("FALCON_FINGER_SDDM_STATE", "/var/lib/sddm/state.conf")
 TAKE_UID = int(os.environ.get("FALCON_FINGER_TAKE_UID", "0"))
 TOKEN_LIFE = 12.0
+# Looking through /proc for a greeter every second cost about 1% of a core all day. logind announces
+# every new or removed session (the greeter has its own), so /proc is read each second only for a
+# while after such a change and while a greeter runs, and otherwise every SLOW_TICK seconds.
+FAST_FOR = 60.0
+SLOW_TICK = 15.0
 RETRY_AFTER_MISS = 0.7
 
 FPRINT = "net.reactivated.Fprint"
@@ -267,6 +272,16 @@ class Daemon:
         self.server.listen(8)
         GLib.io_add_watch(self.server.fileno(), GLib.IO_IN, self.on_accept)
         self.write_greeter("off")
+        self.fast_until = time.monotonic() + FAST_FOR
+        self.last_look = 0.0
+        # A test greeter (FALCON_FINGER_GREETER) has no logind session: look every second then.
+        self.always_fast = "FALCON_FINGER_GREETER" in os.environ
+        try:
+            self.bus.signal_subscribe("org.freedesktop.login1", "org.freedesktop.login1.Manager", None,
+                                      "/org/freedesktop/login1", None, Gio.DBusSignalFlags.NONE,
+                                      self.on_sessions, None)
+        except GLib.Error:
+            self.always_fast = True
         GLib.timeout_add(1000, self.tick)
 
     # fprintd
@@ -407,9 +422,18 @@ class Daemon:
             self.greeter_user = ""
             self.write_greeter("off")
 
+    def on_sessions(self, _conn, _sender, _path, _iface, signal, _params, _data):
+        if signal in ("SessionNew", "SessionRemoved"):
+            self.fast_until = time.monotonic() + FAST_FOR
+
     def tick(self):
         if self.client:
             return True
+        now = time.monotonic()
+        if (self.greeter is None and not self.always_fast and now >= self.fast_until
+                and now - self.last_look < SLOW_TICK):
+            return True
+        self.last_look = now
         running = self.greeter_running()
         if not running:
             self.stop_greeter()
