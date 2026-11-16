@@ -109,6 +109,7 @@ targets=(
     .local/bin/falcon-calendar
     .local/bin/falcon-currency
     .local/bin/falcon-net
+    .local/bin/falcon-fkeys
     .local/bin/falcon-updates
     .local/bin/falcon-privacy
     .local/bin/falcon-netscan
@@ -157,6 +158,9 @@ if ((uninstall)); then
     fi
     if [[ -e /usr/local/libexec/falcon-fingerd ]]; then
         do_it env FALCON_REPO="$root" "$root/bin/falcon-fingerprint" setup --undo
+    fi
+    if [[ -e /etc/modprobe.d/90-falcon-fkeys.conf ]]; then
+        do_it "$root/bin/falcon-fkeys" setup --undo
     fi
     if [[ -e "$state/login-manager" ]] && ((dry == 0)); then
         sudo systemctl disable sddm.service || true
@@ -411,6 +415,12 @@ fi
 if ((packages)) && command -v nmcli >/dev/null; then
     say "Keeping the internet from dropping"
     do_it "$HOME/.local/bin/falcon-net" setup
+fi
+
+# A keyboard with Apple's USB id sends media keys in place of F1 to F12 until the driver is told.
+if ((packages)) && "$HOME/.local/bin/falcon-fkeys" status 2>/dev/null | grep -q '"done": false'; then
+    say "Making F1 to F12 work on this keyboard"
+    do_it "$HOME/.local/bin/falcon-fkeys" setup
 fi
 
 if command -v niri >/dev/null; then

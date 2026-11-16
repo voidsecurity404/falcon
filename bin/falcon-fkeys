@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""Makes F1 to F12 work on keyboards that claim to be Apple's.
+
+  falcon-fkeys status          prints what was found, as JSON
+  falcon-fkeys setup           one time setup, asks for sudo, safe to repeat, works at once
+  falcon-fkeys setup --undo    removes it
+
+Many mechanical keyboards (Keychron and its relatives, HFD NEO87 here) report Apple's USB vendor id
+05ac. The kernel's hid_apple driver then treats the top row as on a MacBook: F1 to F12 arrive as
+brightness, media and volume keys, and a game or any other program never sees an F key. The
+driver's `fnmode` decides it: 1 is media keys first, 2 is F keys first, 3 (the default) picks by
+the keyboard's name and takes an unknown name for Apple's own.
+
+The setup writes 2 into the running driver, so the keys change without replugging, and keeps it:
+a modprobe option for when the driver loads, and a udev rule that sets it again when the driver
+was loaded from the initramfs before that option could be read. The keyboard's own Fn layer
+(Fn+F keys handled inside the keyboard) is untouched.
+"""
+import json
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+from falcon_tr import tr
+
+PARAM = Path("/sys/module/hid_apple/parameters/fnmode")
+MODPROBE = "/etc/modprobe.d/90-falcon-fkeys.conf"
+UDEV = "/etc/udev/rules.d/90-falcon-fkeys.rules"
+
+MODPROBE_TEXT = """# Written by falcon-fkeys setup. Keyboards with Apple's USB id send F1 to F12, not media keys.
+options hid_apple fnmode=2
+"""
+
+UDEV_TEXT = """# Written by falcon-fkeys setup. Sets it also when hid_apple came from the initramfs,
+# before /etc/modprobe.d could be read.
+ACTION=="add", SUBSYSTEM=="module", KERNEL=="hid_apple", ATTR{parameters/fnmode}="2"
+"""
+
+
+def read(path):
+    try:
+        return Path(path).read_text()
+    except OSError:
+        return None
+
+
+def keyboards():
+    """Names of the keyboards with Apple's vendor id, from the kernel's list of input devices."""
+    names = []
+    vendor = name = ""
+    for line in (read("/proc/bus/input/devices") or "").splitlines() + [""]:
+        if line.startswith("I:"):
+            found = [part[7:] for part in line.split() if part.startswith("Vendor=")]
+            vendor = found[0].lower() if found else ""
+        elif line.startswith("N:"):
+            name = line.split("=", 1)[1].strip().strip('"')
+        elif line.startswith("H:"):
+            if vendor == "05ac" and "kbd" in line and name not in names:
+                names.append(name)
+        elif not line.strip():
+            vendor = name = ""
+    return names
+
+
+def status():
+    value = (read(PARAM) or "").strip()
+    found = keyboards()
+    files = read(MODPROBE) == MODPROBE_TEXT and read(UDEV) == UDEV_TEXT
+    return {
+        "keyboards": found,
+        "driver": PARAM.exists(),
+        "fnmode": int(value) if value.lstrip("-").isdigit() else -1,
+        "files": files,
+        # Nothing to do without such a keyboard; with one, the F keys must be first, now and later.
+        "done": not found or (value == "2" and files),
+    }
+
+
+def sudo(*cmd):
+    return subprocess.run(["sudo", *cmd], check=False).returncode == 0
+
+
+def setup():
+    with tempfile.TemporaryDirectory() as tmp:
+        done = True
+        for target, text in ((MODPROBE, MODPROBE_TEXT), (UDEV, UDEV_TEXT)):
+            source = Path(tmp) / Path(target).name
+            source.write_text(text)
+            done = done and sudo("install", "-D", "-o", "root", "-g", "root", "-m", "644", str(source), target)
+    if PARAM.exists():
+        done = done and sudo("sh", "-c", f"echo 2 > {PARAM}")
+    sudo("udevadm", "control", "--reload")
+    now = status()
+    if done and now["files"] and (not now["driver"] or now["fnmode"] == 2):
+        print(tr("Done. F1 to F12 work as F keys now."))
+        return 0
+    print(tr("Setup did not finish."), file=sys.stderr)
+    return 1
+
+
+def undo():
+    sudo("rm", "-f", MODPROBE, UDEV)
+    if PARAM.exists():
+        sudo("sh", "-c", f"echo 3 > {PARAM}")
+    sudo("udevadm", "control", "--reload")
+    print(tr("Removed."))
+    return 0
+
+
+def main(args):
+    if args[:1] == ["status"]:
+        print(json.dumps(status(), ensure_ascii=False))
+        return 0
+    if args[:1] == ["setup"]:
+        if not shutil.which("sudo"):
+            print(tr("sudo is needed."), file=sys.stderr)
+            return 1
+        return undo() if args[1:] == ["--undo"] else setup()
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+sys.exit(main(sys.argv[1:]))

@@ -64,6 +64,13 @@ except (OSError, ValueError, KeyError):
     pass
 
 try:
+    fkeys = json.loads(subprocess.run([str(HOME / ".local/bin/falcon-fkeys"), "status"], capture_output=True, text=True, check=False).stdout)
+    if fkeys["keyboards"]:
+        report(fkeys["done"], tr("F1 to F12 on this keyboard"), tr("Run once in a terminal: falcon-fkeys setup"))
+except (OSError, ValueError, KeyError):
+    pass
+
+try:
     net = json.loads(subprocess.run([str(HOME / ".local/bin/falcon-net"), "status"], capture_output=True, text=True, check=False).stdout)
     report(all(net.values()), tr("Internet self-repair"), tr("Run once in a terminal: falcon-net setup"))
 except (OSError, ValueError):
