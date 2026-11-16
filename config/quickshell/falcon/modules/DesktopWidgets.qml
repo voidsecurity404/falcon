@@ -243,8 +243,44 @@ PanelWindow {
         Keys.onEscapePressed: {
             if (Widgets.galleryOpen)
                 Widgets.galleryOpen = false;
+            else if (Widgets.selectedId !== "")
+                Widgets.selectedId = "";
             else
                 Widgets.editMode = false;
+        }
+        // Tab picks a widget, arrows move it (Shift: four steps), S size, F form, O glass, Delete removes.
+        Keys.onPressed: event => {
+            if (Widgets.galleryOpen)
+                return;
+            if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
+                Widgets.selectNext(event.key === Qt.Key_Backtab ? -1 : 1);
+                event.accepted = true;
+                return;
+            }
+            const id = Widgets.selectedId;
+            const at = Widgets.ids.indexOf(id);
+            const host = at >= 0 && hosts.count > at ? hosts.itemAt(at) : null;
+            if (!host)
+                return;
+            const step = (event.modifiers & Qt.ShiftModifier) ? 64 : 16;
+            const moves = { [Qt.Key_Left]: [-step, 0], [Qt.Key_Right]: [step, 0], [Qt.Key_Up]: [0, -step], [Qt.Key_Down]: [0, step] };
+            if (moves[event.key]) {
+                host.nudge(moves[event.key][0], moves[event.key][1]);
+            } else if (event.key === Qt.Key_S) {
+                Widgets.cycleSize(id);
+            } else if (event.key === Qt.Key_F) {
+                Widgets.cycleForm(id);
+            } else if (event.key === Qt.Key_O) {
+                Widgets.cycleOpacity(id);
+            } else if (event.key === Qt.Key_Delete) {
+                Widgets.selectNext(1);
+                Widgets.remove(id);
+                if (Widgets.selectedId === id)
+                    Widgets.selectedId = "";
+            } else {
+                return;
+            }
+            event.accepted = true;
         }
         visible: Widgets.editMode && root.focusedScreen
 
@@ -254,6 +290,17 @@ PanelWindow {
 
             anchors.fill: parent
             bottomSpace: bar.height + 26 + 14
+        }
+
+        // What the keyboard does here.
+        Label {
+            visible: !Widgets.galleryOpen
+            anchors.horizontalCenter: bar.horizontalCenter
+            anchors.bottom: bar.top
+            anchors.bottomMargin: 10
+            text: Tr.t("Tab picks a widget · arrows move it · S size · F form · O glass · Delete removes")
+            size: 12
+            color: Theme.muted
         }
 
         Rectangle {

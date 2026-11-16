@@ -59,6 +59,16 @@ Item {
         onTriggered: host.contentCovered = true
     }
 
+    // Arrow keys in edit mode: a grid step at a time, saved like a drag.
+    function nudge(dx, dy) {
+        const x = snap(placeX() + dx, minX, maxX);
+        const y = snap(placeY() + dy, minY, maxY);
+        const spanX = Math.max(1, areaWidth - targetWidth);
+        const spanY = Math.max(1, areaHeight - topInset - targetHeight);
+        Widgets.move(widgetId, (x - side) / spanX, (y - topInset) / spanY);
+    }
+    readonly property bool selected: !isFace && Widgets.editMode && Widgets.selectedId === widgetId
+
     function snap(v, low, high) {
         return Math.max(low, Math.min(high, Math.round(v / gridStep) * gridStep));
     }
@@ -222,6 +232,7 @@ Item {
             anchors.fill: parent
             visible: !!host.info && host.info.plate && (host.isFace || Widgets.editMode)
             radius: 22 * host.factor
+            glass: Widgets.glassOf(host.entry)
         }
 
         // Tarkib faqat ko'rinayotganda ishlaydi va sekin paydo bo'ladi. Ramka o'lchami o'zgarmaydi.
@@ -272,8 +283,8 @@ Item {
         radius: host.info && (host.info.plate || host.info.solid) ? 22 * host.factor : 18
         color: "transparent"
         visible: !host.isFace && Widgets.editMode
-        border.width: host.dragging ? 2 : 1
-        border.color: host.dragging || mover.containsMouse ? Theme.accent : Qt.alpha(Theme.text, 0.35)
+        border.width: host.dragging || host.selected ? 2 : 1
+        border.color: host.dragging || mover.containsMouse || host.selected ? Theme.accent : Qt.alpha(Theme.text, 0.35)
     }
     MouseArea {
         id: mover
@@ -289,6 +300,7 @@ Item {
         drag.maximumX: host.maxX
         drag.minimumY: host.minY
         drag.maximumY: host.maxY
+        onPressed: Widgets.selectedId = host.widgetId
         onReleased: {
             // Oddiy bosish vidjetni surmaydi va saqlangan joyini o'zgartirmaydi.
             if (Math.abs(host.x - host.placeX()) < 0.5 && Math.abs(host.y - host.placeY()) < 0.5)
@@ -305,7 +317,7 @@ Item {
     Rectangle {
         id: tools
 
-        readonly property bool shown: !host.isFace && Widgets.editMode && !host.dragging && (editHover.hovered || mover.pressed)
+        readonly property bool shown: !host.isFace && Widgets.editMode && !host.dragging && (editHover.hovered || mover.pressed || host.selected)
 
         anchors.top: parent.top
         anchors.right: parent.right
@@ -393,6 +405,12 @@ Item {
             Tool {
                 text: host.entry ? ({ s: "S", m: "M", l: "L" })[host.entry.size] : ""
                 onPressed: Widgets.cycleSize(host.widgetId)
+            }
+            // Its own glass: common, then 15, 35, 60 and 85 percent.
+            Tool {
+                visible: !!host.info && host.info.plate === true
+                text: host.entry && typeof host.entry.opacity === "number" ? "◐ " + Math.round(host.entry.opacity * 100) + "%" : "◐"
+                onPressed: Widgets.cycleOpacity(host.widgetId)
             }
             Tool {
                 icon: "trash"

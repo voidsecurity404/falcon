@@ -317,7 +317,9 @@ Singleton {
                 fx: Math.max(0, Math.min(1, Number(w.fx) || 0)),
                 fy: Math.max(0, Math.min(1, Number(w.fy) || 0)),
                 size: sizes[w.size] ? w.size : "m",
-                form: typeof w.form === "string" ? w.form : ""
+                form: typeof w.form === "string" ? w.form : "",
+                // The widget's own glass, 0.05 to 1; absent follows widgets.opacity.
+                opacity: typeof w.opacity === "number" ? Math.max(0.05, Math.min(1, w.opacity)) : undefined
             });
         }
         return out;
@@ -452,6 +454,39 @@ Singleton {
         remember();
     }
 
+    // Edit mode's glass button: the widget's own opacity in steps, then back to the common one.
+    readonly property var glassSteps: [0.15, 0.35, 0.6, 0.85]
+    function glassOf(w) {
+        return w && typeof w.opacity === "number" ? w.opacity : glass;
+    }
+    function cycleOpacity(id) {
+        const w = get(id);
+        if (!w)
+            return;
+        const at = typeof w.opacity === "number" ? glassSteps.indexOf(w.opacity) : -1;
+        const next = at + 1 < glassSteps.length ? glassSteps[at + 1] : undefined;
+        apply(items.map(x => {
+            if (x.id !== id)
+                return x;
+            const copy = Object.assign({}, x);
+            if (next === undefined)
+                delete copy.opacity;
+            else
+                copy.opacity = next;
+            return copy;
+        }), true);
+        remember();
+    }
+
+    // The widget the keyboard acts on in edit mode: arrows move it, Tab picks the next.
+    property string selectedId: ""
+    function selectNext(step) {
+        if (ids.length === 0)
+            return;
+        const at = ids.indexOf(selectedId);
+        selectedId = ids[((at < 0 ? (step > 0 ? -1 : 0) : at) + step + ids.length) % ids.length];
+    }
+
     function setPointer(id, x, y) {
         if (pointer.id === id && pointer.x === x && pointer.y === y)
             return;
@@ -569,6 +604,7 @@ Singleton {
             Ui.popup = "";
         else
             galleryOpen = false;
+        selectedId = "";
     }
 
     Timer {

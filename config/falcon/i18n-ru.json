@@ -1771,5 +1771,6 @@
  "Codes against the sum, up to six, for example USD, RUB, EUR": "Коды валют к суму, до шести, например USD, RUB, EUR",
  "Photo frame folder": "Папка фоторамки",
  "Empty is your pictures folder. Wallpapers and screenshots are left out": "Пусто — папка изображений. Обои и скриншоты пропускаются",
- "Next photo after": "Следующее фото через"
+ "Next photo after": "Следующее фото через",
+ "Tab picks a widget · arrows move it · S size · F form · O glass · Delete removes": "Tab — выбрать виджет · стрелки — двигать · S размер · F форма · O стекло · Delete — убрать"
 }
