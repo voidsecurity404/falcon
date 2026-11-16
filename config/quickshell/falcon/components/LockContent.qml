@@ -184,5 +184,49 @@ Item {
             color: root.error !== "" ? Theme.error : Theme.muted
             size: 13
         }
+        // The finger, beside the password (services/Lock.qml).
+        Row {
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: 8
+            topPadding: 14
+            opacity: Lock.finger !== "" || root.preview && Fingerprint.lockOn ? 1 : 0
+            visible: opacity > 0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 300
+                }
+            }
+
+            Icon {
+                id: fingerIcon
+
+                anchors.verticalCenter: parent.verticalCenter
+                name: "fingerprint"
+                size: 18
+                color: Lock.finger === "miss" ? Theme.error : Theme.accent
+
+                SequentialAnimation on opacity {
+                    running: Lock.finger === "ready"
+                    loops: Animation.Infinite
+                    NumberAnimation { to: 0.45; duration: 1100; easing.type: Easing.InOutSine }
+                    NumberAnimation { to: 1; duration: 1100; easing.type: Easing.InOutSine }
+                }
+            }
+            Label {
+                anchors.verticalCenter: parent.verticalCenter
+                text: Lock.finger === "miss" ? Tr.t("Finger not recognized") : Tr.t("Touch the sensor or type the password")
+                color: Lock.finger === "miss" ? Theme.error : Theme.muted
+                size: 13
+            }
+        }
+    }
+    Connections {
+        target: Lock
+
+        function onFingerChanged() {
+            if (Lock.finger === "miss")
+                shakeAnimation.restart();
+        }
     }
 }

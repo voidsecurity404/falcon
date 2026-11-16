@@ -1,0 +1,403 @@
+#!/usr/bin/env python3
+"""Fingerprint for falcon: lock screen, password dialog and login screen, each by finger or password.
+
+    falcon-fingerprint status          JSON: sensor, enrolled fingers, what is set up
+    falcon-fingerprint enroll FINGER   add a finger; JSON lines while the sensor is touched
+    falcon-fingerprint delete FINGER   remove one finger, or `all`
+    falcon-fingerprint scan            ask falcon-fingerd for one match (the password dialog);
+                                       JSON lines, the match carries the secret to answer with
+    falcon-fingerprint setup [--undo]  sudo: the daemon, the PAM lines of sddm and polkit-1,
+                                       and the login screen's part. Safe to repeat.
+
+Fingers are fprintd names: right-index-finger, left-thumb, ...
+The lock screens need no setup: hyprlock and the shell's lock talk to fprintd as the user.
+"""
+import json
+import os
+import secrets
+import signal
+import socket
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+FPRINT = "net.reactivated.Fprint"
+MANAGER_PATH = "/net/reactivated/Fprint/Manager"
+RUN = os.environ.get("FALCON_FINGER_RUN", "/run/falcon-finger")
+SOCKET = os.path.join(RUN, "socket")
+PREFIX = "\x1ffalcon-finger:"
+MARK = "# falcon-finger"
+LIBEXEC = Path("/usr/local/libexec")
+UNIT = Path("/etc/systemd/system/falcon-fingerd.service")
+PAM_SDDM = Path("/etc/pam.d/sddm")
+PAM_POLKIT = Path("/etc/pam.d/polkit-1")
+PAM_POLKIT_VENDOR = Path("/usr/lib/pam.d/polkit-1")
+THEME = Path("/usr/share/sddm/themes/sddm-astronaut-theme")
+FINGERS = ["right-index-finger", "left-index-finger", "right-thumb", "left-thumb",
+           "right-middle-finger", "left-middle-finger", "right-ring-finger", "left-ring-finger",
+           "right-little-finger", "left-little-finger"]
+PAM_LINE = ("auth        [success=done default=ignore]  pam_exec.so quiet expose_authtok "
+            f"{LIBEXEC}/falcon-finger-pam token  {MARK}")
+SDDM_LINES = [
+    f"auth        required    pam_shells.so  {MARK}",
+    f"auth        requisite   pam_nologin.so  {MARK}",
+    PAM_LINE,
+]
+
+
+def repo():
+    path = Path(os.environ.get("FALCON_REPO", Path.home() / "Downloads/falcon"))
+    if not (path / "config/fingerprint/falcon-fingerd").exists():
+        raise SystemExit(f"Repo not found: {path}. Set FALCON_REPO.")
+    return path
+
+
+def out(obj):
+    print(json.dumps(obj), flush=True)
+
+
+# fprintd ----------------------------------------------------------------------------------
+
+def gio():
+    from gi.repository import Gio, GLib
+    return Gio, GLib
+
+
+def bus():
+    Gio, _ = gio()
+    kind = Gio.BusType.SESSION if os.environ.get("FALCON_FINGER_BUS") == "session" else Gio.BusType.SYSTEM
+    return Gio.bus_get_sync(kind, None)
+
+
+def call(conn, path, iface, method, args=None, reply=None, timeout=5000):
+    Gio, GLib = gio()
+    result = conn.call_sync(FPRINT, path, iface, method, args,
+                            GLib.VariantType(reply) if reply else None,
+                            Gio.DBusCallFlags.NONE, timeout, None)
+    return result.unpack() if result is not None else ()
+
+
+def device(conn):
+    try:
+        return call(conn, MANAGER_PATH, FPRINT + ".Manager", "GetDefaultDevice", reply="(o)")[0]
+    except Exception:
+        return None
+
+
+def prop(conn, path, name):
+    _, GLib = gio()
+    try:
+        return call(conn, path, "org.freedesktop.DBus.Properties", "Get",
+                    GLib.Variant("(ss)", (FPRINT + ".Device", name)), "(v)")[0]
+    except Exception:
+        return None
+
+
+def user():
+    import pwd
+    return pwd.getpwuid(os.getuid()).pw_name
+
+
+def fingers(conn, path):
+    _, GLib = gio()
+    try:
+        return list(call(conn, path, FPRINT + ".Device", "ListEnrolledFingers",
+                         GLib.Variant("(s)", (user(),)), "(as)")[0])
+    except Exception:
+        return []
+
+
+def short_error(error):
+    text = getattr(error, "message", str(error))
+    for key, name in (("PermissionDenied", "denied"), ("AlreadyInUse", "busy"),
+                      ("NoEnrolledPrints", "noprints"), ("PrintsNotDeleted", "failed"),
+                      ("NoSuchDevice", "nodevice"), ("Timeout", "timeout")):
+        if key in text:
+            return name
+    return "failed"
+
+
+# status -----------------------------------------------------------------------------------
+
+def daemon_alive():
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(1)
+            s.connect(SOCKET)
+            s.sendall(b'{"op": "state"}\n')
+            return bool(s.recv(4096))
+    except OSError:
+        return False
+
+
+def same(a, b):
+    try:
+        return Path(a).read_bytes() == Path(b).read_bytes()
+    except OSError:
+        return False
+
+
+def setup_state():
+    base = None
+    try:
+        base = repo()
+    except SystemExit:
+        pass
+    files = base is not None and all(same(base / "config/fingerprint" / name, LIBEXEC / name)
+                                     for name in ("falcon-fingerd", "falcon-finger-pam"))
+    try:
+        sddm_pam = PAM_LINE in PAM_SDDM.read_text()
+    except OSError:
+        sddm_pam = False
+    try:
+        polkit = PAM_LINE in PAM_POLKIT.read_text()
+    except OSError:
+        polkit = False
+    theme = (THEME / "Components/FalconFinger.qml").exists() and (
+        base is None or same(base / "config/sddm/FalconFinger.qml", THEME / "Components/FalconFinger.qml"))
+    state = {
+        "daemon": daemon_alive(),
+        "files": files,
+        "login": sddm_pam and theme,
+        "polkit": polkit,
+    }
+    state["done"] = all(state.values())
+    return state
+
+
+def status():
+    conn = bus()
+    path = device(conn)
+    name = prop(conn, path, "name") if path else None
+    stages = prop(conn, path, "num-enroll-stages") if path else None
+    out({
+        "device": name or (path and "Fingerprint sensor") or None,
+        "fingers": fingers(conn, path) if path else [],
+        "stages": stages or 0,
+        "setup": setup_state(),
+    })
+
+
+# enroll and delete ------------------------------------------------------------------------
+
+def enroll(finger):
+    Gio, GLib = gio()
+    if finger not in FINGERS:
+        out({"event": "error", "reason": "finger"})
+        return 1
+    conn = bus()
+    path = device(conn)
+    if not path:
+        out({"event": "error", "reason": "nodevice"})
+        return 1
+    stages = prop(conn, path, "num-enroll-stages") or 0
+    loop = GLib.MainLoop()
+    state = {"done": 0, "code": 1, "claimed": False}
+
+    def finish(code):
+        state["code"] = code
+        loop.quit()
+
+    def on_status(_c, _s, _p, _i, _n, params):
+        result, done = params.unpack()
+        if result == "enroll-stage-passed":
+            state["done"] += 1
+            out({"event": "stage", "done": state["done"], "stages": stages})
+        elif result == "enroll-completed":
+            out({"event": "stage", "done": stages or state["done"], "stages": stages})
+            out({"event": "done", "finger": finger})
+            finish(0)
+            return
+        elif result in ("enroll-retry-scan", "enroll-swipe-too-short", "enroll-finger-not-centered",
+                        "enroll-remove-and-retry"):
+            out({"event": "retry", "reason": result.removeprefix("enroll-")})
+        else:
+            out({"event": "error", "reason": result.removeprefix("enroll-")})
+            finish(1)
+            return
+        if done and result != "enroll-completed":
+            finish(1)
+
+    conn.signal_subscribe(FPRINT, FPRINT + ".Device", "EnrollStatus", path, None,
+                          Gio.DBusSignalFlags.NONE, on_status)
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, sig, lambda: (finish(2), False)[1])
+    # The shell ends this by closing stdin.
+    GLib.io_add_watch(GLib.IOChannel.unix_new(0), GLib.PRIORITY_DEFAULT, GLib.IO_HUP | GLib.IO_ERR,
+                      lambda *_: (finish(2), False)[1])
+    try:
+        call(conn, path, FPRINT + ".Device", "Claim", GLib.Variant("(s)", ("",)), timeout=120000)
+        state["claimed"] = True
+        # Asks for the password through polkit the first time (the shell's own dialog).
+        call(conn, path, FPRINT + ".Device", "EnrollStart", GLib.Variant("(s)", (finger,)), timeout=120000)
+        out({"event": "start", "stages": stages, "finger": finger})
+        loop.run()
+    except GLib.Error as error:
+        out({"event": "error", "reason": short_error(error)})
+    finally:
+        if state["claimed"]:
+            for method in ("EnrollStop", "Release"):
+                try:
+                    call(conn, path, FPRINT + ".Device", method, timeout=3000)
+                except GLib.Error:
+                    pass
+    return state["code"]
+
+
+def delete(finger):
+    _, GLib = gio()
+    conn = bus()
+    path = device(conn)
+    if not path:
+        out({"ok": False, "reason": "nodevice"})
+        return 1
+    claimed = False
+    try:
+        call(conn, path, FPRINT + ".Device", "Claim", GLib.Variant("(s)", ("",)), timeout=120000)
+        claimed = True
+        if finger == "all":
+            call(conn, path, FPRINT + ".Device", "DeleteEnrolledFingers2", timeout=120000)
+        else:
+            call(conn, path, FPRINT + ".Device", "DeleteEnrolledFinger",
+                 GLib.Variant("(s)", (finger,)), timeout=120000)
+        out({"ok": True})
+        return 0
+    except GLib.Error as error:
+        out({"ok": False, "reason": short_error(error)})
+        return 1
+    finally:
+        if claimed:
+            try:
+                call(conn, path, FPRINT + ".Device", "Release", timeout=3000)
+            except GLib.Error:
+                pass
+
+
+# scan for the password dialog -------------------------------------------------------------
+
+def scan():
+    nonce = secrets.token_hex(24)
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.connect(SOCKET)
+    except OSError:
+        out({"state": "error", "reason": "nodaemon"})
+        return 1
+    s.sendall((json.dumps({"op": "scan", "nonce": nonce}) + "\n").encode())
+    buffer = b""
+    with s:
+        while True:
+            try:
+                data = s.recv(4096)
+            except OSError:
+                data = b""
+            if not data:
+                return 1
+            buffer += data
+            while b"\n" in buffer:
+                line, buffer = buffer.split(b"\n", 1)
+                try:
+                    msg = json.loads(line)
+                except ValueError:
+                    continue
+                if msg.get("state") == "match":
+                    msg["secret"] = PREFIX + nonce
+                    out(msg)
+                    return 0
+                out(msg)
+                if msg.get("reason") == "replaced":
+                    return 1
+
+
+# setup ------------------------------------------------------------------------------------
+
+def with_lines(text, lines):
+    """The PAM file with our lines right before its first auth line, old ones of ours removed."""
+    kept = [line for line in text.splitlines() if MARK not in line]
+    for i, line in enumerate(kept):
+        if line.split() and line.lstrip("-").split()[0] == "auth":
+            return "\n".join(kept[:i] + lines + kept[i:]) + "\n"
+    raise SystemExit("No auth lines found, PAM file left alone")
+
+
+def without_lines(text):
+    return "\n".join(line for line in text.splitlines() if MARK not in line) + "\n"
+
+
+def sudo(*args):
+    subprocess.run(["sudo", *args], check=True)
+
+
+def put(text, target, mode="644"):
+    with tempfile.NamedTemporaryFile("w", delete=False, dir=os.environ.get("XDG_RUNTIME_DIR")) as f:
+        f.write(text)
+    try:
+        sudo("install", "-D", "-m", mode, "-o", "root", "-g", "root", f.name, str(target))
+    finally:
+        os.unlink(f.name)
+
+
+def setup(undo=False):
+    base = repo()
+    if undo:
+        if PAM_SDDM.exists() and MARK in PAM_SDDM.read_text():
+            put(without_lines(PAM_SDDM.read_text()), PAM_SDDM)
+        if PAM_POLKIT.exists() and MARK in PAM_POLKIT.read_text():
+            sudo("rm", "-f", str(PAM_POLKIT))
+        subprocess.run(["sudo", "systemctl", "disable", "--now", "falcon-fingerd.service"], check=False)
+        sudo("rm", "-f", str(UNIT), str(LIBEXEC / "falcon-fingerd"), str(LIBEXEC / "falcon-finger-pam"))
+        sudo("systemctl", "daemon-reload")
+        if THEME.exists():
+            sudo("rm", "-f", str(THEME / "Components/FalconFinger.qml"))
+        print("Fingerprint login is off. The lock screens follow Settings.")
+        return 0
+
+    src = base / "config/fingerprint"
+    # The helpers first, so the PAM line never points at a missing file (it would only be ignored).
+    sudo("install", "-D", "-m", "755", "-o", "root", "-g", "root", str(src / "falcon-fingerd"),
+         str(LIBEXEC / "falcon-fingerd"))
+    sudo("install", "-D", "-m", "755", "-o", "root", "-g", "root", str(src / "falcon-finger-pam"),
+         str(LIBEXEC / "falcon-finger-pam"))
+    sudo("install", "-D", "-m", "644", "-o", "root", "-g", "root", str(src / "falcon-fingerd.service"), str(UNIT))
+    sudo("systemctl", "daemon-reload")
+    sudo("systemctl", "enable", "falcon-fingerd.service")
+    sudo("systemctl", "restart", "falcon-fingerd.service")
+
+    if PAM_SDDM.exists():
+        backup = PAM_SDDM.with_name("sddm.falcon-backup")
+        if not backup.exists():
+            sudo("cp", "-p", str(PAM_SDDM), str(backup))
+        put(with_lines(PAM_SDDM.read_text(), SDDM_LINES), PAM_SDDM)
+    vendor = PAM_POLKIT.read_text() if PAM_POLKIT.exists() else PAM_POLKIT_VENDOR.read_text()
+    put(with_lines(vendor, [PAM_LINE]), PAM_POLKIT)
+    if (THEME / "Main.qml").exists():
+        sudo("python3", str(base / "config/sddm/falcon-theme-patch.py"), str(THEME))
+    print("Fingerprint is set up: login screen, password dialog and lock screens.")
+    print("The login screen takes it from the next boot.")
+    return 0
+
+
+def main():
+    args = sys.argv[1:]
+    if not args:
+        print(__doc__.strip())
+        return 2
+    cmd = args[0]
+    if cmd == "status":
+        status()
+        return 0
+    if cmd == "enroll" and len(args) > 1:
+        return enroll(args[1])
+    if cmd == "delete" and len(args) > 1:
+        return delete(args[1])
+    if cmd == "scan":
+        return scan()
+    if cmd == "setup":
+        return setup("--undo" in args)
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

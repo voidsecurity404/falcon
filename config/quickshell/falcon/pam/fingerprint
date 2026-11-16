@@ -1,0 +1,5 @@
+#%PAM-1.0
+# The shell lock's finger, run beside the password (services/Lock.qml). pam_fprintd talks to
+# fprintd as the user, so no root setup is needed. It waits for a touch with no time limit.
+auth     required  pam_fprintd.so max-tries=-1 timeout=-1
+account  required  pam_permit.so

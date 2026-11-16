@@ -131,6 +131,12 @@ Item {
         }
     }
 
+    // The fingerprint line under the form; it hides itself without falcon-fingerd.
+    FalconFinger {
+        form: root.form
+        input: root.input
+    }
+
     Rectangle {
         id: black
 

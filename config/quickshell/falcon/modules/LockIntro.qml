@@ -358,5 +358,20 @@ PanelWindow {
             y: stage.cy + 91 - height / 2 + root.mix(14, 0, rise)
             opacity: rise
         }
+
+        // The finger's line at 0, -138, Geist 11, written into hyprlock by falcon-apply
+        // (hyprlock_finger) only while the lock takes a finger.
+        Text {
+            readonly property real rise: root.part(860, 1140, "out")
+            visible: Fingerprint.lockOn
+            text: Tr.t("Touch the sensor or type the password")
+            color: Theme.text
+            font.family: "Geist"
+            font.pixelSize: 15
+            renderType: Text.NativeRendering
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: stage.cy + 137 - height / 2 + root.mix(14, 0, rise)
+            opacity: rise
+        }
     }
 }

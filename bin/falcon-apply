@@ -587,6 +587,33 @@ def idle_conf(s):
     return "\n".join(out) + "\n"
 
 
+def has_prints():
+    """Whether this user has fingers in fprintd. Asked through falcon-fingerprint, 3 s at most."""
+    try:
+        out = subprocess.run([str(Path(__file__).with_name("falcon-fingerprint")), "status"],
+                             capture_output=True, text=True, timeout=3).stdout
+        return bool(json.loads(out).get("fingers"))
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return False
+
+
+def hyprlock_finger(s):
+    """hyprlock's fingerprint, beside the password, with its line under the field. The same line
+    is drawn by modules/LockIntro.qml at the end of the locking show: change both together."""
+    if s.get("fingerprint", {}).get("lock", True) is False or not has_prints():
+        return ""
+    return (
+        "\nauth:fingerprint:enabled = true\n"
+        f"auth:fingerprint:ready_message = {tr('Touch the sensor or type the password')}\n"
+        f"auth:fingerprint:present_message = {tr('Checking the finger…')}\n"
+        "auth:fingerprint:retry_delay = 250\n"
+        "\nlabel {\n    monitor =\n    text = $FPRINTPROMPT\n    color = $text\n    font_size = 11\n"
+        "    font_family = Geist\n    position = 0, -138\n    halign = center\n    valign = center\n}\n"
+        "\nlabel {\n    monitor =\n    text = $FPRINTFAIL\n    color = $error\n    font_size = 11\n"
+        "    font_family = Geist\n    position = 0, -162\n    halign = center\n    valign = center\n}\n"
+    )
+
+
 def trail_conf(t):
     """Smooth cursor: kitty's trail follows every move, one typed letter too."""
     if not t.get("cursorTrail"):
@@ -766,8 +793,9 @@ def main(argv):
     if fork:
         write_if_changed(NIRI / "generated/falcon.kdl", falcon_text)
     write_if_changed(NIRI / "generated/settings.kdl", settings_text)
-    # Bloklash ekrani matnlari interfeys tilida.
-    write_if_changed(CONFIG / "hypr/falcon-lang.conf", f"$pw_placeholder = {tr('Password')}\n$pw_fail = {tr('Wrong password')}\n")
+    # Bloklash ekrani matnlari interfeys tilida, va barmoq izi (hyprlock.conf bu faylni o'qiydi).
+    write_if_changed(CONFIG / "hypr/falcon-lang.conf",
+                     f"$pw_placeholder = {tr('Password')}\n$pw_fail = {tr('Wrong password')}\n" + hyprlock_finger(s))
     write_if_changed(NIRI / "generated/binds.kdl", binds_text)
     if write_if_changed(CONFIG / "hypr/hypridle.conf", idle_text) and os.environ.get("NIRI_SOCKET"):
         run_quiet("pkill", "-x", "hypridle")

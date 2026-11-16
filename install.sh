@@ -105,6 +105,7 @@ targets=(
     .local/bin/falcon-scratch
     .local/bin/falcon-color
     .local/bin/falcon-charge
+    .local/bin/falcon-fingerprint
     .local/bin/falcon-net
     .local/bin/falcon-updates
     .local/bin/falcon-privacy
@@ -151,6 +152,9 @@ if ((uninstall)); then
     if ((dry == 0)) && [[ -f "$HOME/.bashrc" ]]; then sed -i '/falcon\/shell\.bash/d' "$HOME/.bashrc"; fi
     if [[ -d /usr/share/plymouth/themes/falcon ]]; then
         do_it env FALCON_REPO="$root" "$root/bin/falcon-boot" --undo
+    fi
+    if [[ -e /usr/local/libexec/falcon-fingerd ]]; then
+        do_it env FALCON_REPO="$root" "$root/bin/falcon-fingerprint" setup --undo
     fi
     if [[ -e "$state/login-manager" ]] && ((dry == 0)); then
         sudo systemctl disable sddm.service || true
@@ -393,6 +397,12 @@ fi
 if ((packages)) && compgen -G "/sys/class/power_supply/BAT*/charge_control_end_threshold" >/dev/null; then
     say "Setting up the battery charge limit"
     do_it "$HOME/.local/bin/falcon-charge" setup
+fi
+
+# Finger or password on the login screen and in password dialogs. Only with a sensor fprintd knows.
+if ((packages)) && command -v fprintd-list >/dev/null && fprintd-list "$USER" 2>/dev/null | grep -q 'Using device'; then
+    say "Setting up the fingerprint sensor"
+    do_it env FALCON_REPO="$root" "$HOME/.local/bin/falcon-fingerprint" setup
 fi
 
 # The cable and Wi-Fi on one network took each other's traffic and the internet dropped.

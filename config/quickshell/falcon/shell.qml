@@ -271,6 +271,9 @@ ShellRoot {
         function powerRefresh(): void {
             Power.refresh();
         }
+        function fingerprintRefresh(): void {
+            Fingerprint.refresh();
+        }
         function timer(text: string): void {
             const seconds = Countdown.parse(text);
             if (seconds > 0)

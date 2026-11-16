@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Lays Falcon's way out of the login screen (FalconLeave.qml) over the sddm-astronaut theme.
+"""Lays Falcon's way out of the login screen (FalconLeave.qml) and its fingerprint line
+(FalconFinger.qml) over the sddm-astronaut theme.
 
 Usage: falcon-theme-patch.py THEME_DIR [--undo]
 
@@ -18,6 +19,12 @@ HOOKED = ("        if (falconHooked) falconLogin(targetUser, password.text, sess
 SIGNAL = ("    property bool failed\n"
           "    property bool falconHooked: false  // falcon\n"
           "    signal falconLogin(string user, string secret, int session)  // falcon\n")
+FINGER = ("    property Item falconPassword: password  // falcon\n"
+          "    function falconFingerLogin(user) {  // falcon\n"
+          "        if (!falconHooked || user === \"\") return false  // falcon\n"
+          "        falconLogin(user, \"\", sessionSelect.selectedSession)  // falcon\n"
+          "        return true  // falcon\n"
+          "    }  // falcon\n")
 ALIAS = "    property alias falconInput: input  // falcon\n"
 LEAVE = ("    FalconLeave {  // falcon\n"
          "        scene: sizeHelper\n"
@@ -35,13 +42,16 @@ def edit(path, change):
 
 def patch(theme):
     shutil.copy(HERE / "FalconLeave.qml", theme / "Components/FalconLeave.qml")
+    shutil.copy(HERE / "FalconFinger.qml", theme / "Components/FalconFinger.qml")
 
     def input_qml(text):
-        if "falconHooked" in text:
-            return text
-        if LOGIN not in text or "    property bool failed\n" not in text:
-            raise SystemExit("Input.qml is not the expected version, left alone")
-        return text.replace("    property bool failed\n", SIGNAL, 1).replace(LOGIN, HOOKED, 1)
+        if "falconHooked" not in text:
+            if LOGIN not in text or "    property bool failed\n" not in text:
+                raise SystemExit("Input.qml is not the expected version, left alone")
+            text = text.replace("    property bool failed\n", SIGNAL, 1).replace(LOGIN, HOOKED, 1)
+        if "falconFingerLogin" not in text:
+            text = text.replace(SIGNAL, SIGNAL + FINGER, 1)
+        return text
 
     def form_qml(text):
         if "falconInput" in text:
@@ -64,6 +74,7 @@ def patch(theme):
 
 def undo(theme):
     def strip(text):
+        text = text.replace(FINGER, "")
         text = text.replace(HOOKED, LOGIN).replace(SIGNAL, "    property bool failed\n")
         text = text.replace(ALIAS, "").replace("\n" + LEAVE, "")
         return text
@@ -71,6 +82,7 @@ def undo(theme):
     for name in ("Components/Input.qml", "Components/LoginForm.qml", "Main.qml"):
         edit(theme / name, strip)
     (theme / "Components/FalconLeave.qml").unlink(missing_ok=True)
+    (theme / "Components/FalconFinger.qml").unlink(missing_ok=True)
 
 
 def main():

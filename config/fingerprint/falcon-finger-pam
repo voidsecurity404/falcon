@@ -1,0 +1,69 @@
+#!/usr/bin/python3 -I
+"""PAM side of falcon's fingerprint login, run by pam_exec with expose_authtok.
+
+    falcon-finger-pam token      exit 0 when falcon-fingerd has a fresh match for this login
+
+Installed to /usr/local/libexec by `falcon-fingerprint setup`, used by /etc/pam.d/sddm and
+/etc/pam.d/polkit-1 as one line before the usual stack:
+
+    auth [success=done default=ignore] pam_exec.so quiet expose_authtok .../falcon-finger-pam token
+
+An empty answer (the login screen after a finger matched) or a finger secret (the password
+dialog) is accepted only when the root daemon matched a finger of PAM_USER for this PAM service
+in the last seconds, and the token is used up by asking. Anything else, a typed password above
+all, goes on to the usual stack, faillock included. So a broken or missing helper can never
+keep a password out: pam_exec then fails, which this line ignores.
+"""
+import json
+import os
+import socket
+import sys
+
+SOCKET = os.environ.get("FALCON_FINGER_SOCKET", "/run/falcon-finger/socket")
+PREFIX = "\x1ffalcon-finger:"
+
+
+def answer():
+    data = sys.stdin.buffer.read(4096)
+    return data.split(b"\0", 1)[0].decode("utf-8", "replace").rstrip("\n")
+
+
+def take(service, user, nonce):
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(3)
+            s.connect(SOCKET)
+            s.sendall((json.dumps({"op": "take", "service": service, "user": user,
+                                   "nonce": nonce}) + "\n").encode())
+            reply = b""
+            while not reply.endswith(b"\n"):
+                part = s.recv(4096)
+                if not part:
+                    break
+                reply += part
+        return json.loads(reply or b"{}").get("ok") is True
+    except (OSError, ValueError):
+        return False
+
+
+def main():
+    mode = sys.argv[1] if len(sys.argv) > 1 else ""
+    text = answer()
+    if mode != "token":
+        return 1
+    service = os.environ.get("PAM_SERVICE", "")
+    user = os.environ.get("PAM_USER", "")
+    if not user:
+        return 1
+    if text == "":
+        nonce = ""
+    elif text.startswith(PREFIX):
+        nonce = text[len(PREFIX):]
+        if not nonce:
+            return 1
+    else:
+        return 1
+    return 0 if take(service, user, nonce) else 1
+
+
+sys.exit(main())

@@ -69,6 +69,14 @@ try:
 except (OSError, ValueError):
     pass
 
+try:
+    finger = json.loads(subprocess.run([str(HOME / ".local/bin/falcon-fingerprint"), "status"], capture_output=True, text=True, check=False, timeout=10).stdout)
+    if finger.get("device"):
+        report(bool(finger.get("fingers")), tr("Fingerprint: fingers added"), tr("Add one in Settings, Fingerprint."))
+        report(finger.get("setup", {}).get("done") is True, tr("Fingerprint on the login screen and in password dialogs"), tr("Run once in a terminal: falcon-fingerprint setup"))
+except (OSError, ValueError, subprocess.TimeoutExpired):
+    pass
+
 models = subprocess.run([str(HOME / ".local/bin/falcon-ocr-models"), "status"], capture_output=True, text=True, check=False).stdout.strip()
 have, _, total = models.partition("/")
 report(have == total and bool(total), tr("Reading models of the translator: {models}", models=models), tr("Run: falcon-ocr-models"))

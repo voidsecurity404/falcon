@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Services.Pam
 
 // The lock screen of the shell. A flag file in memory-backed storage remembers the lock, so the shell
 // locks again at once if it restarts while locked.
@@ -34,6 +35,70 @@ Singleton {
     onIntroChanged: {
         if (intro === "" || intro === "wait")
             covered = false;
+    }
+
+    // The finger, beside the password, while the shell's own lock is up. One for all screens,
+    // since fprintd lets one client claim the sensor. "" off, "ready", "miss" (just failed).
+    readonly property bool fingerWanted: active && !preview && Fingerprint.lockOn
+    property string finger: ""
+
+    onFingerWantedChanged: {
+        if (fingerWanted) {
+            fingerRetry.stop();
+            fingerPam.start();
+        } else {
+            fingerRetry.stop();
+            if (fingerPam.active)
+                fingerPam.abort();
+            finger = "";
+        }
+    }
+
+    PamContext {
+        id: fingerPam
+
+        configDirectory: Quickshell.shellDir + "/pam"
+        config: "fingerprint"
+        onActiveChanged: {
+            if (active && root.finger === "")
+                root.finger = "ready";
+        }
+        onPamMessage: {
+            if (messageIsError) {
+                root.finger = "miss";
+                fingerCalm.restart();
+            }
+        }
+        onCompleted: result => {
+            if (result === PamResult.Success && root.fingerWanted) {
+                root.finger = "";
+                root.unlock();
+            } else if (root.fingerWanted) {
+                fingerRetry.restart();
+            }
+        }
+        onError: {
+            if (root.fingerWanted)
+                fingerRetry.restart();
+        }
+    }
+    Timer {
+        id: fingerRetry
+
+        interval: 2000
+        onTriggered: {
+            if (root.fingerWanted && !fingerPam.active)
+                fingerPam.start();
+        }
+    }
+    Timer {
+        id: fingerCalm
+
+        interval: 1600
+        onTriggered: {
+            if (root.finger === "miss")
+                root.finger = "ready";
+        }
     }
 
     function lock() {

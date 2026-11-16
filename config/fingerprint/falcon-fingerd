@@ -1,0 +1,435 @@
+#!/usr/bin/python3 -I
+"""Falcon's fingerprint daemon, run as root by falcon-fingerd.service.
+
+PAM is serial: a module waiting for a finger blocks the password, and SDDM refuses a second
+login while one is going ("Existing authentication ongoing"). So nothing waits inside PAM here.
+This daemon watches the sensor through fprintd on its own, and a match leaves a one-time token
+that falcon-finger-pam (pam_exec, root) takes within TOKEN_LIFE seconds. The password path
+never waits for the finger and the finger never waits for the password.
+
+Two kinds of scan, never at once, since fprintd lets one client claim the device:
+
+- Login screen: while an SDDM greeter runs, it scans for the user with enrolled prints (the
+  last SDDM user when several have them) unless that user turned `fingerprint.login` off.
+  Progress is the name of the one empty file in RUN/greeter/, "SEQ.STATE.USER" (world
+  readable, no secrets), which the greeter theme watches with a FolderListModel; a match leaves a token for service "sddm" with an empty nonce, and the greeter then
+  logs in with an empty password.
+- Clients: `falcon-fingerprint scan` connects to RUN/socket and sends {"op": "scan",
+  "nonce": N}. The peer's uid names the user. Each step is a JSON line back; a match leaves a
+  token for service "polkit-1" bound to N, which the shell's password dialog sends as its answer.
+  A newer client replaces an older one. The scan ends when the client hangs up.
+
+{"op": "take", "service", "user", "nonce"} is answered only for root peers.
+"""
+import json
+import os
+import pwd
+import socket
+import struct
+import time
+
+from gi.repository import Gio, GLib
+
+RUN = os.environ.get("FALCON_FINGER_RUN", "/run/falcon-finger")
+SOCKET = os.path.join(RUN, "socket")
+GREETER_DIR = os.path.join(RUN, "greeter")
+GREETERS = set(os.environ.get("FALCON_FINGER_GREETER", "sddm-greeter-qt6,sddm-greeter").split(","))
+SDDM_STATE = os.environ.get("FALCON_FINGER_SDDM_STATE", "/var/lib/sddm/state.conf")
+TAKE_UID = int(os.environ.get("FALCON_FINGER_TAKE_UID", "0"))
+TOKEN_LIFE = 12.0
+RETRY_AFTER_MISS = 0.7
+
+FPRINT = "net.reactivated.Fprint"
+MANAGER_PATH = "/net/reactivated/Fprint/Manager"
+
+
+def log(*parts):
+    print(*parts, flush=True)
+
+
+def bus():
+    kind = Gio.BusType.SESSION if os.environ.get("FALCON_FINGER_BUS") == "session" else Gio.BusType.SYSTEM
+    return Gio.bus_get_sync(kind, None)
+
+
+class Scan:
+    """One claim of the device for one user, verifying again after each miss until stopped."""
+
+    def __init__(self, daemon, user, report):
+        self.daemon = daemon
+        self.user = user
+        self.report = report
+        self.device = None
+        self.signal = None
+        self.claimed = False
+        self.stopped = False
+        self.retry = 0
+        self.start()
+
+    def call(self, method, args=None, timeout=5000):
+        return self.daemon.bus.call_sync(FPRINT, self.device, FPRINT + ".Device", method, args,
+                                         None, Gio.DBusCallFlags.NONE, timeout, None)
+
+    def later(self, seconds, fn):
+        if self.retry:
+            GLib.source_remove(self.retry)
+        self.retry = GLib.timeout_add(int(seconds * 1000), self._later, fn)
+
+    def _later(self, fn):
+        self.retry = 0
+        if not self.stopped:
+            fn()
+        return False
+
+    def start(self):
+        if self.stopped:
+            return
+        try:
+            self.device = self.daemon.device()
+            if not self.device:
+                self.report("error", reason="nodevice")
+                self.later(5, self.start)
+                return
+            if not self.daemon.enrolled(self.device, self.user):
+                self.report("error", reason="noprints")
+                self.later(5, self.start)
+                return
+            if self.signal is None:
+                self.signal = self.daemon.bus.signal_subscribe(
+                    FPRINT, FPRINT + ".Device", "VerifyStatus", self.device, None,
+                    Gio.DBusSignalFlags.NONE, self.on_status)
+            if not self.claimed:
+                self.call("Claim", GLib.Variant("(s)", (self.user,)))
+                self.claimed = True
+            self.call("VerifyStart", GLib.Variant("(s)", ("any",)))
+            self.report("scanning")
+        except GLib.Error as error:
+            busy = "AlreadyInUse" in error.message or "already" in error.message.lower()
+            self.report("error", reason="busy" if busy else "failed")
+            self.release()
+            self.later(2, self.start)
+
+    def on_status(self, _conn, _sender, _path, _iface, _signal, params):
+        if self.stopped:
+            return
+        result, done = params.unpack()
+        if result == "verify-match":
+            self.stop_verify()
+            self.report("match")
+            # Keeps watching: a login that did not use this match (another user chosen on the
+            # login screen) can still be done by touching again.
+            self.later(3, self.again)
+            return
+        if result == "verify-no-match":
+            self.report("nomatch")
+        elif result in ("verify-retry-scan", "verify-swipe-too-short",
+                        "verify-finger-not-centered", "verify-remove-and-retry"):
+            self.report("retry")
+        elif result in ("verify-disconnected", "verify-unknown-error"):
+            self.report("error", reason="failed")
+            self.release()
+            self.later(2, self.start)
+            return
+        if done:
+            self.stop_verify()
+            self.later(RETRY_AFTER_MISS, self.again)
+
+    def again(self):
+        try:
+            self.call("VerifyStart", GLib.Variant("(s)", ("any",)))
+            self.report("scanning")
+        except GLib.Error:
+            self.release()
+            self.later(1, self.start)
+
+    def stop_verify(self):
+        try:
+            self.call("VerifyStop", timeout=2000)
+        except GLib.Error:
+            pass
+
+    def release(self):
+        if self.claimed:
+            self.stop_verify()
+            try:
+                self.call("Release", timeout=2000)
+            except GLib.Error:
+                pass
+        self.claimed = False
+
+    def stop(self):
+        self.stopped = True
+        if self.retry:
+            GLib.source_remove(self.retry)
+            self.retry = 0
+        if self.signal is not None:
+            self.daemon.bus.signal_unsubscribe(self.signal)
+            self.signal = None
+        self.release()
+
+
+class Client:
+    def __init__(self, daemon, conn, uid):
+        self.daemon = daemon
+        self.conn = conn
+        self.uid = uid
+        self.buffer = b""
+        self.scan = None
+        self.nonce = ""
+        self.watch = GLib.io_add_watch(conn.fileno(), GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR, self.on_io)
+
+    def send(self, obj):
+        try:
+            self.conn.sendall((json.dumps(obj) + "\n").encode())
+        except OSError:
+            pass
+
+    def on_io(self, _fd, cond):
+        try:
+            data = self.conn.recv(4096) if cond & GLib.IO_IN else b""
+        except OSError:
+            data = b""
+        if not data:
+            self.close()
+            return False
+        self.buffer += data
+        if len(self.buffer) > 65536:
+            self.close()
+            return False
+        while b"\n" in self.buffer:
+            line, self.buffer = self.buffer.split(b"\n", 1)
+            try:
+                self.handle(json.loads(line))
+            except (ValueError, AttributeError):
+                self.send({"error": "bad"})
+        return True
+
+    def handle(self, msg):
+        op = msg.get("op")
+        if op == "take":
+            if self.uid != TAKE_UID:
+                self.send({"ok": False})
+                return
+            self.send({"ok": self.daemon.take(str(msg.get("service", "")), str(msg.get("user", "")),
+                                              str(msg.get("nonce", "")))})
+        elif op == "scan":
+            nonce = str(msg.get("nonce", ""))
+            if not (16 <= len(nonce) <= 128 and nonce.isalnum()):
+                self.send({"state": "error", "reason": "nonce"})
+                return
+            try:
+                user = pwd.getpwuid(self.uid).pw_name
+            except KeyError:
+                self.send({"state": "error", "reason": "user"})
+                return
+            self.nonce = nonce
+            self.daemon.start_client(self, user)
+        elif op == "state":
+            self.send(self.daemon.describe())
+
+    def report(self, state, **extra):
+        if state == "match":
+            self.daemon.give("polkit-1", self.scan.user if self.scan else "", self.nonce)
+        self.send(dict(state=state, **extra))
+
+    def close(self):
+        if self.watch:
+            GLib.source_remove(self.watch)
+            self.watch = 0
+        self.daemon.drop_client(self)
+        try:
+            self.conn.close()
+        except OSError:
+            pass
+
+
+class Daemon:
+    def __init__(self):
+        self.bus = bus()
+        self.tokens = []
+        self.client = None
+        self.greeter = None
+        self.greeter_user = ""
+        self.greeter_state = {}
+        self.seq = 0
+        os.makedirs(RUN, exist_ok=True)
+        os.chmod(RUN, 0o755)
+        try:
+            os.unlink(SOCKET)
+        except FileNotFoundError:
+            pass
+        self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.server.bind(SOCKET)
+        os.chmod(SOCKET, 0o666)
+        self.server.listen(8)
+        GLib.io_add_watch(self.server.fileno(), GLib.IO_IN, self.on_accept)
+        self.write_greeter("off")
+        GLib.timeout_add(1000, self.tick)
+
+    # fprintd
+    def device(self):
+        try:
+            reply = self.bus.call_sync(FPRINT, MANAGER_PATH, FPRINT + ".Manager", "GetDefaultDevice",
+                                       None, GLib.VariantType("(o)"), Gio.DBusCallFlags.NONE, 3000, None)
+            return reply.unpack()[0]
+        except GLib.Error:
+            return None
+
+    def enrolled(self, device, user):
+        try:
+            reply = self.bus.call_sync(FPRINT, device, FPRINT + ".Device", "ListEnrolledFingers",
+                                       GLib.Variant("(s)", (user,)), GLib.VariantType("(as)"),
+                                       Gio.DBusCallFlags.NONE, 3000, None)
+            return bool(reply.unpack()[0])
+        except GLib.Error:
+            return False
+
+    # tokens
+    def give(self, service, user, nonce):
+        now = time.monotonic()
+        self.tokens = [t for t in self.tokens if t["until"] > now and not
+                       (t["service"] == service and t["user"] == user)]
+        self.tokens.append({"service": service, "user": user, "nonce": nonce, "until": now + TOKEN_LIFE})
+
+    def take(self, service, user, nonce):
+        now = time.monotonic()
+        for token in self.tokens:
+            if (token["until"] > now and token["service"] == service and token["user"] == user
+                    and token["nonce"] == nonce):
+                self.tokens.remove(token)
+                return True
+        return False
+
+    # clients
+    def on_accept(self, _fd, _cond):
+        try:
+            conn, _ = self.server.accept()
+        except OSError:
+            return True
+        creds = conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i"))
+        _pid, uid, _gid = struct.unpack("3i", creds)
+        Client(self, conn, uid)
+        return True
+
+    def start_client(self, client, user):
+        self.stop_greeter()
+        if self.client and self.client is not client:
+            old = self.client
+            self.client = None
+            if old.scan:
+                old.scan.stop()
+                old.scan = None
+            old.send({"state": "error", "reason": "replaced"})
+        if client.scan:
+            client.scan.stop()
+        self.client = client
+        client.scan = Scan(self, user, client.report)
+
+    def drop_client(self, client):
+        if client.scan:
+            client.scan.stop()
+            client.scan = None
+        if self.client is client:
+            self.client = None
+
+    # login screen
+    def greeter_running(self):
+        for entry in os.listdir("/proc"):
+            if not entry.isdigit():
+                continue
+            try:
+                with open(f"/proc/{entry}/comm") as f:
+                    if f.read().strip() in GREETERS:
+                        return True
+            except OSError:
+                pass
+        return False
+
+    def login_user(self):
+        device = self.device()
+        if not device:
+            return ""
+        people = [p for p in pwd.getpwall() if p.pw_uid >= 1000 and p.pw_uid < 60000
+                  and p.pw_shell not in ("/usr/bin/nologin", "/sbin/nologin", "/bin/false")]
+        with_prints = [p for p in people if self.enrolled(device, p.pw_name)]
+        if len(with_prints) > 1:
+            last = ""
+            try:
+                with open(SDDM_STATE) as f:
+                    for line in f:
+                        if line.startswith("User="):
+                            last = line.split("=", 1)[1].strip()
+            except OSError:
+                pass
+            with_prints = [p for p in with_prints if p.pw_name == last] or with_prints[:1]
+        for person in with_prints:
+            if self.login_allowed(person):
+                return person.pw_name
+        return ""
+
+    def login_allowed(self, person):
+        path = os.path.join(person.pw_dir, ".config/falcon/settings.json")
+        try:
+            with open(path) as f:
+                value = json.load(f).get("fingerprint", {}).get("login", True)
+            return value is not False
+        except (OSError, ValueError, AttributeError):
+            return True
+
+    def write_greeter(self, state, **extra):
+        """The state as the name of an empty file: the greeter watches the folder, so it needs
+        neither polling nor file reading (XMLHttpRequest on files is off in QML by default)."""
+        self.seq += 1
+        self.greeter_state = dict(state=state, user=self.greeter_user, seq=self.seq, **extra)
+        os.makedirs(GREETER_DIR, exist_ok=True)
+        os.chmod(GREETER_DIR, 0o755)
+        name = f"{self.seq}.{state}.{self.greeter_user}"
+        open(os.path.join(GREETER_DIR, name), "w").close()
+        for old in os.listdir(GREETER_DIR):
+            if old != name:
+                try:
+                    os.unlink(os.path.join(GREETER_DIR, old))
+                except OSError:
+                    pass
+
+    def greeter_report(self, state, **extra):
+        if state == "match":
+            self.give("sddm", self.greeter_user, "")
+        self.write_greeter(state, **extra)
+
+    def stop_greeter(self):
+        if self.greeter:
+            self.greeter.stop()
+            self.greeter = None
+            self.greeter_user = ""
+            self.write_greeter("off")
+
+    def tick(self):
+        if self.client:
+            return True
+        running = self.greeter_running()
+        if not running:
+            self.stop_greeter()
+            return True
+        if self.greeter is None:
+            user = self.login_user()
+            if user:
+                self.greeter_user = user
+                self.greeter = Scan(self, user, self.greeter_report)
+            elif self.greeter_state.get("state") != "off":
+                self.write_greeter("off")
+        return True
+
+    def describe(self):
+        return {"client": bool(self.client), "greeter": dict(self.greeter_state)}
+
+
+def main():
+    os.umask(0o022)
+    Daemon()
+    log("falcon-fingerd ready")
+    GLib.MainLoop().run()
+
+
+if __name__ == "__main__":
+    main()

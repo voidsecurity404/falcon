@@ -1,0 +1,22 @@
+[Unit]
+Description=Falcon fingerprint login (finger or password on the login screen and in password dialogs)
+Wants=dbus.service
+After=dbus.service
+
+[Service]
+ExecStart=/usr/local/libexec/falcon-fingerd
+Restart=always
+RestartSec=2
+RuntimeDirectory=falcon-finger
+RuntimeDirectoryMode=0755
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

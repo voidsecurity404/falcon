@@ -1476,6 +1476,38 @@ LazyLoader {
                 ]
             },
             {
+                title: Tr.t("Fingerprint"),
+                subtitle: Tr.t("Unlock, log in and confirm with a touch"),
+                icon: "fingerprint",
+                group: 3,
+                finger: true,
+                sections: [
+                    {
+                        title: Tr.t("Use the finger for"),
+                        items: [
+                            {
+                                key: "fingerprint.lock",
+                                label: Tr.t("Unlocking the screen"),
+                                hint: Tr.t("Touch or type the password, whichever comes first"),
+                                type: "toggle"
+                            },
+                            {
+                                key: "fingerprint.login",
+                                label: Tr.t("Login screen"),
+                                hint: Tr.t("Touch the sensor at the login screen to come in"),
+                                type: "toggle"
+                            },
+                            {
+                                key: "fingerprint.polkit",
+                                label: Tr.t("Password dialogs"),
+                                hint: Tr.t("When an app asks for root rights"),
+                                type: "toggle"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
                 title: Tr.t("Terminal"),
                 subtitle: Tr.t("Kitty look. Some changes apply to new windows"),
                 icon: "terminal",
@@ -2619,6 +2651,11 @@ LazyLoader {
 
                         RemoteStatus {
                             visible: win.filter === "" && !!win.pages[win.page].remote
+                            width: cards.width
+                        }
+
+                        FingerprintStudio {
+                            visible: win.filter === "" && !!win.pages[win.page].finger
                             width: cards.width
                         }
 

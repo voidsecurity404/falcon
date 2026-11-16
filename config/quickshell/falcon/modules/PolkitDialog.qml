@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import qs.components
 import qs.services
@@ -27,6 +28,80 @@ PanelWindow {
         Polkit.submit(field.text);
     }
 
+    // The finger, beside the password: falcon-fingerd watches the sensor, and a match gives a
+    // secret that the PAM line of polkit-1 takes instead of the password. Only for this user:
+    // another identity (root) is asked for its own password.
+    property string finger: ""    // "", "ready", "miss", "match"
+    readonly property bool ownIdentity: {
+        const id = flow ? flow.selectedIdentity : null;
+        const text = id ? String(id.string || id.displayName || "") : "";
+        const me = Quickshell.env("USER");
+        return text === "" || text === "unix-user:" + me || text === me;
+    }
+    readonly property bool fingerWanted: !closing && !!flow && Fingerprint.polkitOn && ownIdentity
+
+    onFingerWantedChanged: fingerScan.running = fingerWanted
+
+    function fingerAnswer(secret) {
+        if (!flow || !flow.isResponseRequired || waiting) {
+            pendingSecret = secret;
+            return;
+        }
+        waiting = true;
+        error = "";
+        field.text = "";
+        Polkit.submit(secret);
+    }
+    property string pendingSecret: ""
+
+    Process {
+        id: fingerScan
+
+        command: [Ui.binDir + "falcon-fingerprint", "scan"]
+        stdout: SplitParser {
+            onRead: line => {
+                let e;
+                try {
+                    e = JSON.parse(line);
+                } catch (err) {
+                    return;
+                }
+                if (e.state === "scanning")
+                    root.finger = root.finger === "miss" ? "miss" : "ready";
+                else if (e.state === "nomatch") {
+                    root.finger = "miss";
+                    shakeAnimation.restart();
+                    fingerCalm.restart();
+                } else if (e.state === "match" && e.secret) {
+                    root.finger = "match";
+                    root.fingerAnswer(e.secret);
+                }
+            }
+        }
+        onExited: {
+            if (root.finger !== "match")
+                root.finger = "";
+            // One match per scan: start again for a request that asks once more.
+            if (root.fingerWanted)
+                fingerRestart.restart();
+        }
+    }
+    Timer {
+        id: fingerRestart
+
+        interval: 1200
+        onTriggered: fingerScan.running = root.fingerWanted
+    }
+    Timer {
+        id: fingerCalm
+
+        interval: 1600
+        onTriggered: {
+            if (root.finger === "miss")
+                root.finger = "ready";
+        }
+    }
+
     function cleanPrompt(text) {
         const t = (text || "").trim();
         return t.endsWith(":") ? t.slice(0, -1) : t;
@@ -39,6 +114,8 @@ PanelWindow {
         error = "";
         waiting = false;
         field.text = "";
+        finger = "";
+        pendingSecret = "";
     }
 
     onClosingChanged: {
@@ -66,9 +143,16 @@ PanelWindow {
             root.prompt = root.cleanPrompt(root.flow.inputPrompt);
             root.secret = !root.flow.responseVisible;
             field.forceActiveFocus();
+            if (root.pendingSecret !== "") {
+                const secret = root.pendingSecret;
+                root.pendingSecret = "";
+                root.fingerAnswer(secret);
+            }
         }
         function onAuthenticationFailed() {
             root.waiting = false;
+            if (root.finger === "match")
+                root.finger = "ready";
             root.error = Tr.t("Wrong password");
             field.text = "";
             shakeAnimation.restart();
@@ -283,6 +367,32 @@ PanelWindow {
                 color: Theme.error
                 size: 13
                 visible: text !== ""
+            }
+            Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 8
+                visible: root.finger !== ""
+
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: root.finger === "match" ? "check" : "fingerprint"
+                    size: 18
+                    color: root.finger === "miss" ? Theme.error : Theme.accent
+
+                    SequentialAnimation on opacity {
+                        running: root.finger === "ready"
+                        loops: Animation.Infinite
+                        alwaysRunToEnd: true
+                        NumberAnimation { to: 0.45; duration: 1100; easing.type: Easing.InOutSine }
+                        NumberAnimation { to: 1; duration: 1100; easing.type: Easing.InOutSine }
+                    }
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.finger === "miss" ? Tr.t("Finger not recognized") : root.finger === "match" ? Tr.t("Finger recognized") : Tr.t("Touch the sensor or type the password")
+                    color: root.finger === "miss" ? Theme.error : Theme.muted
+                    size: 13
+                }
             }
             Row {
                 anchors.right: parent.right
