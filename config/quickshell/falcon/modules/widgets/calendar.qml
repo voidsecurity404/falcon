@@ -117,7 +117,7 @@ Item {
             Text {
                 text: root.today.getDate()
                 font.family: Theme.display
-                font.pixelSize: 86
+                font.pixelSize: root.hasAgenda ? 70 : 86
                 font.weight: Font.Bold
                 color: Theme.text
             }
@@ -172,8 +172,8 @@ Item {
         x: 22
         width: 196 - 44
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 24
-        spacing: 5
+        anchors.bottomMargin: 20
+        spacing: 4
 
         Label {
             text: root.dayTitle(root.picked)
@@ -184,7 +184,7 @@ Item {
             color: Theme.muted
         }
         Repeater {
-            model: root.dayEvents.slice(0, 2)
+            model: root.dayEvents.slice(0, 3)
 
             Rectangle {
                 id: ev
@@ -192,7 +192,7 @@ Item {
                 required property var modelData
 
                 width: parent.width
-                height: 34
+                height: 28
                 radius: 9
                 color: Qt.alpha(Agenda.colorOf(modelData.source), 0.14)
 
@@ -231,8 +231,8 @@ Item {
             color: Theme.muted
         }
         Label {
-            visible: root.dayEvents.length > 2
-            text: Tr.t("And {n} more").replace("{n}", root.dayEvents.length - 2)
+            visible: root.dayEvents.length > 3
+            text: Tr.t("And {n} more").replace("{n}", root.dayEvents.length - 3)
             size: 11
             color: Theme.muted
         }
@@ -295,7 +295,7 @@ Item {
             id: grid
 
             readonly property real cell: (month.width - 32) / 7
-            readonly property real rowHeight: (month.height - y - (root.wide ? 18 : 40)) / 7
+            readonly property real rowHeight: (month.height - y - (root.wide ? 18 : root.hasAgenda ? 124 : 40)) / 7
 
             x: 16
             y: 60
@@ -406,17 +406,99 @@ Item {
             }
         }
         Label {
-            visible: !root.wide
+            visible: !root.wide && !root.hasAgenda
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 14
             x: 22
             width: parent.width - 44
             elide: Text.ElideRight
-            text: !root.hasAgenda ? Tr.t("Week") + " " + root.weekNumber(root.today) + "  ·  " + Tr.t("Day") + " " + root.dayOfYear(root.today)
-                : root.dayEvents.length === 0 ? root.dayTitle(root.picked) + ": " + Tr.t("No events")
-                : root.dayTitle(root.picked) + ": " + root.timeOf(root.dayEvents[0]) + "  " + (root.dayEvents[0].title || Tr.t("(no title)")) + (root.dayEvents.length > 1 ? "  +" + (root.dayEvents.length - 1) : "")
+            text: Tr.t("Week") + " " + root.weekNumber(root.today) + "  ·  " + Tr.t("Day") + " " + root.dayOfYear(root.today)
             size: 12
-            color: root.hasAgenda && root.dayEvents.length > 0 ? Theme.text : Theme.muted
+            color: Theme.muted
+        }
+        // The month form lists the picked day's events under the grid, as the wide form does beside it.
+        Column {
+            visible: !root.wide && root.hasAgenda
+            x: 22
+            width: parent.width - 44
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 14
+            spacing: 3
+
+            Item {
+                width: parent.width
+                height: 16
+
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.dayTitle(root.picked)
+                    size: 11
+                    font.weight: Font.DemiBold
+                    font.capitalization: Font.AllUppercase
+                    font.letterSpacing: 0.6
+                    color: Theme.muted
+                }
+                Label {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: Tr.t("Week") + " " + root.weekNumber(root.picked)
+                    size: 10
+                    color: Theme.muted
+                }
+            }
+            Repeater {
+                model: root.dayEvents.slice(0, 3)
+
+                Rectangle {
+                    id: line
+
+                    required property var modelData
+
+                    width: parent.width
+                    height: 20
+                    radius: 6
+                    color: Qt.alpha(Agenda.colorOf(modelData.source), 0.14)
+
+                    Rectangle {
+                        x: 5
+                        y: 4
+                        width: 3
+                        height: parent.height - 8
+                        radius: 1.5
+                        color: Agenda.colorOf(line.modelData.source)
+                    }
+                    Label {
+                        id: lineTime
+
+                        x: 14
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: root.timeOf(line.modelData)
+                        size: 11
+                        color: Theme.muted
+                    }
+                    Label {
+                        x: lineTime.x + lineTime.width + 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - x - 8
+                        text: (line.modelData.title || Tr.t("(no title)")) + (line.modelData.location ? "  · " + line.modelData.location : "")
+                        size: 12
+                        font.weight: Font.Medium
+                        elide: Text.ElideRight
+                    }
+                }
+            }
+            Label {
+                visible: root.dayEvents.length === 0
+                text: Tr.t("No events")
+                size: 12
+                color: Theme.muted
+            }
+            Label {
+                visible: root.dayEvents.length > 3
+                text: Tr.t("And {n} more").replace("{n}", root.dayEvents.length - 3)
+                size: 11
+                color: Theme.muted
+            }
         }
     }
 }

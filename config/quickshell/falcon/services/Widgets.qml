@@ -26,7 +26,7 @@ Singleton {
             blurb: Tr.t("Month you can leaf through, with today and the week number"),
             icon: "calendar",
             group: "time",
-            forms: [{ name: "month", w: 330, h: 340 }, { name: "wide", w: 540, h: 300 }],
+            forms: [{ name: "month", w: 330, h: 400 }, { name: "wide", w: 540, h: 300 }],
             interactive: true,
             plate: true
         },
