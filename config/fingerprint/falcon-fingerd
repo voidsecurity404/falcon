@@ -33,7 +33,10 @@ from gi.repository import Gio, GLib
 RUN = os.environ.get("FALCON_FINGER_RUN", "/run/falcon-finger")
 SOCKET = os.path.join(RUN, "socket")
 GREETER_DIR = os.path.join(RUN, "greeter")
-GREETERS = set(os.environ.get("FALCON_FINGER_GREETER", "sddm-greeter-qt6,sddm-greeter").split(","))
+# The kernel cuts /proc/PID/comm to 15 characters ("sddm-greeter-qt6" reads "sddm-greeter-qt"),
+# so names are compared cut the same way.
+GREETERS = {name[:15] for name in
+            os.environ.get("FALCON_FINGER_GREETER", "sddm-greeter-qt6,sddm-greeter").split(",")}
 SDDM_STATE = os.environ.get("FALCON_FINGER_SDDM_STATE", "/var/lib/sddm/state.conf")
 TAKE_UID = int(os.environ.get("FALCON_FINGER_TAKE_UID", "0"))
 TOKEN_LIFE = 12.0
