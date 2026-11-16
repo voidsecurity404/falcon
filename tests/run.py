@@ -4635,7 +4635,10 @@ WIDGET_FORMS = {
     "clock": ["wide", "stacked", "compact"], "calendar": ["month", "wide"], "focus": ["round", "wide"],
     "weather": ["large", "wide", "compact"], "player": ["wide", "square"], "system": ["wide", "tall", "compact"],
     "power": ["wide", "square"], "controls": ["wide", "tall"], "notes": ["wide", "tall"],
-    "tasks": ["tall", "wide"], "apps": ["grid", "row"], "phone": ["wide", "square"]}
+    "tasks": ["tall", "wide"], "apps": ["grid", "row"], "phone": ["wide", "square"],
+    "currency": ["wide", "tall", "compact"], "photos": ["square", "wide", "tall"],
+    "batteries": ["wide", "square", "tall"], "network": ["wide", "square"],
+    "updates": ["wide", "compact"], "claude": ["wide", "compact"], "stack": ["stack"]}
 
 
 @case("Har bir vidjetning har bir shakli xatosiz chiziladi")
