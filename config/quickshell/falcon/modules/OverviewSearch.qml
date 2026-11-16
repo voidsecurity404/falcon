@@ -173,7 +173,13 @@ PanelWindow {
     anchors.top: true
     margins.top: 26
     implicitWidth: 480
-    implicitHeight: card.height + 24
+    // Fixed at the tallest card (field and seven rows): a surface resized on every frame of the
+    // card's height animation stalled the shell 50 to 100 ms each time rows came or went.
+    // Clicks pass through everything but the card.
+    implicitHeight: 440
+    mask: Region {
+        item: card
+    }
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
     WlrLayershell.layer: WlrLayer.Top

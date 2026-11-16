@@ -12,7 +12,11 @@ PanelWindow {
     property string outputName: ""
 
     readonly property var workspace: Niri.activeWorkspaceOn(outputName)
-    readonly property bool wanted: Widgets.enabled && Widgets.loaded && !Niri.overview && (!Widgets.firstOnly || (!!workspace && workspace.idx === 1))
+    readonly property bool wanted: Widgets.enabled && Widgets.loaded && (!Widgets.firstOnly || (!!workspace && workspace.idx === 1))
+    // In the overview the layer stays mapped but takes no input and draws nothing: unmapping
+    // this full-screen surface and mapping it again when the overview closed stalled the shell
+    // about 40 ms each time.
+    readonly property bool overviewHidden: Niri.overview && !Widgets.editMode
     readonly property bool focusedScreen: Niri.focusedOutput === "" || Niri.focusedOutput === outputName
     readonly property int topInset: Widgets.topInset
     readonly property int bottomInset: Widgets.bottomInset
@@ -33,12 +37,22 @@ PanelWindow {
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
     visible: wanted || Widgets.editMode
+    mask: overviewHidden ? noInput : null
+    contentItem.visible: !overviewHidden
     WlrLayershell.layer: Widgets.editMode ? WlrLayer.Top : WlrLayer.Bottom
     WlrLayershell.namespace: "falcon-widgets"
     WlrLayershell.keyboardFocus: Widgets.editMode && focusedScreen ? WlrKeyboardFocus.Exclusive : Widgets.noteHovered || Widgets.noteFocused ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
+    Region {
+        id: noInput
+    }
+
     onVisibleChanged: {
         if (!visible)
+            menuOpen = false;
+    }
+    onOverviewHiddenChanged: {
+        if (overviewHidden)
             menuOpen = false;
     }
 
