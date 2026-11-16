@@ -301,7 +301,18 @@ Item {
         drag.minimumY: host.minY
         drag.maximumY: host.maxY
         onPressed: Widgets.selectedId = host.widgetId
+        onPositionChanged: {
+            if (drag.active)
+                Widgets.mergeTarget = Widgets.mergeTargetFor(host.widgetId, host.x + host.width / 2, host.y + host.height / 2);
+        }
         onReleased: {
+            // Dropped on the middle of another widget: they become a stack.
+            if (Widgets.mergeTarget !== "") {
+                const target = Widgets.mergeTarget;
+                Widgets.mergeTarget = "";
+                Widgets.merge(host.widgetId, target);
+                return;
+            }
             // Oddiy bosish vidjetni surmaydi va saqlangan joyini o'zgartirmaydi.
             if (Math.abs(host.x - host.placeX()) < 0.5 && Math.abs(host.y - host.placeY()) < 0.5)
                 return;
@@ -310,6 +321,46 @@ Item {
             const spanX = Math.max(1, host.areaWidth - host.targetWidth);
             const spanY = Math.max(1, host.areaHeight - host.topInset - host.targetHeight);
             Widgets.move(host.widgetId, (x - host.side) / spanX, (y - host.topInset) / spanY);
+        }
+    }
+
+    // A widget dragged onto this one would stack with it.
+    Rectangle {
+        anchors.fill: parent
+        visible: !host.isFace && Widgets.editMode && Widgets.mergeTarget === host.widgetId
+        radius: host.info && (host.info.plate || host.info.solid) ? 22 * host.factor : 18
+        color: Qt.alpha(Theme.accent, 0.22)
+        border.width: 3
+        border.color: Theme.accent
+        z: 5
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: stackHint.implicitWidth + 32
+            height: 40
+            radius: 20
+            color: Theme.accent
+
+            Row {
+                id: stackHint
+
+                anchors.centerIn: parent
+                spacing: 8
+
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "stack"
+                    size: 16
+                    color: Theme.accentText
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: Tr.t("Drop to stack")
+                    size: 13
+                    font.weight: Font.DemiBold
+                    color: Theme.accentText
+                }
+            }
         }
     }
 
@@ -401,6 +452,12 @@ Item {
                 visible: !!host.info && host.info.forms.length > 1
                 icon: "widgets"
                 onPressed: Widgets.cycleForm(host.widgetId)
+            }
+            // Takes the widget on show out of the stack.
+            Tool {
+                visible: !!host.entry && host.entry.type === "stack"
+                icon: "stack"
+                onPressed: Widgets.unstack(host.widgetId)
             }
             Tool {
                 text: host.entry ? ({ s: "S", m: "M", l: "L" })[host.entry.size] : ""

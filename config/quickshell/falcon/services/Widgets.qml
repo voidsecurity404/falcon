@@ -192,6 +192,16 @@ Singleton {
             forms: [{ name: "wide", w: 480, h: 180 }, { name: "compact", w: 300, h: 130 }],
             interactive: true,
             plate: true
+        },
+        {
+            type: "stack",
+            title: Tr.t("Stack"),
+            blurb: Tr.t("Several widgets in one place, turned with the wheel. Drop one widget on another to make one"),
+            icon: "stack",
+            group: "tools",
+            forms: [{ name: "stack", w: 460, h: 210 }],
+            interactive: true,
+            plate: true
         }
     ]
     readonly property var groups: [
@@ -202,6 +212,8 @@ Singleton {
         { id: "music", title: Tr.t("Music") },
         { id: "tools", title: Tr.t("Tools") }
     ]
+    // What a stack from the gallery holds.
+    readonly property var defaultStack: [{ type: "weather", form: "wide" }, { type: "calendar", form: "wide" }, { type: "system", form: "wide" }]
     readonly property var sizes: ({
             s: 0.85,
             m: 1,
@@ -271,15 +283,19 @@ Singleton {
         liveScreens = next;
     }
 
+    // Widgets inside stacks count too.
+    function typesOf(w) {
+        return w.type === "stack" && Array.isArray(w.stack) ? w.stack.map(c => c.type) : [w.type];
+    }
     function hasType(type) {
-        return items.some(w => w.type === type);
+        return items.some(w => typesOf(w).indexOf(type) >= 0);
     }
 
     function usesData(kind) {
-        return items.some(w => {
-            const i = info(w.type);
+        return items.some(w => typesOf(w).some(t => {
+            const i = info(t);
             return !!i && i.uses === kind;
-        });
+        }));
     }
 
     function info(type) {
@@ -295,6 +311,19 @@ Singleton {
         const i = w ? info(w.type) : null;
         if (!i)
             return null;
+        // A stack is as wide and as tall as its largest widgets; smaller ones sit in the middle.
+        if (w.type === "stack") {
+            let bw = 260, bh = 140;
+            for (const c of (Array.isArray(w.stack) ? w.stack : defaultStack)) {
+                const ci = info(c.type);
+                const cf = ci ? (ci.forms.find(f => f.name === c.form) || ci.forms[0]) : null;
+                if (cf) {
+                    bw = Math.max(bw, cf.w);
+                    bh = Math.max(bh, cf.h);
+                }
+            }
+            return { name: "stack", w: Math.min(560, bw + 16), h: Math.min(520, bh) };
+        }
         return i.forms.find(f => f.name === w.form) || i.forms[0];
     }
 
@@ -307,9 +336,20 @@ Singleton {
             return null;
         const seen = {};
         const out = [];
-        for (const w of list) {
+        for (const raw of list) {
+            let w = raw;
             if (!w || !info(w.type) || typeof w.id !== "string" || seen[w.id])
                 continue;
+            if (w.type === "stack") {
+                const kids = (Array.isArray(w.stack) ? w.stack : []).filter(c => c && info(c.type) && c.type !== "stack").map(c => ({
+                            type: c.type,
+                            form: typeof c.form === "string" ? c.form : ""
+                        }));
+                if (kids.length === 0)
+                    continue;
+                // One left: the stack becomes that widget.
+                w = kids.length === 1 ? Object.assign({}, w, { type: kids[0].type, form: kids[0].form, stack: undefined }) : Object.assign({}, w, { stack: kids });
+            }
             seen[w.id] = true;
             out.push({
                 id: w.id,
@@ -319,7 +359,8 @@ Singleton {
                 size: sizes[w.size] ? w.size : "m",
                 form: typeof w.form === "string" ? w.form : "",
                 // The widget's own glass, 0.05 to 1; absent follows widgets.opacity.
-                opacity: typeof w.opacity === "number" ? Math.max(0.05, Math.min(1, w.opacity)) : undefined
+                opacity: typeof w.opacity === "number" ? Math.max(0.05, Math.min(1, w.opacity)) : undefined,
+                stack: w.type === "stack" ? w.stack : undefined
             });
         }
         return out;
@@ -474,24 +515,25 @@ Singleton {
             n++;
         const id = type + (n > 1 ? "-" + n : "");
         const spot = freeSpot(type);
-        apply(items.concat([
-            {
-                id: id,
-                type: type,
-                fx: spot.fx,
-                fy: spot.fy,
-                size: "m",
-                form: ""
-            }
-        ]), true);
+        const entry = {
+            id: id,
+            type: type,
+            fx: spot.fx,
+            fy: spot.fy,
+            size: "m",
+            form: ""
+        };
+        if (type === "stack")
+            entry.stack = defaultStack;
+        apply(items.concat([entry]), true);
         remember();
         return id;
     }
 
     // The place where a new widget covers the least of the others, nearest to the middle.
-    function freeSpot(type) {
+    function freeSpot(type, given) {
         const screen = Quickshell.screens.find(s => s.name === Niri.focusedOutput) || Quickshell.screens[0];
-        const form = info(type).forms[0];
+        const form = given || info(type).forms[0];
         if (!screen)
             return { fx: 0.5, fy: 0.4 };
         const spanX = Math.max(1, screen.width - 32 - form.w);
@@ -516,6 +558,81 @@ Singleton {
             }
         }
         return best;
+    }
+
+    // ---------------------------------------------------------------- stacks
+    // While a widget is dragged over the middle of another, that one lights up; a drop there stacks them.
+    property string mergeTarget: ""
+    function mergeTargetFor(id, cx, cy) {
+        for (const other of ids) {
+            const r = rects[other];
+            if (other === id || !r)
+                continue;
+            if (cx > r.x + r.w * 0.25 && cx < r.x + r.w * 0.75 && cy > r.y + r.h * 0.25 && cy < r.y + r.h * 0.75)
+                return other;
+        }
+        return "";
+    }
+    function childrenOf(w) {
+        return w.type === "stack" ? w.stack : [{ type: w.type, form: w.form || "" }];
+    }
+    // The dragged widget joins the target: into its stack, or a new stack in its place.
+    function merge(dragId, targetId) {
+        const a = get(dragId), b = get(targetId);
+        if (!a || !b || dragId === targetId)
+            return;
+        const kids = childrenOf(b).concat(childrenOf(a)).slice(0, 8);
+        let id = b.id;
+        if (b.type !== "stack") {
+            let n = 1;
+            while (get("stack" + (n > 1 ? "-" + n : "")))
+                n++;
+            id = "stack" + (n > 1 ? "-" + n : "");
+        }
+        const stacked = {
+            id: id,
+            type: "stack",
+            fx: b.fx,
+            fy: b.fy,
+            size: b.size,
+            form: "",
+            stack: kids
+        };
+        if (typeof b.opacity === "number")
+            stacked.opacity = b.opacity;
+        apply(items.filter(w => w.id !== dragId).map(w => w.id === targetId ? stacked : w), true);
+        // Shows the widget just added.
+        share(id, "page", kids.length - 1);
+        remember();
+    }
+    // Takes the widget on show out of a stack and puts it in a free place; the last one left
+    // turns the stack back into that widget.
+    function unstack(id) {
+        const s = get(id);
+        if (!s || s.type !== "stack")
+            return;
+        const page = ((sharedValue(id, "page", 0) % s.stack.length) + s.stack.length) % s.stack.length;
+        const out = s.stack[page];
+        const rest = s.stack.filter((c, i) => i !== page);
+        const outInfo = info(out.type);
+        const spot = freeSpot(out.type, outInfo.forms.find(f => f.name === out.form) || outInfo.forms[0]);
+        let n = 1;
+        while (get(out.type + (n > 1 ? "-" + n : "")))
+            n++;
+        const loose = {
+            id: out.type + (n > 1 ? "-" + n : ""),
+            type: out.type,
+            fx: spot.fx,
+            fy: spot.fy,
+            size: s.size,
+            form: out.form
+        };
+        const kept = rest.length === 1 ? Object.assign({}, s, { type: rest[0].type, form: rest[0].form, stack: undefined }) : Object.assign({}, s, { stack: rest });
+        if (rest.length === 1)
+            delete kept.stack;
+        share(id, "page", 0);
+        apply(items.map(w => w.id === id ? kept : w).concat([loose]), true);
+        remember();
     }
 
     // Edit mode's shape button: the next form of this widget.
@@ -622,7 +739,7 @@ Singleton {
             return {
                 id: w.id,
                 form: form.name,
-                forms: (follow === "place" ? [form] : i.forms).map(f => ({
+                forms: (follow === "place" || w.type === "stack" ? [form] : i.forms).map(f => ({
                     name: f.name,
                     w: f.w * scale,
                     h: f.h * scale
