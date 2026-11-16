@@ -24,24 +24,88 @@ PanelWindow {
     property int startWindow: -1
     property real reveal: 0
 
-    readonly property var matches: {
-        const q = query.trim().toLowerCase();
-        if (q === "")
-            return [];
-        const list = [];
+    // Recomputed only when the text or the set of windows and titles changes, never on niri's
+    // focus and layout events: those come with every glide of the overview, and a binding on
+    // Niri.windows rebuilt the rows and re-focused the top match each time, so typing stuttered
+    // and the selection jumped back. Focus order is taken once, when the overview opens.
+    property var matches: []
+    property var focusOrder: ({})
+    property var entryCache: ({})
+    property string matchKey: ""
+    readonly property string windowsKey: {
+        let key = "";
         for (const id in Niri.windows) {
             const w = Niri.windows[id];
-            const app = w.app_id || "";
-            const entry = DesktopEntries.heuristicLookup(app);
-            const name = entry && entry.name ? entry.name : app;
-            // Titles only by whole text (a scattered-letter match in a long title is noise);
-            // the app's name also by its letters in order, as in the app menu.
-            const rank = Math.max(root.within(w.title || "", q), root.within(name, q) + 50, root.within(app, q), Math.min(200, Tools.score(name, q, "")));
-            if (rank > 0)
-                list.push({ id: w.id, title: w.title || name, app: name, icon: entry ? entry.icon : "", workspace: w.workspace_id, rank: rank, focusedAt: w.focus_timestamp ? (w.focus_timestamp.secs || 0) : 0 });
+            key += id + "\u0001" + (w.app_id || "") + "\u0001" + (w.title || "") + "\u0001" + w.workspace_id + "\u0002";
         }
-        list.sort((a, b) => b.rank - a.rank || b.focusedAt - a.focusedAt);
-        return list.slice(0, 7);
+        return key;
+    }
+
+    function entryOf(app) {
+        if (!(app in entryCache)) {
+            const entry = DesktopEntries.heuristicLookup(app);
+            entryCache[app] = entry ? { name: entry.name || app, icon: entry.icon || "" } : { name: app, icon: "" };
+        }
+        return entryCache[app];
+    }
+
+    function rememberOrder() {
+        const order = {};
+        for (const id in Niri.windows) {
+            const t = Niri.windows[id].focus_timestamp;
+            order[id] = t ? (t.secs || 0) * 1e9 + (t.nanos || 0) : 0;
+        }
+        focusOrder = order;
+    }
+
+    function search() {
+        const q = query.trim().toLowerCase();
+        const list = [];
+        if (q !== "") {
+            for (const id in Niri.windows) {
+                const w = Niri.windows[id];
+                const app = w.app_id || "";
+                const entry = entryOf(app);
+                const name = entry.name;
+                // Titles only by whole text (a scattered-letter match in a long title is noise);
+                // the app's name also by its letters in order, as in the app menu.
+                const rank = Math.max(root.within(w.title || "", q), root.within(name, q) + 50, root.within(app, q), Math.min(200, Tools.score(name, q, "")));
+                if (rank > 0)
+                    list.push({ id: w.id, title: w.title || name, app: name, icon: entry.icon, workspace: w.workspace_id, rank: rank, focusedAt: focusOrder[id] || 0 });
+            }
+            list.sort((a, b) => b.rank - a.rank || b.focusedAt - a.focusedAt);
+        }
+        const next = list.slice(0, 7);
+        const key = next.map(m => m.id + "\u0001" + m.title + "\u0001" + m.workspace).join("\u0002");
+        if (key === matchKey)
+            return;
+        const keptId = matches.length > 0 && selected < matches.length ? matches[selected].id : -1;
+        const topBefore = matches.length > 0 ? matches[0].id : -1;
+        matchKey = key;
+        matches = next;
+        if (next.length === 0) {
+            selected = 0;
+            return;
+        }
+        // A new top match (the text changed) is chosen; otherwise the chosen window stays chosen.
+        const kept = next.findIndex(m => m.id === keptId);
+        if (next[0].id !== topBefore || kept < 0)
+            choose(0);
+        else
+            selected = kept;
+    }
+
+    onQueryChanged: search()
+    onWindowsKeyChanged: if (wanted) search()
+
+    // Each focus makes the overview glide; while letters come quickly only the last one is sent.
+    Timer {
+        id: focusTimer
+
+        property int target: -1
+
+        interval: 70
+        onTriggered: if (target >= 0) Niri.request({ FocusWindow: { id: target } }, ["focus-window", "--id", String(target)])
     }
 
     // 1000 at the start, 800 at a word start, less further in; also typed on the other layout.
@@ -67,18 +131,16 @@ PanelWindow {
         if (matches.length === 0)
             return;
         selected = (index + matches.length) % matches.length;
-        Niri.request({ FocusWindow: { id: matches[selected].id } }, ["focus-window", "--id", String(matches[selected].id)]);
+        focusTimer.target = matches[selected].id;
+        focusTimer.restart();
     }
 
     function closeOverview() {
+        if (focusTimer.running) {
+            focusTimer.stop();
+            focusTimer.triggered();
+        }
         Niri.request({ CloseOverview: {} }, ["close-overview"]);
-    }
-
-    onMatchesChanged: {
-        if (matches.length > 0)
-            choose(0);
-        else
-            selected = 0;
     }
 
     onWantedChanged: {
@@ -87,6 +149,9 @@ PanelWindow {
         revealAnimation.duration = wanted ? 260 : 140;
         revealAnimation.start();
         if (wanted) {
+            focusTimer.stop();
+            entryCache = {};
+            rememberOrder();
             query = "";
             field.text = "";
             selected = 0;
@@ -179,6 +244,7 @@ PanelWindow {
                         case Qt.Key_Escape:
                             if (!empty) {
                                 text = "";
+                                focusTimer.stop();
                                 if (root.startWindow >= 0)
                                     Niri.request({ FocusWindow: { id: root.startWindow } }, null);
                             } else {
