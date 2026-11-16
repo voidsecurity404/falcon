@@ -70,6 +70,41 @@ Singleton {
         save();
     }
 
+    // Finished focus rounds per day, kept 60 days in Saved "focusStats": { "Y-M-D": { n, min } }.
+    property var stats: ({})
+
+    function dayKey(d) {
+        return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+    }
+    function statOf(d) {
+        return stats[dayKey(d)] || { n: 0, min: 0 };
+    }
+    // The last seven days, oldest first: { date, n, min }.
+    function week() {
+        const out = [];
+        const now = new Date();
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+            const s = statOf(d);
+            out.push({ date: d.getTime(), n: s.n, min: s.min });
+        }
+        return out;
+    }
+    function record(minutes) {
+        const next = {};
+        const oldest = Date.now() - 60 * 86400000;
+        for (const k in stats) {
+            const p = k.split("-").map(Number);
+            if (new Date(p[0], p[1] - 1, p[2]).getTime() >= oldest)
+                next[k] = stats[k];
+        }
+        const k = dayKey(new Date());
+        const s = next[k] || { n: 0, min: 0 };
+        next[k] = { n: s.n + 1, min: s.min + Math.round(minutes) };
+        stats = next;
+        Saved.set("focusStats", next);
+    }
+
     function pomodoro() {
         round = 1;
         startPhase("work");
@@ -152,6 +187,7 @@ Singleton {
         // Away during a Pomodoro: the cycle does not run on by itself over an empty chair.
         if (wasPhase !== "" && !late) {
             if (wasPhase === "work") {
+                record(total / 60);
                 startPhase("break");
                 Toasts.alarm(Tr.t("Time for a break"), Tr.t("{n} min").replace("{n}", Math.round(left / 60)), "coffee");
             } else {
@@ -170,6 +206,7 @@ Singleton {
     }
 
     Component.onCompleted: {
+        stats = Saved.get("focusStats", {}) || {};
         const s = Saved.get("timer", null);
         if (s && (s.endAt > 0 || s.pausedLeft > 0)) {
             label = s.label || "";

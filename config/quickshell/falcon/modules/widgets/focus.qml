@@ -15,6 +15,11 @@ Item {
     readonly property bool resting: Countdown.phase === "break"
     readonly property color tint: resting ? Theme.good : Theme.accent
     readonly property real share: active && Countdown.total > 0 ? Countdown.left / Countdown.total : 0
+    readonly property var today: Countdown.statOf(new Date())
+    readonly property var week: Countdown.stats, Countdown.week()
+    readonly property int weekTop: Math.max(1, ...week.map(d => d.n))
+    readonly property int weekTotal: week.reduce((a, d) => a + d.n, 0)
+    readonly property string todayText: Tr.t("Today") + ": " + today.n + " · " + today.min + " " + Tr.t("min")
     readonly property string phaseText: !active ? Tr.t("Ready to focus") : Countdown.paused ? Tr.t("Paused") : Countdown.phase === "work" ? Tr.t("Focus") : resting ? Tr.t("Break") : (Countdown.label || Tr.t("Timer"))
 
     Item {
@@ -121,6 +126,16 @@ Item {
         }
     }
 
+    // Rounds finished today (round form).
+    Label {
+        visible: !root.wide
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: dial.y + dial.height + (rounds.visible ? 22 : 10)
+        text: root.todayText
+        size: 11
+        color: Theme.muted
+    }
+
     Item {
         id: panel
 
@@ -136,6 +151,52 @@ Item {
             WidgetCaption {
                 icon: "focus"
                 text: Tr.t("Focus timer")
+            }
+        }
+        // The last seven days as bars, today on the right, with today's count under them.
+        Column {
+            visible: root.wide
+            anchors.right: parent.right
+            y: 0
+            spacing: 4
+
+            Row {
+                anchors.right: parent.right
+                spacing: 4
+
+                Repeater {
+                    model: root.week
+
+                    Item {
+                        id: dayBar
+
+                        required property var modelData
+                        required property int index
+
+                        width: 9
+                        height: 30
+
+                        Rectangle {
+                            anchors.bottom: parent.bottom
+                            width: parent.width
+                            height: Math.max(3, parent.height * dayBar.modelData.n / root.weekTop)
+                            radius: 3
+                            color: dayBar.modelData.n === 0 ? Qt.alpha(Theme.text, 0.15) : dayBar.index === 6 ? root.tint : Qt.alpha(root.tint, 0.55)
+                        }
+                    }
+                }
+            }
+            Label {
+                anchors.right: parent.right
+                text: root.todayText
+                size: 10
+                color: Theme.muted
+            }
+            Label {
+                anchors.right: parent.right
+                text: Tr.t("Week") + ": " + root.weekTotal
+                size: 10
+                color: Theme.muted
             }
         }
 
