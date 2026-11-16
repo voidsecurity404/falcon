@@ -8,9 +8,21 @@ Singleton {
     id: root
 
     readonly property var players: Mpris.players.values
+    // A player picked by hand (the player widget's switch) stays chosen while it exists.
+    property string pinnedName: ""
     readonly property var player: {
         const list = players;
-        return list.find(p => p.isPlaying) || (list.length > 0 ? list[0] : null);
+        const pinned = pinnedName !== "" ? list.find(p => p.dbusName === pinnedName) : null;
+        return pinned || list.find(p => p.isPlaying) || (list.length > 0 ? list[0] : null);
+    }
+
+    // The next player in the list becomes the shown one.
+    function cycle() {
+        const list = players;
+        if (list.length < 2)
+            return;
+        const at = list.indexOf(player);
+        pinnedName = list[(at + 1) % list.length].dbusName;
     }
     // A player going away briefly reports undefined position and length.
     readonly property real progress: {

@@ -19,6 +19,8 @@ Item {
     readonly property real share: hasLength ? Math.min(1, player.position / player.length) : 0
     readonly property color tint: Media.art !== "" ? Media.artAccent : Theme.accent
 
+    readonly property int count: Media.players.length
+
     function clock(seconds) {
         const s = Math.max(0, Math.floor(seconds));
         return Math.floor(s / 60) + ":" + (s % 60 < 10 ? "0" : "") + s % 60;
@@ -231,12 +233,26 @@ Item {
                 font.capitalization: Font.AllUppercase
                 color: Theme.muted
             }
+            Label {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.count > 1
+                text: "⇄ " + (Media.players.indexOf(root.player) + 1) + "/" + root.count
+                size: 11
+                font.weight: Font.DemiBold
+                color: root.tint
+            }
+        }
+        WidgetHot {
+            width: source.width
+            height: source.height + 4
+            visible: !root.square && root.count > 1
+            onClicked: Media.cycle()
         }
         Label {
             id: title
 
             y: root.square ? 0 : 22
-            width: parent.width
+            width: parent.width - (root.square ? 0 : 34)
             text: Media.title || Tr.t("Unknown track")
             size: root.square ? 17 : 18
             font.weight: Font.Bold
@@ -360,6 +376,108 @@ Item {
                 visible: !!root.player && root.player.canGoNext
                 onClicked: root.player.next()
             }
+            // The system's output volume, dragged along the bar; the icon mutes.
+            Row {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: Audio.available
+                spacing: 4
+
+                Item {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 26
+                    height: 26
+
+                    Icon {
+                        anchors.centerIn: parent
+                        name: Audio.muted ? "mute" : "volume"
+                        size: 16
+                        color: muteHot.hovered ? Theme.text : Theme.muted
+                    }
+                    WidgetHot {
+                        id: muteHot
+
+                        anchors.fill: parent
+                        onClicked: Audio.toggleMute()
+                    }
+                }
+                Item {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: root.square ? 52 : 74
+                    height: 22
+
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width
+                        height: volHot.hovered ? 7 : 5
+                        radius: height / 2
+                        color: Qt.alpha(Theme.text, 0.16)
+
+                        Rectangle {
+                            width: Math.max(parent.height, parent.width * Math.min(1, Audio.volume))
+                            height: parent.height
+                            radius: height / 2
+                            color: Audio.muted ? Theme.muted : root.tint
+                        }
+                    }
+                    WidgetHot {
+                        id: volHot
+
+                        anchors.fill: parent
+                        slider: true
+                        onSlid: share => Audio.setVolume(share)
+                    }
+                }
+            }
+        }
+    }
+
+    // Names the song playing through songrec.
+    WidgetButton {
+        visible: root.playing
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.margins: 14
+        height: 30
+        icon: "search"
+        on: SongRec.running
+        onClicked: {
+            if (!SongRec.running)
+                SongRec.recognize(false);
+        }
+    }
+    // Which player, and a switch to the next when there are several (square form).
+    Rectangle {
+        visible: root.square && root.count > 1
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.margins: 14
+        width: switchRow.implicitWidth + 18
+        height: 30
+        radius: 15
+        color: Qt.alpha(Theme.text, switchHot.hovered ? 0.16 : 0.08)
+
+        Row {
+            id: switchRow
+
+            anchors.centerIn: parent
+            spacing: 5
+
+            Label {
+                text: root.player ? Media.nameOf(root.player) : ""
+                size: 11
+                font.weight: Font.DemiBold
+            }
+            Label {
+                text: "⇄ " + (Media.players.indexOf(root.player) + 1) + "/" + root.count
+                size: 11
+                color: root.tint
+            }
+        }
+        WidgetHot {
+            id: switchHot
+
+            anchors.fill: parent
+            onClicked: Media.cycle()
         }
     }
 }
