@@ -1696,5 +1696,8 @@
  "Quietly": "Тихо",
  "Important": "Важное",
  "Apps appear here after their first notification.": "Приложения появятся здесь после первого уведомления.",
- "Quietly: only into the history. Important: a card even in Silent and focus mode. Off: not shown and not kept. Urgent ones always show.": "Тихо: только в историю. Важное: карточка даже в беззвучном режиме и режиме фокуса. Выкл.: не показывать и не хранить. Срочные показываются всегда."
+ "Quietly: only into the history. Important: a card even in Silent and focus mode. Off: not shown and not kept. Urgent ones always show.": "Тихо: только в историю. Важное: карточка даже в беззвучном режиме и режиме фокуса. Выкл.: не показывать и не хранить. Срочные показываются всегда.",
+ "Type to find a window": "Начните печатать, чтобы найти окно",
+ "Search in the overview": "Поиск в обзоре",
+ "Type in the overview to find a window, Enter opens it": "Печатайте в обзоре, чтобы найти окно, Enter открывает его"
 }

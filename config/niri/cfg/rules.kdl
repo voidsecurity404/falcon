@@ -150,6 +150,7 @@ layer-rule {
     match namespace="^falcon-menu$"
     match namespace="^falcon-power$"
     match namespace="^falcon-polkit$"
+    match namespace="^falcon-overview-search$"
     match namespace="^falcon-keys$"
     match namespace="^falcon-clipboard$"
     match namespace="^falcon-top$"

@@ -55,6 +55,7 @@ ShellRoot {
     AppMenu {}
     PowerMenu {}
     PolkitDialog {}
+    OverviewSearch {}
     KeysSheet {}
     WallpaperPicker {}
     WallpaperBrowser {}

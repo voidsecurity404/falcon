@@ -53,6 +53,7 @@
     "edgeMargin": 0,
     "shadowSoftness": 34,
     "blurStrength": 3,
+    "overviewSearch": true,
     "overviewZoom": 0.46,
     "followScroll": 0,
     "warpMode": "edge",

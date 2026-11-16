@@ -1041,6 +1041,12 @@ LazyLoader {
                                 names: [Tr.t("Top left"), Tr.t("Top right"), Tr.t("Bottom left"), Tr.t("Bottom right"), Tr.t("Off")]
                             },
                             {
+                                key: "windows.overviewSearch",
+                                label: Tr.t("Search in the overview"),
+                                hint: Tr.t("Type in the overview to find a window, Enter opens it"),
+                                type: "toggle"
+                            },
+                            {
                                 key: "windows.overviewZoom",
                                 label: Tr.t("Overview zoom"),
                                 type: "slider",
