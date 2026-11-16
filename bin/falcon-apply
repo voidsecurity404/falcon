@@ -599,7 +599,8 @@ def has_prints():
 
 def hyprlock_finger(s):
     """hyprlock's fingerprint, beside the password, with its line under the field. The same line
-    is drawn by modules/LockIntro.qml at the end of the locking show: change both together."""
+    is drawn by modules/LockIntro.qml at the end of the locking show: change both together.
+    No $FPRINTFAIL label: hyprlock draws an empty label as a thin bar, and its text is English."""
     if s.get("fingerprint", {}).get("lock", True) is False or not has_prints():
         return ""
     return (
@@ -609,8 +610,6 @@ def hyprlock_finger(s):
         "auth:fingerprint:retry_delay = 250\n"
         "\nlabel {\n    monitor =\n    text = $FPRINTPROMPT\n    color = $text\n    font_size = 11\n"
         "    font_family = Geist\n    position = 0, -138\n    halign = center\n    valign = center\n}\n"
-        "\nlabel {\n    monitor =\n    text = $FPRINTFAIL\n    color = $error\n    font_size = 11\n"
-        "    font_family = Geist\n    position = 0, -162\n    halign = center\n    valign = center\n}\n"
     )
 
 
