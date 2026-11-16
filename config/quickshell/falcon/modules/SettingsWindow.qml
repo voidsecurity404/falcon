@@ -1962,6 +1962,19 @@ LazyLoader {
                         ]
                     },
                     {
+                        title: Tr.t("Calendar"),
+                        items: [
+                            {
+                                key: "calendar.sources",
+                                label: Tr.t("Calendars"),
+                                hint: Tr.t("iCal links or .ics files, separated by spaces. Google: calendar settings, Secret address in iCal format"),
+                                type: "text",
+                                width: 420,
+                                fallback: ""
+                            }
+                        ]
+                    },
+                    {
                         title: Tr.t("Translation"),
                         items: [
                             {

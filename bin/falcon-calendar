@@ -1,0 +1,267 @@
+#!/usr/bin/env python3
+"""Events for the calendar menu from iCal feeds and files.
+
+    falcon-calendar events [--force]   one JSON object: events from 7 days back to 70 ahead
+
+Sources are `calendar.sources` in the settings: links (https://, webcal://) or .ics files,
+separated by spaces, commas or new lines. For Google Calendar, use the calendar's "Secret address
+in iCal format" from its settings. Links are fetched at most every 15 minutes into
+~/.cache/falcon/calendar; a failed fetch keeps the last copy. Repeating events (RRULE, EXDATE,
+moved occurrences through RECURRENCE-ID) are expanded with dateutil, times shown in local time.
+"""
+import hashlib
+import json
+import os
+import re
+import sys
+import time
+import urllib.request
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+from dateutil.rrule import rrulestr
+
+HOME = Path.home()
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "falcon"
+CACHE = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "falcon/calendar"
+FRESH = 15 * 60
+BACK, AHEAD = 7, 70
+LOCAL = datetime.now().astimezone().tzinfo
+# Outlook and others write Windows zone names.
+WINDOWS_ZONES = {
+    "UTC": "UTC", "GMT Standard Time": "Europe/London", "W. Europe Standard Time": "Europe/Berlin",
+    "Central Europe Standard Time": "Europe/Budapest", "Russian Standard Time": "Europe/Moscow",
+    "West Asia Standard Time": "Asia/Tashkent", "Pacific Standard Time": "America/Los_Angeles",
+    "Eastern Standard Time": "America/New_York", "Central Standard Time": "America/Chicago",
+    "Tokyo Standard Time": "Asia/Tokyo", "China Standard Time": "Asia/Shanghai",
+}
+
+
+def settings():
+    merged = {}
+    for name in ("defaults.json", "settings.json"):
+        try:
+            merged.update(json.loads((CONFIG / name).read_text()).get("calendar", {}))
+        except (OSError, ValueError, AttributeError):
+            pass
+    return merged
+
+
+def sources():
+    raw = settings().get("sources", "")
+    if isinstance(raw, list):
+        raw = " ".join(map(str, raw))
+    return [s for s in re.split(r"[\s,]+", str(raw)) if s]
+
+
+def fetch(source, force):
+    """The text of a source, from the cache when fresh. Returns (text, error)."""
+    if not re.match(r"^(https?|webcal)://", source):
+        path = Path(os.path.expanduser(source))
+        try:
+            return path.read_text(errors="replace"), ""
+        except OSError:
+            return "", "missing"
+    url = re.sub(r"^webcal://", "https://", source)
+    CACHE.mkdir(parents=True, exist_ok=True)
+    os.chmod(CACHE, 0o700)
+    cached = CACHE / (hashlib.sha256(url.encode()).hexdigest()[:24] + ".ics")
+    if not force and cached.exists() and time.time() - cached.stat().st_mtime < FRESH:
+        return cached.read_text(errors="replace"), ""
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": "falcon-calendar"})
+        with urllib.request.urlopen(request, timeout=15) as reply:
+            data = reply.read(20_000_000).decode("utf-8", "replace")
+        if "BEGIN:VCALENDAR" not in data:
+            raise ValueError("not a calendar")
+        tmp = cached.with_name(f"{cached.name}.{os.getpid()}.tmp")
+        tmp.write_text(data)
+        os.chmod(tmp, 0o600)
+        tmp.replace(cached)
+        return data, ""
+    except (OSError, ValueError) as error:
+        if cached.exists():
+            return cached.read_text(errors="replace"), "stale"
+        return "", "offline" if isinstance(error, OSError) else "invalid"
+
+
+def unfold(text):
+    return re.sub(r"\r?\n[ \t]", "", text).splitlines()
+
+
+def unescape(value):
+    return (value.replace("\\n", "\n").replace("\\N", "\n").replace("\\,", ",")
+            .replace("\\;", ";").replace("\\\\", "\\"))
+
+
+def parse_line(line):
+    head, _, value = line.partition(":")
+    parts = head.split(";")
+    params = {}
+    for p in parts[1:]:
+        key, _, val = p.partition("=")
+        params[key.upper()] = val.strip('"')
+    return parts[0].upper(), params, value
+
+
+def zone(name):
+    if not name:
+        return None
+    name = WINDOWS_ZONES.get(name, name)
+    try:
+        return ZoneInfo(name)
+    except (KeyError, ValueError, OSError):
+        return None
+
+
+def when(value, params):
+    """(datetime aware or date, all_day)."""
+    value = value.strip()
+    if params.get("VALUE") == "DATE" or re.fullmatch(r"\d{8}", value):
+        return date(int(value[:4]), int(value[4:6]), int(value[6:8])), True
+    stamp = datetime.strptime(value[:15], "%Y%m%dT%H%M%S")
+    if value.endswith("Z"):
+        return stamp.replace(tzinfo=timezone.utc), False
+    return stamp.replace(tzinfo=zone(params.get("TZID")) or LOCAL), False
+
+
+def duration(text):
+    m = re.fullmatch(r"([+-])?P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?", text.strip())
+    if not m:
+        return timedelta(0)
+    sign = -1 if m.group(1) == "-" else 1
+    w, d, h, mi, s = (int(x or 0) for x in m.groups()[1:])
+    return sign * timedelta(weeks=w, days=d, hours=h, minutes=mi, seconds=s)
+
+
+def events_of(text):
+    out, current = [], None
+    for line in unfold(text):
+        if line == "BEGIN:VEVENT":
+            current = {"exdates": []}
+        elif line == "END:VEVENT":
+            if current is not None and "start" in current:
+                out.append(current)
+            current = None
+        elif current is not None and ":" in line:
+            name, params, value = parse_line(line)
+            if name == "SUMMARY":
+                current["title"] = unescape(value)
+            elif name == "LOCATION":
+                current["location"] = unescape(value)
+            elif name == "DTSTART":
+                current["start"], current["allDay"] = when(value, params)
+            elif name == "DTEND":
+                current["end"], _ = when(value, params)
+            elif name == "DURATION":
+                current["duration"] = duration(value)
+            elif name == "RRULE":
+                current["rrule"] = value
+            elif name == "EXDATE":
+                for v in value.split(","):
+                    current["exdates"].append(when(v, params)[0])
+            elif name == "RECURRENCE-ID":
+                current["recurrence"] = when(value, params)[0]
+            elif name == "UID":
+                current["uid"] = value
+            elif name == "STATUS":
+                current["status"] = value.upper()
+    return out
+
+
+def as_local(moment):
+    if isinstance(moment, datetime):
+        return moment.astimezone(LOCAL)
+    return datetime(moment.year, moment.month, moment.day, tzinfo=LOCAL)
+
+
+def key_of(moment):
+    return as_local(moment).replace(second=0, microsecond=0).isoformat()
+
+
+def expand(events, start, end, source_index):
+    moved = {}
+    for e in events:
+        if "recurrence" in e and "uid" in e:
+            moved[(e["uid"], key_of(e["recurrence"]))] = e
+    rows = []
+    for e in events:
+        if "recurrence" in e:
+            continue
+        first = e["start"]
+        all_day = e.get("allDay", False)
+        length = (e["end"] - first) if "end" in e else e.get("duration") or (timedelta(days=1) if all_day else timedelta(0))
+        if "rrule" in e:
+            anchor = datetime(first.year, first.month, first.day) if all_day else first
+            try:
+                rule = rrulestr(e["rrule"], dtstart=anchor, ignoretz=False)
+                lo = datetime(start.year, start.month, start.day) - length - timedelta(days=1)
+                hi = datetime(end.year, end.month, end.day) + timedelta(days=1)
+                if not all_day:
+                    lo, hi = lo.replace(tzinfo=LOCAL), hi.replace(tzinfo=LOCAL)
+                    if anchor.tzinfo is not None:
+                        lo, hi = lo.astimezone(anchor.tzinfo), hi.astimezone(anchor.tzinfo)
+                occurrences = rule.between(lo, hi, inc=True)
+            except (ValueError, TypeError):
+                occurrences = [anchor]
+            if all_day:
+                occurrences = [o.date() for o in occurrences]
+        else:
+            occurrences = [first]
+        skip = {key_of(x) for x in e["exdates"]}
+        for occ in occurrences:
+            k = key_of(occ)
+            if k in skip:
+                continue
+            item = moved.pop((e.get("uid"), k), None) or e
+            begin = item["start"] if item is not e else occ
+            stop_len = (item["end"] - item["start"]) if (item is not e and "end" in item) else length
+            rows.append((item, begin, begin + stop_len))
+    rows += [(e, e["start"], e.get("end", e["start"])) for e in moved.values()]
+    out = []
+    for item, begin, stop in rows:
+        if item.get("status") == "CANCELLED":
+            continue
+        all_day = item.get("allDay", False)
+        b, s = as_local(begin), as_local(stop)
+        if s <= b and not all_day:
+            s = b
+        if s < datetime(start.year, start.month, start.day, tzinfo=LOCAL) or b > datetime(end.year, end.month, end.day, tzinfo=LOCAL):
+            continue
+        out.append({
+            "title": item.get("title", "") or "",
+            "location": item.get("location", ""),
+            "start": b.isoformat(),
+            "end": s.isoformat(),
+            "allDay": all_day,
+            "source": source_index,
+        })
+    return out
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] != "events":
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    force = "--force" in args
+    today = date.today()
+    start, end = today - timedelta(days=BACK), today + timedelta(days=AHEAD)
+    found, errors = [], []
+    for index, source in enumerate(sources()):
+        text, error = fetch(source, force)
+        if error:
+            errors.append({"source": index, "error": error})
+        if text:
+            try:
+                found += expand(events_of(text), start, end, index)
+            except Exception as problem:  # one broken feed must not hide the others
+                errors.append({"source": index, "error": "invalid", "detail": str(problem)[:120]})
+    found.sort(key=lambda e: (e["start"], not e["allDay"], e["title"]))
+    print(json.dumps({"events": found, "errors": errors, "sources": len(sources())}, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

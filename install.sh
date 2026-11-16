@@ -106,6 +106,7 @@ targets=(
     .local/bin/falcon-color
     .local/bin/falcon-charge
     .local/bin/falcon-fingerprint
+    .local/bin/falcon-calendar
     .local/bin/falcon-net
     .local/bin/falcon-updates
     .local/bin/falcon-privacy

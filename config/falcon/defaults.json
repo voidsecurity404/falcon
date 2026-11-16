@@ -250,6 +250,9 @@
     "snapFill": "Mod+Alt+Return",
     "snapCenter": "Mod+Alt+C"
   },
+  "calendar": {
+    "sources": ""
+  },
   "fingerprint": {
     "lock": true,
     "polkit": true,
