@@ -330,8 +330,83 @@ Singleton {
         const next = list.map(w => w.id);
         if (JSON.stringify(next) !== JSON.stringify(ids))
             ids = next;
-        if (save)
+        if (save) {
             file.setText(JSON.stringify(list, null, 1) + "\n");
+            keepSet();
+        }
+    }
+
+    // ---------------------------------------------------------------- day and night sets
+    // With widgets.dayNight the desktop keeps two layouts, one for the day and one for the night
+    // (schedule.lightFrom and darkFrom), in widget-sets.json. Whatever is arranged belongs to the
+    // part of the day it is arranged in; at the turn the other one comes back. A part never
+    // arranged yet keeps the layout as it is.
+    readonly property bool dayNight: Settings.get("widgets.dayNight", false) === true
+    property string part: ""
+    // Read from the file on first use: its onLoaded may come after the first turn, which then
+    // wrote over the saved sets.
+    property var setsCache: null
+    function sets() {
+        if (setsCache === null) {
+            try {
+                setsCache = JSON.parse(setsFile.text() || "{}") || {};
+            } catch (e) {
+                setsCache = {};
+            }
+        }
+        return setsCache;
+    }
+
+    function wantedPart() {
+        return Schedule.wantedMode(new Date()) === "light" ? "day" : "night";
+    }
+    function keepSet() {
+        if (!dayNight || part === "")
+            return;
+        const next = Object.assign({}, sets());
+        next[part] = items;
+        next.lastPart = part;
+        setsCache = next;
+        setsFile.setText(JSON.stringify(next, null, 1) + "\n");
+    }
+    function turnPart() {
+        if (!dayNight || !loaded || editMode)
+            return;
+        const want = wantedPart();
+        if (part === "") {
+            part = sets().lastPart || want;
+            keepSet();
+        }
+        if (want === part)
+            return;
+        keepSet();
+        part = want;
+        const saved = validated(sets()[want]);
+        if (saved && saved.length > 0) {
+            apply(saved, true);
+            remember();
+        } else {
+            keepSet();
+        }
+    }
+    onDayNightChanged: {
+        part = "";
+        turnPart();
+    }
+    onLoadedChanged: turnPart()
+    Timer {
+        interval: 30000
+        running: root.dayNight && root.loaded
+        repeat: true
+        onTriggered: root.turnPart()
+    }
+    FileView {
+        id: setsFile
+
+        path: Quickshell.env("HOME") + "/.config/falcon/widget-sets.json"
+        blockLoading: true
+        printErrors: false
+        atomicWrites: true
     }
 
     function update(id, change) {
@@ -605,6 +680,9 @@ Singleton {
         else
             galleryOpen = false;
         selectedId = "";
+        // A turn of the day while editing waits until editing ends.
+        if (!editMode)
+            turnPart();
     }
 
     Timer {

@@ -292,6 +292,38 @@ PanelWindow {
             bottomSpace: bar.height + 26 + 14
         }
 
+        // Which set is being arranged, with day and night sets on.
+        Rectangle {
+            visible: Widgets.dayNight && !Widgets.galleryOpen
+            anchors.right: bar.left
+            anchors.rightMargin: 10
+            anchors.verticalCenter: bar.verticalCenter
+            width: partRow.implicitWidth + 24
+            height: 36
+            radius: 18
+            color: Theme.pill
+            border.width: 1
+            border.color: Theme.panelEdge
+
+            Row {
+                id: partRow
+
+                anchors.centerIn: parent
+                spacing: 6
+
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: Widgets.part === "night" ? "moon" : "sun"
+                    size: 14
+                    color: Theme.accent
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: Widgets.part === "night" ? Tr.t("Night set") : Tr.t("Day set")
+                    size: 13
+                }
+            }
+        }
         // What the keyboard does here.
         Label {
             visible: !Widgets.galleryOpen

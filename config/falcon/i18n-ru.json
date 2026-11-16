@@ -1772,5 +1772,9 @@
  "Photo frame folder": "Папка фоторамки",
  "Empty is your pictures folder. Wallpapers and screenshots are left out": "Пусто — папка изображений. Обои и скриншоты пропускаются",
  "Next photo after": "Следующее фото через",
- "Tab picks a widget · arrows move it · S size · F form · O glass · Delete removes": "Tab — выбрать виджет · стрелки — двигать · S размер · F форма · O стекло · Delete — убрать"
+ "Tab picks a widget · arrows move it · S size · F form · O glass · Delete removes": "Tab — выбрать виджет · стрелки — двигать · S размер · F форма · O стекло · Delete — убрать",
+ "Night set": "Ночной набор",
+ "Day set": "Дневной набор",
+ "Day and night sets": "Дневной и ночной наборы",
+ "Widgets arranged by day and by night are kept apart and swap by the light and dark times": "Виджеты, расставленные днём и ночью, хранятся отдельно и сменяются по времени светлой и тёмной темы"
 }

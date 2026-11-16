@@ -653,6 +653,12 @@ LazyLoader {
                                 names: [Tr.t("Place and form"), Tr.t("Place only"), Tr.t("Stay as they are")]
                             },
                             {
+                                key: "widgets.dayNight",
+                                label: Tr.t("Day and night sets"),
+                                hint: Tr.t("Widgets arranged by day and by night are kept apart and swap by the light and dark times"),
+                                type: "toggle"
+                            },
+                            {
                                 label: Tr.t("Move, add and remove widgets"),
                                 hint: Tr.t("Right click the desktop or press the shortcut"),
                                 type: "action",

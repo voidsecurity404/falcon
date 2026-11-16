@@ -294,7 +294,8 @@
     "photos": {
       "folder": "",
       "seconds": 60
-    }
+    },
+    "dayNight": false
   },
   "keysounds": {
     "enabled": false,
