@@ -163,6 +163,39 @@ Singleton {
         osdTimer.restart();
     }
 
+    // Per-app choices from Settings → Notifications (`notifications.apps`, app name → mode):
+    // "show" (the default), "quiet" (history only, no card), "important" (a card even in Silent
+    // and focus mode), "off" (dropped, not kept).
+    readonly property var appModes: Settings.get("notifications.apps", ({})) || ({})
+
+    function appMode(app) {
+        const mode = appModes[app || ""];
+        return ["quiet", "important", "off"].indexOf(mode) >= 0 ? mode : "show";
+    }
+
+    function setAppMode(app, mode) {
+        const next = Object.assign({}, appModes);
+        if (mode === "show")
+            delete next[app];
+        else
+            next[app] = mode;
+        Settings.set("notifications.apps", next);
+    }
+
+    // Apps that sent something, newest first, and apps with a choice: the list in Settings.
+    readonly property var knownApps: {
+        const seen = [];
+        for (const h of history) {
+            if (h.app && h.app !== Tr.t("System") && seen.indexOf(h.app) < 0)
+                seen.push(h.app);
+        }
+        for (const app of Object.keys(appModes)) {
+            if (seen.indexOf(app) < 0)
+                seen.push(app);
+        }
+        return seen;
+    }
+
     function enqueue(item) {
         if (current) {
             queue = trimmed(queue.concat([item]));
@@ -329,10 +362,15 @@ Singleton {
                 n.dismiss();
                 return;
             }
+            const mode = root.appMode(n.appName);
+            if (mode === "off") {
+                n.dismiss();
+                return;
+            }
             const body = root.bodyOf(n);
             const historyId = root.remember(n.summary || n.appName, body, n.appName);
             const critical = n.urgency === NotificationUrgency.Critical;
-            if (root.doNotDisturb && !critical) {
+            if (mode === "quiet" && !critical || root.doNotDisturb && !critical && mode !== "important") {
                 n.dismiss();
                 return;
             }
@@ -351,6 +389,7 @@ Singleton {
                 key: "",
                 notification: n,
                 sticky: critical,
+                inZen: mode === "important",
                 run: null
             });
         }

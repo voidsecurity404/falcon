@@ -189,7 +189,8 @@
     ]
   },
   "notifications": {
-    "seconds": 3.6
+    "seconds": 3.6,
+    "apps": {}
   },
   "nightlight": {
     "temperature": 4000,

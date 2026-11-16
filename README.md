@@ -67,6 +67,8 @@ Each part of the bar opens its own small menu under it. The clock opens the cale
 
 Notifications appear as cards at the top right, under the right island. When their time is up they shrink and fly into the bell, which swings as they land, and the bell's badge counts the unread ones. A click on a card runs it, a right click sends it away. Volume and brightness levels show in a small pill under the middle island.
 
+Notifications per app: Settings → Notifications lists every app that sent something, each set to Show, Quietly (only into the history), Important (a card even in Silent and focus mode) or Off (not shown, not kept). Urgent ones always show.
+
 Events in the calendar menu: put iCal links or `.ics` files in Settings → System → Calendar (for Google Calendar, its "Secret address in iCal format"). Days with events get dots, a click on a day lists its events, repeating events and moved or cancelled ones are followed. Links are fetched every 15 minutes, and the last copy stays when offline.
 
 ## Desktop widgets

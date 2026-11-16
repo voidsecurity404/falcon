@@ -1691,5 +1691,10 @@
  "(no title)": "(без названия)",
  "And {n} more": "И ещё {n}",
  "Calendars": "Календари",
- "iCal links or .ics files, separated by spaces. Google: calendar settings, Secret address in iCal format": "Ссылки iCal или файлы .ics через пробел. Google: настройки календаря, «Закрытый адрес в формате iCal»"
+ "iCal links or .ics files, separated by spaces. Google: calendar settings, Secret address in iCal format": "Ссылки iCal или файлы .ics через пробел. Google: настройки календаря, «Закрытый адрес в формате iCal»",
+ "Show": "Показывать",
+ "Quietly": "Тихо",
+ "Important": "Важное",
+ "Apps appear here after their first notification.": "Приложения появятся здесь после первого уведомления.",
+ "Quietly: only into the history. Important: a card even in Silent and focus mode. Off: not shown and not kept. Urgent ones always show.": "Тихо: только в историю. Важное: карточка даже в беззвучном режиме и режиме фокуса. Выкл.: не показывать и не хранить. Срочные показываются всегда."
 }

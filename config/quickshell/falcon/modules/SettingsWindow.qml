@@ -575,6 +575,7 @@ LazyLoader {
                 subtitle: Tr.t("Cards at the top right and the bell"),
                 icon: "bell",
                 group: 0,
+                notifyApps: true,
                 sections: [
                     {
                         title: Tr.t("Cards"),
@@ -2806,6 +2807,11 @@ LazyLoader {
 
                         SoundDevices {
                             visible: win.filter === "" && !!win.pages[win.page].sound
+                            width: cards.width
+                        }
+
+                        NotifyRules {
+                            visible: win.filter === "" && !!win.pages[win.page].notifyApps
                             width: cards.width
                         }
 
