@@ -1768,7 +1768,7 @@
  "No numbers yet": "Пока нет данных",
  "Other widgets": "Другие виджеты",
  "Currencies": "Валюты",
- "Codes against the sum, up to six, for example USD, RUB, EUR": "Коды валют к суму, до шести, например USD, RUB, EUR",
+ "Codes against the sum, up to six, for example USD, RUB, EUR. Crypto such as BTC or ETH is shown in dollars": "Коды валют к суму, до шести, например USD, RUB, EUR. Криптовалюты вроде BTC или ETH показываются в долларах",
  "Photo frame folder": "Папка фоторамки",
  "Empty is your pictures folder. Wallpapers and screenshots are left out": "Пусто — папка изображений. Обои и скриншоты пропускаются",
  "Next photo after": "Следующее фото через",

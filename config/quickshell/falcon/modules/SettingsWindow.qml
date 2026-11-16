@@ -727,7 +727,7 @@ LazyLoader {
                             {
                                 key: "widgets.currency.codes",
                                 label: Tr.t("Currencies"),
-                                hint: Tr.t("Codes against the sum, up to six, for example USD, RUB, EUR"),
+                                hint: Tr.t("Codes against the sum, up to six, for example USD, RUB, EUR. Crypto such as BTC or ETH is shown in dollars"),
                                 type: "text",
                                 width: 220
                             },

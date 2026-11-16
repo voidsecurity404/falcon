@@ -20,14 +20,14 @@ Item {
         const r = Currency.rates[c];
         if (!r || r.diff === 0)
             return "0";
-        return (r.diff > 0 ? "+" : "−") + Currency.format(Math.abs(r.diff));
+        return (r.diff > 0 ? "+" : "−") + Currency.price(c, Math.abs(r.diff));
     }
     function tint(c) {
         const r = Currency.rates[c];
         return !r || r.diff === 0 ? Theme.muted : r.diff > 0 ? up : down;
     }
     function sign(c) {
-        return ({ USD: "$", EUR: "€", RUB: "₽", GBP: "£", CNY: "¥", JPY: "¥", KZT: "₸", TRY: "₺", KRW: "₩", AED: "د.إ" })[c] || c.charAt(0);
+        return ({ USD: "$", EUR: "€", RUB: "₽", GBP: "£", CNY: "¥", JPY: "¥", KZT: "₸", TRY: "₺", KRW: "₩", AED: "د.إ", BTC: "₿", ETH: "Ξ", USDT: "₮" })[c] || c.charAt(0);
     }
 
     WidgetCaption {
@@ -102,7 +102,7 @@ Item {
                     x: 12
                     y: 38
                     width: parent.width - 24
-                    text: Currency.format(Currency.rates[col.modelData].rate)
+                    text: Currency.price(col.modelData, Currency.rates[col.modelData].rate)
                     font.family: Theme.display
                     font.pixelSize: 22
                     font.weight: Font.DemiBold
@@ -146,7 +146,8 @@ Item {
         spacing: root.compact ? 2 : 8
 
         Repeater {
-            model: root.wide ? [] : root.list.slice(0, root.compact ? 3 : 6)
+            // Compact holds four rows: with a fourth code they close up from 26 to 21 px.
+            model: root.wide ? [] : root.list.slice(0, root.compact ? 4 : 6)
 
             Item {
                 id: row
@@ -154,7 +155,7 @@ Item {
                 required property string modelData
 
                 width: parent.width
-                height: root.compact ? 26 : 44
+                height: root.compact ? (root.list.length > 3 ? 21 : 26) : 44
 
                 Label {
                     anchors.verticalCenter: parent.verticalCenter
@@ -183,7 +184,7 @@ Item {
 
                     Label {
                         anchors.right: parent.right
-                        text: Currency.format(Currency.rates[row.modelData].rate)
+                        text: Currency.price(row.modelData, Currency.rates[row.modelData].rate)
                         size: root.compact ? 13 : 16
                         font.weight: Font.DemiBold
                     }

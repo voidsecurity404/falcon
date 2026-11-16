@@ -5,12 +5,13 @@ import Quickshell
 import Quickshell.Io
 
 // Exchange rates against the sum from the Central Bank of Uzbekistan, through bin/falcon-currency.
+// Crypto (BTC, ETH…) the bank does not list comes in dollars, with "unit": "USD". UZS is the base.
 // Asked only while a currency widget is on the desktop, every three hours and again a few seconds
 // after the list of currencies changes. The last answer stays through failed requests.
 Singleton {
     id: root
 
-    readonly property var codes: String(Settings.get("widgets.currency.codes", "USD,RUB,EUR") || "").toUpperCase().split(/[\s,;]+/).filter(c => /^[A-Z]{3}$/.test(c)).slice(0, 6)
+    readonly property var codes: String(Settings.get("widgets.currency.codes", "USD,RUB,EUR") || "").toUpperCase().split(/[\s,;]+/).filter(c => /^[A-Z]{3,5}$/.test(c) && c !== "UZS").slice(0, 6)
     readonly property bool wanted: Widgets.loaded && Widgets.hasType("currency")
     property var rates: ({})
     property var history: ({})
@@ -26,6 +27,11 @@ Singleton {
     }
 
     // 12014.37 -> "12 014", 146.19 -> "146.19".
+    // "$64 654" for a coin priced in dollars, the plain number for one in sum.
+    function price(code, v) {
+        const r = rates[code];
+        return (r && r.unit === "USD" ? "$" : "") + format(v);
+    }
     function format(v) {
         if (v >= 1000)
             return Math.round(v).toLocaleString(Qt.locale(), "f", 0);
