@@ -373,6 +373,7 @@ ShellRoot {
         Countdown.active;
         Privacy.enabled;
         WallpaperAuto.mode;
+        TaskReminders.waiting;
         Monitors.wantConnect;
     }
 }

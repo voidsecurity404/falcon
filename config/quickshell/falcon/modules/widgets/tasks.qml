@@ -21,13 +21,26 @@ Item {
         tasks = next;
         file.setText(JSON.stringify(next, null, 1) + "\n");
     }
+    // "@18:00", "@tomorrow 9:00", "@30m" at the end sets a deadline, see TaskReminders.parse.
     function add(text) {
-        const clean = text.trim();
-        if (clean !== "")
-            store([{ text: clean, done: false }].concat(tasks));
+        const p = TaskReminders.parse(text, Date.now());
+        if (p.text === "")
+            return;
+        const task = { text: p.text, done: false };
+        if (p.due > 0)
+            task.due = p.due;
+        store([task].concat(tasks));
     }
-    // Open tasks first, the done ones under them, each group in its own order.
-    readonly property var ordered: tasks.map((t, i) => ({ text: t.text, done: t.done === true, index: i })).sort((a, b) => (a.done - b.done) || (a.index - b.index))
+    // Ticks each half minute, so a passed deadline turns red.
+    property real nowMs: Date.now()
+    Timer {
+        interval: 30000
+        running: root.tasks.some(t => t.due && !t.done)
+        repeat: true
+        onTriggered: root.nowMs = Date.now()
+    }
+    // Open tasks first, sooner deadlines before later and none, the done ones under them.
+    readonly property var ordered: tasks.map((t, i) => ({ text: t.text, done: t.done === true, due: Number(t.due) || 0, index: i })).sort((a, b) => (a.done - b.done) || ((a.due || 9e15) - (b.due || 9e15)) || (a.index - b.index))
 
     FileView {
         id: file
@@ -168,7 +181,7 @@ Item {
                 id: rowHot
 
                 anchors.fill: parent
-                onClicked: root.store(root.tasks.map((t, i) => i === row.modelData.index ? { text: t.text, done: !t.done } : t))
+                onClicked: root.store(root.tasks.map((t, i) => i === row.modelData.index ? Object.assign({}, t, { done: !t.done }) : t))
             }
             Rectangle {
                 x: 10
@@ -195,8 +208,23 @@ Item {
                 }
             }
             Label {
+                id: dueLabel
+
+                readonly property bool late: row.modelData.due > 0 && !row.modelData.done && row.modelData.due < root.nowMs
+
+                visible: row.modelData.due > 0
+                anchors.right: parent.right
+                anchors.rightMargin: rowHot.hovered || removeHot.hovered ? 38 : 10
+                anchors.verticalCenter: parent.verticalCenter
+                text: TaskReminders.label(row.modelData.due, root.nowMs)
+                size: 11
+                font.weight: Font.DemiBold
+                color: late ? Theme.error : row.modelData.done ? Theme.muted : Theme.accent
+            }
+            Label {
                 x: 42
-                width: parent.width - x - 38
+                width: parent.width - x - (dueLabel.visible ? dueLabel.implicitWidth + 16 + dueLabel.anchors.rightMargin : 38)
+                elide: Text.ElideRight
                 anchors.verticalCenter: parent.verticalCenter
                 text: row.modelData.text
                 color: row.modelData.done ? Theme.muted : Theme.text
@@ -276,7 +304,7 @@ Item {
 
             Label {
                 visible: field.text === ""
-                text: Tr.t("New task")
+                text: Tr.t("New task") + "   @18:00"
                 color: Theme.muted
                 size: 14
             }
