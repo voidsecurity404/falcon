@@ -1190,6 +1190,12 @@ LazyLoader {
                                 key: "keyboard.perWindow",
                                 label: Tr.t("Remember layout per window"),
                                 type: "toggle"
+                            },
+                            {
+                                key: "keyboard.osd",
+                                label: Tr.t("Show layout and Caps Lock changes"),
+                                hint: Tr.t("A short pill under the bar. Caps Lock shows only while it is not the Compose key"),
+                                type: "toggle"
                             }
                         ]
                     },

@@ -1676,5 +1676,9 @@
  "Fingerprint: fingers added": "Отпечаток: пальцы добавлены",
  "Add one in Settings, Fingerprint.": "Добавьте палец в Настройках, раздел «Отпечаток пальца».",
  "Fingerprint on the login screen and in password dialogs": "Отпечаток на экране входа и в запросах пароля",
- "Run once in a terminal: falcon-fingerprint setup": "Выполните один раз в терминале: falcon-fingerprint setup"
+ "Run once in a terminal: falcon-fingerprint setup": "Выполните один раз в терминале: falcon-fingerprint setup",
+ "Show layout and Caps Lock changes": "Показывать смену раскладки и Caps Lock",
+ "A short pill under the bar. Caps Lock shows only while it is not the Compose key": "Короткая плашка под панелью. Caps Lock виден, только если он не клавиша Compose",
+ "Caps Lock on": "Caps Lock включён",
+ "Caps Lock off": "Caps Lock выключен"
 }

@@ -149,6 +149,20 @@ Singleton {
         osdTimer.restart();
     }
 
+    // A short state in the same pill instead of a level: Caps Lock, the keyboard layout.
+    function badge(key, title, icon, on, code) {
+        osd = {
+            title: title,
+            icon: icon,
+            value: -1,
+            key: key,
+            text: true,
+            on: on === true,
+            code: code || ""
+        };
+        osdTimer.restart();
+    }
+
     function enqueue(item) {
         if (current) {
             queue = trimmed(queue.concat([item]));

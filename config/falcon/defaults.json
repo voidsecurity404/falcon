@@ -156,7 +156,8 @@
     "repeatDelay": 300,
     "repeatRate": 35,
     "perWindow": true,
-    "numlock": true
+    "numlock": true,
+    "osd": true
   },
   "pointer": {
     "tap": true,
