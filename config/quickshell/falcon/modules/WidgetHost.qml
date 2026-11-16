@@ -250,6 +250,9 @@ Item {
                 onLoaded: {
                     if ("widgetId" in item)
                         item.widgetId = host.widgetId;
+                    // "face" is the copy seen on the desktop, alive only while it can be seen.
+                    if ("role" in item)
+                        item.role = host.role;
                     if ("form" in item)
                         item.form = Qt.binding(() => host.shownForm ? host.shownForm.name : "");
                 }

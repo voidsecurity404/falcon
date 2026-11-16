@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+"""Exchange rates of the Central Bank of Uzbekistan for the currency widget.
+
+    falcon-currency [CODES...]      e.g. falcon-currency USD RUB EUR
+
+Prints one JSON object: {"date": "dd.mm.yyyy", "rates": {CODE: {"rate", "diff", "nominal",
+"name"}}, "history": {CODE: [rate, ...]}} with the last 14 days, oldest first, or {"error":
+"offline"}. Each day's list is cached in ~/.cache/falcon/currency/, so only new days are fetched.
+"""
+import datetime
+import json
+import os
+import sys
+import urllib.request
+
+API = "https://cbu.uz/uz/arkhiv-kursov-valyut/json/"
+CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "falcon", "currency")
+DAYS = 14
+
+
+def fetch(url):
+    req = urllib.request.Request(url, headers={"User-Agent": "falcon-currency"})
+    with urllib.request.urlopen(req, timeout=8) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def write(path, data):
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.replace(tmp, path)
+
+
+def day_list(day):
+    """The bank's list for one past day, from the cache or the network; None when unknown."""
+    path = os.path.join(CACHE, day.isoformat() + ".json")
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        pass
+    try:
+        data = fetch(f"{API}all/{day.isoformat()}/")
+    except Exception:
+        return None
+    if isinstance(data, list) and data:
+        write(path, data)
+        return data
+    return None
+
+
+def main():
+    codes = [c.upper() for c in sys.argv[1:]] or ["USD", "RUB", "EUR"]
+    os.makedirs(CACHE, exist_ok=True)
+    try:
+        today = fetch(API)
+    except Exception:
+        print(json.dumps({"error": "offline"}))
+        return
+    rates = {}
+    lang = "RU" if os.environ.get("LANG", "").startswith("ru") else "EN"
+    for row in today:
+        if row.get("Ccy") in codes:
+            rates[row["Ccy"]] = {
+                "rate": float(row["Rate"]),
+                "diff": float(row["Diff"]),
+                "nominal": int(row.get("Nominal") or 1),
+                "name": row.get("CcyNm_" + lang) or row.get("CcyNm_EN", ""),
+            }
+    history = {c: [] for c in codes}
+    now = datetime.date.today()
+    # Past days come from the cache after the first run. The bank skips weekends, so a day
+    # repeats the one before; that keeps the line flat over them.
+    for back in range(DAYS - 1, 0, -1):
+        rows = day_list(now - datetime.timedelta(days=back))
+        if rows is None:
+            continue
+        found = {r.get("Ccy"): float(r["Rate"]) for r in rows if r.get("Ccy") in codes}
+        for c in codes:
+            if c in found:
+                history[c].append(found[c])
+    for c in codes:
+        if c in rates:
+            history[c].append(rates[c]["rate"])
+    # Old cache files go.
+    keep = {(now - datetime.timedelta(days=b)).isoformat() + ".json" for b in range(DAYS + 2)}
+    for name in os.listdir(CACHE):
+        if name.endswith(".json") and name not in keep:
+            try:
+                os.remove(os.path.join(CACHE, name))
+            except OSError:
+                pass
+    date = today[0].get("Date", "") if today else ""
+    print(json.dumps({"date": date, "rates": rates, "history": history}, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()

@@ -287,6 +287,13 @@
       "asr": "hanafi",
       "fajr": 15,
       "isha": 15
+    },
+    "currency": {
+      "codes": "USD,RUB,EUR"
+    },
+    "photos": {
+      "folder": "",
+      "seconds": 60
     }
   },
   "keysounds": {

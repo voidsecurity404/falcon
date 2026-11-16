@@ -133,6 +133,65 @@ Singleton {
             forms: [{ name: "wide", w: 440, h: 210 }, { name: "square", w: 270, h: 300 }],
             interactive: true,
             plate: true
+        },
+        {
+            type: "currency",
+            title: Tr.t("Exchange rates"),
+            blurb: Tr.t("The sum against other currencies from the Central Bank, with two weeks"),
+            icon: "coin",
+            group: "tools",
+            forms: [{ name: "wide", w: 480, h: 230 }, { name: "tall", w: 300, h: 260 }, { name: "compact", w: 300, h: 150 }],
+            plate: true
+        },
+        {
+            type: "photos",
+            title: Tr.t("Photo frame"),
+            blurb: Tr.t("Pictures from your folder, one after another"),
+            icon: "image",
+            group: "tools",
+            forms: [{ name: "square", w: 300, h: 300 }, { name: "wide", w: 460, h: 270 }, { name: "tall", w: 270, h: 380 }],
+            interactive: true,
+            plate: true
+        },
+        {
+            type: "batteries",
+            title: Tr.t("Batteries"),
+            blurb: Tr.t("This computer, the phone and Bluetooth devices in one place"),
+            icon: "battery",
+            group: "system",
+            forms: [{ name: "wide", w: 460, h: 180 }, { name: "square", w: 300, h: 300 }, { name: "tall", w: 280, h: 330 }],
+            uses: "system",
+            plate: true
+        },
+        {
+            type: "network",
+            title: Tr.t("Network devices"),
+            blurb: Tr.t("Who is on your Wi-Fi, with new devices marked"),
+            icon: "devices",
+            group: "system",
+            forms: [{ name: "wide", w: 480, h: 220 }, { name: "square", w: 300, h: 330 }],
+            interactive: true,
+            plate: true
+        },
+        {
+            type: "updates",
+            title: Tr.t("Updates"),
+            blurb: Tr.t("Waiting packages and one press to update"),
+            icon: "update",
+            group: "system",
+            forms: [{ name: "wide", w: 420, h: 190 }, { name: "compact", w: 320, h: 140 }],
+            interactive: true,
+            plate: true
+        },
+        {
+            type: "claude",
+            title: Tr.t("Claude limits"),
+            blurb: Tr.t("Session and weekly usage of Claude Code"),
+            icon: "claude",
+            group: "tools",
+            forms: [{ name: "wide", w: 480, h: 180 }, { name: "compact", w: 300, h: 130 }],
+            interactive: true,
+            plate: true
         }
     ]
     readonly property var groups: [

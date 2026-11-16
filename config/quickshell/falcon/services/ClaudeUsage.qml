@@ -61,6 +61,20 @@ Singleton {
     // The countdown while fetches work, otherwise the real age of the numbers.
     readonly property string statusText: checking && !failed ? Tr.t("Updating in {s} s").replace("{s}", countdown) : updatedText
 
+    // Desktop widgets showing the limits: then they are fetched every five minutes.
+    property int watchers: 0
+    function watch(step) {
+        watchers = Math.max(0, watchers + step);
+        if (step > 0 && Date.now() / 1000 - updated > 300 && !fetch.running)
+            refresh();
+    }
+    Timer {
+        interval: 300000
+        running: root.watchers > 0 && !root.checking
+        repeat: true
+        onTriggered: if (!fetch.running) root.refresh()
+    }
+
     function refresh() {
         countdown = 0;
         fetch.running = true;

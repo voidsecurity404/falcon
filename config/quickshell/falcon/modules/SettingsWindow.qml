@@ -716,6 +716,34 @@ LazyLoader {
                         ]
                     },
                     {
+                        title: Tr.t("Other widgets"),
+                        items: [
+                            {
+                                key: "widgets.currency.codes",
+                                label: Tr.t("Currencies"),
+                                hint: Tr.t("Codes against the sum, up to six, for example USD, RUB, EUR"),
+                                type: "text",
+                                width: 220
+                            },
+                            {
+                                key: "widgets.photos.folder",
+                                label: Tr.t("Photo frame folder"),
+                                hint: Tr.t("Empty is your pictures folder. Wallpapers and screenshots are left out"),
+                                type: "text",
+                                width: 260
+                            },
+                            {
+                                key: "widgets.photos.seconds",
+                                label: Tr.t("Next photo after"),
+                                type: "slider",
+                                min: 10,
+                                max: 600,
+                                step: 10,
+                                unit: "sec"
+                            }
+                        ]
+                    },
+                    {
                         title: Tr.t("Music"),
                         items: [
                             {
