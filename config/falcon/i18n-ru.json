@@ -1716,5 +1716,7 @@
  "in about {n} min": "примерно через {n} мин",
  "UV": "УФ",
  "Air": "Воздух",
- "Dry for the next two hours": "Ближайшие два часа без осадков"
+ "Dry for the next two hours": "Ближайшие два часа без осадков",
+ "Measuring…": "Измерение…",
+ "Too hot": "Перегрев"
 }

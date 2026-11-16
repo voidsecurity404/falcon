@@ -68,6 +68,7 @@ Singleton {
             group: "system",
             forms: [{ name: "wide", w: 460, h: 230 }, { name: "tall", w: 260, h: 350 }, { name: "compact", w: 330, h: 140 }],
             uses: "system",
+            interactive: true,
             plate: true
         },
         {

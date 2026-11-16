@@ -21,6 +21,27 @@ Item {
     property real down: 0
     property real up: 0
     property var downHistory: []
+    property var upHistory: []
+    // Over this the frame glows red.
+    readonly property bool overheat: Sys.temperature >= 85
+    // A press on the processor shows what loads it. Shared, so the face shows it too.
+    readonly property bool showTop: Widgets.sharedValue(widgetId, "top", false)
+
+    onShowTopChanged: {
+        Processes.watch(showTop ? 1 : -1);
+        if (showTop)
+            topClose.restart();
+    }
+    Component.onDestruction: {
+        if (showTop)
+            Processes.watch(-1);
+    }
+    Timer {
+        id: topClose
+
+        interval: 20000
+        onTriggered: Widgets.share(root.widgetId, "top", false)
+    }
     property var last: null
     property string uptime: ""
 
@@ -50,6 +71,7 @@ Item {
                 root.down = Math.max(0, (rx - root.last.rx) / dt);
                 root.up = Math.max(0, (tx - root.last.tx) / dt);
                 root.downHistory = root.downHistory.concat([root.down]).slice(-40);
+                root.upHistory = root.upHistory.concat([root.up]).slice(-40);
             }
             root.last = { t: t, rx: rx, tx: tx };
         }
@@ -259,8 +281,84 @@ Item {
             y: 92
             width: parent.width
             height: parent.height - y
+            visible: opacity > 0
+            opacity: root.showTop ? 0 : 1
             values: Sys.history.length > 1 ? Sys.history : [Sys.cpu, Sys.cpu]
             max: 100
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 180
+                }
+            }
+        }
+        // The three busiest processes, in place of the graph while asked for.
+        Column {
+            y: 84
+            width: parent.width
+            spacing: 4
+            visible: opacity > 0
+            opacity: root.showTop ? 1 : 0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 180
+                }
+            }
+
+            Label {
+                visible: Processes.top3.length === 0
+                text: Tr.t("Measuring…")
+                size: 12
+                color: Theme.muted
+            }
+            Repeater {
+                model: Processes.top3
+
+                Item {
+                    id: proc
+
+                    required property var modelData
+                    required property int index
+
+                    width: parent.width
+                    height: 24
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 8
+                        color: Qt.alpha(Theme.accent, 0.06 + 0.1 * Math.min(1, proc.modelData.cpu / 100))
+                    }
+                    Rectangle {
+                        width: Math.max(6, parent.width * Math.min(1, proc.modelData.cpu / 100))
+                        height: parent.height
+                        radius: 8
+                        color: Qt.alpha(proc.index === 0 ? Theme.accent : Theme.text, 0.14)
+                    }
+                    Label {
+                        x: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - 70
+                        text: proc.modelData.name
+                        size: 12
+                        font.weight: proc.index === 0 ? Font.DemiBold : Font.Normal
+                        elide: Text.ElideRight
+                    }
+                    Label {
+                        anchors.right: parent.right
+                        anchors.rightMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Math.round(proc.modelData.cpu) + "%"
+                        size: 12
+                        font.weight: Font.DemiBold
+                        color: proc.index === 0 ? Theme.accent : Theme.text
+                    }
+                }
+            }
+        }
+        WidgetHot {
+            anchors.fill: parent
+            onClicked: Widgets.share(root.widgetId, "top", !root.showTop)
         }
     }
 
@@ -297,15 +395,26 @@ Item {
             width: parent.width
             height: 44
 
+            // Download filled, upload as a line over it, on one scale.
             WidgetSpark {
                 anchors.fill: parent
                 values: root.downHistory.length > 1 ? root.downHistory : [0, 0]
-                max: Math.max(65536, ...root.downHistory) * 1.15
+                max: Math.max(65536, ...root.downHistory, ...root.upHistory) * 1.15
                 color: root.netColor
                 lineWidth: 1.6
                 fillAlpha: 0.25
                 dot: false
                 opacity: 0.8
+            }
+            WidgetSpark {
+                anchors.fill: parent
+                values: root.upHistory.length > 1 ? root.upHistory : [0, 0]
+                max: Math.max(65536, ...root.downHistory, ...root.upHistory) * 1.15
+                color: Theme.hueShift(Theme.accent, 0.5)
+                lineWidth: 1.4
+                fillAlpha: 0
+                dot: false
+                opacity: 0.85
             }
             Row {
                 y: 2
@@ -334,7 +443,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         name: "arrowUp"
                         size: 12
-                        color: Theme.muted
+                        color: Theme.hueShift(Theme.accent, 0.5)
                     }
                     Label {
                         anchors.verticalCenter: parent.verticalCenter
@@ -344,6 +453,54 @@ Item {
                     }
                 }
             }
+        }
+    }
+
+    // A red glow around the widget while the processor is too hot.
+    Rectangle {
+        anchors.fill: parent
+        radius: 22
+        color: "transparent"
+        border.width: 2
+        border.color: Theme.error
+        visible: root.overheat
+        opacity: 0.4 + 0.6 * pulse
+
+        property real pulse: 0
+
+        SequentialAnimation on pulse {
+            running: root.overheat
+            loops: Animation.Infinite
+
+            NumberAnimation {
+                to: 1
+                duration: 900
+                easing.type: Easing.InOutSine
+            }
+            NumberAnimation {
+                to: 0
+                duration: 900
+                easing.type: Easing.InOutSine
+            }
+        }
+    }
+    Rectangle {
+        visible: root.overheat && !root.compact
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: -height / 2
+        width: hotText.implicitWidth + 20
+        height: 22
+        radius: 11
+        color: Theme.error
+
+        Label {
+            id: hotText
+
+            anchors.centerIn: parent
+            text: Tr.t("Too hot") + " · " + Sys.temperature + "°"
+            size: 11
+            font.weight: Font.DemiBold
+            color: "white"
         }
     }
 }

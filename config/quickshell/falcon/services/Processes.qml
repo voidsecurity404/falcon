@@ -8,7 +8,15 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    readonly property bool active: Ui.popup === "system"
+    // Desktop widgets showing the busiest processes count themselves here while they do.
+    property int watchers: 0
+    readonly property bool active: Ui.popup === "system" || watchers > 0
+    // The busiest processes now, most first: { pid, name, cpu, mem }.
+    readonly property var top3: Object.keys(byPid).map(k => byPid[k]).sort((a, b) => b.cpu - a.cpu || b.mem - a.mem).slice(0, 3)
+
+    function watch(step) {
+        watchers = Math.max(0, watchers + step);
+    }
     readonly property string user: Quickshell.env("USER")
 
     // Every process: pids in list order, byPid gives {pid, user, cpu, mem, name}.
